@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ContinuWitty — Ocean Flow Brand System</title>
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600;700&family=Nunito:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400&family=Quicksand:wght@300;400;500;600;700&family=Baloo+2:wght@400;500;600;700;800&family=Varela+Round&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Core Ocean Palette */
+    --deep: #0b1a2b;
+    --ocean-900: #0c2d48;
+    --ocean-800: #0d3b5e;
+    --ocean-700: #0e4d76;
+    --ocean-600: #0f6292;
+    --ocean-500: #1a8ab5;
+    --ocean-400: #2bb5d9;
+    --ocean-300: #4dd9e8;
+    --ocean-200: #7eeaed;
+    --ocean-100: #b2f5ea;
+    --ocean-50: #e0faf4;
+
+    /* Accent */
+    --foam: #ffffff;
+    --seafoam: #5eead4;
+    --mint: #99f6e4;
+    --pearl: #f0fdfa;
+    --coral: #fb923c;
+    --sand: #fef3c7;
+
+    /* Surfaces */
+    --surface-dark: #091520;
+    --surface-card: rgba(11, 26, 43, 0.6);
+
+    /* Gradients */
+    --grad-ocean: linear-gradient(135deg, #0c4a6e 0%, #0e7490 35%, #0d9488 65%, #14b8a6 100%);
+    --grad-sky: linear-gradient(180deg, #0b1a2b 0%, #0c3547 40%, #0e5e6f 100%);
+    --grad-wave: linear-gradient(135deg, #06b6d4 0%, #14b8a6 50%, #5eead4 100%);
+    --grad-deep: linear-gradient(180deg, #0b1a2b 0%, #164e63 100%);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--deep);
+    color: #c2e0eb;
+    font-family: 'Nunito', sans-serif;
+    overflow-x: hidden;
+    line-height: 1.65;
+  }
+
+  /* =================== HERO =================== */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+    padding: 40px 20px;
+  }
+
+  /* Animated wave layers */
+  .wave-layer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 200%;
+    height: 180px;
+    pointer-events: none;
+  }
+  .wave-layer svg {
+    width: 100%;
+    height: 100%;
+  }
+  .wave-1 { animation: waveSlide 12s linear infinite; opacity: 0.08; bottom: 0; }
+  .wave-2 { animation: waveSlide 8s linear infinite reverse; opacity: 0.05; bottom: 20px; }
+  .wave-3 { animation: waveSlide 15s linear infinite; opacity: 0.03; bottom: 40px; }
+
+  @keyframes waveSlide {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* Floating particles */
+  .particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: rgba(94, 234, 212, 0.3);
+    border-radius: 50%;
+    animation: float 8s ease-in-out infinite;
+  }
+  .particle:nth-child(1) { top: 20%; left: 15%; animation-delay: 0s; animation-duration: 7s; }
+  .particle:nth-child(2) { top: 60%; left: 80%; animation-delay: 2s; animation-duration: 9s; width: 3px; height: 3px; }
+  .particle:nth-child(3) { top: 35%; left: 65%; animation-delay: 4s; animation-duration: 11s; width: 5px; height: 5px; opacity: 0.4; }
+  .particle:nth-child(4) { top: 75%; left: 25%; animation-delay: 1s; animation-duration: 8s; }
+  .particle:nth-child(5) { top: 15%; left: 50%; animation-delay: 3s; animation-duration: 10s; width: 2px; height: 2px; }
+  .particle:nth-child(6) { top: 50%; left: 40%; animation-delay: 5s; animation-duration: 6s; width: 6px; height: 6px; opacity: 0.2; }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; }
+    25% { transform: translateY(-20px) translateX(10px); opacity: 0.6; }
+    50% { transform: translateY(-10px) translateX(-5px); opacity: 0.4; }
+    75% { transform: translateY(-25px) translateX(8px); opacity: 0.5; }
+  }
+
+  .hero-ambient {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(14, 116, 144, 0.12) 0%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: ambientPulse 6s ease-in-out infinite;
+  }
+  @keyframes ambientPulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+    50% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+  }
+
+  .hero-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: rgba(94, 234, 212, 0.5);
+    margin-bottom: 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-logo {
+    position: relative;
+    z-index: 1;
+    margin-bottom: 20px;
+  }
+  .hero-logo .logotype {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700;
+    font-size: clamp(48px, 8vw, 80px);
+    letter-spacing: 1px;
+    background: linear-gradient(135deg, #fff 0%, #5eead4 50%, #2dd4bf 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 40px rgba(94, 234, 212, 0.2));
+  }
+
+  .hero-tagline {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 300;
+    font-size: clamp(16px, 2.5vw, 22px);
+    color: rgba(178, 245, 234, 0.5);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+  }
+
+  .scroll-hint {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: rgba(94, 234, 212, 0.3);
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+    animation: bob 2s ease-in-out infinite;
+  }
+  @keyframes bob {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(8px); }
+  }
+
+  /* =================== SECTION LAYOUT =================== */
+  .section {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 80px 24px;
+  }
+  .section-sm {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 80px 24px;
+  }
+
+  .section-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--seafoam);
+    margin-bottom: 16px;
+    opacity: 0.7;
+  }
+  .section-label::before {
+    content: '';
+    display: block;
+    width: 24px;
+    height: 1px;
+    background: var(--seafoam);
+    opacity: 0.5;
+  }
+
+  .section-title {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700;
+    font-size: clamp(28px, 4vw, 40px);
+    color: #fff;
+    margin-bottom: 12px;
+  }
+
+  .section-desc {
+    font-size: 16px;
+    color: rgba(178, 245, 234, 0.45);
+    max-width: 600px;
+    margin-bottom: 48px;
+    line-height: 1.7;
+  }
+
+  .divider {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(94, 234, 212, 0.12), transparent);
+  }
+
+  /* =================== LOGO SHOWCASE =================== */
+  .logo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 20px;
+  }
+
+  .logo-card {
+    background: rgba(11, 26, 43, 0.5);
+    border: 1px solid rgba(94, 234, 212, 0.08);
+    border-radius: 20px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    transition: transform 0.3s ease, border-color 0.3s ease;
+  }
+  .logo-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(94, 234, 212, 0.2);
+  }
+
+  .logo-preview {
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-info {
+    padding: 20px 24px;
+    border-top: 1px solid rgba(94, 234, 212, 0.06);
+  }
+  .logo-info .name {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: #fff;
+    margin-bottom: 5px;
+  }
+  .logo-info .desc {
+    font-size: 13px;
+    color: rgba(178, 245, 234, 0.35);
+    line-height: 1.55;
+  }
+  .logo-info .use {
+    display: inline-block;
+    margin-top: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--seafoam);
+    opacity: 0.5;
+    background: rgba(94, 234, 212, 0.06);
+    padding: 3px 10px;
+    border-radius: 4px;
+  }
+
+  /* --- Individual Logo Styles --- */
+
+  /* L1: Primary Wordmark */
+  .l1-bg {
+    background: linear-gradient(160deg, #0c3547, #0e5e6f, #0d7c7a);
+    position: relative;
+  }
+  .l1-bg::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 40%;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 600 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,30 Q75,10 150,30 T300,30 T450,30 T600,30 L600,60 L0,60Z' fill='rgba(94,234,212,0.06)'/%3E%3C/svg%3E");
+    background-size: 600px 60px;
+    background-repeat: repeat-x;
+    animation: waveSlide 10s linear infinite;
+  }
+  .l1 {
+    position: relative; z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .l1-icon {
+    width: 48px; height: 48px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .l1-text {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700;
+    font-size: 32px;
+    color: #fff;
+    letter-spacing: 0.5px;
+  }
+  .l1-text .w { color: var(--seafoam); }
+
+  /* L2: Stacked Wave */
+  .l2-bg {
+    background: #fff;
+  }
+  .l2 { text-align: center; position: relative; }
+  .l2-word {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700;
+    font-size: 34px;
+    color: #0c4a6e;
+    letter-spacing: 0.5px;
+  }
+  .l2-word .w { color: #0d9488; }
+  .l2-wave {
+    display: block;
+    margin: 6px auto 0;
+    width: 120px;
+    height: 12px;
+  }
+  .l2-sub {
+    font-family: 'Nunito', sans-serif;
+    font-size: 10px;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-top: 6px;
+  }
+
+  /* L3: Bubble Mark */
+  .l3-bg {
+    background: linear-gradient(145deg, #f0fdfa, #ccfbf1);
+  }
+  .l3 {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .l3-bubble {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0d9488, #06b6d4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(13, 148, 136, 0.3);
+    position: relative;
+  }
+  .l3-bubble::after {
+    content: '';
+    position: absolute;
+    top: 6px; left: 10px;
+    width: 12px; height: 8px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 50%;
+    transform: rotate(-20deg);
+  }
+  .l3-bubble svg { position: relative; z-index: 1; }
+  .l3-wordmark {
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    color: #134e4a;
+    letter-spacing: -0.5px;
+  }
+  .l3-wordmark .w { color: #0d9488; }
+
+  /* L4: Rounded Pill */
+  .l4-bg { background: var(--ocean-900); }
+  .l4 {
+    display: flex;
+    align-items: center;
+    background: linear-gradient(135deg, rgba(94,234,212,0.1), rgba(6,182,212,0.1));
+    border: 1px solid rgba(94,234,212,0.15);
+    border-radius: 60px;
+    padding: 12px 10px 12px 14px;
+    gap: 10px;
+    backdrop-filter: blur(10px);
+  }
+  .l4-dot {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--grad-wave);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .l4-dot svg { width: 18px; height: 18px; }
+  .l4-name {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 600;
+    font-size: 22px;
+    color: #fff;
+    padding-right: 14px;
+  }
+  .l4-name .w { color: var(--seafoam); }
+
+  /* L5: Flowing Script Accent */
+  .l5-bg {
+    background: linear-gradient(160deg, #042f2e, #064e3b);
+    position: relative;
+  }
+  .l5 { text-align: center; position: relative; z-index: 1; }
+  .l5-main {
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 36px;
+    color: #fff;
+    letter-spacing: 1px;
+  }
+  .l5-flow {
+    display: block;
+    margin-top: -2px;
+  }
+  .l5-flow svg { width: 200px; height: 20px; }
+
+  /* L6: Dark Minimal */
+  .l6-bg { background: #000; }
+  .l6 {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 300;
+    font-size: 34px;
+    color: rgba(255,255,255,0.7);
+    letter-spacing: 3px;
+  }
+  .l6 .w {
+    font-weight: 700;
+    color: #fff;
+    background: var(--grad-wave);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* L7: Water Drop Icon */
+  .l7-bg {
+    background: linear-gradient(145deg, #ecfdf5, #d1fae5);
+  }
+  .l7 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .l7-drop {
+    width: 56px; height: 56px;
+    position: relative;
+  }
+  .l7-drop .drop-shape {
+    width: 56px; height: 56px;
+    background: linear-gradient(180deg, #06b6d4, #0d9488);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    transform: rotate(180deg);
+    position: relative;
+    box-shadow: 0 8px 24px rgba(13, 148, 136, 0.3);
+  }
+  .l7-drop .drop-shape::after {
+    content: '';
+    position: absolute;
+    top: 16px; left: 12px;
+    width: 10px; height: 6px;
+    background: rgba(255,255,255,0.35);
+    border-radius: 50%;
+    transform: rotate(160deg);
+  }
+  .l7-drop .play-inner {
+    position: absolute;
+    top: 50%; left: 52%;
+    transform: translate(-50%, -50%) rotate(180deg);
+    width: 0; height: 0;
+    border-left: 12px solid #fff;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+  }
+  .l7-wordmark {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 600;
+    font-size: 22px;
+    color: #134e4a;
+  }
+  .l7-wordmark .w { color: #0d9488; }
+
+  /* L8: Ripple Mark */
+  .l8-bg { background: var(--deep); }
+  .l8 {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .l8-ripple {
+    width: 50px; height: 50px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .l8-ripple .ring {
+    position: absolute;
+    border: 1.5px solid rgba(94, 234, 212, 0.2);
+    border-radius: 50%;
+    animation: ripple 3s ease-out infinite;
+  }
+  .l8-ripple .ring:nth-child(1) { width: 20px; height: 20px; animation-delay: 0s; }
+  .l8-ripple .ring:nth-child(2) { width: 34px; height: 34px; animation-delay: 0.6s; }
+  .l8-ripple .ring:nth-child(3) { width: 48px; height: 48px; animation-delay: 1.2s; }
+  .l8-ripple .core {
+    width: 10px; height: 10px;
+    background: var(--seafoam);
+    border-radius: 50%;
+    position: relative;
+    z-index: 1;
+  }
+  @keyframes ripple {
+    0% { transform: scale(0.8); opacity: 0.6; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+  .l8-text {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700;
+    font-size: 30px;
+    color: #fff;
+  }
+  .l8-text .w { color: var(--seafoam); }
+
+  /* L9: Wave Underline */
+  .l9-bg { background: #f8fafc; }
+  .l9 { text-align: center; }
+  .l9-text {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    font-size: 38px;
+    color: #0c4a6e;
+    position: relative;
+    display: inline-block;
+  }
+  .l9-text .w { color: #0d9488; }
+  .l9-text::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 10' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,5 Q25,0 50,5 T100,5 T150,5 T200,5' fill='none' stroke='%230d9488' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-size: 200px 10px;
+    background-repeat: repeat-x;
+  }
+
+  /* =================== DESIGN TOKENS =================== */
+  .tokens-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+  }
+
+  .token-card {
+    background: rgba(11, 26, 43, 0.5);
+    border: 1px solid rgba(94, 234, 212, 0.06);
+    border-radius: 16px;
+    padding: 24px;
+    backdrop-filter: blur(10px);
+  }
+  .token-card h3 {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--seafoam);
+    margin-bottom: 16px;
+    opacity: 0.8;
+  }
+
+  /* Color swatches */
+  .swatch-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    position: relative;
+    cursor: default;
+    transition: transform 0.2s ease;
+  }
+  .swatch:hover { transform: scale(1.1); }
+  .swatch-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(178, 245, 234, 0.3);
+    margin-top: 4px;
+  }
+
+  /* Font samples */
+  .font-sample {
+    margin-bottom: 14px;
+  }
+  .font-sample .preview-text {
+    font-size: 22px;
+    color: #fff;
+    margin-bottom: 2px;
+  }
+  .font-sample .font-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(178, 245, 234, 0.3);
+    letter-spacing: 1px;
+  }
+
+  /* =================== PROMPT BOX =================== */
+  .prompt-container {
+    background: rgba(11, 26, 43, 0.6);
+    border: 1px solid rgba(94, 234, 212, 0.1);
+    border-radius: 20px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+  }
+  .prompt-header {
+    padding: 20px 28px;
+    border-bottom: 1px solid rgba(94, 234, 212, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .prompt-header .label {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--seafoam);
+  }
+  .prompt-header .copy-hint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(94, 234, 212, 0.3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .prompt-body {
+    padding: 28px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    color: rgba(178, 245, 234, 0.55);
+    white-space: pre-wrap;
+    max-height: 600px;
+    overflow-y: auto;
+  }
+  .prompt-body::-webkit-scrollbar { width: 6px; }
+  .prompt-body::-webkit-scrollbar-track { background: transparent; }
+  .prompt-body::-webkit-scrollbar-thumb { background: rgba(94, 234, 212, 0.1); border-radius: 3px; }
+  .prompt-body .hl { color: var(--seafoam); }
+  .prompt-body .comment { color: rgba(94, 234, 212, 0.25); }
+  .prompt-body .heading { color: #fff; font-weight: 700; font-size: 13px; display: block; margin-top: 16px; margin-bottom: 4px; }
+
+  /* =================== APP ICON ROW =================== */
+  .app-icons-row {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 40px 0;
+  }
+  .app-icon-item { text-align: center; }
+  .app-icon-box {
+    width: 72px; height: 72px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    margin-bottom: 8px;
+  }
+  .app-icon-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(178, 245, 234, 0.3);
+    letter-spacing: 1px;
+  }
+
+  /* =================== MOCKUPS =================== */
+  .mockup-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+    gap: 20px;
+  }
+  .mock-card {
+    background: rgba(11, 26, 43, 0.5);
+    border: 1px solid rgba(94, 234, 212, 0.06);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .mock-label {
+    padding: 14px 24px;
+    border-top: 1px solid rgba(94, 234, 212, 0.06);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(94, 234, 212, 0.3);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  /* Browser mockup */
+  .browser-frame {
+    margin: 24px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(94, 234, 212, 0.08);
+  }
+  .browser-bar {
+    background: rgba(0,0,0,0.4);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .browser-dots { display: flex; gap: 5px; }
+  .browser-dots span { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.1); }
+  .browser-url {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+    margin-left: 8px;
+  }
+  .browser-content {
+    background: linear-gradient(180deg, #0b1a2b, #0c3547);
+    padding: 50px 30px;
+    text-align: center;
+    min-height: 260px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .browser-content::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 600 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,20 Q75,8 150,20 T300,20 T450,20 T600,20 L600,40 L0,40Z' fill='rgba(94,234,212,0.04)'/%3E%3C/svg%3E");
+    background-size: 600px 40px;
+    background-repeat: repeat-x;
+    animation: waveSlide 12s linear infinite;
+  }
+  .bc-logo {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700;
+    font-size: 36px;
+    color: #fff;
+    position: relative;
+    z-index: 1;
+  }
+  .bc-logo span { color: var(--seafoam); }
+  .bc-tagline {
+    font-family: 'Nunito', sans-serif;
+    font-size: 14px;
+    color: rgba(178, 245, 234, 0.35);
+    position: relative;
+    z-index: 1;
+    max-width: 340px;
+  }
+  .bc-btn {
+    display: inline-block;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    color: #0b1a2b;
+    background: var(--grad-wave);
+    padding: 10px 28px;
+    border-radius: 30px;
+    text-decoration: none;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 4px 20px rgba(94, 234, 212, 0.25);
+  }
+
+  /* Mobile mockup */
+  .mobile-frame {
+    width: 220px;
+    margin: 24px auto;
+    background: #000;
+    border-radius: 28px;
+    padding: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .mobile-screen {
+    border-radius: 18px;
+    overflow: hidden;
+    background: linear-gradient(180deg, #0b1a2b, #0e5e6f);
+    min-height: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    position: relative;
+  }
+  .mobile-screen::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 80px;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 300 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,20 Q37,8 75,20 T150,20 T225,20 T300,20 L300,40 L0,40Z' fill='rgba(94,234,212,0.05)'/%3E%3C/svg%3E");
+    background-size: 300px 40px;
+    background-repeat: repeat-x;
+  }
+  .ms-logo {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    color: #fff;
+    position: relative; z-index: 1;
+  }
+  .ms-logo span { color: var(--seafoam); }
+  .ms-sub {
+    font-family: 'Nunito', sans-serif;
+    font-size: 11px;
+    color: rgba(178, 245, 234, 0.3);
+    text-align: center;
+    position: relative; z-index: 1;
+    max-width: 160px;
+  }
+  .ms-btn {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 600;
+    font-size: 11px;
+    color: #0b1a2b;
+    background: var(--grad-wave);
+    padding: 8px 24px;
+    border-radius: 20px;
+    position: relative; z-index: 1;
+    box-shadow: 0 4px 16px rgba(94, 234, 212, 0.2);
+  }
+  .mobile-home-bar {
+    width: 100px;
+    height: 4px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+    margin: 10px auto 4px;
+  }
+
+  .footer {
+    text-align: center;
+    padding: 80px 20px 40px;
+    color: rgba(178, 245, 234, 0.2);
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<!-- =================== HERO =================== -->
+<div class="hero">
+  <div class="hero-ambient"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+
+  <div class="wave-layer wave-1">
+    <svg viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0,60 Q150,20 300,60 T600,60 T900,60 T1200,60 L1200,120 L0,120Z" fill="rgba(94,234,212,1)"/></svg>
+  </div>
+  <div class="wave-layer wave-2">
+    <svg viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0,50 Q150,30 300,50 T600,50 T900,50 T1200,50 L1200,120 L0,120Z" fill="rgba(6,182,212,1)"/></svg>
+  </div>
+  <div class="wave-layer wave-3">
+    <svg viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0,40 Q150,60 300,40 T600,40 T900,40 T1200,40 L1200,120 L0,120Z" fill="rgba(20,184,166,1)"/></svg>
+  </div>
+
+  <div class="hero-eyebrow">Brand Identity System</div>
+  <div class="hero-logo">
+    <div class="logotype">ContinuWitty</div>
+  </div>
+  <div class="hero-tagline">Intelligence that flows</div>
+  <div class="scroll-hint">
+    <span>Explore</span>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+  </div>
+</div>
+
+<!-- =================== LOGO OPTIONS =================== -->
+<div class="section">
+  <div class="section-label">Logo Variations</div>
+  <div class="section-title">The Mark</div>
+  <div class="section-desc">Nine logo treatments sharing the same ocean-flow DNA. Each fits a different context — from app icons to billboards.</div>
+
+  <div class="logo-grid">
+
+    <!-- L1: Primary -->
+    <div class="logo-card">
+      <div class="logo-preview l1-bg">
+        <div class="l1">
+          <div class="l1-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#5eead4" stroke-width="2" stroke-linecap="round" width="24" height="24"><polygon points="6,3 20,12 6,21"/></svg>
+          </div>
+          <div class="l1-text">Continu<span class="w">Witty</span></div>
+        </div>
+      </div>
+      <div class="logo-info">
+        <div class="name">Primary — Icon + Wordmark</div>
+        <div class="desc">Frosted glass icon with play symbol. Teal ocean gradient background with animated waves. The primary logo for headers, hero sections, and marketing.</div>
+        <span class="use">Website · Presentations · Marketing</span>
+      </div>
+    </div>
+
+    <!-- L2: Light Stacked -->
+    <div class="logo-card">
+      <div class="logo-preview l2-bg">
+        <div class="l2">
+          <div class="l2-word">Continu<span class="w">Witty</span></div>
+          <svg class="l2-wave" viewBox="0 0 120 12"><path d="M0,6 Q15,1 30,6 T60,6 T90,6 T120,6" fill="none" stroke="#0d9488" stroke-width="2.5" stroke-linecap="round"/></svg>
+          <div class="l2-sub">Intelligence that flows</div>
+        </div>
+      </div>
+      <div class="logo-info">
+        <div class="name">Light Mode — Wave Underline</div>
+        <div class="desc">Clean white background with a wave stroke underneath the wordmark. The wave IS the brand mark — simple and distinctive. Perfect for light UIs.</div>
+        <span class="use">Light UI · Documents · Print</span>
+      </div>
+    </div>
+
+    <!-- L3: Bubble -->
+    <div class="logo-card">
+      <div class="logo-preview l3-bg">
+        <div class="l3">
+          <div class="l3-bubble">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" width="24" height="24"><polygon points="7,4 19,12 7,20"/></svg>
+          </div>
+          <div class="l3-wordmark">Continu<span class="w">Witty</span></div>
+        </div>
+      </div>
+      <div class="logo-info">
+        <div class="name">Bubble — Friendly Mark</div>
+        <div class="desc">Water droplet-shaped circle with a play icon. The specular highlight gives it a 3D bubble feel. Friendly, approachable, consumer-facing.</div>
+        <span class="use">Consumer Apps · Onboarding · Social</span>
+      </div>
+    </div>
+
+    <!-- L4: Pill -->
+    <div class="logo-card">
+      <div class="logo-preview l4-bg">
+        <div class="l4">
+          <div class="l4-dot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0b1a2b" stroke-width="2.5" stroke-linecap="round" width="18" height="18"><polygon points="7,4 19,12 7,20"/></svg>
+          </div>
+          <div class="l4-name">Continu<span class="w">Witty</span></div>
+        </div>
+      </div>
+      <div class="logo-info">
+        <div class="name">Frosted Pill — Contained</div>
+        <div class="desc">Glassmorphism pill with gradient dot. Works as a floating badge, nav element, or interactive button. Self-contained and versatile.</div>
+        <span class="use">Navigation · Badges · Floating UI</span>
+      </div>
+    </div>
+
+    <!-- L5: Flowing -->
+    <div class="logo-card">
+      <div class="logo-preview l5-bg">
+        <div class="l5">
+          <div class="l5-main">ContinuWitty</div>
+          <span class="l5-flow">
+            <svg viewBox="0 0 200 20"><path d="M10,10 Q30,2 50,10 T90,10 T130,10 T170,10 T200,10" fill="none" stroke="rgba(94,234,212,0.4)" stroke-width="2" stroke-linecap="round"/></svg>
+          </span>
+        </div>
+      </div>
+      <div class="logo-info">
+        <div class="name">Deep Forest — Organic</div>
+        <div class="desc">Deep emerald gradient with flowing line underneath. Earthy, organic variant that leans into nature metaphors. Calm, grounded, premium.</div>
+        <span class="use">Premium Contexts · Environmental</span>
+      </div>
+    </div>
+
+    <!-- L6: Dark Minimal -->
+    <div class="logo-card">
+      <div class="logo-preview l6-bg">
+        <div class="l6">continu<span class="w">Witty</span></div>
+      </div>
+      <div class="logo-info">
+        <div class="name">Minimal Dark — Gradient Text</div>
+        <div class="desc">Ultra-minimal: light grey "continu" flows into gradient "Witty". Maximum restraint. Works anywhere dark mode exists.</div>
+        <span class="use">Developer Tools · Dark Mode · CLI</span>
+      </div>
+    </div>
+
+    <!-- L7: Water Drop -->
+    <div class="logo-card">
+      <div class="logo-preview l7-bg">
+        <div class="l7">
+          <div class="l7-drop">
+            <div class="drop-shape"></div>
+            <div class="play-inner"></div>
+          </div>
+          <div class="l7-wordmark">Continu<span class="w">Witty</span></div>
+        </div>
+      </div>
+      <div class="logo-info">
+        <div class="name">Water Drop — Centered Stack</div>
+        <div class="desc">Teardrop/water-drop icon with a play button carved inside. The drop shape reinforces the "flow" metaphor. Great for favicons and app icons.</div>
+        <span class="use">App Icon · Favicon · Stickers</span>
+      </div>
+    </div>
+
+    <!-- L8: Ripple -->
+    <div class="logo-card">
+      <div class="logo-preview l8-bg">
+        <div class="l8">
+          <div class="l8-ripple">
+            <span class="ring"></span>
+            <span class="ring"></span>
+            <span class="ring"></span>
+            <span class="core"></span>
+          </div>
+          <div class="l8-text">Continu<span class="w">Witty</span></div>
+        </div>
+      </div>
+      <div class="logo-info">
+        <div class="name">Ripple — Animated Mark</div>
+        <div class="desc">Concentric rings pulse outward from a center dot — like a stone dropped in water. Animated version is hypnotic. Static version works for print.</div>
+        <span class="use">Loading States · Animated · Motion</span>
+      </div>
+    </div>
+
+    <!-- L9: Friendly -->
+    <div class="logo-card">
+      <div class="logo-preview l9-bg">
+        <div class="l9">
+          <div class="l9-text">Continu<span class="w">Witty</span></div>
+        </div>
+      </div>
+      <div class="logo-info">
+        <div class="name">Friendly Wave — Rounded Type</div>
+        <div class="desc">Baloo 2 typeface with wavy underline adds warmth and playfulness. The friendliest variant — ideal for onboarding, tutorials, and help screens.</div>
+        <span class="use">Onboarding · Help · Tutorials</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- =================== APP ICONS =================== -->
+<div class="section">
+  <div class="section-label">Iconography</div>
+  <div class="section-title">App Icons</div>
+  <div class="section-desc">Six icon treatments, all sharing the ocean-flow palette. The water drop with play symbol is the recommended primary.</div>
+
+  <div class="app-icons-row">
+    <div class="app-icon-item">
+      <div class="app-icon-box" style="background: linear-gradient(135deg, #06b6d4, #0d9488);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" width="32" height="32"><polygon points="7,4 19,12 7,20"/></svg>
+      </div>
+      <div class="app-icon-label">Primary</div>
+    </div>
+    <div class="app-icon-item">
+      <div class="app-icon-box" style="background: linear-gradient(180deg, #0b1a2b, #164e63);">
+        <span style="font-family:'Comfortaa',sans-serif; font-weight:700; font-size:30px; color:#5eead4;">cW</span>
+      </div>
+      <div class="app-icon-label">Monogram</div>
+    </div>
+    <div class="app-icon-item">
+      <div class="app-icon-box" style="background: linear-gradient(135deg, #14b8a6, #06b6d4); position:relative;">
+        <div style="width:36px; height:36px; background:linear-gradient(180deg,#06b6d4,#0d9488); border-radius:50% 50% 50% 50%/60% 60% 40% 40%; transform:rotate(180deg); position:relative;">
+          <div style="position:absolute; top:50%; left:52%; transform:translate(-50%,-50%) rotate(180deg); width:0; height:0; border-left:10px solid #fff; border-top:7px solid transparent; border-bottom:7px solid transparent;"></div>
+        </div>
+      </div>
+      <div class="app-icon-label">Drop</div>
+    </div>
+    <div class="app-icon-item">
+      <div class="app-icon-box" style="background: #fff; border: 1px solid #e2e8f0;">
+        <span style="font-family:'Comfortaa',sans-serif; font-weight:700; font-size:28px; color:#0d9488;">C</span>
+      </div>
+      <div class="app-icon-label">Light</div>
+    </div>
+    <div class="app-icon-item">
+      <div class="app-icon-box" style="background: #0b1a2b; border: 1px solid rgba(94,234,212,0.15);">
+        <div style="position:relative; width:32px; height:32px; display:flex; align-items:center; justify-content:center;">
+          <div style="width:8px; height:8px; background:#5eead4; border-radius:50%;"></div>
+          <div style="position:absolute; width:18px; height:18px; border:1px solid rgba(94,234,212,0.3); border-radius:50%;"></div>
+          <div style="position:absolute; width:28px; height:28px; border:1px solid rgba(94,234,212,0.15); border-radius:50%;"></div>
+        </div>
+      </div>
+      <div class="app-icon-label">Ripple</div>
+    </div>
+    <div class="app-icon-item">
+      <div class="app-icon-box" style="background: linear-gradient(135deg, #0d9488, #0284c7); overflow:hidden; position:relative;">
+        <svg viewBox="0 0 72 72" width="72" height="72" style="position:absolute; bottom:0; left:0;">
+          <path d="M0,45 Q18,35 36,45 T72,45 L72,72 L0,72Z" fill="rgba(255,255,255,0.1)"/>
+          <path d="M0,52 Q18,42 36,52 T72,52 L72,72 L0,72Z" fill="rgba(255,255,255,0.07)"/>
+        </svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" width="28" height="28" style="position:relative; z-index:1;"><polygon points="7,4 19,12 7,20"/></svg>
+      </div>
+      <div class="app-icon-label">Wave</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- =================== DESIGN TOKENS =================== -->
+<div class="section">
+  <div class="section-label">Design System</div>
+  <div class="section-title">Design Tokens</div>
+  <div class="section-desc">The building blocks of the ocean flow language — colors, typography, radii, and motion principles.</div>
+
+  <div class="tokens-grid">
+
+    <!-- Colors -->
+    <div class="token-card">
+      <h3>Primary Palette</h3>
+      <div class="swatch-row">
+        <div><div class="swatch" style="background:#0b1a2b;"></div><div class="swatch-label">Deep</div></div>
+        <div><div class="swatch" style="background:#0c4a6e;"></div><div class="swatch-label">900</div></div>
+        <div><div class="swatch" style="background:#0e7490;"></div><div class="swatch-label">700</div></div>
+        <div><div class="swatch" style="background:#0d9488;"></div><div class="swatch-label">500</div></div>
+        <div><div class="swatch" style="background:#14b8a6;"></div><div class="swatch-label">400</div></div>
+        <div><div class="swatch" style="background:#5eead4;"></div><div class="swatch-label">Foam</div></div>
+      </div>
+      <div class="swatch-row">
+        <div><div class="swatch" style="background:#99f6e4;"></div><div class="swatch-label">Mint</div></div>
+        <div><div class="swatch" style="background:#b2f5ea;"></div><div class="swatch-label">100</div></div>
+        <div><div class="swatch" style="background:#f0fdfa;"></div><div class="swatch-label">Pearl</div></div>
+        <div><div class="swatch" style="background:#ffffff; border:1px solid rgba(255,255,255,0.1);"></div><div class="swatch-label">White</div></div>
+      </div>
+    </div>
+
+    <!-- Accents -->
+    <div class="token-card">
+      <h3>Accent & Semantic</h3>
+      <div class="swatch-row">
+        <div><div class="swatch" style="background:#fb923c;"></div><div class="swatch-label">Coral</div></div>
+        <div><div class="swatch" style="background:#fbbf24;"></div><div class="swatch-label">Sand</div></div>
+        <div><div class="swatch" style="background:#f87171;"></div><div class="swatch-label">Danger</div></div>
+        <div><div class="swatch" style="background:#34d399;"></div><div class="swatch-label">Success</div></div>
+      </div>
+      <div style="margin-top:12px; font-size:12px; color:rgba(178,245,234,0.3); line-height:1.6;">
+        Coral for warm CTAs and highlights. Sand for warnings. Teal remains dominant — accents are used sparingly.
+      </div>
+    </div>
+
+    <!-- Typography -->
+    <div class="token-card">
+      <h3>Typography</h3>
+      <div class="font-sample">
+        <div class="preview-text" style="font-family:'Comfortaa',sans-serif; font-weight:700;">ContinuWitty</div>
+        <div class="font-meta">Comfortaa 700 · Brand / Headlines</div>
+      </div>
+      <div class="font-sample">
+        <div class="preview-text" style="font-family:'Quicksand',sans-serif; font-weight:600; font-size:20px;">ContinuWitty</div>
+        <div class="font-meta">Quicksand 600 · Alt Headlines</div>
+      </div>
+      <div class="font-sample">
+        <div class="preview-text" style="font-family:'Nunito',sans-serif; font-weight:400; font-size:18px;">Body text that flows naturally</div>
+        <div class="font-meta">Nunito 400 · Body Copy</div>
+      </div>
+      <div class="font-sample">
+        <div class="preview-text" style="font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; color:var(--seafoam);">code && dev</div>
+        <div class="font-meta">JetBrains Mono · Code / Technical</div>
+      </div>
+    </div>
+
+    <!-- Shapes & Motion -->
+    <div class="token-card">
+      <h3>Shape & Motion</h3>
+      <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+        <div style="width:48px; height:48px; background:rgba(94,234,212,0.1); border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--seafoam);">8px</div>
+        <div style="width:48px; height:48px; background:rgba(94,234,212,0.1); border-radius:14px; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--seafoam);">14px</div>
+        <div style="width:48px; height:48px; background:rgba(94,234,212,0.1); border-radius:20px; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--seafoam);">20px</div>
+        <div style="width:48px; height:48px; background:rgba(94,234,212,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--seafoam);">full</div>
+      </div>
+      <div style="font-size:12px; color:rgba(178,245,234,0.3); line-height:1.7;">
+        Rounded corners always. Never sharp. Motion is easing: ease-in-out for waves, ease-out for interactions. Durations: 200ms micro, 400ms standard, 800ms+ ambient.
+      </div>
+    </div>
+
+    <!-- Gradients -->
+    <div class="token-card">
+      <h3>Gradient System</h3>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="height:32px; border-radius:8px; background:linear-gradient(135deg, #0c4a6e, #0e7490, #0d9488, #14b8a6);"></div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:9px; color:rgba(178,245,234,0.3);">Ocean — Primary brand gradient</div>
+        <div style="height:32px; border-radius:8px; background:linear-gradient(135deg, #06b6d4, #14b8a6, #5eead4);"></div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:9px; color:rgba(178,245,234,0.3);">Wave — CTA and accents</div>
+        <div style="height:32px; border-radius:8px; background:linear-gradient(180deg, #0b1a2b, #164e63);"></div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:9px; color:rgba(178,245,234,0.3);">Deep — Backgrounds and surfaces</div>
+      </div>
+    </div>
+
+    <!-- Principles -->
+    <div class="token-card">
+      <h3>Design Principles</h3>
+      <div style="font-size:13px; color:rgba(178,245,234,0.4); line-height:1.8;">
+        <strong style="color:var(--seafoam); font-weight:600;">Flow, not friction.</strong> Every element should feel like it's part of a current — smooth transitions, rounded edges, gentle motion.<br><br>
+        <strong style="color:var(--seafoam); font-weight:600;">Depth through layers.</strong> Use translucency, blur, and overlapping wave patterns to create depth without hard shadows.<br><br>
+        <strong style="color:var(--seafoam); font-weight:600;">Calm confidence.</strong> Teal is trustworthy. White space is generous. Nothing screams — everything invites.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- =================== MOCKUPS =================== -->
+<div class="section">
+  <div class="section-label">In Context</div>
+  <div class="section-title">Mockups</div>
+  <div class="section-desc">How the brand lives in real products.</div>
+
+  <div class="mockup-grid">
+    <!-- Website -->
+    <div class="mock-card">
+      <div style="padding:24px;">
+        <div class="browser-frame">
+          <div class="browser-bar">
+            <div class="browser-dots"><span></span><span></span><span></span></div>
+            <div class="browser-url">continuwitty.com</div>
+          </div>
+          <div class="browser-content">
+            <div class="bc-logo">Continu<span>Witty</span></div>
+            <div class="bc-tagline">AI that picks up where you left off — with intelligence that flows.</div>
+            <a class="bc-btn">Start Flowing →</a>
+          </div>
+        </div>
+      </div>
+      <div class="mock-label">Website — Landing Page</div>
+    </div>
+
+    <!-- Mobile -->
+    <div class="mock-card">
+      <div style="padding:24px; display:flex; justify-content:center;">
+        <div class="mobile-frame">
+          <div class="mobile-screen">
+            <div style="width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg,#06b6d4,#0d9488); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(13,148,136,0.3); margin-bottom:4px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" width="20" height="20"><polygon points="7,4 19,12 7,20"/></svg>
+            </div>
+            <div class="ms-logo">Continu<span>Witty</span></div>
+            <div class="ms-sub">Pick up where you left off</div>
+            <div class="ms-btn">Continue →</div>
+          </div>
+          <div class="mobile-home-bar"></div>
+        </div>
+      </div>
+      <div class="mock-label">Mobile — App Launch</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- =================== PROMPT =================== -->
+<div class="section-sm">
+  <div class="section-label">For AI Implementation</div>
+  <div class="section-title">The Design Prompt</div>
+  <div class="section-desc">Copy this prompt and use it with any LLM to generate UI that matches the ContinuWitty brand.</div>
+
+  <div class="prompt-container">
+    <div class="prompt-header">
+      <span class="label">design-system-prompt.md</span>
+      <span class="copy-hint">Copy & Use</span>
+    </div>
+    <div class="prompt-body"><span class="heading">## ContinuWitty — Design Language Prompt</span>
+
+<span class="comment">## Use this prompt as a system instruction or context block</span>
+<span class="comment">## when asking any LLM to generate UI for ContinuWitty.</span>
+
+<span class="heading">### Brand Identity</span>
+Brand name: <span class="hl">ContinuWitty</span>
+Tagline: <span class="hl">"Intelligence that flows"</span>
+Core metaphor: <span class="hl">Ocean / flowing water / continuity as current</span>
+Personality: <span class="hl">Calm, trustworthy, intelligent, approachable, modern</span>
+Never: <span class="hl">Sharp, aggressive, loud, cluttered, corporate-cold</span>
+
+<span class="heading">### Color System</span>
+Background (dark):     <span class="hl">#0b1a2b</span> (deep ocean)
+Surface:               <span class="hl">#0c3547</span> (mid ocean)
+Primary gradient:      <span class="hl">linear-gradient(135deg, #0c4a6e, #0e7490, #0d9488, #14b8a6)</span>
+CTA / accent gradient: <span class="hl">linear-gradient(135deg, #06b6d4, #14b8a6, #5eead4)</span>
+Seafoam (key accent):  <span class="hl">#5eead4</span>
+Mint:                  <span class="hl">#99f6e4</span>
+Text on dark:          <span class="hl">rgba(178, 245, 234, 0.5)</span> for body, <span class="hl">#fff</span> for headings
+Background (light):    <span class="hl">#f0fdfa</span> or <span class="hl">#fff</span>
+Text on light:         <span class="hl">#134e4a</span> for headings, <span class="hl">#0c4a6e</span> for body
+Warm accent (sparse):  <span class="hl">#fb923c</span> (coral, for highlights only)
+
+<span class="heading">### Typography</span>
+Headlines / Brand:  <span class="hl">Comfortaa (weight 600-700)</span> — rounded, geometric, friendly
+Alt headlines:      <span class="hl">Quicksand (weight 500-700)</span> — lighter alternative
+Body text:          <span class="hl">Nunito (weight 300-600)</span> — warm, highly readable
+Code / technical:   <span class="hl">JetBrains Mono (weight 400-500)</span>
+<span class="comment">Rule: All fonts must be rounded/soft. Never use sharp serif</span>
+<span class="comment">or condensed fonts. No Inter, Roboto, Arial, or system fonts.</span>
+
+<span class="heading">### Shape Language</span>
+Border radii:    <span class="hl">Always rounded — 8px (small), 14px (medium), 20px (large), full (pills/circles)</span>
+Corners:         <span class="hl">NEVER sharp 0px corners. Minimum 8px.</span>
+Cards:           <span class="hl">20px radius, 1px border rgba(94,234,212,0.08), backdrop-filter: blur(10px)</span>
+Buttons:         <span class="hl">Full rounded (border-radius: 9999px) with gradient backgrounds</span>
+Icons:           <span class="hl">Rounded stroke style (2-2.5px), stroke-linecap: round</span>
+
+<span class="heading">### Wave & Motion System</span>
+<span class="comment">Waves are the signature visual element. Use them as:</span>
+- Background decoration (SVG wave paths at bottom of sections)
+- Underline accents (wavy line under headings)
+- Dividers between sections
+- Loading/ambient animations
+
+Wave SVG pattern:
+<span class="hl">&lt;path d="M0,30 Q75,10 150,30 T300,30 T450,30 T600,30" /&gt;</span>
+
+Animation timing:
+- Waves: <span class="hl">8-15s linear infinite</span> (slow, ambient, translateX)
+- Micro interactions: <span class="hl">200ms ease-out</span>
+- Page transitions: <span class="hl">400ms ease-in-out</span>
+- Ambient pulses: <span class="hl">4-6s ease-in-out infinite</span>
+- Floating particles: <span class="hl">6-12s ease-in-out infinite</span>
+
+<span class="heading">### Surface & Depth</span>
+Use glassmorphism sparingly:
+<span class="hl">background: rgba(11, 26, 43, 0.5)</span>
+<span class="hl">backdrop-filter: blur(10px)</span>
+<span class="hl">border: 1px solid rgba(94, 234, 212, 0.08)</span>
+
+Ambient glow for hero sections:
+<span class="hl">radial-gradient(circle, rgba(14,116,144,0.12) 0%, transparent 70%)</span>
+
+Shadows are soft and teal-tinted:
+<span class="hl">box-shadow: 0 8px 24px rgba(13, 148, 136, 0.2)</span>
+
+<span class="heading">### Logo Usage</span>
+Primary: Icon (play symbol in frosted glass) + "ContinuWitty" in Comfortaa 700
+"Witty" portion: Always colored in <span class="hl">#5eead4</span> (dark bg) or <span class="hl">#0d9488</span> (light bg)
+App icon: Teal gradient with play symbol or water drop
+Monogram: "cW" in Comfortaa 700
+
+<span class="heading">### Component Patterns</span>
+Buttons:     Gradient background (#06b6d4 → #14b8a6), white text, full rounded, subtle glow shadow
+Inputs:      Rounded, translucent background, teal border on focus
+Cards:       Glassmorphism, rounded 20px, wave decoration optional at bottom
+Navigation:  Clean, minimal, logo left, rounded pill-style nav items
+Sections:    Generous padding (80px+ vertical), wave dividers between
+Empty states: Animated ripple or floating particles
+
+<span class="heading">### Content Voice</span>
+Tone: Calm, clear, slightly playful, confident without being pushy
+Words to use: flow, continue, pick up, stream, current, seamless
+Words to avoid: disrupt, break, hack, crush, dominate
+CTAs: "Start flowing", "Continue →", "Pick up where you left off"
+
+<span class="heading">### Don'ts</span>
+❌ Sharp corners or boxy layouts
+❌ High-contrast neon or aggressive colors
+❌ Dense, cluttered information hierarchy
+❌ Generic sans-serif fonts (Inter, Roboto, Arial)
+❌ Purple gradients (that's every other AI brand)
+❌ Heavy drop shadows or hard borders
+❌ Static, lifeless layouts — always add subtle motion</div>
+  </div>
+</div>
+
+<div class="footer">
+  ContinuWitty — Ocean Flow Brand System · 9 Logos · 6 App Icons · Design Tokens · Implementation Prompt
+</div>
+
+</body>
+</html>
