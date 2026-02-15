@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 
 import pytest
 
@@ -203,3 +204,32 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     listed_after = client.get(f"/api/v1/chat/sessions/{session_id}/engrams")
     assert listed_after.status_code == 200
     assert listed_after.json() == []
+
+
+@pytest.mark.integration
+def test_chat_api_reconciles_stale_session_user_id_after_db_reset(
+    client,
+    clean_db,
+    db_conn,
+) -> None:
+    _login(client)
+
+    settings = get_settings()
+    replacement_user_id = uuid.uuid4()
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE users
+            SET user_id = %s
+            WHERE username = %s
+            """,
+            (replacement_user_id, settings.ui_demo_username),
+        )
+    db_conn.commit()
+
+    created = _create_session(client, project_id="project-session-reconcile")
+    assert created["project_id"] == "project-session-reconcile"
+
+    me = client.get("/api/v1/me")
+    assert me.status_code == 200
+    assert me.json()["user_id"] == str(replacement_user_id)

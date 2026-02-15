@@ -39,7 +39,6 @@ from .repository import (
 )
 from .user_repository import (
     create_user,
-    ensure_user_store,
     get_user_auth_record,
     list_users,
     update_user,
@@ -55,10 +54,6 @@ async def lifespan(_app: FastAPI):
         ensure_schema_initialized()
     except Exception as exc:  # pragma: no cover - defensive for local startup mismatches
         print(f"[warn] failed to initialize schema: {exc}")
-    try:
-        ensure_user_store()
-    except Exception as exc:  # pragma: no cover - defensive for local startup mismatches
-        print(f"[warn] failed to initialize user store: {exc}")
     yield
     with suppress(Exception):
         agent_workflow.close()
@@ -90,13 +85,37 @@ mcp_service = McpService(chat_service=chat_service, embedding_dim=settings.embed
 
 def _session_user(request: Request) -> dict[str, Any] | None:
     user = request.session.get("user")
-    if isinstance(user, dict) and user.get("username") and user.get("role"):
+    if isinstance(user, dict) and user.get("user_id") and user.get("username") and user.get("role"):
         return user
     return None
 
 
+def _resolve_session_user(request: Request) -> dict[str, Any] | None:
+    user = _session_user(request)
+    if not user:
+        return None
+
+    try:
+        db_user = get_user_auth_record(user["username"])
+    except Exception:
+        db_user = None
+
+    if not db_user or not db_user.get("is_active"):
+        request.session.pop("user", None)
+        return None
+
+    canonical = {
+        "user_id": str(db_user["user_id"]),
+        "username": db_user["username"],
+        "role": db_user["role"],
+    }
+    if user != canonical:
+        request.session["user"] = canonical
+    return canonical
+
+
 def _is_authenticated(request: Request) -> bool:
-    return _session_user(request) is not None
+    return _resolve_session_user(request) is not None
 
 
 def _login_redirect() -> RedirectResponse:
@@ -137,28 +156,11 @@ def _authenticate_user(username: str, password: str) -> dict[str, Any] | None:
             "username": user["username"],
             "role": user["role"],
         }
-
-    current_settings = get_settings()
-    if username != current_settings.ui_demo_username:
-        return None
-
-    if current_settings.ui_demo_password_hash:
-        password_ok = verify_password(password, current_settings.ui_demo_password_hash)
-    else:
-        password_ok = password == current_settings.ui_demo_password
-
-    if not password_ok:
-        return None
-
-    return {
-        "user_id": "env-fallback-user",
-        "username": current_settings.ui_demo_username,
-        "role": UserRole.admin.value,
-    }
+    return None
 
 
 def _require_roles_api(request: Request, allowed_roles: set[str]) -> dict[str, Any]:
-    user = _session_user(request)
+    user = _resolve_session_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
     if user["role"] not in allowed_roles:
@@ -270,7 +272,7 @@ def login_submit(
 
 @app.post("/logout", include_in_schema=False)
 def logout(request: Request, csrf_token: str = Form(...)) -> Response:
-    user = _session_user(request)
+    user = _resolve_session_user(request)
     if not _verify_csrf_token(request, csrf_token):
         log_audit_event(
             request=request,
@@ -291,7 +293,7 @@ def logout(request: Request, csrf_token: str = Form(...)) -> Response:
 
 @app.get("/ui", response_class=HTMLResponse, include_in_schema=False)
 def ui_dashboard(request: Request) -> Response:
-    user = _session_user(request)
+    user = _resolve_session_user(request)
     if not user:
         return _login_redirect()
     return templates.TemplateResponse(
@@ -308,7 +310,7 @@ def ui_dashboard(request: Request) -> Response:
 
 @app.get("/ui/admin", response_class=HTMLResponse, include_in_schema=False)
 def ui_admin(request: Request) -> Response:
-    user = _session_user(request)
+    user = _resolve_session_user(request)
     if not user:
         return _login_redirect()
     if user["role"] != UserRole.admin.value:

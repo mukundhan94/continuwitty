@@ -5,13 +5,18 @@ export
 
 DIAGRAM_PUML_FILES := docs/architecture-workflows.puml docs/model-switch-engram-usecases.puml
 
-.PHONY: db-up db-down db-logs stack-up stack-down stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check diagram-render diagram-render-png
+.PHONY: db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check diagram-render diagram-render-png
 
 db-up:
 	docker compose up -d --build --force-recreate db
 
 db-down:
 	docker compose down
+
+db-reset:
+	docker compose down -v
+	rm -f data/langgraph_checkpoints.sqlite data/audit_events.jsonl
+	docker compose up -d --build --force-recreate db
 
 db-logs:
 	docker compose logs -f db
@@ -21,6 +26,11 @@ stack-up:
 
 stack-down:
 	docker compose down
+
+stack-reset:
+	docker compose down -v
+	rm -f data/langgraph_checkpoints.sqlite data/audit_events.jsonl
+	docker compose up -d --build --force-recreate db api web
 
 stack-logs:
 	docker compose logs -f db api web

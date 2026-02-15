@@ -93,6 +93,19 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS users_role_idx ON users (role);
 CREATE INDEX IF NOT EXISTS users_active_idx ON users (is_active);
 
+-- Fresh setup seed user for local development.
+-- username: admin
+-- password: admin123
+INSERT INTO users (user_id, username, password_hash, role, is_active)
+VALUES (
+  '00000000-0000-0000-0000-000000000001'::UUID,
+  'admin',
+  'pbkdf2_sha256$390000$00112233445566778899aabbccddeeff$45c0bdc16f1609a69d14a4e8d89974fd24556c45af75ee01c34bdb9de1c1832a',
+  'admin',
+  TRUE
+)
+ON CONFLICT (username) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS chat_sessions (
   session_id UUID PRIMARY KEY,
   owner_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

@@ -4,44 +4,8 @@ from uuid import UUID, uuid4
 
 from psycopg.errors import UniqueViolation
 
-from .auth import hash_password
-from .config import get_settings
 from .db import get_conn
 from .models import UserRecord, UserRole
-
-USERS_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS users (
-    user_id UUID PRIMARY KEY,
-    username TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('admin', 'analyst', 'viewer')),
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS users_role_idx ON users (role);
-CREATE INDEX IF NOT EXISTS users_active_idx ON users (is_active);
-"""
-
-
-def ensure_user_store() -> None:
-    settings = get_settings()
-    password_hash = settings.ui_demo_password_hash or hash_password(settings.ui_demo_password)
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(USERS_TABLE_SQL)
-        cur.execute(
-            """
-            INSERT INTO users (user_id, username, password_hash, role, is_active)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (username) DO NOTHING
-            """,
-            (
-                uuid4(),
-                settings.ui_demo_username,
-                password_hash,
-                UserRole.admin.value,
-                True,
-            ),
-        )
 
 
 def get_user_auth_record(username: str) -> dict | None:

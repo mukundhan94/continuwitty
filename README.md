@@ -71,6 +71,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add architecture playbook with Mermaid diagrams and multi-model continuity runbooks.
 - [x] Add detailed PlantUML architecture/workflow map and Docker-based renderer.
 - [x] Add detailed PlantUML use-case diagram for model switching and engram continuity lifecycle.
+- [x] Add clean reset scripts and stale-session reconciliation to keep chat creation stable after DB resets.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -354,7 +355,7 @@ engram/
 - `api/app/providers/bedrock_provider.py`: Bedrock adapter implementation.
 - `api/app/providers/registry.py`: provider adapter factory and resolver.
 - `api/app/repository.py`: SQL persistence, reranked semantic query, and citation-packed rehydration builder.
-- `api/app/user_repository.py`: user persistence, seeding, and role-aware updates.
+- `api/app/user_repository.py`: user persistence, lookup, and role-aware updates.
 - `api/app/embedding.py`: Deterministic local embedding helper.
 - `api/app/db.py`: DB connection lifecycle.
 - `api/app/config.py`: Environment-backed settings plus dev-mode safe config snapshot helpers.
@@ -488,11 +489,10 @@ UI testing entrypoints:
 - [http://localhost:8000/ui](http://localhost:8000/ui)
 - [http://localhost:8000/ui/admin](http://localhost:8000/ui/admin) (admin role)
 
-Default local UI credentials (override in `.env` if needed):
+Default local UI credentials (seeded in `db/init/001_schema.sql`):
 
 - username: `admin`
 - password: `admin123`
-- optional hash override: `UI_DEMO_PASSWORD_HASH` (if set, plain password env is ignored)
 
 Local security baseline knobs (optional in `.env`):
 
@@ -595,11 +595,18 @@ docker compose ps
 make stack-down
 ```
 
+Fresh clean reset commands (drops DB volume and local runtime files):
+
+```bash
+make db-reset
+make stack-reset
+```
+
 ### Docker Env Matrix (Core)
 
 - DB: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`
 - API runtime: `APP_ENV`, `LOG_CONFIG_IN_DEV`, `EMBEDDING_DIM`, `APP_SESSION_SECRET`
-- UI auth seed: `UI_DEMO_USERNAME`, `UI_DEMO_PASSWORD`, `UI_DEMO_PASSWORD_HASH`
+- UI auth defaults come from DB seed (`db/init/001_schema.sql`); acceptance runner reads `UI_USERNAME`/`UI_PASSWORD`.
 - Providers: `DEFAULT_CHAT_PROVIDER`, `DEFAULT_CHAT_MODEL`, `OPENAI_*`, `ANTHROPIC_*`, `AWS_*`
 - Web runtime: `WEB_PORT`, `VITE_API_PROXY_TARGET`, `VITE_ALLOWED_HOSTS`, `VITE_DEFAULT_*`
 - Acceptance profile: `ACCEPTANCE_WEB_BASE_URL`, `ACCEPTANCE_API_BASE_URL`, `ACCEPTANCE_BDD_TAGS`, `BEDROCK_LIVE_*`, `PW_HEADLESS`, `PW_TIMEOUT_MS`
@@ -1466,6 +1473,25 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - added file guide entry for `docs/model-switch-engram-usecases.puml`.
 4. Updated render automation:
    - `make diagram-render` and `make diagram-render-png` now target both PlantUML diagram sources explicitly.
+
+### 2026-02-15 (Fresh-reset session FK fix pass)
+
+1. Fixed stale-session user mapping after DB reset:
+   - API/UI auth now reconciles session user payload against current `users` table by username.
+   - stale cookie `user_id` values are auto-corrected to the active DB user record before chat routes run.
+2. Hardened demo user bootstrap for clean starts:
+   - moved local demo user bootstrap into `db/init/001_schema.sql` for fresh setup.
+   - removed startup-time user seeding from API lifespan path.
+   - login now authenticates against DB users only (no env-only fallback identity).
+3. Added reset scripts for clean local starts:
+   - `make db-reset` (drop volumes + clear local runtime files + start DB)
+   - `make stack-reset` (drop volumes + clear local runtime files + start DB/API/Web)
+4. Added regression test:
+   - integration test validates chat session creation still works when session cookie has stale `user_id` after DB identity change.
+5. Validation:
+   - `make test` passed (`82` tests)
+   - `make lint` passed
+   - `make format-check` passed
 
 ### Next Immediate Steps (One By One)
 
