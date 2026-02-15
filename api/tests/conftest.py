@@ -62,5 +62,14 @@ def ensure_schema(db_conn) -> None:
 @pytest.fixture
 def clean_db(db_conn, ensure_schema) -> None:
     with db_conn.cursor() as cur:
-        cur.execute("TRUNCATE TABLE engrams CASCADE")
+        cur.execute(
+            """
+            TRUNCATE TABLE
+                session_pinned_engrams,
+                chat_messages,
+                chat_sessions,
+                engrams
+            CASCADE
+            """
+        )
     db_conn.commit()

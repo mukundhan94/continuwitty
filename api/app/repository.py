@@ -85,7 +85,11 @@ def _pack_citations(
     return packed
 
 
-def create_engram(payload: MemoryEngramCreate, embedding_dim: int) -> EngramCreateResponse:
+def create_engram(
+    payload: MemoryEngramCreate,
+    embedding_dim: int,
+    owner_user_id: UUID | None = None,
+) -> EngramCreateResponse:
     engram_id = uuid4()
     now = datetime.now(UTC)
     retrieval_text = _build_retrieval_text(payload)
@@ -106,6 +110,8 @@ def create_engram(payload: MemoryEngramCreate, embedding_dim: int) -> EngramCrea
         "tags": payload.tags,
         "keywords": payload.keywords,
         "artifacts": [item.model_dump(mode="json") for item in payload.artifacts],
+        "visibility_scope": payload.visibility_scope,
+        "source_session_id": str(payload.source_session_id) if payload.source_session_id else None,
         "created_at": now.isoformat(),
     }
 
@@ -114,13 +120,13 @@ def create_engram(payload: MemoryEngramCreate, embedding_dim: int) -> EngramCrea
             """
                 INSERT INTO engrams (
                     engram_id, project_id, thread_id, created_at, updated_at, schema_version,
-                    title, abstract, engram_json, engram_markdown, tags, keywords,
-                    retrieval_text, embedding_model, embed
+                    title, abstract, engram_json, engram_markdown, tags, keywords, owner_user_id,
+                    visibility_scope, source_session_id, retrieval_text, embedding_model, embed
                 )
                 VALUES (
                     %(engram_id)s, %(project_id)s, %(thread_id)s, %(created_at)s, %(updated_at)s, '1.0',
-                    %(title)s, %(abstract)s, %(engram_json)s, %(engram_markdown)s, %(tags)s, %(keywords)s,
-                    %(retrieval_text)s, 'local-deterministic-v1', %(embed)s::vector
+                    %(title)s, %(abstract)s, %(engram_json)s, %(engram_markdown)s, %(tags)s, %(keywords)s, %(owner_user_id)s,
+                    %(visibility_scope)s, %(source_session_id)s, %(retrieval_text)s, 'local-deterministic-v1', %(embed)s::vector
                 )
                 """,
             {
@@ -135,6 +141,9 @@ def create_engram(payload: MemoryEngramCreate, embedding_dim: int) -> EngramCrea
                 "engram_markdown": payload.detailed_summary_markdown,
                 "tags": payload.tags,
                 "keywords": payload.keywords,
+                "owner_user_id": owner_user_id,
+                "visibility_scope": payload.visibility_scope,
+                "source_session_id": payload.source_session_id,
                 "retrieval_text": retrieval_text,
                 "embed": embedding_literal,
             },
@@ -181,16 +190,24 @@ def list_engrams(
     project_id: str | None = None,
     limit: int = 25,
     offset: int = 0,
+    actor_user_id: UUID | None = None,
 ) -> list[EngramSummary]:
     query = """
         SELECT
-            engram_id, project_id, thread_id, title, abstract, created_at, tags, keywords
+            engram_id, project_id, thread_id, title, abstract, created_at, tags, keywords,
+            owner_user_id, visibility_scope
         FROM engrams
     """
+    where_clauses: list[str] = []
     params: list = []
+    if actor_user_id:
+        where_clauses.append("(owner_user_id = %s OR visibility_scope = 'project')")
+        params.append(actor_user_id)
     if project_id:
-        query += " WHERE project_id = %s"
+        where_clauses.append("project_id = %s")
         params.append(project_id)
+    if where_clauses:
+        query += " WHERE " + " AND ".join(where_clauses)
     query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
     params.extend([limit, offset])
 
@@ -201,7 +218,11 @@ def list_engrams(
     return [EngramSummary(**row) for row in rows]
 
 
-def query_engrams(request: EngramQueryRequest, embedding_dim: int) -> list[EngramQueryResult]:
+def query_engrams(
+    request: EngramQueryRequest,
+    embedding_dim: int,
+    actor_user_id: UUID | None = None,
+) -> list[EngramQueryResult]:
     query_embedding = embed_text_local(request.query, embedding_dim)
     query_literal = _vector_literal(query_embedding)
 
@@ -211,6 +232,9 @@ def query_engrams(request: EngramQueryRequest, embedding_dim: int) -> list[Engra
     if request.project_id:
         where_clauses.append("project_id = %s")
         params.append(request.project_id)
+    if actor_user_id:
+        where_clauses.append("(owner_user_id = %s OR visibility_scope = 'project')")
+        params.append(actor_user_id)
     if request.tags:
         where_clauses.append("tags && %s")
         params.append(request.tags)
@@ -239,6 +263,8 @@ def query_engrams(request: EngramQueryRequest, embedding_dim: int) -> list[Engra
             created_at,
             tags,
             keywords,
+            owner_user_id,
+            visibility_scope,
             retrieval_text,
             embed <=> %s::vector AS distance
         FROM engrams
@@ -284,22 +310,34 @@ def query_engrams(request: EngramQueryRequest, embedding_dim: int) -> list[Engra
             created_at=row["created_at"],
             tags=row.get("tags") or [],
             keywords=row.get("keywords") or [],
+            owner_user_id=row.get("owner_user_id"),
+            visibility_scope=row.get("visibility_scope") or "private",
             distance=row["distance"],
         )
         for row in trimmed
     ]
 
 
-def get_rehydration_bundle(engram_id: UUID) -> RehydrationBundle | None:
+def get_rehydration_bundle(
+    engram_id: UUID,
+    actor_user_id: UUID | None = None,
+) -> RehydrationBundle | None:
+    where_clause = "WHERE engram_id = %s"
+    where_params: list = [engram_id]
+    if actor_user_id:
+        where_clause += " AND (owner_user_id = %s OR visibility_scope = 'project')"
+        where_params.append(actor_user_id)
+
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
                 SELECT
-                    engram_id, project_id, title, abstract, engram_json, engram_markdown
+                    engram_id, project_id, title, abstract, engram_json, engram_markdown,
+                    owner_user_id, visibility_scope
                 FROM engrams
-                WHERE engram_id = %s
+                {where_clause}
                 """,
-            (engram_id,),
+            where_params,
         )
         row = cur.fetchone()
         if not row:
@@ -364,10 +402,20 @@ def get_rehydration_bundle(engram_id: UUID) -> RehydrationBundle | None:
         open_questions=open_questions,
         top_citations=packed_citations,
         context_markdown=context_markdown,
+        owner_user_id=row.get("owner_user_id"),
+        visibility_scope=row.get("visibility_scope") or "private",
     )
 
 
-def get_engram_sources(engram_id: UUID, limit: int = 100) -> list[EngramSourceRecord]:
+def get_engram_sources(
+    engram_id: UUID,
+    limit: int = 100,
+    actor_user_id: UUID | None = None,
+) -> list[EngramSourceRecord]:
+    bundle = get_rehydration_bundle(engram_id, actor_user_id=actor_user_id)
+    if not bundle:
+        return []
+
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """

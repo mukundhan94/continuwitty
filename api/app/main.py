@@ -13,6 +13,7 @@ from .agent_workflow import AgentWorkflowService
 from .audit import log_audit_event
 from .auth import generate_csrf_token, hash_password, verify_password
 from .config import get_settings
+from .db import ensure_schema_initialized
 from .login_guard import LoginAttemptGuard
 from .models import (
     EngramCreateResponse,
@@ -45,6 +46,10 @@ from .user_repository import (
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    try:
+        ensure_schema_initialized()
+    except Exception as exc:  # pragma: no cover - defensive for local startup mismatches
+        print(f"[warn] failed to initialize schema: {exc}")
     try:
         ensure_user_store()
     except Exception as exc:  # pragma: no cover - defensive for local startup mismatches

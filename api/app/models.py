@@ -42,6 +42,8 @@ class MemoryEngramCreate(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     artifacts: list[ArtifactIn] = Field(default_factory=list)
     retrieval_text: str | None = None
+    visibility_scope: str = "private"
+    source_session_id: UUID | None = None
 
 
 class EngramSummary(BaseModel):
@@ -53,6 +55,8 @@ class EngramSummary(BaseModel):
     created_at: datetime
     tags: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+    owner_user_id: UUID | None = None
+    visibility_scope: str = "private"
 
 
 class EngramCreateResponse(BaseModel):
@@ -78,6 +82,8 @@ class EngramQueryResult(BaseModel):
     created_at: datetime
     tags: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+    owner_user_id: UUID | None = None
+    visibility_scope: str = "private"
     distance: float
 
 
@@ -101,6 +107,17 @@ class UserRole(str, Enum):
     admin = "admin"
     analyst = "analyst"
     viewer = "viewer"
+
+
+class VisibilityScope(str, Enum):
+    private = "private"
+    project = "project"
+
+
+class ChatProvider(str, Enum):
+    openai = "openai"
+    anthropic = "anthropic"
+    bedrock = "bedrock"
 
 
 class UserRecord(BaseModel):
@@ -133,3 +150,105 @@ class RehydrationBundle(BaseModel):
     open_questions: list[str] = Field(default_factory=list)
     top_citations: list[RehydrationCitation] = Field(default_factory=list)
     context_markdown: str
+    owner_user_id: UUID | None = None
+    visibility_scope: str = "private"
+
+
+class ChatSessionCreateRequest(BaseModel):
+    project_id: str
+    title: str
+    provider: ChatProvider = ChatProvider.openai
+    model_id: str = "gpt-4o-mini"
+    system_prompt: str = ""
+    visibility_scope: VisibilityScope = VisibilityScope.private
+    autosave_enabled: bool = False
+
+
+class ChatSessionUpdateRequest(BaseModel):
+    title: str | None = None
+    provider: ChatProvider | None = None
+    model_id: str | None = None
+    system_prompt: str | None = None
+    visibility_scope: VisibilityScope | None = None
+    autosave_enabled: bool | None = None
+
+
+class ChatSessionRecord(BaseModel):
+    session_id: UUID
+    owner_user_id: UUID
+    project_id: str
+    title: str
+    provider: ChatProvider
+    model_id: str
+    system_prompt: str
+    visibility_scope: VisibilityScope
+    autosave_enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatMessageCreateRequest(BaseModel):
+    content_text: str
+
+
+class ChatMessageRecord(BaseModel):
+    message_id: UUID
+    session_id: UUID
+    role: str
+    content_text: str
+    provider: str | None = None
+    model_id: str | None = None
+    token_usage_json: dict = Field(default_factory=dict)
+    used_engram_ids: list[UUID] = Field(default_factory=list)
+    created_at: datetime
+
+
+class PinEngramRequest(BaseModel):
+    engram_id: UUID
+
+
+class PinnedEngramRecord(BaseModel):
+    session_id: UUID
+    engram_id: UUID
+    pinned_by_user_id: UUID
+    created_at: datetime
+
+
+class ChatSendResponse(BaseModel):
+    session_id: UUID
+    message_id: UUID
+    reply_message_id: UUID
+    assistant_text: str
+    used_engram_ids: list[UUID] = Field(default_factory=list)
+
+
+class SaveSessionAsEngramRequest(BaseModel):
+    title: str
+    abstract: str
+    visibility_scope: VisibilityScope = VisibilityScope.private
+    tags: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+
+
+class SaveSessionAsEngramResponse(BaseModel):
+    engram_id: UUID
+    session_id: UUID
+    created_at: datetime
+
+
+class ContinueSessionRequest(BaseModel):
+    title: str | None = None
+
+
+class McpJsonRpcRequest(BaseModel):
+    jsonrpc: str = "2.0"
+    id: str | int
+    method: str
+    params: dict = Field(default_factory=dict)
+
+
+class McpJsonRpcResponse(BaseModel):
+    jsonrpc: str = "2.0"
+    id: str | int
+    result: dict | None = None
+    error: dict | None = None

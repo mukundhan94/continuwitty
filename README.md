@@ -26,12 +26,16 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add reranking/citation-packing improvements for retrieval quality.
 - [x] Add background consolidation jobs for long-run memory maintenance.
 - [x] Add local security baseline (audit log + login rate limiting/lockout).
+- [x] Add schema/repository layer for chat sessions, pinning, and visibility.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
 
 - `Plan.md`: historical baseline plan and completed local-first milestones.
 - `Plan.Next.md`: active implementation roadmap for chat continuity, multi-provider adapters, and MCP streaming.
+- Phase status:
+  - Phase 0-1 completed (`Plan.Next.md`, `AGENT.md`, `skills/`).
+  - Phase 2 completed (chat/session schema + repositories + visibility enforcement).
 
 ## Agent Guide
 
@@ -145,6 +149,7 @@ engram/
       agent_workflow.py
       audit.py
       auth.py
+      chat_repository.py
       cli.py
       consolidation.py
       config.py
@@ -173,6 +178,7 @@ engram/
 - `api/app/agent_workflow.py`: LangGraph workflow, checkpointing, and resume logic.
 - `api/app/audit.py`: append-only local audit event writer (`jsonl`).
 - `api/app/auth.py`: password hashing/verification and CSRF token helpers.
+- `api/app/chat_repository.py`: chat session/message and pinned-engram persistence with visibility checks.
 - `api/app/cli.py`: local terminal workflows for upload/search/rehydrate.
 - `api/app/consolidation.py`: local background maintenance logic for consolidation snapshots.
 - `api/app/login_guard.py`: login attempt rate-limit and lockout state machine.
@@ -197,6 +203,8 @@ engram/
 - `api/tests/test_cli.py`: unit tests for CLI argument handling and command behavior.
 - `api/tests/test_consolidation.py`: unit tests for consolidation job behavior and guardrails.
 - `api/tests/test_ui_auth.py`: login/logout/session workflow + CSRF + rate-limit + audit checks.
+- `api/tests/test_chat_repository.py`: integration coverage for chat sessions/messages/pinning visibility.
+- `api/tests/test_engram_visibility.py`: integration checks for owner/project scope filtering behavior.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
 - `Makefile`: Local run shortcuts.
@@ -651,9 +659,36 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make test` -> `44 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
+### 2026-02-15 (Plan.Next phase 2: schema and repository layer)
+
+1. Added schema extensions for continuity and access control:
+   - `engrams.owner_user_id`
+   - `engrams.visibility_scope` (`private`/`project`)
+   - `engrams.source_session_id`
+   - new tables: `chat_sessions`, `chat_messages`, `session_pinned_engrams`
+2. Added compatibility bootstrap:
+   - `ensure_schema_initialized()` runs schema DDL at app startup for existing local databases.
+3. Added chat repository module:
+   - `api/app/chat_repository.py` with create/list/get/update session operations
+   - message write/list operations
+   - pin/unpin/list pinned engrams with visibility enforcement
+4. Extended data contracts in `api/app/models.py`:
+   - chat/session/message/pin request-response models
+   - visibility and provider enums
+   - MCP JSON-RPC request/response types
+5. Added integration tests:
+   - `api/tests/test_chat_repository.py`
+   - `api/tests/test_engram_visibility.py`
+6. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `49 passed`
+   - `make eval` -> `4/4` cases passed (score `1.0`)
+
 ### Next Immediate Steps (One By One)
 
-1. Add production auth hardening (oauth/oidc, audit events, rate limits).
+1. Add provider adapter layer for OpenAI, Anthropic, and Bedrock.
+2. Add chat API endpoints and continuity flows.
+3. Add MCP JSON-RPC over SSE endpoint and tool routing.
 
 ## MVP API Surface
 
@@ -833,6 +868,20 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - oauth/oidc integration
   - centralized audit-event pipeline
   - distributed auth rate limits and lockout policy
+
+### Milestone 10 (Completed)
+
+- Plan.Next phase 2 schema and repository layer:
+  - chat/session/pinning tables
+  - engram ownership and visibility fields
+  - visibility-aware repository filtering
+
+### Milestone 11 (Next)
+
+- Provider adapter layer:
+  - OpenAI
+  - Anthropic
+  - Bedrock
 
 ## Example: Create Engram
 
