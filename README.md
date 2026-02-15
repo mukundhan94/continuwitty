@@ -29,6 +29,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add schema/repository layer for chat sessions, pinning, and visibility.
 - [x] Add provider adapter layer (OpenAI, Anthropic, Bedrock) with registry.
 - [x] Add chat APIs and continuity workflows (pin, save-as-engram, continue, stream).
+- [x] Add MCP JSON-RPC over SSE endpoint with chat/engram/user tool routing.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -40,6 +41,7 @@ This README is written for a newcomer and follows an implementation sequence bas
   - Phase 2 completed (chat/session schema + repositories + visibility enforcement).
   - Phase 3 completed (provider adapters + registry + provider config contracts).
   - Phase 4 completed (chat API routes + context assembler + continuity flows).
+  - Phase 5 completed (MCP stream endpoint + tool execution + JSON-RPC error framing).
 
 ## Agent Guide
 
@@ -170,6 +172,11 @@ engram/
       embedding.py
       login_guard.py
       main.py
+      mcp/
+        __init__.py
+        api.py
+        errors.py
+        service.py
       models.py
       providers/
         __init__.py
@@ -207,6 +214,9 @@ engram/
 - `api/app/cli.py`: local terminal workflows for upload/search/rehydrate.
 - `api/app/consolidation.py`: local background maintenance logic for consolidation snapshots.
 - `api/app/login_guard.py`: login attempt rate-limit and lockout state machine.
+- `api/app/mcp/api.py`: MCP JSON-RPC over SSE route layer.
+- `api/app/mcp/errors.py`: MCP RPC error types and codes.
+- `api/app/mcp/service.py`: MCP tool dispatch and JSON-RPC frame generation.
 - `api/app/models.py`: Request/response and engram schema models.
 - `api/app/providers/base.py`: provider adapter contract and normalized request/response types.
 - `api/app/providers/errors.py`: provider-layer error taxonomy.
@@ -238,6 +248,7 @@ engram/
 - `api/tests/test_chat_api_integration.py`: end-to-end chat API lifecycle and continuity flow tests.
 - `api/tests/test_chat_context.py`: context assembly merge/dedupe behavior tests.
 - `api/tests/test_chat_service.py`: chat service orchestration and save/continue behavior tests.
+- `api/tests/test_mcp_api_integration.py`: MCP SSE transport and tool success/error/auth coverage.
 - `api/tests/test_engram_visibility.py`: integration checks for owner/project scope filtering behavior.
 - `api/tests/test_provider_registry.py`: provider registry construction and adapter selection checks.
 - `api/tests/test_provider_adapters.py`: adapter normalization and error-path tests.
@@ -781,11 +792,34 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make test` -> `67 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
+### 2026-02-15 (Plan.Next phase 5: MCP HTTP stream server)
+
+1. Added MCP domain package under `api/app/mcp`:
+   - `api.py`: `/api/v1/mcp/stream` transport endpoint
+   - `service.py`: JSON-RPC tool dispatcher and event framing
+   - `errors.py`: structured RPC error model
+2. Implemented JSON-RPC over SSE behavior:
+   - SSE events carry JSON-RPC frames (`result`, `error`, and `mcp.event` notifications)
+   - deterministic request `id` correlation in all frames
+3. Implemented initial MCP tool handlers:
+   - `chat.create_session`, `chat.list_sessions`, `chat.get_session`, `chat.send_message`, `chat.save_as_engram`, `chat.continue_session`
+   - `engram.create`, `engram.query`, `engram.rehydrate`, `engram.pin_to_session`
+   - `user.get_profile`, `user.list_projects`
+4. Enforced auth/visibility parity with API contracts:
+   - endpoint requires authenticated session role
+   - tool calls reuse chat/engram service/repository authorization paths
+5. Added integration tests:
+   - `api/tests/test_mcp_api_integration.py` for success/error/auth paths and streaming behavior
+6. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `72 passed`
+   - `make eval` -> `4/4` cases passed (score `1.0`)
+
 ### Next Immediate Steps (One By One)
 
-1. Add MCP JSON-RPC over SSE endpoint and tool routing.
-2. Add React chat UI with session/pin/save workflows.
-3. Add UI-level tests for chat streaming, pin/share, and continue flows.
+1. Add React chat UI with session/pin/save workflows.
+2. Add UI-level tests for chat streaming, pin/share, and continue flows.
+3. Add MCP client examples and validation fixtures for external agent integrations.
 
 ## MVP API Surface
 
@@ -809,10 +843,58 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
 - `DELETE /api/v1/chat/sessions/{session_id}/engrams/{engram_id}`
 - `POST /api/v1/chat/sessions/{session_id}/save-engram`
 - `POST /api/v1/chat/sessions/{session_id}/continue`
+- `POST /api/v1/mcp/stream`
 - `POST /api/v1/agent-runs`
 - `GET /api/v1/agent-runs/{thread_id}`
 - `POST /api/v1/agent-runs/{thread_id}/resume`
 - `GET /healthz`
+
+## MCP Stream Usage (JSON-RPC over SSE)
+
+Endpoint:
+
+- `POST /api/v1/mcp/stream`
+
+Request body:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "tool-call-1",
+  "method": "chat.send_message",
+  "params": {
+    "session_id": "00000000-0000-0000-0000-000000000000",
+    "content_text": "Summarize the pinned engrams",
+    "stream": true
+  }
+}
+```
+
+SSE framing:
+
+- `event: jsonrpc`
+- `data: <JSON-RPC frame>`
+
+Frame types:
+
+- success frame: `{"jsonrpc":"2.0","id":"...","result":{...}}`
+- error frame: `{"jsonrpc":"2.0","id":"...","error":{"code":...,"message":"...","data":{...}}}`
+- progress frame: `{"jsonrpc":"2.0","method":"mcp.event","params":{"id":"...","tool":"chat.send_message","event":"chunk|meta|done","data":{...}}}`
+
+Initial tools:
+
+- `chat.create_session`
+- `chat.list_sessions`
+- `chat.get_session`
+- `chat.send_message`
+- `chat.save_as_engram`
+- `chat.continue_session`
+- `engram.create`
+- `engram.query`
+- `engram.rehydrate`
+- `engram.pin_to_session`
+- `user.get_profile`
+- `user.list_projects`
 
 ## CLI Workflow (Local)
 
@@ -1000,12 +1082,20 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - save-as-engram and continue-session flows
   - context assembly with `used_engram_ids` and `source_references`
 
-### Milestone 13 (Next)
+### Milestone 13 (Completed)
 
-- MCP HTTP stream layer:
+- MCP HTTP stream layer completed:
   - JSON-RPC over SSE transport
-  - chat/engram tool routing
+  - chat/engram/user tool routing
   - auth/visibility parity with REST APIs
+  - structured error frames and correlation IDs
+
+### Milestone 14 (Next)
+
+- React chat UI layer:
+  - session list/create workflow
+  - streaming transcript and retry/error handling
+  - pin/save/continue controls and engram ID copy workflows
 
 ## Example: Create Engram
 

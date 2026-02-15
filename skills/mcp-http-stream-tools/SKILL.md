@@ -15,6 +15,12 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 - Stream events as SSE `data:` lines containing JSON payloads.
 - Include deterministic `id` correlation for every tool call.
 - Return structured errors with code/message/data.
+- Emit progress notifications as `mcp.event` frames for long-running tools.
+
+## Module Layout (Current)
+- `api/app/mcp/api.py`: HTTP transport and SSE writer.
+- `api/app/mcp/service.py`: tool dispatch and JSON-RPC frame generation.
+- `api/app/mcp/errors.py`: RPC error object and codes.
 
 ## Tool Implementation Sequence
 1. Define input/output schema.

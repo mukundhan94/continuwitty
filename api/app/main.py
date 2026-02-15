@@ -16,6 +16,7 @@ from .chat import ChatService, create_chat_router
 from .config import get_settings
 from .db import ensure_schema_initialized
 from .login_guard import LoginAttemptGuard
+from .mcp import McpService, create_mcp_router
 from .models import (
     EngramCreateResponse,
     EngramQueryRequest,
@@ -81,6 +82,7 @@ login_attempt_guard = LoginAttemptGuard(
     lockout_seconds=settings.login_lockout_seconds,
 )
 chat_service = ChatService(embedding_dim=settings.embedding_dim)
+mcp_service = McpService(chat_service=chat_service, embedding_dim=settings.embedding_dim)
 
 
 def _session_user(request: Request) -> dict[str, Any] | None:
@@ -171,6 +173,12 @@ def _require_authenticated_api_user(request: Request) -> dict[str, Any]:
 app.include_router(
     create_chat_router(
         chat_service=chat_service,
+        require_api_actor=_require_authenticated_api_user,
+    )
+)
+app.include_router(
+    create_mcp_router(
+        mcp_service=mcp_service,
         require_api_actor=_require_authenticated_api_user,
     )
 )

@@ -6,6 +6,7 @@ Use it as the default workflow when adding or refactoring features.
 ## 1. Repository Map
 - `api/app/`: FastAPI services, models, repositories, auth, provider adapters, MCP server.
 - `api/app/chat/`: chat domain package (API router, service orchestration, context assembly, errors).
+- `api/app/mcp/`: MCP domain package (SSE transport, JSON-RPC dispatch, tool errors).
 - `api/app/providers/`: provider domain package (`base`, `errors`, concrete adapters, `registry`).
 - `api/tests/`: unit and integration tests.
 - `api/evals/`: scenario-based eval harness.
@@ -76,6 +77,7 @@ Use it as the default workflow when adding or refactoring features.
 - Enforce auth/visibility checks exactly as API routes do.
 - Stream responses using JSON-RPC framed SSE events.
 - Return structured error payloads with machine-parseable codes.
+- Keep all tool routing in `api/app/mcp/service.py`; avoid embedding tool logic in route handlers.
 
 ## 9. Testing Requirements
 - Unit tests for pure logic and adapters.
