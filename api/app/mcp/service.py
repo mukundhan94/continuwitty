@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -24,6 +25,15 @@ from .errors import McpRpcError
 
 
 class McpService:
+    """JSON-RPC tool dispatcher for MCP-over-SSE.
+
+    Design intent:
+    - Keep transport in `mcp/api.py` and business logic in domain services/repositories.
+    - Support both legacy direct tool methods (`chat.*`, `engram.*`, `user.*`)
+      and interoperable MCP-style methods (`initialize`, `tools/list`, `tools/call`).
+    - Keep auth and visibility parity with REST handlers by requiring a resolved actor.
+    """
+
     def __init__(self, chat_service: ChatService, embedding_dim: int) -> None:
         self._chat_service = chat_service
         self._embedding_dim = embedding_dim
@@ -96,16 +106,193 @@ class McpService:
             project_ids.add(item.project_id)
         return sorted(project_ids)
 
-    def _dispatch_non_stream(
+    @staticmethod
+    def _tool_call_success(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        # `tools/call` responses include a human-readable text content field and
+        # a structured payload. `default=str` keeps UUID/datetime values serializable
+        # without losing deterministic machine-readable `structuredContent`.
+        return {
+            "tool_name": tool_name,
+            "structuredContent": payload,
+            "content": [{"type": "text", "text": json.dumps(payload, default=str)}],
+            "isError": False,
+        }
+
+    @staticmethod
+    def _tool_catalog() -> list[dict[str, Any]]:
+        # Keep this catalog synchronized with dispatcher behavior and tests.
+        # External MCP clients depend on stable tool names and input schemas.
+        return [
+            {
+                "name": "chat.create_session",
+                "description": "Create a chat session in a project.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["project_id", "title"],
+                    "properties": {
+                        "project_id": {"type": "string"},
+                        "title": {"type": "string"},
+                        "provider": {"type": "string"},
+                        "model_id": {"type": "string"},
+                        "system_prompt": {"type": "string"},
+                        "visibility_scope": {"type": "string", "enum": ["private", "project"]},
+                        "autosave_enabled": {"type": "boolean"},
+                    },
+                },
+            },
+            {
+                "name": "chat.list_sessions",
+                "description": "List chat sessions for the authenticated user.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {"type": "string"},
+                        "limit": {"type": "integer", "minimum": 1},
+                        "offset": {"type": "integer", "minimum": 0},
+                    },
+                },
+            },
+            {
+                "name": "chat.get_session",
+                "description": "Get chat session metadata by session_id.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {"session_id": {"type": "string", "format": "uuid"}},
+                },
+            },
+            {
+                "name": "chat.send_message",
+                "description": "Send a user message in a chat session (streaming supported).",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id", "content_text"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "content_text": {"type": "string"},
+                        "stream": {"type": "boolean"},
+                    },
+                },
+            },
+            {
+                "name": "chat.save_as_engram",
+                "description": "Save a chat session as an engram artifact.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id", "title"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "title": {"type": "string"},
+                        "abstract": {"type": "string"},
+                        "visibility_scope": {"type": "string", "enum": ["private", "project"]},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "keywords": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+            },
+            {
+                "name": "chat.continue_session",
+                "description": "Create a continued session carrying pinned engram context.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "title": {"type": "string"},
+                    },
+                },
+            },
+            {
+                "name": "engram.create",
+                "description": "Create a new memory engram with summary metadata.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["project_id", "title", "abstract", "detailed_summary_markdown"],
+                    "properties": {
+                        "project_id": {"type": "string"},
+                        "thread_id": {"type": "string"},
+                        "title": {"type": "string"},
+                        "abstract": {"type": "string"},
+                        "detailed_summary_markdown": {"type": "string"},
+                        "visibility_scope": {"type": "string", "enum": ["private", "project"]},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "keywords": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+            },
+            {
+                "name": "engram.query",
+                "description": "Query engrams by semantic text plus metadata filters.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["query"],
+                    "properties": {
+                        "query": {"type": "string"},
+                        "top_k": {"type": "integer", "minimum": 1, "maximum": 50},
+                        "project_id": {"type": "string"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "keywords": {"type": "array", "items": {"type": "string"}},
+                        "created_after": {"type": "string", "format": "date-time"},
+                        "created_before": {"type": "string", "format": "date-time"},
+                    },
+                },
+            },
+            {
+                "name": "engram.rehydrate",
+                "description": "Return a compact and citation-packed rehydration bundle.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["engram_id"],
+                    "properties": {"engram_id": {"type": "string", "format": "uuid"}},
+                },
+            },
+            {
+                "name": "engram.pin_to_session",
+                "description": "Pin an engram to a chat session context chain.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id", "engram_id"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "engram_id": {"type": "string", "format": "uuid"},
+                    },
+                },
+            },
+            {
+                "name": "user.get_profile",
+                "description": "Get the authenticated user profile.",
+                "inputSchema": {"type": "object", "properties": {}},
+            },
+            {
+                "name": "user.list_projects",
+                "description": "List project IDs visible to the authenticated user.",
+                "inputSchema": {"type": "object", "properties": {}},
+            },
+        ]
+
+    @staticmethod
+    def _tool_name_and_params_for_tools_call(
+        params: dict[str, Any],
+    ) -> tuple[str, dict[str, Any]]:
+        tool_name = params.get("name")
+        if not isinstance(tool_name, str) or not tool_name:
+            raise McpRpcError(code=-32602, message="Invalid params", data={"missing": "name"})
+
+        tool_params = params.get("arguments", {})
+        if tool_params is None:
+            tool_params = {}
+        if not isinstance(tool_params, dict):
+            raise McpRpcError(code=-32602, message="Invalid params", data={"invalid": "arguments"})
+        return tool_name, tool_params
+
+    def _dispatch_tool(
         self,
         *,
         actor: dict[str, Any],
         actor_user_id: UUID,
-        request: McpJsonRpcRequest,
+        method: str,
+        params: dict[str, Any],
     ) -> dict[str, Any]:
-        params = request.params
-        method = request.method
-
         if method == "chat.create_session":
             created = self._chat_service.create_session(
                 actor_user_id=actor_user_id,
@@ -198,6 +385,45 @@ class McpService:
             data={"method": method},
         )
 
+    def _dispatch_non_stream(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        request: McpJsonRpcRequest,
+    ) -> dict[str, Any]:
+        params = request.params
+        method = request.method
+
+        # Interop surface for standard MCP clients.
+        if method == "initialize":
+            return {
+                "protocolVersion": "2024-11-05",
+                "serverInfo": {"name": "engram-vault-mcp", "version": "0.1.0"},
+                "capabilities": {"tools": {"listChanged": False}},
+            }
+
+        if method == "tools/list":
+            return {"tools": self._tool_catalog()}
+
+        if method == "tools/call":
+            tool_name, tool_params = self._tool_name_and_params_for_tools_call(params)
+            tool_payload = self._dispatch_tool(
+                actor=actor,
+                actor_user_id=actor_user_id,
+                method=tool_name,
+                params=tool_params,
+            )
+            return self._tool_call_success(tool_name, tool_payload)
+
+        # Backward-compatible direct method path.
+        return self._dispatch_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+        )
+
     def stream_call(
         self,
         *,
@@ -224,12 +450,34 @@ class McpService:
             )
             return
 
+        # Direct streaming path retained for backward compatibility.
         if request.method == "chat.send_message":
             yield from self._stream_chat_send_message(
                 actor_user_id=actor_user_id,
-                request=request,
+                request_id=request.id,
+                tool_name="chat.send_message",
+                params=request.params,
             )
             return
+
+        # Standard MCP interop path for clients that only use `tools/call`.
+        if request.method == "tools/call":
+            try:
+                tool_name, tool_params = self._tool_name_and_params_for_tools_call(request.params)
+            except McpRpcError as exc:
+                yield self._error(request.id, code=exc.code, message=exc.message, data=exc.data)
+                return
+
+            # Streaming is currently only meaningful for chat message generation.
+            if tool_name == "chat.send_message" and bool(tool_params.get("stream", True)):
+                yield from self._stream_chat_send_message(
+                    actor_user_id=actor_user_id,
+                    request_id=request.id,
+                    tool_name=tool_name,
+                    params=tool_params,
+                    as_tool_call=True,
+                )
+                return
 
         try:
             result = self._dispatch_non_stream(
@@ -278,9 +526,14 @@ class McpService:
         self,
         *,
         actor_user_id: UUID,
-        request: McpJsonRpcRequest,
+        request_id: str | int,
+        tool_name: str,
+        params: dict[str, Any],
+        as_tool_call: bool = False,
     ):
-        params = request.params
+        # This method emits progress frames (`mcp.event`) plus a final success/error
+        # JSON-RPC frame. `as_tool_call=True` wraps the final success payload in the
+        # `tools/call` envelope so external MCP clients get a consistent shape.
         try:
             session_id = self._parse_uuid(params, "session_id")
             payload = ChatMessageCreateRequest(content_text=params.get("content_text", ""))
@@ -291,7 +544,13 @@ class McpService:
                     session_id=session_id,
                     payload=payload,
                 )
-                yield self._success(request.id, {"message": response.model_dump(mode="json")})
+                direct_payload = {"message": response.model_dump(mode="json")}
+                if as_tool_call:
+                    yield self._success(
+                        request_id, self._tool_call_success(tool_name, direct_payload)
+                    )
+                else:
+                    yield self._success(request_id, direct_payload)
                 return
 
             final_message: dict[str, Any] | None = None
@@ -307,8 +566,8 @@ class McpService:
                     event_payload_dict = {"value": event_payload}
 
                 yield self._event(
-                    request.id,
-                    tool=request.method,
+                    request_id,
+                    tool=tool_name,
                     event_name=event_name,
                     event_payload=event_payload_dict,
                 )
@@ -327,38 +586,42 @@ class McpService:
                     message="chat.send_message stream ended without completion",
                 )
 
-            yield self._success(request.id, {"message": final_message})
+            final_payload = {"message": final_message}
+            if as_tool_call:
+                yield self._success(request_id, self._tool_call_success(tool_name, final_payload))
+            else:
+                yield self._success(request_id, final_payload)
         except McpRpcError as exc:
             yield self._error(
-                request.id,
+                request_id,
                 code=exc.code,
                 message=exc.message,
                 data=exc.data,
             )
         except ValidationError as exc:
             yield self._error(
-                request.id,
+                request_id,
                 code=-32602,
                 message="Invalid params",
                 data={"errors": exc.errors()},
             )
         except ChatProviderExecutionError as exc:
             yield self._error(
-                request.id,
+                request_id,
                 code=-32020,
                 message=exc.detail,
                 data={"error_code": exc.error_code, "status_code": exc.status_code},
             )
         except ChatServiceError as exc:
             yield self._error(
-                request.id,
+                request_id,
                 code=-32010,
                 message=exc.detail,
                 data={"status_code": exc.status_code},
             )
         except Exception as exc:
             yield self._error(
-                request.id,
+                request_id,
                 code=-32000,
                 message="Internal MCP error",
                 data={"detail": str(exc), "timestamp": datetime.now(UTC).isoformat()},

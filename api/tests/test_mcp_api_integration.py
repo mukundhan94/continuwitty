@@ -112,6 +112,40 @@ def test_mcp_returns_invalid_params_error(client, clean_db) -> None:
 
 
 @pytest.mark.integration
+def test_mcp_initialize_and_tools_list_contract(client, clean_db) -> None:
+    _login(client)
+
+    init_frames = _mcp_frames(client, method="initialize", params={}, request_id="init")
+    init_result = _final_result_frame(init_frames)["result"]
+    assert init_result["protocolVersion"] == "2024-11-05"
+    assert init_result["serverInfo"]["name"] == "engram-vault-mcp"
+    assert init_result["capabilities"]["tools"]["listChanged"] is False
+
+    tools_frames = _mcp_frames(client, method="tools/list", params={}, request_id="tools-list")
+    tools = _final_result_frame(tools_frames)["result"]["tools"]
+    tool_names = {item["name"] for item in tools}
+    assert "chat.create_session" in tool_names
+    assert "chat.send_message" in tool_names
+    assert "engram.query" in tool_names
+    assert "user.get_profile" in tool_names
+
+    send_message_tool = next(item for item in tools if item["name"] == "chat.send_message")
+    assert send_message_tool["inputSchema"]["type"] == "object"
+    assert "session_id" in send_message_tool["inputSchema"]["required"]
+    assert "content_text" in send_message_tool["inputSchema"]["required"]
+
+
+@pytest.mark.integration
+def test_mcp_tools_call_requires_name_param(client, clean_db) -> None:
+    _login(client)
+    frames = _mcp_frames(client, method="tools/call", params={}, request_id="tools-call-missing")
+    error_frame = [item for item in frames if "error" in item][0]
+    assert error_frame["id"] == "tools-call-missing"
+    assert error_frame["error"]["code"] == -32602
+    assert error_frame["error"]["data"]["missing"] == "name"
+
+
+@pytest.mark.integration
 def test_mcp_chat_send_message_stream_flow(client, clean_db, monkeypatch) -> None:
     _login(client)
     _install_fake_provider(monkeypatch)
@@ -145,6 +179,58 @@ def test_mcp_chat_send_message_stream_flow(client, clean_db, monkeypatch) -> Non
     final = _final_result_frame(message_frames)
     assert final["id"] == "send-message"
     assert final["result"]["message"]["assistant_text"] == "assistant:streamed"
+
+
+@pytest.mark.integration
+def test_mcp_tools_call_stream_flow(client, clean_db, monkeypatch) -> None:
+    _login(client)
+    _install_fake_provider(monkeypatch)
+
+    create_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.create_session",
+            "arguments": {
+                "project_id": "project-mcp-tools-call",
+                "title": "MCP tools/call session",
+                "provider": "openai",
+                "model_id": "gpt-4o-mini",
+                "system_prompt": "Be concise.",
+                "visibility_scope": "private",
+                "autosave_enabled": False,
+            },
+        },
+        request_id="tools-call-create",
+    )
+    structured = _final_result_frame(create_frames)["result"]["structuredContent"]
+    session_id = structured["session"]["session_id"]
+
+    send_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.send_message",
+            "arguments": {
+                "session_id": session_id,
+                "content_text": "hello from tools call",
+                "stream": True,
+            },
+        },
+        request_id="tools-call-send",
+    )
+
+    event_frames = [item for item in send_frames if item.get("method") == "mcp.event"]
+    assert event_frames
+    assert all(item["params"]["id"] == "tools-call-send" for item in event_frames)
+    assert all(item["params"]["tool"] == "chat.send_message" for item in event_frames)
+    assert any(item["params"]["event"] == "chunk" for item in event_frames)
+    assert any(item["params"]["event"] == "done" for item in event_frames)
+
+    final = _final_result_frame(send_frames)
+    assert final["result"]["tool_name"] == "chat.send_message"
+    assert final["result"]["isError"] is False
+    assert final["result"]["structuredContent"]["message"]["assistant_text"] == "assistant:streamed"
 
 
 @pytest.mark.integration

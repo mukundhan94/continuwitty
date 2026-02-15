@@ -74,6 +74,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add detailed PlantUML architecture/workflow map and Docker-based renderer.
 - [x] Add detailed PlantUML use-case diagram for model switching and engram continuity lifecycle.
 - [x] Add clean reset scripts and stale-session reconciliation to keep chat creation stable after DB resets.
+- [x] Add MCP interoperability layer (`initialize`, `tools/list`, `tools/call`) plus typed Python/TypeScript JSON-RPC/SSE clients and contract tests.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -82,7 +83,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - Completed scope:
   - phases 0-15 completed (foundation, schema/storage, retrieval/rehydration, durability, chat continuity, providers, MCP, UI, acceptance, theme/UX hardening).
 - Next implementation scope:
-  - phase 16: MCP developer tooling and typed clients.
+  - phase 16: MCP developer tooling and typed clients (in progress: compatibility + typed clients complete, CLI smoke command deferred).
   - phase 17: document ingestion and RAG-ready retrieval.
   - phase 18: memory lifecycle policies (autosave/retention/consolidation).
   - phase 19: collaboration and sharing model.
@@ -355,8 +356,9 @@ engram/
 - `api/app/consolidation.py`: local background maintenance logic for consolidation snapshots.
 - `api/app/login_guard.py`: login attempt rate-limit and lockout state machine.
 - `api/app/mcp/api.py`: MCP JSON-RPC over SSE route layer.
+- `api/app/mcp/client.py`: typed Python JSON-RPC/SSE MCP client helper for external integrations.
 - `api/app/mcp/errors.py`: MCP RPC error types and codes.
-- `api/app/mcp/service.py`: MCP tool dispatch and JSON-RPC frame generation.
+- `api/app/mcp/service.py`: MCP tool dispatch, compatibility methods (`initialize`/`tools/*`), and JSON-RPC frame generation.
 - `api/app/models.py`: Request/response and engram schema models.
 - `api/app/providers/base.py`: provider adapter contract and normalized request/response types.
 - `api/app/providers/errors.py`: provider-layer error taxonomy.
@@ -390,6 +392,7 @@ engram/
 - `api/tests/test_chat_context.py`: context assembly merge/dedupe behavior tests.
 - `api/tests/test_chat_service.py`: chat service orchestration and save/continue behavior tests.
 - `api/tests/test_mcp_api_integration.py`: MCP SSE transport and tool success/error/auth coverage.
+- `api/tests/test_mcp_client.py`: typed Python MCP client parsing/auth/transport contract tests.
 - `api/tests/test_engram_visibility.py`: integration checks for owner/project scope filtering behavior.
 - `api/tests/test_provider_registry.py`: provider registry construction and adapter selection checks.
 - `api/tests/test_provider_adapters.py`: adapter normalization and error-path tests.
@@ -400,6 +403,8 @@ engram/
 - `web/src/ThemedApp.tsx`: mode-aware `ThemeProvider` wrapper for runtime light/dark switching.
 - `web/src/config.ts`: frontend runtime config parsing + one-time debug console print.
 - `web/src/api/*.ts`: browser API clients for auth/chat/engram interactions.
+- `web/src/api/mcpClient.ts`: typed TypeScript JSON-RPC/SSE MCP client helper.
+- `web/src/api/mcpClient.test.ts`: TypeScript MCP client protocol parsing and stream contract tests.
 - `web/src/components/*.tsx`: UI modules for login, sessions, chat transcript, pinning, and save modal.
 - `web/src/components/SessionSidebar.test.tsx`: sidebar interaction tests (toggle, labels, active-state marker).
 - `web/src/styles/theme.ts`: shared frontend light/dark design tokens and theme registry.
@@ -886,6 +891,37 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 4. Updated README docs navigation and file-by-file guide to include the new workflow doc and screenshot assets.
 5. Verification:
    - confirmed all workflow screenshot files are present and embedded in order in the user-flow document.
+
+### 2026-02-15 (Unified roadmap phase 16: MCP interoperability + typed clients)
+
+1. Added MCP interoperability methods in `api/app/mcp/service.py` for external MCP clients:
+   - `initialize`
+   - `tools/list`
+   - `tools/call`
+2. Kept existing direct tool methods (`chat.*`, `engram.*`, `user.*`) for backward compatibility.
+3. Added streaming compatibility for `tools/call` when invoking `chat.send_message`:
+   - emits `mcp.event` progress frames with stable request correlation.
+   - returns tool-call style final result payload in JSON-RPC success frame.
+4. Added typed Python client helper:
+   - `api/app/mcp/client.py` (`McpSseClient`, typed frame models, SSE parser, login helper).
+5. Added typed TypeScript client helper:
+   - `web/src/api/mcpClient.ts` (`streamMcpCall`, frame parsers, final-frame helpers).
+6. Added contract tests:
+   - `api/tests/test_mcp_api_integration.py`: compatibility envelopes and `tools/call` stream flow.
+   - `api/tests/test_mcp_client.py`: Python helper auth/transport/protocol coverage.
+   - `web/src/api/mcpClient.test.ts`: TypeScript helper protocol parsing and SSE handling.
+7. Updated docs and skills:
+   - README MCP usage expanded with compatibility invocation paths and tool-group examples.
+   - `skills/mcp-http-stream-tools/SKILL.md` updated with compatibility and client-helper expectations.
+   - `AGENT.md` updated with MCP contract synchronization rule for typed clients.
+8. Validation:
+   - `cd api && uv run ruff check app/mcp tests/test_mcp_api_integration.py tests/test_mcp_client.py`
+   - `cd api && uv run pytest -q tests/test_mcp_api_integration.py tests/test_mcp_client.py`
+   - `cd web && npm run lint`
+   - `cd web && npm run test -- src/api/mcpClient.test.ts`
+9. Future consideration:
+   - evaluate `FastMCP` as an optional adapter layer for broader third-party MCP ecosystem integration.
+   - keep current FastAPI MCP implementation as the source of truth unless an explicit migration phase is approved.
 
 ### 2026-02-15 (Completed in this pass)
 
@@ -1545,11 +1581,12 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 
 ### Next Immediate Steps (One By One)
 
-1. Phase 16 kickoff: add typed MCP client helpers (Python/TypeScript) and contract tests for JSON-RPC/SSE tools.
-2. Phase 17 kickoff: implement document/chunk ingestion with upload UX and retrieval blending with chat snapshots.
-3. Phase 18 kickoff: ship memory lifecycle controls for autosave cadence, retention, and consolidation policies.
-4. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
-5. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
+1. Phase 16 follow-up (deferred by request): add `engram-cli mcp-call` smoke command for terminal MCP debugging.
+2. Phase 16 architecture note: evaluate `FastMCP` adapter pilot (non-breaking, optional) before any protocol-layer rewrite.
+3. Phase 17 kickoff: implement document/chunk ingestion with upload UX and retrieval blending with chat snapshots.
+4. Phase 18 kickoff: ship memory lifecycle controls for autosave cadence, retention, and consolidation policies.
+5. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
+6. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
 
 ## MVP API Surface
 
@@ -1586,7 +1623,9 @@ Endpoint:
 
 - `POST /api/v1/mcp/stream`
 
-Request body:
+Two interoperable invocation styles are supported:
+
+1. Direct tool method (backward-compatible):
 
 ```json
 {
@@ -1597,6 +1636,24 @@ Request body:
     "session_id": "00000000-0000-0000-0000-000000000000",
     "content_text": "Summarize the pinned engrams",
     "stream": true
+  }
+}
+```
+
+2. MCP-compatible tool call (`tools/call`) for external clients:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "tool-call-2",
+  "method": "tools/call",
+  "params": {
+    "name": "chat.send_message",
+    "arguments": {
+      "session_id": "00000000-0000-0000-0000-000000000000",
+      "content_text": "Summarize the pinned engrams",
+      "stream": true
+    }
   }
 }
 ```
@@ -1612,7 +1669,13 @@ Frame types:
 - error frame: `{"jsonrpc":"2.0","id":"...","error":{"code":...,"message":"...","data":{...}}}`
 - progress frame: `{"jsonrpc":"2.0","method":"mcp.event","params":{"id":"...","tool":"chat.send_message","event":"chunk|meta|done","data":{...}}}`
 
-Initial tools:
+Compatibility methods:
+
+- `initialize`
+- `tools/list`
+- `tools/call`
+
+Core tools:
 
 - `chat.create_session`
 - `chat.list_sessions`
@@ -1626,6 +1689,57 @@ Initial tools:
 - `engram.pin_to_session`
 - `user.get_profile`
 - `user.list_projects`
+
+Typed client helpers:
+
+- Python: `api/app/mcp/client.py` (`McpSseClient`)
+- TypeScript: `web/src/api/mcpClient.ts` (`streamMcpCall`, frame parsers)
+
+Example calls by tool group:
+
+1. `chat.*`
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "chat-create-1",
+  "method": "chat.create_session",
+  "params": {
+    "project_id": "engram-vault",
+    "title": "MCP chat session",
+    "provider": "openai",
+    "model_id": "gpt-4o-mini",
+    "visibility_scope": "private",
+    "autosave_enabled": false
+  }
+}
+```
+
+2. `engram.*`
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "engram-query-1",
+  "method": "engram.query",
+  "params": {
+    "query": "incident mitigation",
+    "project_id": "engram-vault",
+    "top_k": 5
+  }
+}
+```
+
+3. `user.*`
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "user-profile-1",
+  "method": "user.get_profile",
+  "params": {}
+}
+```
 
 ## CLI Workflow (Local)
 
@@ -1862,6 +1976,15 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - tagged live Bedrock and triage continuity scenarios
   - markdown rendering + stream parsing reliability fixes
   - dark/light theming and sidebar UX hardening
+
+### Milestone 16 (In Progress)
+
+- MCP developer-experience and external interoperability:
+  - MCP compatibility methods: `initialize`, `tools/list`, `tools/call`
+  - typed Python and TypeScript MCP JSON-RPC/SSE client helpers
+  - contract tests for compatibility envelopes and stream-call behavior
+- Remaining in milestone:
+  - CLI smoke utility (`engram-cli mcp-call`) deferred to the next pass
 
 ### Milestone 16 (Next)
 

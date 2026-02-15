@@ -16,11 +16,18 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 - Include deterministic `id` correlation for every tool call.
 - Return structured errors with code/message/data.
 - Emit progress notifications as `mcp.event` frames for long-running tools.
+- Keep interoperability paths for external MCP clients:
+  - `initialize`
+  - `tools/list`
+  - `tools/call`
+- Keep direct tool methods for backward compatibility (`chat.*`, `engram.*`, `user.*`).
 
 ## Module Layout (Current)
 - `api/app/mcp/api.py`: HTTP transport and SSE writer.
 - `api/app/mcp/service.py`: tool dispatch and JSON-RPC frame generation.
 - `api/app/mcp/errors.py`: RPC error object and codes.
+- `api/app/mcp/client.py`: typed Python MCP client helper for JSON-RPC/SSE transport.
+- `web/src/api/mcpClient.ts`: typed TypeScript MCP client helper for JSON-RPC/SSE transport.
 
 ## Tool Implementation Sequence
 1. Define input/output schema.
@@ -28,6 +35,7 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 3. Call service/repository layer.
 4. Emit success frame or error frame.
 5. Add test coverage for success, invalid params, unauthorized, forbidden.
+6. If `tools/list` schemas change, update typed clients and docs in the same phase.
 
 ## Initial Tool Set
 - `chat.create_session`
@@ -41,3 +49,16 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 - `engram.pin_to_session`
 - `user.get_profile`
 - `user.list_projects`
+
+## Contract Test Minimum
+- `api/tests/test_mcp_api_integration.py`: transport + tool success/error contracts.
+- `api/tests/test_mcp_client.py`: Python typed client frame parsing and protocol handling.
+- `web/src/api/mcpClient.test.ts`: TypeScript typed client frame parsing and SSE handling.
+
+## Future Consideration (Do Not Auto-Migrate)
+- Evaluate `FastMCP` as an adapter/facade for external MCP ecosystem clients.
+- Keep current FastAPI/MCP service as source of truth unless an explicit migration phase is approved.
+- If evaluated:
+  1. Pilot adapter layer first (no API/tool contract breakage).
+  2. Measure implementation simplification vs. migration risk.
+  3. Preserve existing auth/session and visibility semantics.

@@ -89,6 +89,10 @@ Use it as the default workflow when adding or refactoring features.
 - Stream responses using JSON-RPC framed SSE events.
 - Return structured error payloads with machine-parseable codes.
 - Keep all tool routing in `api/app/mcp/service.py`; avoid embedding tool logic in route handlers.
+- Keep external MCP compatibility (`initialize`, `tools/list`, `tools/call`) aligned with direct tool methods.
+- When MCP contracts change, update both typed clients in the same phase:
+  - `api/app/mcp/client.py`
+  - `web/src/api/mcpClient.ts`
 
 ## 9. Testing Requirements
 - Unit tests for pure logic and adapters.

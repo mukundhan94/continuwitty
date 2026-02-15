@@ -115,6 +115,7 @@ Build a local-first memory system where agents and humans can:
 2. MCP smoke CLI (`engram-cli mcp-call`) for local tool debugging.
 3. Contract tests for request/response/error envelopes.
 4. README examples for each core tool group (`chat.*`, `engram.*`, `user.*`).
+5. Future-consideration note for optional `FastMCP` adapter pilot (non-breaking) after baseline DX is stable.
 
 ### Exit Criteria
 

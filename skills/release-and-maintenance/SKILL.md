@@ -21,3 +21,8 @@ description: Use this skill when preparing release-quality changes, updating doc
 - Weekly: run checks and evals.
 - Monthly: dependency review and provider API compatibility review.
 - Per phase: refresh docs and validate local reproducibility.
+
+## Architecture Evaluation Notes
+- Record deferred architecture options explicitly (example: FastMCP adapter evaluation).
+- Track them as "future consideration" in README + relevant skills.
+- Prefer incremental adapter pilots over full rewrites when core workflows are already stable.

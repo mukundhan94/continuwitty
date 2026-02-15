@@ -14,6 +14,9 @@ description: Use this skill when adding tests, extending eval scenarios, and val
 - Integration tests for API + DB + auth/visibility behavior.
 - Eval harness tests for recall, temporal correctness, abstention.
 - Add chat continuity eval scenarios when chat logic changes.
+- For MCP contract changes, include:
+  - transport + JSON-RPC envelope integration coverage (`test_mcp_api_integration.py`)
+  - typed client parser/transport coverage (Python + TypeScript helper tests).
 
 ## Required Commands
 - `make lint`
