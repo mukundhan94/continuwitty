@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ContinuWitty — Ocean Wave Experience</title>
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600;700&family=Nunito:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400&family=Quicksand:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --deep: #081420;
+    --seafoam: #5eead4;
+    --cyan: #06b6d4;
+    --teal: #0d9488;
+    --mint: #99f6e4;
+    --ocean-mid: #0c3547;
+    --text-dim: rgba(178, 245, 234, 0.35);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--deep);
+    color: #c2e0eb;
+    font-family: 'Nunito', sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* ===== CANVAS ===== */
+  #ocean-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+  }
+
+  /* ===== OVERLAY ===== */
+  .overlay { position: relative; z-index: 10; pointer-events: none; }
+  .overlay * { pointer-events: auto; }
+
+  /* ===== HERO ===== */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px 24px;
+    position: relative;
+  }
+
+  /* Animated wave-mark above logo */
+  .hero-wave-mark {
+    width: 80px;
+    height: 40px;
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeUp 1.2s cubic-bezier(0.16,1,0.3,1) 0.1s forwards;
+  }
+  .hero-wave-mark path {
+    stroke-dasharray: 200;
+    stroke-dashoffset: 200;
+    animation: drawIn 1.8s ease-out 0.4s forwards;
+  }
+  @keyframes drawIn { to { stroke-dashoffset: 0; } }
+
+  .hero-wordmark {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700;
+    font-size: clamp(44px, 9vw, 88px);
+    letter-spacing: 1px;
+    opacity: 0;
+    animation: fadeUp 1.4s cubic-bezier(0.16,1,0.3,1) 0.2s forwards;
+  }
+  .hero-wordmark .c { color: #8ec8c8; }
+  .hero-wordmark .w { color: var(--seafoam); }
+
+  /* The signature wave underline */
+  .hero-wave-line {
+    width: clamp(260px, 48vw, 540px);
+    height: 18px;
+    margin-top: -2px;
+    opacity: 0;
+    animation: fadeUp 1.4s cubic-bezier(0.16,1,0.3,1) 0.35s forwards;
+  }
+  .hero-wave-line .wave-path {
+    stroke-dasharray: 700;
+    stroke-dashoffset: 700;
+    animation: drawIn 2.2s ease-out 0.7s forwards;
+  }
+  .hero-wave-line .wave-path-ghost {
+    stroke-dasharray: 700;
+    stroke-dashoffset: 700;
+    animation: drawIn 2.4s ease-out 0.9s forwards;
+  }
+
+  .hero-tagline {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 300;
+    font-size: clamp(13px, 2vw, 18px);
+    color: rgba(94, 234, 212, 0.35);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-top: 16px;
+    opacity: 0;
+    animation: fadeUp 1.4s cubic-bezier(0.16,1,0.3,1) 0.5s forwards;
+  }
+
+  .hero-cta {
+    display: flex; gap: 14px; margin-top: 36px; flex-wrap: wrap; justify-content: center;
+    opacity: 0;
+    animation: fadeUp 1.4s cubic-bezier(0.16,1,0.3,1) 0.7s forwards;
+  }
+  .btn {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700; font-size: 13px;
+    padding: 11px 30px; border-radius: 50px; border: none; cursor: pointer;
+    transition: all 0.3s ease; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--cyan), var(--teal), var(--seafoam));
+    color: var(--deep);
+    box-shadow: 0 4px 24px rgba(94,234,212,0.2);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(94,234,212,0.3); }
+  .btn-ghost {
+    background: rgba(94,234,212,0.06);
+    color: var(--seafoam);
+    border: 1px solid rgba(94,234,212,0.12);
+    backdrop-filter: blur(8px);
+  }
+  .btn-ghost:hover { background: rgba(94,234,212,0.12); transform: translateY(-2px); }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .scroll-hint {
+    position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    letter-spacing: 3px; text-transform: uppercase;
+    color: rgba(94,234,212,0.2);
+    animation: bob 2s ease-in-out infinite, fadeUp 1s ease 1.2s forwards;
+    opacity: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  @keyframes bob { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(8px)} }
+
+  /* ===== CONTENT ===== */
+  .content {
+    position: relative; z-index: 10;
+    background: linear-gradient(180deg, transparent 0%, rgba(8,20,32,0.96) 6%, rgba(8,20,32,0.99) 100%);
+    padding: 60px 20px 40px;
+  }
+  .inner { max-width: 1140px; margin: 0 auto; }
+
+  .sec-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 4px; text-transform: uppercase;
+    color: rgba(94,234,212,0.35); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sec-label::before { content:''; display:block; width:20px; height:1px; background:rgba(94,234,212,0.25); }
+  .sec-title {
+    font-family: 'Comfortaa', sans-serif; font-weight: 700;
+    font-size: clamp(24px,3.5vw,36px); color: #fff; margin-bottom: 36px;
+  }
+  .divider {
+    max-width: 1140px; margin: 50px auto;
+    height: 1px; background: linear-gradient(90deg, transparent, rgba(94,234,212,0.08), transparent);
+  }
+
+  /* ===== LOGO CARDS ===== */
+  .lgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    gap: 18px;
+    margin-bottom: 50px;
+  }
+  .lcard {
+    border-radius: 18px; overflow: hidden;
+    border: 1px solid rgba(94,234,212,0.05);
+    background: rgba(8,20,32,0.65);
+    backdrop-filter: blur(12px);
+    transition: transform 0.3s ease, border-color 0.3s ease;
+  }
+  .lcard:hover { transform: translateY(-3px); border-color: rgba(94,234,212,0.14); }
+  .lcard.full { grid-column: 1 / -1; }
+
+  .lshow {
+    height: 180px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .lshow.xl { height: 240px; }
+  .lshow.lg { height: 200px; }
+
+  .lmeta {
+    padding: 16px 20px;
+    border-top: 1px solid rgba(94,234,212,0.04);
+  }
+  .lmeta .n { font-family:'Comfortaa',sans-serif; font-weight:600; font-size:14px; color:#fff; margin-bottom:3px; }
+  .lmeta .d { font-size:12px; color:var(--text-dim); line-height:1.5; }
+  .lmeta .ctx {
+    display:inline-block; margin-top:8px;
+    font-family:'JetBrains Mono',monospace; font-size:9px;
+    letter-spacing:1px; text-transform:uppercase;
+    color:rgba(94,234,212,0.3); background:rgba(94,234,212,0.04);
+    padding:3px 8px; border-radius:4px;
+  }
+
+  /* BG variants */
+  .bg-deep { background: var(--deep); }
+  .bg-grad { background: linear-gradient(160deg, #0c3547, #0e5e6f, #0d7c7a); }
+  .bg-white { background: #fff; }
+  .bg-pearl { background: #f0fdfa; }
+  .bg-ocean { background: linear-gradient(135deg, #0c4a6e, #0d9488); }
+  .bg-black { background: #000; }
+  .bg-midnight { background: linear-gradient(160deg, #040d18, #0b1e34); }
+
+  /* Animated wave bottoms */
+  .wave-anim-bottom {
+    position: absolute; bottom: 0; left: 0;
+    width: 200%; height: 50px;
+    animation: slideWave 10s linear infinite;
+  }
+  .wave-anim-bottom.slow { animation-duration: 14s; }
+  .wave-anim-bottom.rev { animation-direction: reverse; }
+  @keyframes slideWave { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+  /* ===== ICON ROW ===== */
+  .icon-row {
+    display: flex; gap: 22px; flex-wrap: wrap;
+    justify-content: center; padding: 30px 0 40px;
+  }
+  .icon-item { text-align: center; }
+  .icon-box {
+    width: 76px; height: 76px; border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    position: relative; overflow: hidden;
+    transition: transform 0.3s ease;
+  }
+  .icon-box:hover { transform: scale(1.08); }
+  .icon-lbl {
+    font-family:'JetBrains Mono',monospace; font-size:9px;
+    color:rgba(178,245,234,0.2); letter-spacing:1px;
+  }
+
+  .footer {
+    position: relative; z-index: 10;
+    text-align: center; padding: 30px 20px;
+    background: rgba(8,20,32,0.99);
+    font-family:'JetBrains Mono',monospace; font-size:10px;
+    color:rgba(94,234,212,0.12); letter-spacing:1px;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="ocean-canvas"></canvas>
+
+<div class="overlay">
+  <!-- ===== HERO ===== -->
+  <div class="hero">
+
+    <!-- Wave-flow icon mark (no teardrop!) -->
+    <svg class="hero-wave-mark" viewBox="0 0 80 40">
+      <path d="M4,28 Q12,8 24,20 Q36,32 48,16 Q56,6 68,18 Q74,24 78,20"
+        stroke="#5eead4" stroke-width="3.5" fill="none" stroke-linecap="round"
+        style="filter:drop-shadow(0 0 12px rgba(94,234,212,0.4));"/>
+      <path d="M4,34 Q16,18 28,26 Q40,34 52,20 Q60,12 72,22"
+        stroke="rgba(94,234,212,0.25)" stroke-width="2" fill="none" stroke-linecap="round"
+        style="stroke-dasharray:200; stroke-dashoffset:200; animation:drawIn 2s ease-out 0.6s forwards;"/>
+    </svg>
+
+    <div class="hero-wordmark">
+      <span class="c">Continu</span><span class="w">Witty</span>
+    </div>
+
+    <!-- Signature multi-layer wave underline -->
+    <svg class="hero-wave-line" viewBox="0 0 540 18">
+      <path class="wave-path"
+        d="M6,9 Q30,2 54,9 T102,9 T150,9 T198,9 T246,9 T294,9 T342,9 T390,9 T438,9 T486,9 L534,9"
+        stroke="#5eead4" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <path class="wave-path-ghost"
+        d="M6,12 Q34,5 58,12 T110,12 T162,12 T214,12 T266,12 T318,12 T370,12 T422,12 T474,12 L534,12"
+        stroke="rgba(94,234,212,0.15)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    </svg>
+
+    <div class="hero-tagline">Intelligence that flows</div>
+
+    <div class="hero-cta">
+      <button class="btn btn-primary" onclick="document.querySelector('.content').scrollIntoView({behavior:'smooth'})">
+        Explore Logos ↓
+      </button>
+      <button class="btn btn-ghost" onclick="toggleBubbles()">
+        ○ Bubbles
+      </button>
+    </div>
+
+    <div class="scroll-hint">
+      <span>Scroll</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+    </div>
+  </div>
+
+  <!-- ===== LOGOS ===== -->
+  <div class="content">
+    <div class="inner">
+
+      <div class="sec-label">Logo System</div>
+      <div class="sec-title">Wave-Flow Logos</div>
+
+      <div class="lgrid">
+
+        <!-- 1. HERO PRIMARY: Wave mark + Wordmark + Wave underline -->
+        <div class="lcard full">
+          <div class="lshow xl bg-midnight" style="padding:0 40px;">
+            <div style="position:relative; z-index:1; display:flex; align-items:center; gap:20px;">
+              <!-- Wave icon mark -->
+              <svg width="56" height="36" viewBox="0 0 56 36" style="flex-shrink:0; filter:drop-shadow(0 0 16px rgba(94,234,212,0.3));">
+                <path d="M4,24 Q12,6 22,18 Q32,30 42,14 Q48,6 54,14" stroke="#5eead4" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+                <path d="M4,30 Q14,16 24,24 Q34,32 44,18 Q50,10 54,18" stroke="rgba(94,234,212,0.3)" stroke-width="2" fill="none" stroke-linecap="round"/>
+              </svg>
+              <div>
+                <div style="font-family:'Comfortaa',sans-serif; font-weight:700; font-size:clamp(28px,4vw,42px); line-height:1;">
+                  <span style="color:#8ec8c8;">Continu</span><span style="color:#5eead4;">Witty</span>
+                </div>
+                <svg width="260" height="10" viewBox="0 0 260 10" style="margin-top:5px;">
+                  <path d="M2,5 Q16,1 32,5 T64,5 T96,5 T128,5 T160,5 T192,5 T224,5 L258,5" stroke="#5eead4" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.35"/>
+                </svg>
+              </div>
+            </div>
+            <!-- Animated ocean waves at bottom -->
+            <div class="wave-anim-bottom">
+              <svg viewBox="0 0 1200 50" preserveAspectRatio="none" style="width:100%;height:100%;">
+                <path d="M0,28 Q75,14 150,28 T300,28 T450,28 T600,28 T750,28 T900,28 T1050,28 T1200,28 L1200,50 L0,50Z" fill="rgba(94,234,212,0.04)"/>
+              </svg>
+            </div>
+            <div class="wave-anim-bottom slow rev" style="height:40px;">
+              <svg viewBox="0 0 1200 40" preserveAspectRatio="none" style="width:100%;height:100%;">
+                <path d="M0,22 Q75,12 150,22 T300,22 T450,22 T600,22 T750,22 T900,22 T1050,22 T1200,22 L1200,40 L0,40Z" fill="rgba(94,234,212,0.025)"/>
+              </svg>
+            </div>
+          </div>
+          <div class="lmeta">
+            <div class="n">Primary — Wave Mark + Wordmark</div>
+            <div class="d">The complete logo: wave-flow icon, dual-tone wordmark, wave underline, animated ocean footer. Your main hero mark.</div>
+            <span class="ctx">Website · Hero · Presentations · Marketing</span>
+          </div>
+        </div>
+
+        <!-- 2. Wave mark only -->
+        <div class="lcard">
+          <div class="lshow bg-grad">
+            <svg width="120" height="60" viewBox="0 0 120 60" style="filter:drop-shadow(0 4px 20px rgba(94,234,212,0.3));">
+              <path d="M8,40 Q24,8 44,30 Q64,52 84,22 Q96,8 116,24" stroke="#fff" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+              <path d="M8,48 Q28,20 48,36 Q68,52 88,28 Q100,14 116,30" stroke="rgba(255,255,255,0.25)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              <circle cx="116" cy="24" r="4" fill="#fff" opacity="0.7"/>
+            </svg>
+          </div>
+          <div class="lmeta">
+            <div class="n">Wave Mark — Icon Only</div>
+            <div class="d">Dual-wave with a dot endpoint. The wave IS the brand. Inspired by ocean currents — continuous, flowing, alive. Scales beautifully.</div>
+            <span class="ctx">Favicon · App Icon · Watermark · Loading</span>
+          </div>
+        </div>
+
+        <!-- 3. Light Mode -->
+        <div class="lcard">
+          <div class="lshow bg-white">
+            <div style="text-align:center;">
+              <div style="display:flex; align-items:center; justify-content:center; gap:12px;">
+                <svg width="36" height="22" viewBox="0 0 36 22">
+                  <path d="M2,16 Q8,3 14,12 Q20,21 26,8 Q30,2 34,8" stroke="#0d9488" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                  <path d="M2,19 Q10,8 16,14 Q22,20 28,10 Q32,4 34,10" stroke="rgba(13,148,136,0.2)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                </svg>
+                <span style="font-family:'Comfortaa',sans-serif; font-weight:700; font-size:28px; color:#0c4a6e; letter-spacing:0.5px;">
+                  Continu<span style="color:#0d9488;">Witty</span>
+                </span>
+              </div>
+              <svg width="200" height="8" viewBox="0 0 200 8" style="margin-top:4px;">
+                <path d="M2,4 Q14,1 28,4 T56,4 T84,4 T112,4 T140,4 T168,4 L198,4" stroke="#0d9488" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/>
+              </svg>
+            </div>
+          </div>
+          <div class="lmeta">
+            <div class="n">Light Mode — Print Ready</div>
+            <div class="d">Wave mark + wordmark + wave underline on white. Clean, readable, professional. Perfect for documents and light interfaces.</div>
+            <span class="ctx">Print · Documents · Light UI · Email</span>
+          </div>
+        </div>
+
+        <!-- 4. Frosted Pill -->
+        <div class="lcard">
+          <div class="lshow bg-deep">
+            <div style="display:flex; align-items:center; background:rgba(94,234,212,0.05); border:1px solid rgba(94,234,212,0.1); border-radius:60px; padding:8px 20px 8px 12px; gap:10px; backdrop-filter:blur(8px);">
+              <svg width="32" height="20" viewBox="0 0 32 20">
+                <path d="M2,14 Q7,3 12,10 Q17,17 22,7 Q26,2 30,7" stroke="#5eead4" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              </svg>
+              <span style="font-family:'Comfortaa',sans-serif; font-weight:600; font-size:20px; color:#fff;">Continu<span style="color:#5eead4;">Witty</span></span>
+            </div>
+          </div>
+          <div class="lmeta">
+            <div class="n">Frosted Pill — Compact</div>
+            <div class="d">Glass badge with wave mark. Self-contained, works as nav element, floating UI, or interactive chip.</div>
+            <span class="ctx">Navigation · Badges · Toolbar</span>
+          </div>
+        </div>
+
+        <!-- 5. Full-width ocean banner -->
+        <div class="lcard full">
+          <div class="lshow lg bg-ocean" style="position:relative;">
+            <div style="position:relative; z-index:1; text-align:center;">
+              <div style="font-family:'Comfortaa',sans-serif; font-weight:700; font-size:clamp(28px,4vw,40px); color:#fff; text-shadow:0 2px 30px rgba(0,0,0,0.2); letter-spacing:1px;">
+                ContinuWitty
+              </div>
+              <div style="font-family:'Nunito',sans-serif; font-size:12px; letter-spacing:5px; text-transform:uppercase; color:rgba(255,255,255,0.4); margin-top:6px;">
+                Never lose your thread
+              </div>
+            </div>
+            <!-- Triple wave footer -->
+            <div class="wave-anim-bottom" style="height:60px;">
+              <svg viewBox="0 0 1200 60" preserveAspectRatio="none" style="width:100%;height:100%;">
+                <path d="M0,35 Q75,20 150,35 T300,35 T450,35 T600,35 T750,35 T900,35 T1050,35 T1200,35 L1200,60 L0,60Z" fill="rgba(255,255,255,0.07)"/>
+              </svg>
+            </div>
+            <div class="wave-anim-bottom slow rev" style="height:50px;">
+              <svg viewBox="0 0 1200 50" preserveAspectRatio="none" style="width:100%;height:100%;">
+                <path d="M0,30 Q75,18 150,30 T300,30 T450,30 T600,30 T750,30 T900,30 T1050,30 T1200,30 L1200,50 L0,50Z" fill="rgba(255,255,255,0.05)"/>
+              </svg>
+            </div>
+            <div class="wave-anim-bottom" style="height:40px; animation-duration:16s;">
+              <svg viewBox="0 0 1200 40" preserveAspectRatio="none" style="width:100%;height:100%;">
+                <path d="M0,24 Q75,14 150,24 T300,24 T450,24 T600,24 T750,24 T900,24 T1050,24 T1200,24 L1200,40 L0,40Z" fill="rgba(255,255,255,0.035)"/>
+              </svg>
+            </div>
+          </div>
+          <div class="lmeta">
+            <div class="n">Ocean Banner — Triple Wave</div>
+            <div class="d">White text riding on the teal gradient with three layered wave animations at different speeds. Cinematic, immersive, hero-ready.</div>
+            <span class="ctx">Social Banners · Video Intros · Hero Sections</span>
+          </div>
+        </div>
+
+        <!-- 6. Ultra minimal -->
+        <div class="lcard">
+          <div class="lshow bg-black">
+            <div>
+              <div style="font-family:'Comfortaa',sans-serif; font-weight:300; font-size:28px; color:rgba(255,255,255,0.45); letter-spacing:3px;">
+                continu<span style="font-weight:700; background:linear-gradient(90deg,#06b6d4,#5eead4); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Witty</span>
+              </div>
+              <svg width="180" height="6" viewBox="0 0 180 6" style="margin-top:6px; opacity:0.3;">
+                <path d="M2,3 Q12,1 24,3 T48,3 T72,3 T96,3 T120,3 T144,3 L178,3" stroke="#5eead4" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="lmeta">
+            <div class="n">Minimal Dark — Developer</div>
+            <div class="d">Whisper-quiet "continu" flows into gradient "Witty" with a ghost wave line. Maximum restraint, maximum sophistication.</div>
+            <span class="ctx">Developer Tools · CLI · Dark Mode</span>
+          </div>
+        </div>
+
+        <!-- 7. Animated wave-flow mark -->
+        <div class="lcard">
+          <div class="lshow bg-deep">
+            <div style="display:flex; align-items:center; gap:16px;">
+              <!-- Animated flowing wave -->
+              <div style="width:50px; height:32px; position:relative; overflow:hidden;">
+                <svg width="100" height="32" viewBox="0 0 100 32" style="position:absolute; left:0; top:0; animation:flowMark 3s linear infinite;">
+                  <path d="M0,22 Q12,6 24,16 Q36,26 48,12 Q56,4 64,14 Q76,26 88,12 Q96,4 100,12" stroke="#5eead4" stroke-width="3" fill="none" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div style="font-family:'Comfortaa',sans-serif; font-weight:700; font-size:28px; color:#fff;">
+                Continu<span style="color:#5eead4;">Witty</span>
+              </div>
+            </div>
+          </div>
+          <style>@keyframes flowMark{0%{transform:translateX(0)}100%{transform:translateX(-36px)}}</style>
+          <div class="lmeta">
+            <div class="n">Flowing Wave — Animated Mark</div>
+            <div class="d">The wave mark scrolls infinitely — it literally never stops flowing. A living logo for digital contexts. Hypnotic and memorable.</div>
+            <span class="ctx">Loading States · App Headers · Motion</span>
+          </div>
+        </div>
+
+        <!-- 8. Stacked centered -->
+        <div class="lcard">
+          <div class="lshow bg-pearl">
+            <div style="text-align:center;">
+              <svg width="50" height="28" viewBox="0 0 50 28" style="margin-bottom:8px;">
+                <path d="M4,20 Q12,4 22,14 Q32,24 40,10 Q44,4 48,10" stroke="#0d9488" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <path d="M4,24 Q14,12 24,18 Q34,24 42,14 Q46,8 48,14" stroke="rgba(13,148,136,0.2)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+              </svg>
+              <div style="font-family:'Comfortaa',sans-serif; font-weight:700; font-size:22px; color:#134e4a;">
+                Continu<span style="color:#0d9488;">Witty</span>
+              </div>
+              <div style="font-family:'Nunito',sans-serif; font-size:10px; letter-spacing:4px; text-transform:uppercase; color:#94a3b8; margin-top:4px;">
+                Intelligence that flows
+              </div>
+            </div>
+          </div>
+          <div class="lmeta">
+            <div class="n">Stacked — Centered</div>
+            <div class="d">Vertical layout: wave mark on top, wordmark, tagline. Great for splash screens, app stores, about pages, merchandise.</div>
+            <span class="ctx">Splash Screen · App Store · Merch</span>
+          </div>
+        </div>
+
+        <!-- 9. Wave-wrapped wordmark -->
+        <div class="lcard">
+          <div class="lshow bg-deep">
+            <div style="position:relative; padding:16px 28px;">
+              <!-- Wave that wraps around the text -->
+              <svg style="position:absolute; top:0; left:0; width:100%; height:100%;" viewBox="0 0 300 70" preserveAspectRatio="none">
+                <path d="M0,10 Q20,0 40,8 Q60,16 80,8 Q100,0 120,8 Q140,16 160,8 Q180,0 200,8 Q220,16 240,8 Q260,0 280,8 L300,4" stroke="rgba(94,234,212,0.12)" stroke-width="1" fill="none"/>
+                <path d="M0,62 Q20,70 40,62 Q60,54 80,62 Q100,70 120,62 Q140,54 160,62 Q180,70 200,62 Q220,54 240,62 Q260,70 280,62 L300,66" stroke="rgba(94,234,212,0.12)" stroke-width="1" fill="none"/>
+              </svg>
+              <div style="position:relative; font-family:'Comfortaa',sans-serif; font-weight:700; font-size:30px; color:#fff; text-align:center; letter-spacing:1px;">
+                Continu<span style="color:#5eead4;">Witty</span>
+              </div>
+            </div>
+          </div>
+          <div class="lmeta">
+            <div class="n">Wave-Wrapped — Enclosed</div>
+            <div class="d">Subtle wave borders flow above and below the wordmark, creating a sense of being immersed in the current. Elegant containment.</div>
+            <span class="ctx">Headers · Cards · Certificates</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- APP ICONS -->
+      <div class="sec-label">Icons</div>
+      <div class="sec-title">App Icons</div>
+
+      <div class="icon-row">
+        <!-- 1. Wave gradient -->
+        <div class="icon-item">
+          <div class="icon-box" style="background:linear-gradient(135deg,#06b6d4,#0d9488);">
+            <svg width="42" height="26" viewBox="0 0 42 26">
+              <path d="M4,18 Q10,4 18,13 Q26,22 34,9 Q37,4 40,9" stroke="rgba(255,255,255,0.9)" stroke-width="3" fill="none" stroke-linecap="round"/>
+              <path d="M4,22 Q12,12 20,17 Q28,22 36,12 Q39,8 40,12" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="icon-lbl">Primary</div>
+        </div>
+
+        <!-- 2. cW monogram -->
+        <div class="icon-item">
+          <div class="icon-box" style="background:linear-gradient(180deg,#0b1a2b,#164e63);">
+            <span style="font-family:'Comfortaa',sans-serif; font-weight:700; font-size:26px; color:#5eead4;">cW</span>
+          </div>
+          <div class="icon-lbl">Monogram</div>
+        </div>
+
+        <!-- 3. Dark wave -->
+        <div class="icon-item">
+          <div class="icon-box" style="background:#0a1628; border:1px solid rgba(94,234,212,0.12);">
+            <svg width="40" height="24" viewBox="0 0 40 24">
+              <path d="M4,16 Q10,4 18,12 Q26,20 34,8 Q37,4 38,8" stroke="#5eead4" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              <path d="M4,20 Q12,10 20,16 Q28,22 36,10" stroke="rgba(94,234,212,0.2)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="icon-lbl">Dark</div>
+        </div>
+
+        <!-- 4. Wave with ocean bottom -->
+        <div class="icon-item">
+          <div class="icon-box" style="background:linear-gradient(135deg,#0d9488,#06b6d4); position:relative; overflow:hidden;">
+            <svg viewBox="0 0 76 76" width="76" height="76" style="position:absolute; bottom:0; left:0;">
+              <path d="M0,52 Q19,42 38,52 T76,52 L76,76 L0,76Z" fill="rgba(255,255,255,0.08)"/>
+              <path d="M0,60 Q19,50 38,60 T76,60 L76,76 L0,76Z" fill="rgba(255,255,255,0.05)"/>
+            </svg>
+            <svg width="36" height="22" viewBox="0 0 36 22" style="position:relative; z-index:1;">
+              <path d="M3,16 Q8,4 15,11 Q22,18 29,7 Q32,3 35,7" stroke="#fff" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="icon-lbl">Ocean</div>
+        </div>
+
+        <!-- 5. White bg -->
+        <div class="icon-item">
+          <div class="icon-box" style="background:#fff; border:1px solid #e2e8f0;">
+            <svg width="38" height="22" viewBox="0 0 38 22">
+              <path d="M4,16 Q10,4 18,12 Q26,20 34,8" stroke="#0d9488" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              <path d="M4,20 Q12,10 20,16 Q28,22 36,10" stroke="rgba(13,148,136,0.15)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="icon-lbl">Light</div>
+        </div>
+
+        <!-- 6. Filled wave shape -->
+        <div class="icon-item">
+          <div class="icon-box" style="background:linear-gradient(180deg,#0c3547,#0e5e6f);">
+            <svg width="42" height="30" viewBox="0 0 42 30">
+              <path d="M0,26 Q8,6 18,16 Q28,26 38,10 L42,6 L42,30 L0,30Z" fill="rgba(94,234,212,0.2)"/>
+              <path d="M0,26 Q8,6 18,16 Q28,26 38,10 L42,6" stroke="#5eead4" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="icon-lbl">Filled</div>
+        </div>
+
+        <!-- 7. C letter -->
+        <div class="icon-item">
+          <div class="icon-box" style="background:linear-gradient(135deg,#14b8a6,#06b6d4);">
+            <span style="font-family:'Comfortaa',sans-serif; font-weight:700; font-size:34px; color:#fff;">C</span>
+          </div>
+          <div class="icon-lbl">Letter</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">ContinuWitty — Wave-Flow Brand · Three.js Ocean · 9 Logos · 7 Icons</div>
+</div>
+
+<!-- ===== THREE.JS OCEAN ===== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const canvas = document.getElementById('ocean-canvas');
+const W = window.innerWidth, H = window.innerHeight;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x081420, 1);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x081420, 0.006);
+
+const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 500);
+camera.position.set(0, 18, 55);
+camera.lookAt(0, -2, 0);
+
+// === LIGHTS ===
+scene.add(new THREE.AmbientLight(0x0c3547, 0.5));
+
+const sun = new THREE.DirectionalLight(0x5eead4, 0.35);
+sun.position.set(20, 30, 10);
+scene.add(sun);
+
+const p1 = new THREE.PointLight(0x06b6d4, 0.7, 120);
+p1.position.set(-20, 10, 15);
+scene.add(p1);
+
+const p2 = new THREE.PointLight(0x14b8a6, 0.5, 100);
+p2.position.set(25, 6, -20);
+scene.add(p2);
+
+const p3 = new THREE.PointLight(0x5eead4, 0.3, 80);
+p3.position.set(0, 15, 0);
+scene.add(p3);
+
+// === OCEAN SURFACE ===
+const oceanSeg = 160;
+const oceanGeo = new THREE.PlaneGeometry(250, 250, oceanSeg, oceanSeg);
+const oceanMat = new THREE.MeshPhongMaterial({
+  color: 0x0e4d6e,
+  emissive: 0x061520,
+  specular: 0x5eead4,
+  shininess: 80,
+  transparent: true,
+  opacity: 0.8,
+  side: THREE.DoubleSide,
+});
+const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+ocean.rotation.x = -Math.PI / 2;
+ocean.position.y = -3;
+scene.add(ocean);
+
+// Second layer
+const deep2Geo = new THREE.PlaneGeometry(250, 250, 80, 80);
+const deep2Mat = new THREE.MeshPhongMaterial({
+  color: 0x071220,
+  emissive: 0x040a14,
+  transparent: true,
+  opacity: 0.5,
+  side: THREE.DoubleSide,
+});
+const deep2 = new THREE.Mesh(deep2Geo, deep2Mat);
+deep2.rotation.x = -Math.PI / 2;
+deep2.position.y = -10;
+scene.add(deep2);
+
+// Third abyss layer
+const abyssGeo = new THREE.PlaneGeometry(300, 300, 40, 40);
+const abyssMat = new THREE.MeshPhongMaterial({
+  color: 0x030810,
+  emissive: 0x020508,
+  transparent: true,
+  opacity: 0.4,
+  side: THREE.DoubleSide,
+});
+const abyss = new THREE.Mesh(abyssGeo, abyssMat);
+abyss.rotation.x = -Math.PI / 2;
+abyss.position.y = -18;
+scene.add(abyss);
+
+// === BUBBLES ===
+let bubblesOn = true;
+const BCOUNT = 160;
+const bGeo = new THREE.SphereGeometry(1, 12, 12);
+
+const bubbles = [];
+const bGroup = new THREE.Group();
+scene.add(bGroup);
+
+for (let i = 0; i < BCOUNT; i++) {
+  const s = 0.04 + Math.random() * 0.28;
+  const mat = new THREE.MeshPhongMaterial({
+    color: 0x5eead4,
+    emissive: 0x0d9488,
+    transparent: true,
+    opacity: 0.04 + Math.random() * 0.12,
+    specular: 0xffffff,
+    shininess: 120,
+  });
+  const m = new THREE.Mesh(bGeo, mat);
+  m.scale.set(s, s, s);
+
+  const x = (Math.random() - 0.5) * 100;
+  const y = -12 + Math.random() * 35;
+  const z = (Math.random() - 0.5) * 80;
+  m.position.set(x, y, z);
+
+  bGroup.add(m);
+  bubbles.push({
+    mesh: m,
+    bx: x, bz: z,
+    spd: 0.2 + Math.random() * 0.7,
+    wSpd: 0.8 + Math.random() * 2.2,
+    wAmp: 0.2 + Math.random() * 0.9,
+    ph: Math.random() * Math.PI * 2,
+    sz: s,
+  });
+}
+
+// === LIGHT RAYS ===
+for (let i = 0; i < 12; i++) {
+  const rGeo = new THREE.PlaneGeometry(0.25 + Math.random() * 0.3, 35 + Math.random() * 20);
+  const rMat = new THREE.MeshBasicMaterial({
+    color: 0x5eead4,
+    transparent: true,
+    opacity: 0.012 + Math.random() * 0.02,
+    side: THREE.DoubleSide,
+  });
+  const ray = new THREE.Mesh(rGeo, rMat);
+  ray.position.set(
+    (Math.random() - 0.5) * 80,
+    6 + Math.random() * 10,
+    (Math.random() - 0.5) * 50 - 10
+  );
+  ray.rotation.z = (Math.random() - 0.5) * 0.4;
+  ray.rotation.y = Math.random() * Math.PI;
+  scene.add(ray);
+}
+
+// === ANIMATE ===
+const clock = new THREE.Clock();
+
+function waveOcean(t) {
+  const pos = oceanGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    pos.setY(i,
+      Math.sin(x * 0.045 + t * 0.55) * 1.4 +
+      Math.sin(z * 0.07 + t * 0.35) * 0.9 +
+      Math.sin((x + z) * 0.025 + t * 0.25) * 1.8 +
+      Math.sin(x * 0.12 + z * 0.08 + t * 0.8) * 0.4
+    );
+  }
+  pos.needsUpdate = true;
+  oceanGeo.computeVertexNormals();
+
+  const d2p = deep2Geo.attributes.position;
+  for (let i = 0; i < d2p.count; i++) {
+    const x = d2p.getX(i), z = d2p.getZ(i);
+    d2p.setY(i,
+      Math.sin(x * 0.025 + t * 0.18) * 2.5 +
+      Math.sin(z * 0.035 + t * 0.12) * 1.8
+    );
+  }
+  d2p.needsUpdate = true;
+  deep2Geo.computeVertexNormals();
+
+  const ap = abyssGeo.attributes.position;
+  for (let i = 0; i < ap.count; i++) {
+    const x = ap.getX(i), z = ap.getZ(i);
+    ap.setY(i,
+      Math.sin(x * 0.015 + t * 0.08) * 3 +
+      Math.sin(z * 0.02 + t * 0.06) * 2
+    );
+  }
+  ap.needsUpdate = true;
+  abyssGeo.computeVertexNormals();
+}
+
+function moveBubbles(t) {
+  bubbles.forEach(b => {
+    b.mesh.visible = bubblesOn;
+    if (!bubblesOn) return;
+
+    b.mesh.position.y += b.spd * 0.015;
+    b.mesh.position.x = b.bx + Math.sin(t * b.wSpd + b.ph) * b.wAmp;
+    b.mesh.position.z = b.bz + Math.cos(t * b.wSpd * 0.6 + b.ph) * b.wAmp * 0.6;
+
+    // Subtle size pulse
+    const pulse = 1 + Math.sin(t * 2 + b.ph) * 0.08;
+    b.mesh.scale.set(b.sz * pulse, b.sz * pulse, b.sz * pulse);
+
+    if (b.mesh.position.y > 22) {
+      b.mesh.position.y = -12;
+      b.bx = (Math.random() - 0.5) * 100;
+      b.bz = (Math.random() - 0.5) * 80;
+    }
+  });
+}
+
+function loop() {
+  requestAnimationFrame(loop);
+  const t = clock.getElapsedTime();
+
+  waveOcean(t);
+  moveBubbles(t);
+
+  // Camera drift
+  camera.position.x = Math.sin(t * 0.08) * 4;
+  camera.position.y = 18 + Math.sin(t * 0.12) * 2;
+  camera.lookAt(Math.sin(t * 0.05) * 2, -2, 0);
+
+  // Lights drift
+  p1.position.x = -20 + Math.sin(t * 0.25) * 8;
+  p1.position.y = 10 + Math.sin(t * 0.3) * 3;
+  p2.position.z = -20 + Math.cos(t * 0.18) * 8;
+  p3.intensity = 0.3 + Math.sin(t * 0.4) * 0.1;
+
+  renderer.render(scene, camera);
+}
+loop();
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Scroll parallax
+window.addEventListener('scroll', () => {
+  const s = window.scrollY;
+  camera.position.y = 18 + s * 0.012;
+  camera.position.z = 55 - s * 0.025;
+  ocean.material.opacity = Math.max(0.25, 0.8 - s * 0.0008);
+});
+
+function toggleBubbles() { bubblesOn = !bubblesOn; }
+</script>
+
+</body>
+</html>
