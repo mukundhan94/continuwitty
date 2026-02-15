@@ -20,6 +20,16 @@ async function fetchCsrfToken(pagePath: '/login' | '/ui'): Promise<string> {
   return extractCsrfTokenFromHtml(await response.text())
 }
 
+function isManualRedirectSuccess(response: Response): boolean {
+  if (response.status === 303 || response.status === 302 || response.status === 307 || response.status === 308) {
+    return true
+  }
+  if (response.type === 'opaqueredirect') {
+    return true
+  }
+  return response.status === 0
+}
+
 export async function getSessionProfile(): Promise<UserProfile> {
   return apiJson<UserProfile>('/api/v1/me')
 }
@@ -42,7 +52,7 @@ export async function loginWithPassword(username: string, password: string): Pro
     redirect: 'manual',
   })
 
-  if (response.status === 303) {
+  if (isManualRedirectSuccess(response)) {
     return
   }
 
@@ -63,7 +73,7 @@ export async function logoutCurrentUser(): Promise<void> {
     redirect: 'manual',
   })
 
-  if (response.status === 303) {
+  if (isManualRedirectSuccess(response)) {
     return
   }
 

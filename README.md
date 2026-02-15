@@ -965,11 +965,14 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
 4. Fixed workspace growth bug during repeated session creation:
    - root cause: grid row used auto height, so growing session list expanded all panes.
    - fix: constrained workspace row with `grid-template-rows: minmax(0, 1fr)` and `flex: 1` container sizing, with pane-internal scroll.
-5. Refined base controls:
+5. Fixed frontend sign-in redirect handling in dev:
+   - root cause: `fetch(..., redirect: 'manual')` can return `status=0` + `opaqueredirect`, which was incorrectly treated as login failure even when server auth succeeded.
+   - fix: treat manual redirect responses (`303`/`302`/`307`/`308`, `opaqueredirect`, `status=0`) as success for login/logout flow.
+6. Refined base controls:
    - button text centering and form-control line-height/min-height adjustments in global styles.
-6. Verification:
+7. Verification:
    - `make web-check` -> all frontend checks passed
-   - frontend tests: `7 passed`
+   - frontend tests: `10 passed`
 
 ### Next Immediate Steps (One By One)
 
