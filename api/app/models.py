@@ -214,12 +214,22 @@ class PinnedEngramRecord(BaseModel):
     created_at: datetime
 
 
+class ChatSourceReference(BaseModel):
+    engram_id: UUID
+    engram_title: str
+    url: str
+    title: str | None = None
+    snippet: str
+    captured_at: datetime
+
+
 class ChatSendResponse(BaseModel):
     session_id: UUID
     message_id: UUID
     reply_message_id: UUID
     assistant_text: str
     used_engram_ids: list[UUID] = Field(default_factory=list)
+    source_references: list[ChatSourceReference] = Field(default_factory=list)
 
 
 class SaveSessionAsEngramRequest(BaseModel):
@@ -238,6 +248,11 @@ class SaveSessionAsEngramResponse(BaseModel):
 
 class ContinueSessionRequest(BaseModel):
     title: str | None = None
+
+
+class ContinueSessionResponse(BaseModel):
+    session: ChatSessionRecord
+    carried_engram_ids: list[UUID] = Field(default_factory=list)
 
 
 class McpJsonRpcRequest(BaseModel):

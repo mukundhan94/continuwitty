@@ -18,8 +18,14 @@ description: Use this skill when implementing chat sessions, context assembly wi
    - short citation pack
 3. Call provider adapter through registry.
 4. Save assistant/user messages and metadata.
-5. Expose `used_engram_ids` in chat response payloads.
+5. Expose `used_engram_ids` and `source_references` in chat response payloads.
 6. Add save-as-engram endpoint to snapshot useful chat state.
+
+## Module Layout (Current)
+- `api/app/chat/api.py`: chat route transport layer.
+- `api/app/chat/service.py`: orchestration and continuity flows.
+- `api/app/chat/context.py`: retrieval + pinned context assembly.
+- `api/app/chat/errors.py`: domain errors for HTTP mapping.
 
 ## Continuity Pattern
 - Start a new session by cloning provider/system settings and pinned engrams.

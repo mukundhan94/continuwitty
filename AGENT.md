@@ -5,6 +5,7 @@ Use it as the default workflow when adding or refactoring features.
 
 ## 1. Repository Map
 - `api/app/`: FastAPI services, models, repositories, auth, provider adapters, MCP server.
+- `api/app/chat/`: chat domain package (API router, service orchestration, context assembly, errors).
 - `api/app/providers/`: provider domain package (`base`, `errors`, concrete adapters, `registry`).
 - `api/tests/`: unit and integration tests.
 - `api/evals/`: scenario-based eval harness.
@@ -29,7 +30,9 @@ Use it as the default workflow when adding or refactoring features.
 
 ## 4. Architecture Boundaries
 - Route handlers in `main.py` should orchestrate only.
+- Domain routers (`api/app/chat/api.py`) should remain thin and delegate to services.
 - DB access must live in repository modules.
+- Context assembly logic belongs in domain context modules (`api/app/chat/context.py`), not route handlers.
 - Provider SDK calls must stay in `api/app/providers/`.
 - MCP tool handlers should call service/repository layers, not raw SQL.
 - UI should call API/MCP contracts only, not reimplement business logic.
@@ -55,6 +58,7 @@ Use it as the default workflow when adding or refactoring features.
 - Validate all external payloads with Pydantic models.
 - Include stable identifiers in responses (`user_id`, `session_id`, `engram_id`).
 - For chat responses, return `used_engram_ids` whenever context retrieval is used.
+- For chat responses, return `source_references` whenever retrieval context includes citations.
 
 ## 7. Provider Adapter Contract
 - Implement common methods across providers:

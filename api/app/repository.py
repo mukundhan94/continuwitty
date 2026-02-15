@@ -201,7 +201,9 @@ def list_engrams(
     where_clauses: list[str] = []
     params: list = []
     if actor_user_id:
-        where_clauses.append("(owner_user_id = %s OR visibility_scope = 'project')")
+        where_clauses.append(
+            "(owner_user_id = %s OR visibility_scope = 'project' OR owner_user_id IS NULL)"
+        )
         params.append(actor_user_id)
     if project_id:
         where_clauses.append("project_id = %s")
@@ -233,7 +235,9 @@ def query_engrams(
         where_clauses.append("project_id = %s")
         params.append(request.project_id)
     if actor_user_id:
-        where_clauses.append("(owner_user_id = %s OR visibility_scope = 'project')")
+        where_clauses.append(
+            "(owner_user_id = %s OR visibility_scope = 'project' OR owner_user_id IS NULL)"
+        )
         params.append(actor_user_id)
     if request.tags:
         where_clauses.append("tags && %s")
@@ -325,7 +329,9 @@ def get_rehydration_bundle(
     where_clause = "WHERE engram_id = %s"
     where_params: list = [engram_id]
     if actor_user_id:
-        where_clause += " AND (owner_user_id = %s OR visibility_scope = 'project')"
+        where_clause += (
+            " AND (owner_user_id = %s OR visibility_scope = 'project' OR owner_user_id IS NULL)"
+        )
         where_params.append(actor_user_id)
 
     with get_conn() as conn, conn.cursor() as cur:

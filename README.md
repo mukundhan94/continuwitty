@@ -28,6 +28,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add local security baseline (audit log + login rate limiting/lockout).
 - [x] Add schema/repository layer for chat sessions, pinning, and visibility.
 - [x] Add provider adapter layer (OpenAI, Anthropic, Bedrock) with registry.
+- [x] Add chat APIs and continuity workflows (pin, save-as-engram, continue, stream).
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -38,6 +39,7 @@ This README is written for a newcomer and follows an implementation sequence bas
   - Phase 0-1 completed (`Plan.Next.md`, `AGENT.md`, `skills/`).
   - Phase 2 completed (chat/session schema + repositories + visibility enforcement).
   - Phase 3 completed (provider adapters + registry + provider config contracts).
+  - Phase 4 completed (chat API routes + context assembler + continuity flows).
 
 ## Agent Guide
 
@@ -154,6 +156,12 @@ engram/
       agent_workflow.py
       audit.py
       auth.py
+      chat/
+        __init__.py
+        api.py
+        context.py
+        errors.py
+        service.py
       chat_repository.py
       cli.py
       consolidation.py
@@ -191,6 +199,10 @@ engram/
 - `api/app/agent_workflow.py`: LangGraph workflow, checkpointing, and resume logic.
 - `api/app/audit.py`: append-only local audit event writer (`jsonl`).
 - `api/app/auth.py`: password hashing/verification and CSRF token helpers.
+- `api/app/chat/api.py`: chat/session REST route layer (`/api/v1/chat/*`).
+- `api/app/chat/context.py`: context assembler for pinned + retrieved engram packs.
+- `api/app/chat/errors.py`: chat-domain error types mapped to HTTP responses.
+- `api/app/chat/service.py`: chat continuity orchestration and provider call workflow.
 - `api/app/chat_repository.py`: chat session/message and pinned-engram persistence with visibility checks.
 - `api/app/cli.py`: local terminal workflows for upload/search/rehydrate.
 - `api/app/consolidation.py`: local background maintenance logic for consolidation snapshots.
@@ -223,6 +235,9 @@ engram/
 - `api/tests/test_consolidation.py`: unit tests for consolidation job behavior and guardrails.
 - `api/tests/test_ui_auth.py`: login/logout/session workflow + CSRF + rate-limit + audit checks.
 - `api/tests/test_chat_repository.py`: integration coverage for chat sessions/messages/pinning visibility.
+- `api/tests/test_chat_api_integration.py`: end-to-end chat API lifecycle and continuity flow tests.
+- `api/tests/test_chat_context.py`: context assembly merge/dedupe behavior tests.
+- `api/tests/test_chat_service.py`: chat service orchestration and save/continue behavior tests.
 - `api/tests/test_engram_visibility.py`: integration checks for owner/project scope filtering behavior.
 - `api/tests/test_provider_registry.py`: provider registry construction and adapter selection checks.
 - `api/tests/test_provider_adapters.py`: adapter normalization and error-path tests.
@@ -739,11 +754,38 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make test` -> `58 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
+### 2026-02-15 (Plan.Next phase 4: chat API and continuity flow)
+
+1. Added chat domain package under `api/app/chat`:
+   - `api.py`: `/api/v1/chat/*` route layer
+   - `service.py`: session/message/pin/save/continue orchestration
+   - `context.py`: pinned + retrieval context assembler with source reference packing
+   - `errors.py`: chat service error mapping contract
+2. Implemented chat API surface:
+   - session create/list/get/update
+   - message send and stream (`text/event-stream`)
+   - pin/unpin engram
+   - save session as engram
+   - continue session with pinned engram carry-forward
+3. Added response metadata for continuity:
+   - `used_engram_ids` in assistant replies
+   - `source_references` from packed rehydration citations
+4. Added compatibility fix for legacy local engrams:
+   - ownerless engrams (`owner_user_id IS NULL`) remain readable for authenticated users.
+5. Added tests:
+   - `api/tests/test_chat_context.py`
+   - `api/tests/test_chat_service.py`
+   - `api/tests/test_chat_api_integration.py`
+6. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `67 passed`
+   - `make eval` -> `4/4` cases passed (score `1.0`)
+
 ### Next Immediate Steps (One By One)
 
-1. Add chat API endpoints and continuity flows.
-2. Add MCP JSON-RPC over SSE endpoint and tool routing.
-3. Add React chat UI with session/pin/save workflows.
+1. Add MCP JSON-RPC over SSE endpoint and tool routing.
+2. Add React chat UI with session/pin/save workflows.
+3. Add UI-level tests for chat streaming, pin/share, and continue flows.
 
 ## MVP API Surface
 
@@ -756,6 +798,17 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
 - `POST /api/v1/engrams/query`
 - `GET /api/v1/engrams/{engram_id}/sources`
 - `GET /api/v1/engrams/{engram_id}/rehydrate`
+- `POST /api/v1/chat/sessions`
+- `GET /api/v1/chat/sessions`
+- `GET /api/v1/chat/sessions/{session_id}`
+- `PATCH /api/v1/chat/sessions/{session_id}`
+- `GET /api/v1/chat/sessions/{session_id}/messages`
+- `POST /api/v1/chat/sessions/{session_id}/messages`
+- `POST /api/v1/chat/sessions/{session_id}/messages/stream`
+- `POST /api/v1/chat/sessions/{session_id}/engrams/pin`
+- `DELETE /api/v1/chat/sessions/{session_id}/engrams/{engram_id}`
+- `POST /api/v1/chat/sessions/{session_id}/save-engram`
+- `POST /api/v1/chat/sessions/{session_id}/continue`
 - `POST /api/v1/agent-runs`
 - `GET /api/v1/agent-runs/{thread_id}`
 - `POST /api/v1/agent-runs/{thread_id}/resume`
@@ -939,12 +992,20 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - Bedrock adapter with normalized request/response mapping
   - provider registry and configuration contract
 
-### Milestone 12 (Next)
+### Milestone 12 (Completed)
 
-- Chat API and continuity layer:
+- Chat API and continuity layer completed:
   - session/message endpoints
+  - stream endpoint for incremental assistant output
   - save-as-engram and continue-session flows
-  - context assembly and `used_engram_ids` response metadata
+  - context assembly with `used_engram_ids` and `source_references`
+
+### Milestone 13 (Next)
+
+- MCP HTTP stream layer:
+  - JSON-RPC over SSE transport
+  - chat/engram tool routing
+  - auth/visibility parity with REST APIs
 
 ## Example: Create Engram
 
