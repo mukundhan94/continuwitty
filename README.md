@@ -21,7 +21,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add provenance source-inspection endpoint and UI flow.
 - [x] Add CSRF-protected UI auth with optional hashed-password support.
 - [x] Add multi-user auth model + role-based access controls (admin/analyst/viewer).
-- [ ] Add CLI/UI for upload/search/rehydrate workflows.
+- [x] Add CLI/UI for upload/search/rehydrate workflows.
 - [x] Add automated evaluation harness (temporal + multi-engram reasoning).
 - [ ] Add production security hardening (oauth/oidc, audit logging, rate limits).
 
@@ -95,6 +95,7 @@ engram/
       agent_models.py
       agent_workflow.py
       auth.py
+      cli.py
       config.py
       db.py
       embedding.py
@@ -116,6 +117,7 @@ engram/
 - `api/app/agent_models.py`: request/response models for agent runs.
 - `api/app/agent_workflow.py`: LangGraph workflow, checkpointing, and resume logic.
 - `api/app/auth.py`: password hashing/verification and CSRF token helpers.
+- `api/app/cli.py`: local terminal workflows for upload/search/rehydrate.
 - `api/app/models.py`: Request/response and engram schema models.
 - `api/app/repository.py`: SQL persistence, semantic query, rehydration builder.
 - `api/app/user_repository.py`: user persistence, seeding, and role-aware updates.
@@ -135,6 +137,7 @@ engram/
 - `api/tests/test_ui_auth.py`: login/logout/session workflow tests.
 - `api/tests/test_user_rbac.py`: multi-user auth and role-based access checks.
 - `api/tests/test_eval_harness.py`: integration check that evaluation scenarios pass.
+- `api/tests/test_cli.py`: unit tests for CLI argument handling and command behavior.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
 - `Makefile`: Local run shortcuts.
@@ -235,6 +238,14 @@ make eval
 
 Evaluation output is written to `api/evals/last_eval.json`.
 
+10. Run CLI workflows (local operator path):
+
+```bash
+make cli ARGS="upload --file /tmp/engram.json"
+make cli ARGS="search --query 'durable runs' --project-id engram-vault --top-k 5"
+make cli ARGS="rehydrate --engram-id <engram_uuid>"
+```
+
 ## Workflow Notes (Current Validation Sequence)
 
 Use this exact flow while you validate current local behavior end-to-end.
@@ -333,6 +344,14 @@ curl -X POST http://localhost:8000/api/v1/agent-runs \
     "auto_persist_engram": false
   }'
 ```
+
+7. CLI smoke test:
+
+```bash
+make cli ARGS="search --query 'local-first memory' --project-id engram-vault --top-k 3"
+```
+
+Comment: validates non-UI operator workflow from terminal.
 
 If you want to use a hashed local UI password instead of plaintext in `.env`, generate one with:
 
@@ -473,12 +492,26 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make test` -> `30 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
+### 2026-02-15 (Local CLI workflow phase)
+
+1. Added terminal CLI entrypoint (`api/app/cli.py`) for operator workflows:
+   - `upload` from JSON file (single object or list)
+   - `search` with semantic query + metadata filters
+   - `rehydrate` by engram id
+2. Added Makefile CLI passthrough:
+   - `make cli ARGS=\"...\"`
+3. Added CLI tests:
+   - `api/tests/test_cli.py`
+4. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `34 passed`
+   - `make eval` -> `4/4` cases passed (score `1.0`)
+
 ### Next Immediate Steps (One By One)
 
-1. Add local CLI workflow for upload/search/rehydrate.
-2. Add reranking/citation-packing improvements for retrieval quality.
-3. Add background consolidation jobs for long-run memory maintenance.
-4. Add production auth hardening (oauth/oidc, audit events, rate limits).
+1. Add reranking/citation-packing improvements for retrieval quality.
+2. Add background consolidation jobs for long-run memory maintenance.
+3. Add production auth hardening (oauth/oidc, audit events, rate limits).
 
 ## MVP API Surface
 
@@ -496,6 +529,44 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
 - `POST /api/v1/agent-runs/{thread_id}/resume`
 - `GET /healthz`
 
+## CLI Workflow (Local)
+
+Use CLI mode when you want a terminal-only path (no browser).
+
+1. Create a minimal upload payload:
+
+```bash
+cat > /tmp/engram.json <<'JSON'
+{
+  "project_id": "engram-vault",
+  "thread_id": "cli-run-001",
+  "title": "CLI upload sample",
+  "abstract": "Uploaded from local CLI.",
+  "detailed_summary_markdown": "Sample summary for CLI upload testing.",
+  "tags": ["cli"],
+  "keywords": ["upload", "local"]
+}
+JSON
+```
+
+2. Upload engram:
+
+```bash
+make cli ARGS="upload --file /tmp/engram.json"
+```
+
+3. Search engrams:
+
+```bash
+make cli ARGS="search --query 'uploaded from local cli' --project-id engram-vault --top-k 5"
+```
+
+4. Rehydrate engram by id:
+
+```bash
+make cli ARGS="rehydrate --engram-id <engram_uuid>"
+```
+
 ## Test Suite
 
 Test files live under `api/tests`:
@@ -508,6 +579,7 @@ Test files live under `api/tests`:
 - `test_user_rbac.py`: user management and role-based access control checks.
 - `test_agent_workflow.py`: LangGraph checkpoint/resume + auto-persist + snapshot checks.
 - `test_eval_harness.py`: scenario-based evaluation harness pass/fail checks.
+- `test_cli.py`: upload/search/rehydrate CLI command behavior.
 - `conftest.py`: DB fixture, schema bootstrap, and cleanup.
 
 Notes:
@@ -584,12 +656,18 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - temporal updates
   - abstention checks
 
-### Milestone 6 (Next)
+### Milestone 6 (Completed)
 
-- Add local CLI workflow:
+- Added local CLI workflow:
   - upload engrams from JSON
   - query/search from terminal
   - rehydrate bundles from terminal
+
+### Milestone 7 (Next)
+
+- Retrieval quality and memory maintenance improvements:
+  - reranking/citation-packing
+  - background consolidation jobs
 - Add production auth/security hardening:
   - oauth/oidc integration
   - audit-event logging
@@ -669,5 +747,6 @@ curl http://localhost:8000/api/v1/engrams/<engram_id>/sources
 - [x] I can inspect stored provenance sources for an engram via API/UI.
 - [x] I can manage users and enforce admin-only routes with role checks.
 - [x] I can run local eval scenarios for fact/cross/temporal/abstention behavior.
+- [x] I can upload/search/rehydrate engrams from terminal using local CLI commands.
 - [x] A newcomer can run the system locally using this README alone.
 - [ ] The same stored engram can be reused with different LLM providers later.

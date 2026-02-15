@@ -148,6 +148,7 @@ LLM-ready rehydration bundle.
 -   CSRF protection for UI form actions is implemented.
 -   Source inspection endpoint + dashboard action is implemented.
 -   Multi-user RBAC is implemented (`admin`, `analyst`, `viewer`) with admin-only user management APIs.
+-   Local operator CLI is implemented for upload/search/rehydrate workflows (`api/app/cli.py`).
 
 ------------------------------------------------------------------------
 
