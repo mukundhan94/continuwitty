@@ -6,6 +6,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
+from .agent_models import AgentResumeRequest, AgentRunRequest, AgentRunResponse
+from .agent_workflow import AgentWorkflowService
 from .config import get_settings
 from .models import (
     EngramCreateResponse,
@@ -30,6 +32,7 @@ app.add_middleware(
     https_only=False,
 )
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+agent_workflow = AgentWorkflowService()
 
 
 def _is_authenticated(request: Request) -> bool:
@@ -99,6 +102,41 @@ def ui_dashboard(request: Request) -> Response:
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/api/v1/agent-runs", response_model=AgentRunResponse)
+def run_agent_workflow(payload: AgentRunRequest) -> AgentRunResponse:
+    result = agent_workflow.run(payload.model_dump(mode="json"))
+    return AgentRunResponse(
+        thread_id=payload.thread_id,
+        status=result.get("status", "unknown"),
+        engram_id=result.get("engram_id"),
+        state=result,
+    )
+
+
+@app.get("/api/v1/agent-runs/{thread_id}", response_model=AgentRunResponse)
+def get_agent_run_state(thread_id: str) -> AgentRunResponse:
+    state = agent_workflow.get_state(thread_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Thread state not found")
+    return AgentRunResponse(
+        thread_id=thread_id,
+        status=state.get("status", "unknown"),
+        engram_id=state.get("engram_id"),
+        state=state,
+    )
+
+
+@app.post("/api/v1/agent-runs/{thread_id}/resume", response_model=AgentRunResponse)
+def resume_agent_workflow(thread_id: str, payload: AgentResumeRequest) -> AgentRunResponse:
+    result = agent_workflow.resume(thread_id, payload.model_dump(mode="json"))
+    return AgentRunResponse(
+        thread_id=thread_id,
+        status=result.get("status", "unknown"),
+        engram_id=result.get("engram_id"),
+        state=result,
+    )
 
 
 @app.post("/api/v1/engrams", response_model=EngramCreateResponse)

@@ -110,6 +110,14 @@ LLM-ready rehydration bundle.
 -   Resume capability
 -   Automatic engram write at completion
 
+### Local MVP Status
+
+-   Implemented with `api/app/agent_workflow.py` using SQLite checkpoints.
+-   Exposed endpoints:
+    - `POST /api/v1/agent-runs`
+    - `GET /api/v1/agent-runs/{thread_id}`
+    - `POST /api/v1/agent-runs/{thread_id}/resume`
+
 ------------------------------------------------------------------------
 
 ## Phase 7 --- Local Test UI + Simple Login

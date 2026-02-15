@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     app_session_secret: str = "engram-local-dev-session-secret"
     ui_demo_username: str = "admin"
     ui_demo_password: str = "admin123"
+    langgraph_checkpoint_path: str = "./data/langgraph_checkpoints.sqlite"
 
     model_config = SettingsConfigDict(
         env_file=".env",
