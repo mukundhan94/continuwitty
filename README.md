@@ -2,7 +2,7 @@
 
 This project turns long LLM research runs into durable, queryable "memory engrams" so context does not disappear between sessions.
 
-This README is written for a newcomer and follows an implementation sequence based on `deep-research-report.md`.
+This README is written for a newcomer and follows an implementation sequence based on `deep-research-report.md`, `Plan.md`, and `Plan.Next.md`.
 
 ## Current Progress
 
@@ -27,6 +27,31 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add background consolidation jobs for long-run memory maintenance.
 - [x] Add local security baseline (audit log + login rate limiting/lockout).
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
+
+## Plan.Next Status
+
+- `Plan.md`: historical baseline plan and completed local-first milestones.
+- `Plan.Next.md`: active implementation roadmap for chat continuity, multi-provider adapters, and MCP streaming.
+
+## Agent Guide
+
+- `AGENT.md` is the canonical contribution and maintenance contract for human contributors and agents.
+- Before changing architecture, API contracts, or schema behavior, read `AGENT.md` first.
+- Every phase updates this README and keeps `Plan.Next.md` and `skills/` aligned.
+
+## Skills Catalog
+
+Agent workflow skills are under `skills/`:
+
+- `engram-lifecycle`: creation/query/rehydration and ownership/visibility behavior.
+- `chat-rag-operator`: chat session continuity and context assembly with engrams.
+- `mcp-http-stream-tools`: JSON-RPC over SSE tool contracts and handlers.
+- `provider-openai`: OpenAI adapter implementation conventions.
+- `provider-anthropic`: Anthropic adapter implementation conventions.
+- `provider-bedrock`: Bedrock adapter implementation conventions.
+- `schema-migrations-and-backfill`: forward-only schema evolution and compatibility.
+- `testing-and-evals`: test matrix and eval harness extension guidance.
+- `release-and-maintenance`: release checklist and long-run maintenance cadence.
 
 ## Why This Exists
 
@@ -78,11 +103,32 @@ Long research threads lose useful context once a session ends. The goal here is 
 ```text
 engram/
   README.md
+  AGENT.md
+  Plan.md
+  Plan.Next.md
   deep-research-report.md
-  Engram_Vault_Plan.md
   .env.example
   docker-compose.yml
   Makefile
+  skills/
+    engram-lifecycle/
+      SKILL.md
+    chat-rag-operator/
+      SKILL.md
+    mcp-http-stream-tools/
+      SKILL.md
+    provider-openai/
+      SKILL.md
+    provider-anthropic/
+      SKILL.md
+    provider-bedrock/
+      SKILL.md
+    schema-migrations-and-backfill/
+      SKILL.md
+    testing-and-evals/
+      SKILL.md
+    release-and-maintenance/
+      SKILL.md
   db/
     init/
       001_schema.sql
@@ -118,6 +164,9 @@ engram/
 ## File-by-File Guide
 
 - `docker-compose.yml`: Local Postgres + pgvector service.
+- `AGENT.md`: project operating guide for contributors and agents.
+- `Plan.md`: historical phased baseline plan.
+- `Plan.Next.md`: active roadmap for chat + MCP + multi-provider phases.
 - `db/init/001_schema.sql`: Database extension, tables, and indexes.
 - `api/app/main.py`: FastAPI routes and API surface.
 - `api/app/agent_models.py`: request/response models for agent runs.
@@ -152,6 +201,7 @@ engram/
 - `api/tests/test_repository_helpers.py`: repository helper tests.
 - `Makefile`: Local run shortcuts.
 - `.env.example`: Starter configuration for local setup.
+- `skills/`: reusable agent workflows for implementation and maintenance.
 
 ## Prerequisites
 
