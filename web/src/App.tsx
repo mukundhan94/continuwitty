@@ -7,11 +7,14 @@ import {
   createChatSession,
   listChatSessions,
   listEngrams,
+  listPinnedDocuments,
   listPinnedEngrams,
   listSessionMessages,
+  pinDocumentToSession,
   pinEngramToSession,
   saveSessionAsEngram,
   streamChatMessage,
+  unpinDocumentFromSession,
   unpinEngramFromSession,
 } from './api/chat'
 import { ApiError } from './api/http'
@@ -22,6 +25,7 @@ import type {
   ChatSourceReference,
   DocumentRecord,
   EngramSummary,
+  PinnedDocumentRecord,
   UserProfile,
 } from './api/types'
 import { ChatPanel } from './components/ChatPanel'
@@ -43,11 +47,10 @@ import {
 import { useThemeMode } from './styles/useThemeMode'
 import { buildDefaultSaveAbstract } from './utils/chat'
 
-const RightRail = styled.div<{ $showIngestion: boolean }>`
+const RightRail = styled.div`
   min-height: 0;
   display: grid;
-  grid-template-rows: ${({ $showIngestion }) =>
-    $showIngestion ? 'minmax(12rem, 0.65fr) minmax(0, 1.35fr)' : 'minmax(0, 1fr)'};
+  grid-template-rows: minmax(12rem, 0.65fr) minmax(0, 1.35fr);
   gap: 0.9rem;
 
   @media (max-width: 1180px) {
@@ -108,7 +111,7 @@ export default function App() {
   const [documentsSubmitting, setDocumentsSubmitting] = useState(false)
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [documentsError, setDocumentsError] = useState<string | null>(null)
-  const [showIngestionPanel, setShowIngestionPanel] = useState(true)
+  const [pinnedDocuments, setPinnedDocuments] = useState<PinnedDocumentRecord[]>([])
 
   const [saveModalOpen, setSaveModalOpen] = useState(false)
   const [saveSubmitting, setSaveSubmitting] = useState(false)
@@ -137,13 +140,15 @@ export default function App() {
   const loadSessionData = async (sessionId: string, currentProjectId: string) => {
     setEngramLoading(true)
     try {
-      const [loadedMessages, loadedPinned, loadedEngrams] = await Promise.all([
+      const [loadedMessages, loadedPinned, loadedPinnedDocuments, loadedEngrams] = await Promise.all([
         listSessionMessages(sessionId),
         listPinnedEngrams(sessionId),
+        listPinnedDocuments(sessionId),
         listEngrams(currentProjectId),
       ])
       setMessages(loadedMessages)
       setPinnedEngrams(loadedPinned)
+      setPinnedDocuments(loadedPinnedDocuments)
       setAvailableEngrams(loadedEngrams)
     } catch (error) {
       setChatError(describeError(error))
@@ -200,6 +205,7 @@ export default function App() {
     if (!user || !selectedSessionId) {
       setMessages([])
       setPinnedEngrams([])
+      setPinnedDocuments([])
       setSourceReferences([])
       return
     }
@@ -233,6 +239,7 @@ export default function App() {
     setSelectedSessionId(null)
     setMessages([])
     setPinnedEngrams([])
+    setPinnedDocuments([])
     setAvailableEngrams([])
     setSourceReferences([])
     setDocuments([])
@@ -367,6 +374,33 @@ export default function App() {
     await loadProjectDocuments(projectId)
   }
 
+  const handlePinDocument = async (documentId: string) => {
+    if (!selectedSessionId) {
+      setChatError('Select a session before pinning a document.')
+      return
+    }
+    try {
+      await pinDocumentToSession(selectedSessionId, documentId)
+      await refreshFromSession(selectedSessionId)
+      setNotice(`Pinned document ${documentId}`)
+    } catch (error) {
+      setChatError(describeError(error))
+    }
+  }
+
+  const handleUnpinDocument = async (documentId: string) => {
+    if (!selectedSessionId) {
+      return
+    }
+    try {
+      await unpinDocumentFromSession(selectedSessionId, documentId)
+      await refreshFromSession(selectedSessionId)
+      setNotice(`Unpinned document ${documentId}`)
+    } catch (error) {
+      setChatError(describeError(error))
+    }
+  }
+
   const handleIngestText = async (payload: {
     title: string
     text: string
@@ -472,9 +506,6 @@ export default function App() {
           <button type="button" onClick={toggleMode}>
             {mode === 'dark' ? 'Light Theme' : 'Dark Theme'}
           </button>
-          <button type="button" onClick={() => setShowIngestionPanel((current) => !current)}>
-            {showIngestionPanel ? 'Hide Docs' : 'Show Docs'}
-          </button>
           <button type="button" onClick={handleLogout}>
             Logout
           </button>
@@ -514,19 +545,21 @@ export default function App() {
           onContinueSession={handleContinueSession}
         />
 
-        <RightRail $showIngestion={showIngestionPanel}>
-          {showIngestionPanel ? (
-            <DocumentIngestionPanel
-              projectId={projectId}
-              documents={documents}
-              loading={documentsLoading}
-              submitting={documentsSubmitting}
-              error={documentsError}
-              onRefresh={handleRefreshDocuments}
-              onIngestText={handleIngestText}
-              onIngestFile={handleIngestFile}
-            />
-          ) : null}
+        <RightRail>
+          <DocumentIngestionPanel
+            projectId={projectId}
+            selectedSessionId={selectedSessionId}
+            documents={documents}
+            pinnedDocumentIds={pinnedDocuments.map((item) => item.document_id)}
+            loading={documentsLoading}
+            submitting={documentsSubmitting}
+            error={documentsError}
+            onRefresh={handleRefreshDocuments}
+            onIngestText={handleIngestText}
+            onIngestFile={handleIngestFile}
+            onPinDocument={handlePinDocument}
+            onUnpinDocument={handleUnpinDocument}
+          />
 
           <PinnedEngramPanel
             selectedSessionId={selectedSessionId}

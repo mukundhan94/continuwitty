@@ -19,7 +19,9 @@ from app.models import (
     ContinueSessionRequest,
     ContinueSessionResponse,
     EngramSummary,
+    PinDocumentRequest,
     PinEngramRequest,
+    PinnedDocumentRecord,
     PinnedEngramRecord,
     SaveSessionAsEngramRequest,
     SaveSessionAsEngramResponse,
@@ -127,6 +129,17 @@ def create_chat_router(
         except ChatServiceError as exc:
             raise _to_http_exception(exc) from exc
 
+    @router.get("/sessions/{session_id}/documents", response_model=list[PinnedDocumentRecord])
+    def list_pinned_documents(request: Request, session_id: UUID) -> list[PinnedDocumentRecord]:
+        actor = require_api_actor(request)
+        try:
+            return chat_service.list_pinned_documents(
+                actor_user_id=UUID(actor["user_id"]),
+                session_id=session_id,
+            )
+        except ChatServiceError as exc:
+            raise _to_http_exception(exc) from exc
+
     @router.post(
         "/sessions/{session_id}/messages", response_model=ChatSendResponse, status_code=201
     )
@@ -191,6 +204,35 @@ def create_chat_router(
                 actor_user_id=UUID(actor["user_id"]),
                 session_id=session_id,
                 engram_id=engram_id,
+            )
+        except ChatServiceError as exc:
+            raise _to_http_exception(exc) from exc
+        return {"removed": True}
+
+    @router.post("/sessions/{session_id}/documents/pin", response_model=PinnedDocumentRecord)
+    def pin_document(
+        request: Request,
+        session_id: UUID,
+        payload: PinDocumentRequest,
+    ) -> PinnedDocumentRecord:
+        actor = require_api_actor(request)
+        try:
+            return chat_service.pin_document(
+                actor_user_id=UUID(actor["user_id"]),
+                session_id=session_id,
+                payload=payload,
+            )
+        except ChatServiceError as exc:
+            raise _to_http_exception(exc) from exc
+
+    @router.delete("/sessions/{session_id}/documents/{document_id}")
+    def unpin_document(request: Request, session_id: UUID, document_id: UUID) -> dict[str, bool]:
+        actor = require_api_actor(request)
+        try:
+            chat_service.unpin_document(
+                actor_user_id=UUID(actor["user_id"]),
+                session_id=session_id,
+                document_id=document_id,
             )
         except ChatServiceError as exc:
             raise _to_http_exception(exc) from exc

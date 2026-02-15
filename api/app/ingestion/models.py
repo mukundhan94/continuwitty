@@ -55,6 +55,7 @@ class DocumentIngestResponse(BaseModel):
 class DocumentChunkQueryRequest(BaseModel):
     query: str = Field(min_length=1)
     project_id: str | None = None
+    document_ids: list[UUID] = Field(default_factory=list)
     top_k: int = Field(default=6, ge=1, le=50)
 
 

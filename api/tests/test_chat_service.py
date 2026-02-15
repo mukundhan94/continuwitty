@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -17,6 +17,7 @@ from app.models import (
     ContinueSessionRequest,
     EngramCreateResponse,
     PinEngramRequest,
+    PinnedDocumentRecord,
     PinnedEngramRecord,
     SaveSessionAsEngramRequest,
     VisibilityScope,
@@ -146,6 +147,8 @@ def test_continue_session_copies_pinned_engrams(monkeypatch) -> None:
     continued = _session(actor_id)
     engram_a = uuid4()
     engram_b = uuid4()
+    document_a = uuid4()
+    copied_document_ids: list[UUID] = []
     service = ChatService(embedding_dim=256)
 
     monkeypatch.setattr(
@@ -194,6 +197,28 @@ def test_continue_session_copies_pinned_engrams(monkeypatch) -> None:
             created_at=datetime.now(UTC),
         ),
     )
+    monkeypatch.setattr(
+        "app.chat.service.list_pinned_documents",
+        lambda session_id, actor_user_id: [
+            PinnedDocumentRecord(
+                session_id=session.session_id,
+                document_id=document_a,
+                pinned_by_user_id=actor_id,
+                created_at=datetime.now(UTC),
+            )
+        ],
+    )
+
+    def _fake_pin_document_to_session(session_id, document_id, actor_user_id):  # noqa: ANN001
+        copied_document_ids.append(document_id)
+        return PinnedDocumentRecord(
+            session_id=session_id,
+            document_id=document_id,
+            pinned_by_user_id=actor_user_id,
+            created_at=datetime.now(UTC),
+        )
+
+    monkeypatch.setattr("app.chat.service.pin_document_to_session", _fake_pin_document_to_session)
 
     response = service.continue_session(
         actor_user_id=actor_id,
@@ -203,6 +228,7 @@ def test_continue_session_copies_pinned_engrams(monkeypatch) -> None:
 
     assert response.session.title == "Continued Session"
     assert response.carried_engram_ids == [engram_a, engram_b]
+    assert copied_document_ids == [document_a]
 
 
 def test_save_session_as_engram_sets_source_session_id(monkeypatch) -> None:

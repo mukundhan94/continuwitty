@@ -6,6 +6,7 @@ import type {
   ChatSourceReference,
   ContinueSessionResponse,
   EngramSummary,
+  PinnedDocumentRecord,
   SaveSessionAsEngramResponse,
   VisibilityScope,
 } from './types'
@@ -93,6 +94,10 @@ export async function listPinnedEngrams(sessionId: string): Promise<EngramSummar
   return apiJson<EngramSummary[]>(`/api/v1/chat/sessions/${sessionId}/engrams`)
 }
 
+export async function listPinnedDocuments(sessionId: string): Promise<PinnedDocumentRecord[]> {
+  return apiJson<PinnedDocumentRecord[]>(`/api/v1/chat/sessions/${sessionId}/documents`)
+}
+
 export async function sendChatMessage(sessionId: string, contentText: string): Promise<ChatSendResponse> {
   return apiJson<ChatSendResponse>(`/api/v1/chat/sessions/${sessionId}/messages`, {
     method: 'POST',
@@ -137,6 +142,19 @@ export async function pinEngramToSession(sessionId: string, engramId: string): P
 
 export async function unpinEngramFromSession(sessionId: string, engramId: string): Promise<void> {
   await apiVoid(`/api/v1/chat/sessions/${sessionId}/engrams/${engramId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function pinDocumentToSession(sessionId: string, documentId: string): Promise<void> {
+  await apiJson(`/api/v1/chat/sessions/${sessionId}/documents/pin`, {
+    method: 'POST',
+    body: JSON.stringify({ document_id: documentId }),
+  })
+}
+
+export async function unpinDocumentFromSession(sessionId: string, documentId: string): Promise<void> {
+  await apiVoid(`/api/v1/chat/sessions/${sessionId}/documents/${documentId}`, {
     method: 'DELETE',
   })
 }

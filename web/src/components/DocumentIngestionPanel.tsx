@@ -78,18 +78,43 @@ const DocList = styled(ScrollColumn)`
   max-height: min(18rem, 38vh);
 `
 
-const DocCard = styled.article`
+const DocCard = styled.article<{ $pinned: boolean }>`
   border: 1px solid var(--color-line);
   border-radius: 10px;
   padding: 0.45rem 0.52rem;
   background: var(--surface-raised);
   display: grid;
   gap: 0.18rem;
+
+  ${({ $pinned }) =>
+    $pinned
+      ? `
+    background: var(--session-active-bg);
+    border-color: var(--session-active-border);
+    box-shadow:
+      inset 0 0 0 1px var(--session-active-border),
+      0 0 0 1px var(--session-active-shadow);
+  `
+      : ''}
+`
+
+const DocActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+`
+
+const PinButton = styled.button`
+  padding: 0.24rem 0.52rem;
+  font-size: 0.72rem;
+  line-height: 1.1;
 `
 
 interface DocumentIngestionPanelProps {
   projectId: string
+  selectedSessionId: string | null
   documents: DocumentRecord[]
+  pinnedDocumentIds: string[]
   loading: boolean
   submitting: boolean
   error: string | null
@@ -108,17 +133,23 @@ interface DocumentIngestionPanelProps {
     chunk_size_chars: number
     chunk_overlap_chars: number
   }) => Promise<void>
+  onPinDocument: (documentId: string) => Promise<void>
+  onUnpinDocument: (documentId: string) => Promise<void>
 }
 
 export function DocumentIngestionPanel({
   projectId,
+  selectedSessionId,
   documents,
+  pinnedDocumentIds,
   loading,
   submitting,
   error,
   onRefresh,
   onIngestText,
   onIngestFile,
+  onPinDocument,
+  onUnpinDocument,
 }: DocumentIngestionPanelProps) {
   const [mode, setMode] = useState<'text' | 'file'>('file')
   const [showUploadForm, setShowUploadForm] = useState(false)
@@ -131,6 +162,7 @@ export function DocumentIngestionPanel({
     () => [...documents].sort((a, b) => b.created_at.localeCompare(a.created_at)),
     [documents],
   )
+  const pinnedDocumentIdSet = useMemo(() => new Set(pinnedDocumentIds), [pinnedDocumentIds])
 
   const resetInputState = () => {
     setTitle('')
@@ -198,15 +230,45 @@ export function DocumentIngestionPanel({
           ) : null}
 
           {sortedDocuments.map((item) => (
-            <DocCard key={item.document_id} data-testid={`document-card-${item.document_id}`}>
+            <DocCard
+              key={item.document_id}
+              data-testid={`document-card-${item.document_id}`}
+              $pinned={pinnedDocumentIdSet.has(item.document_id)}
+            >
               <p className="font-semibold text-ink">{item.title}</p>
               <SessionMeta>
                 {item.source_type} · chunks {item.chunk_count} · {item.visibility_scope}
               </SessionMeta>
+              {pinnedDocumentIdSet.has(item.document_id) ? (
+                <MutedText data-testid={`document-pinned-${item.document_id}`}>Pinned to active chat</MutedText>
+              ) : null}
               {item.source_name ? <MutedText>{item.source_name}</MutedText> : null}
+              <DocActions>
+                {pinnedDocumentIdSet.has(item.document_id) ? (
+                  <PinButton
+                    type="button"
+                    onClick={() => void onUnpinDocument(item.document_id)}
+                    disabled={!selectedSessionId}
+                  >
+                    Unpin
+                  </PinButton>
+                ) : (
+                  <PinButton
+                    type="button"
+                    onClick={() => void onPinDocument(item.document_id)}
+                    disabled={!selectedSessionId}
+                  >
+                    Pin to Chat
+                  </PinButton>
+                )}
+              </DocActions>
             </DocCard>
           ))}
         </DocList>
+
+        {!selectedSessionId ? (
+          <MutedText>Select a chat session to pin uploaded documents into message context.</MutedText>
+        ) : null}
 
         <SectionDivider>
           <SecondaryActions>

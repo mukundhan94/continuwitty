@@ -150,6 +150,18 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     assert engram_response.status_code == 200
     engram_id = engram_response.json()["engram_id"]
 
+    document_response = client.post(
+        "/api/v1/ingestion/text",
+        json={
+            "project_id": "project-chat",
+            "title": "Incident Runbook",
+            "text": "Queue depth crossed 5k for 20 minutes. Drain policy: prioritize webhook retries.",
+            "visibility_scope": "project",
+        },
+    )
+    assert document_response.status_code == 201
+    document_id = document_response.json()["document"]["document_id"]
+
     pinned = client.post(
         f"/api/v1/chat/sessions/{session_id}/engrams/pin",
         json={"engram_id": engram_id},
@@ -161,12 +173,27 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     assert listed_pins.status_code == 200
     assert [item["engram_id"] for item in listed_pins.json()] == [engram_id]
 
+    pinned_document = client.post(
+        f"/api/v1/chat/sessions/{session_id}/documents/pin",
+        json={"document_id": document_id},
+    )
+    assert pinned_document.status_code == 200
+    assert pinned_document.json()["document_id"] == document_id
+
+    listed_documents = client.get(f"/api/v1/chat/sessions/{session_id}/documents")
+    assert listed_documents.status_code == 200
+    assert [item["document_id"] for item in listed_documents.json()] == [document_id]
+
     sent = client.post(
         f"/api/v1/chat/sessions/{session_id}/messages",
         json={"content_text": "use prior context"},
     )
     assert sent.status_code == 201
     assert engram_id in sent.json()["used_engram_ids"]
+    assert len(sent.json()["used_document_chunk_ids"]) >= 1
+    assert any(
+        ref.get("source_type") == "document_chunk" for ref in sent.json()["source_references"]
+    )
     assert isinstance(sent.json()["source_references"], list)
 
     saved = client.post(
@@ -193,6 +220,10 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     assert continued_session_id != session_id
     assert engram_id in body["carried_engram_ids"]
 
+    continued_documents = client.get(f"/api/v1/chat/sessions/{continued_session_id}/documents")
+    assert continued_documents.status_code == 200
+    assert [item["document_id"] for item in continued_documents.json()] == [document_id]
+
     continued_messages = client.get(f"/api/v1/chat/sessions/{continued_session_id}/messages")
     assert continued_messages.status_code == 200
     assert continued_messages.json() == []
@@ -204,6 +235,14 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     listed_after = client.get(f"/api/v1/chat/sessions/{session_id}/engrams")
     assert listed_after.status_code == 200
     assert listed_after.json() == []
+
+    unpinned_document = client.delete(f"/api/v1/chat/sessions/{session_id}/documents/{document_id}")
+    assert unpinned_document.status_code == 200
+    assert unpinned_document.json() == {"removed": True}
+
+    listed_documents_after = client.get(f"/api/v1/chat/sessions/{session_id}/documents")
+    assert listed_documents_after.status_code == 200
+    assert listed_documents_after.json() == []
 
 
 @pytest.mark.integration

@@ -76,6 +76,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add clean reset scripts and stale-session reconciliation to keep chat creation stable after DB resets.
 - [x] Add MCP interoperability layer (`initialize`, `tools/list`, `tools/call`) plus typed Python/TypeScript JSON-RPC/SSE clients and contract tests.
 - [x] Add Phase 17 ingestion stack: text/file document ingest APIs, deterministic chunking, embedding abstraction with local fallback, chat-context chunk blending, and upload UI.
+- [x] Add session-level document pinning so uploaded docs can be explicitly carried into chat context and continuation sessions.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -85,7 +86,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
   - phases 0-15 completed (foundation, schema/storage, retrieval/rehydration, durability, chat continuity, providers, MCP, UI, acceptance, theme/UX hardening).
 - Next implementation scope:
   - phase 16: MCP developer tooling and typed clients (in progress: compatibility + typed clients complete, CLI smoke command deferred).
-  - phase 17: document ingestion and RAG-ready retrieval (implemented; pending phase verification/commit).
+  - phase 17: document ingestion and RAG-ready retrieval (implemented and verified, including session-level document pinning support).
   - phase 18: memory lifecycle policies (autosave/retention/consolidation).
   - phase 19: collaboration and sharing model.
   - phase 20: production security hardening.
@@ -369,11 +370,11 @@ engram/
 - `api/app/agent_workflow.py`: LangGraph workflow, checkpointing, and resume logic.
 - `api/app/audit.py`: append-only local audit event writer (`jsonl`).
 - `api/app/auth.py`: password hashing/verification and CSRF token helpers.
-- `api/app/chat/api.py`: chat/session REST route layer (`/api/v1/chat/*`).
-- `api/app/chat/context.py`: context assembler for pinned + retrieved engram packs.
+- `api/app/chat/api.py`: chat/session REST route layer (`/api/v1/chat/*`) including pinned engram and pinned document management routes.
+- `api/app/chat/context.py`: context assembler for pinned + retrieved engram packs plus pinned/retrieved document chunk context.
 - `api/app/chat/errors.py`: chat-domain error types mapped to HTTP responses.
 - `api/app/chat/service.py`: chat continuity orchestration and provider call workflow.
-- `api/app/chat_repository.py`: chat session/message and pinned-engram persistence with visibility checks.
+- `api/app/chat_repository.py`: chat session/message, pinned-engram, and pinned-document persistence with visibility checks.
 - `api/app/cli.py`: local terminal workflows for upload/search/rehydrate.
 - `api/app/consolidation.py`: local background maintenance logic for consolidation snapshots.
 - `api/app/ingestion/api.py`: ingestion REST routes (`/api/v1/ingestion/*`) for text/file intake and retrieval.
@@ -438,12 +439,13 @@ engram/
 - `web/src/ThemedApp.tsx`: mode-aware `ThemeProvider` wrapper for runtime light/dark switching.
 - `web/src/config.ts`: frontend runtime config parsing + one-time debug console print.
 - `web/src/api/*.ts`: browser API clients for auth/chat/engram interactions.
+- `web/src/api/chat.ts`: browser API client for chat/session/pin flows, including pinned-document route calls.
 - `web/src/api/ingestion.ts`: browser API client for document ingestion and project document listing.
 - `web/src/api/mcpClient.ts`: typed TypeScript JSON-RPC/SSE MCP client helper.
 - `web/src/api/mcpClient.test.ts`: TypeScript MCP client protocol parsing and stream contract tests.
 - `web/src/components/*.tsx`: UI modules for login, sessions, chat transcript, pinning, and save modal.
-- `web/src/components/DocumentIngestionPanel.tsx`: project-scoped file/text ingestion surface with status and recent document list.
-- `web/src/components/DocumentIngestionPanel.test.tsx`: ingestion panel interaction tests (text + file flows).
+- `web/src/components/DocumentIngestionPanel.tsx`: project-scoped file/text ingestion surface with recent docs and session pin/unpin controls.
+- `web/src/components/DocumentIngestionPanel.test.tsx`: ingestion panel interaction tests (text/file plus pin/unpin flows).
 - `web/src/components/SessionSidebar.test.tsx`: sidebar interaction tests (toggle, labels, active-state marker).
 - `web/src/styles/theme.ts`: shared frontend light/dark design tokens and theme registry.
 - `web/src/styles/globalStyles.ts`: global CSS variables and base element styles.
@@ -1641,6 +1643,30 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `cd web && npm run test` passed (`36` tests).
    - `cd web && npm run build` passed.
 
+### 2026-02-16 (Phase 17 follow-up - pinned document continuity pass)
+
+1. Added pinned-document chat APIs:
+   - `GET /api/v1/chat/sessions/{session_id}/documents`
+   - `POST /api/v1/chat/sessions/{session_id}/documents/pin`
+   - `DELETE /api/v1/chat/sessions/{session_id}/documents/{document_id}`
+2. Upgraded chat context assembly:
+   - session-pinned documents are queried first and merged with normal document retrieval.
+   - context now includes a dedicated `Pinned Document Context` block when pinned chunks are available.
+3. Added continuation carry-forward:
+   - pinned documents now carry into newly continued sessions (same behavior as pinned engrams).
+4. Added UI support:
+   - recent document cards now support `Pin to Chat` and `Unpin`.
+   - pinned documents are visually highlighted and tagged in the ingestion panel.
+   - removed top-nav docs hide toggle so the document panel is always visible.
+5. Added regression tests:
+   - API integration for pin/list/unpin documents and continuation carry-forward.
+   - repository integration for document pin lifecycle.
+   - context and service unit tests for pinned document usage and copy-on-continue behavior.
+   - web interaction tests for document pin/unpin controls.
+6. Validation:
+   - `make check` passed (`100` API tests + eval suite).
+   - `make web-check` passed (`38` web tests + build).
+
 ### Next Immediate Steps (One By One)
 
 1. Phase 16 follow-up (deferred by request): add `engram-cli mcp-call` smoke command for terminal MCP debugging.
@@ -1671,10 +1697,13 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 - `PATCH /api/v1/chat/sessions/{session_id}`
 - `GET /api/v1/chat/sessions/{session_id}/messages`
 - `GET /api/v1/chat/sessions/{session_id}/engrams`
+- `GET /api/v1/chat/sessions/{session_id}/documents`
 - `POST /api/v1/chat/sessions/{session_id}/messages`
 - `POST /api/v1/chat/sessions/{session_id}/messages/stream`
 - `POST /api/v1/chat/sessions/{session_id}/engrams/pin`
+- `POST /api/v1/chat/sessions/{session_id}/documents/pin`
 - `DELETE /api/v1/chat/sessions/{session_id}/engrams/{engram_id}`
+- `DELETE /api/v1/chat/sessions/{session_id}/documents/{document_id}`
 - `POST /api/v1/chat/sessions/{session_id}/save-engram`
 - `POST /api/v1/chat/sessions/{session_id}/continue`
 - `POST /api/v1/mcp/stream`

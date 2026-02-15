@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.chat_repository import list_pinned_engram_summaries
+from app.chat_repository import list_pinned_documents, list_pinned_engram_summaries
 from app.ingestion.models import DocumentChunkQueryRequest, DocumentChunkQueryResult
 from app.ingestion.repository import query_document_chunks
 from app.models import ChatSessionRecord, ChatSourceReference, EngramQueryRequest, RehydrationBundle
@@ -26,6 +26,19 @@ def _dedupe_preserve_order(ids: list[UUID]) -> list[UUID]:
             continue
         seen.add(item)
         ordered.append(item)
+    return ordered
+
+
+def _dedupe_chunks_preserve_order(
+    chunks: list[DocumentChunkQueryResult],
+) -> list[DocumentChunkQueryResult]:
+    seen: set[UUID] = set()
+    ordered: list[DocumentChunkQueryResult] = []
+    for chunk in chunks:
+        if chunk.chunk_id in seen:
+            continue
+        seen.add(chunk.chunk_id)
+        ordered.append(chunk)
     return ordered
 
 
@@ -63,10 +76,13 @@ def _collect_source_references(
     global_limit: int = 12,
 ) -> list[ChatSourceReference]:
     references: list[ChatSourceReference] = []
-    seen: set[tuple[UUID, str]] = set()
+    seen: set[str] = set()
     for bundle in bundles:
         for citation in bundle.top_citations[:per_engram_limit]:
-            key = (bundle.engram_id, citation.url.lower().strip())
+            # Dedupe by canonical URL across all bundles so the UI/source strip
+            # does not show the same source repeatedly when multiple engrams
+            # cite identical material.
+            key = citation.url.lower().strip()
             if key in seen:
                 continue
             seen.add(key)
@@ -88,22 +104,42 @@ def _collect_source_references(
     return references
 
 
+def _dedupe_source_references(
+    references: list[ChatSourceReference],
+    limit: int = 16,
+) -> list[ChatSourceReference]:
+    seen: set[tuple[str, str]] = set()
+    deduped: list[ChatSourceReference] = []
+    for reference in references:
+        key = (
+            reference.source_type.strip().lower(),
+            reference.url.strip().lower(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(reference)
+        if len(deduped) >= limit:
+            break
+    return deduped
+
+
 def _collect_document_source_references(
     chunks: list[DocumentChunkQueryResult],
     limit: int = 8,
 ) -> list[ChatSourceReference]:
     references: list[ChatSourceReference] = []
-    seen: set[UUID] = set()
+    seen_documents: set[UUID] = set()
     for chunk in chunks:
-        if chunk.chunk_id in seen:
+        if chunk.document_id in seen_documents:
             continue
-        seen.add(chunk.chunk_id)
+        seen_documents.add(chunk.document_id)
         references.append(
             ChatSourceReference(
                 source_type="document_chunk",
                 engram_id=chunk.document_id,
                 engram_title=chunk.title,
-                url=f"document://{chunk.document_id}#chunk={chunk.chunk_index}",
+                url=f"document://{chunk.document_id}",
                 title=chunk.source_name or f"{chunk.title} · chunk {chunk.chunk_index}",
                 snippet=chunk.snippet,
                 captured_at=chunk.created_at,
@@ -138,6 +174,7 @@ def assemble_chat_context(
     document_top_k: int = 4,
 ) -> AssembledChatContext:
     pinned = list_pinned_engram_summaries(session.session_id, actor_user_id=actor_user_id)
+    pinned_documents = list_pinned_documents(session.session_id, actor_user_id=actor_user_id)
     retrieved = query_engrams(
         EngramQueryRequest(
             query=user_query,
@@ -159,6 +196,22 @@ def assemble_chat_context(
 
     used_engram_ids = [item.engram_id for item in bundles]
 
+    pinned_document_ids = [item.document_id for item in pinned_documents]
+    pinned_chunks: list[DocumentChunkQueryResult] = []
+    if pinned_document_ids:
+        # Pinning means "always consider these docs first" while still using semantic ranking
+        # inside the pinned subset.
+        pinned_chunks = query_document_chunks(
+            actor_user_id=actor_user_id,
+            request=DocumentChunkQueryRequest(
+                query=user_query,
+                project_id=session.project_id,
+                document_ids=pinned_document_ids,
+                top_k=min(max(document_top_k, 2), 8),
+            ),
+            embedding_dim=embedding_dim,
+        )
+
     retrieved_chunks = query_document_chunks(
         actor_user_id=actor_user_id,
         request=DocumentChunkQueryRequest(
@@ -168,9 +221,12 @@ def assemble_chat_context(
         ),
         embedding_dim=embedding_dim,
     )
-    used_document_chunk_ids = [item.chunk_id for item in retrieved_chunks]
 
-    if not bundles and not retrieved_chunks:
+    chunk_budget = min(max(document_top_k, len(pinned_chunks)), 8)
+    selected_chunks = _dedupe_chunks_preserve_order(pinned_chunks + retrieved_chunks)[:chunk_budget]
+    used_document_chunk_ids = [item.chunk_id for item in selected_chunks]
+
+    if not bundles and not selected_chunks:
         return AssembledChatContext(
             context_markdown="",
             used_engram_ids=used_engram_ids,
@@ -183,16 +239,30 @@ def assemble_chat_context(
         context_sections.extend(
             ["# Engram Retrieval Context", *[_bundle_section(item) for item in bundles]]
         )
-    if retrieved_chunks:
+
+    pinned_chunk_ids = {item.chunk_id for item in pinned_chunks}
+    pinned_context_chunks = [item for item in selected_chunks if item.chunk_id in pinned_chunk_ids]
+    retrieved_context_chunks = [
+        item for item in selected_chunks if item.chunk_id not in pinned_chunk_ids
+    ]
+
+    if pinned_context_chunks:
+        context_sections.extend(
+            [
+                "# Pinned Document Context",
+                *[_document_chunk_section(item) for item in pinned_context_chunks],
+            ]
+        )
+    if retrieved_context_chunks:
         context_sections.extend(
             [
                 "# Document Retrieval Context",
-                *[_document_chunk_section(item) for item in retrieved_chunks],
+                *[_document_chunk_section(item) for item in retrieved_context_chunks],
             ]
         )
 
-    source_references = _collect_source_references(bundles) + _collect_document_source_references(
-        retrieved_chunks
+    source_references = _dedupe_source_references(
+        _collect_source_references(bundles) + _collect_document_source_references(selected_chunks)
     )
     return AssembledChatContext(
         context_markdown="\n\n".join(context_sections),

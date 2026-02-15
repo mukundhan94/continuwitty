@@ -69,6 +69,10 @@ export interface ChatSourceReference {
   title: string | null
   snippet: string
   captured_at: string
+  source_type?: string
+  document_id?: string | null
+  chunk_id?: string | null
+  chunk_index?: number | null
 }
 
 export interface ChatSendResponse {
@@ -84,6 +88,13 @@ export interface ChatSendResponse {
 export interface ContinueSessionResponse {
   session: ChatSession
   carried_engram_ids: string[]
+}
+
+export interface PinnedDocumentRecord {
+  session_id: string
+  document_id: string
+  pinned_by_user_id: string
+  created_at: string
 }
 
 export interface SaveSessionAsEngramResponse {

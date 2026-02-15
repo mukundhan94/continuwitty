@@ -10,12 +10,17 @@ from app.chat_repository import (
     create_chat_session,
     list_chat_messages,
     list_chat_sessions,
+    list_pinned_documents,
     list_pinned_engram_summaries,
+    pin_document_to_session,
     pin_engram_to_session,
+    unpin_document_from_session,
     unpin_engram_from_session,
     update_chat_session,
 )
 from app.config import get_settings
+from app.ingestion.chunking import build_content_hash, build_document_id, chunk_document_text
+from app.ingestion.repository import upsert_document_with_chunks
 from app.models import (
     ChatSessionCreateRequest,
     ChatSessionUpdateRequest,
@@ -140,6 +145,82 @@ def test_pin_and_unpin_engram(clean_db) -> None:
         session.session_id, actor_user_id=admin["user_id"]
     )
     assert summaries_after == []
+
+
+@pytest.mark.integration
+def test_pin_and_unpin_document(clean_db) -> None:
+    admin = get_user_auth_record(get_settings().ui_demo_username)
+    assert admin is not None
+
+    settings = get_settings()
+    session = create_chat_session(
+        owner_user_id=admin["user_id"],
+        payload=ChatSessionCreateRequest(
+            project_id="project-doc-pin",
+            title="Session D",
+            provider="openai",
+            model_id="gpt-4o-mini",
+            visibility_scope="private",
+        ),
+    )
+
+    text = "Queue depth exceeded threshold. Start dequeue worker burst and monitor retries."
+    content_hash = build_content_hash(text)
+    document_id = build_document_id(
+        owner_user_id=admin["user_id"],
+        project_id="project-doc-pin",
+        title="Runbook Document",
+        content_hash=content_hash,
+    )
+    chunks = chunk_document_text(
+        content_hash=content_hash,
+        text=text,
+        chunk_size_chars=500,
+        chunk_overlap_chars=80,
+    )
+    upsert_document_with_chunks(
+        document_id=document_id,
+        actor_user_id=admin["user_id"],
+        project_id="project-doc-pin",
+        title="Runbook Document",
+        source_type="text",
+        source_name=None,
+        mime_type="text/plain",
+        visibility_scope="project",
+        content_text=text,
+        content_hash=content_hash,
+        metadata={},
+        chunks=chunks,
+        embedding_dim=settings.embedding_dim,
+    )
+
+    pinned = pin_document_to_session(
+        session_id=session.session_id,
+        document_id=document_id,
+        actor_user_id=admin["user_id"],
+    )
+    assert pinned is not None
+    assert pinned.document_id == document_id
+
+    listed = list_pinned_documents(
+        session_id=session.session_id,
+        actor_user_id=admin["user_id"],
+    )
+    assert len(listed) == 1
+    assert listed[0].document_id == document_id
+
+    removed = unpin_document_from_session(
+        session_id=session.session_id,
+        document_id=document_id,
+        actor_user_id=admin["user_id"],
+    )
+    assert removed is True
+
+    listed_after = list_pinned_documents(
+        session_id=session.session_id,
+        actor_user_id=admin["user_id"],
+    )
+    assert listed_after == []
 
 
 @pytest.mark.integration

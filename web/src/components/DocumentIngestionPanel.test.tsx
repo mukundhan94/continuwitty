@@ -29,13 +29,17 @@ function buildDocument(overrides: Partial<DocumentRecord> = {}): DocumentRecord 
 function renderPanel(overrides: Partial<ComponentProps<typeof DocumentIngestionPanel>> = {}) {
   const props: ComponentProps<typeof DocumentIngestionPanel> = {
     projectId: 'engram-vault',
+    selectedSessionId: 'session-1',
     documents: [buildDocument()],
+    pinnedDocumentIds: [],
     loading: false,
     submitting: false,
     error: null,
     onRefresh: vi.fn(async () => {}),
     onIngestText: vi.fn(async () => {}),
     onIngestFile: vi.fn(async () => {}),
+    onPinDocument: vi.fn(async () => {}),
+    onUnpinDocument: vi.fn(async () => {}),
     ...overrides,
   }
 
@@ -101,5 +105,55 @@ describe('DocumentIngestionPanel', () => {
     expect(screen.queryByTestId('ingest-file-form')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Show Upload Form' }))
     expect(screen.getByTestId('ingest-file-form')).toBeInTheDocument()
+  })
+
+  it('pins and unpins documents from recent list', async () => {
+    const user = userEvent.setup()
+    const onPinDocument = vi.fn(async () => {})
+    const onUnpinDocument = vi.fn(async () => {})
+
+    const { rerender } = render(
+      <ThemeProvider theme={lightTheme}>
+        <DocumentIngestionPanel
+          projectId="engram-vault"
+          selectedSessionId="session-1"
+          documents={[buildDocument()]}
+          pinnedDocumentIds={[]}
+          loading={false}
+          submitting={false}
+          error={null}
+          onRefresh={vi.fn(async () => {})}
+          onIngestText={vi.fn(async () => {})}
+          onIngestFile={vi.fn(async () => {})}
+          onPinDocument={onPinDocument}
+          onUnpinDocument={onUnpinDocument}
+        />
+      </ThemeProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Pin to Chat' }))
+    expect(onPinDocument).toHaveBeenCalledWith('doc-1')
+
+    rerender(
+      <ThemeProvider theme={lightTheme}>
+        <DocumentIngestionPanel
+          projectId="engram-vault"
+          selectedSessionId="session-1"
+          documents={[buildDocument()]}
+          pinnedDocumentIds={['doc-1']}
+          loading={false}
+          submitting={false}
+          error={null}
+          onRefresh={vi.fn(async () => {})}
+          onIngestText={vi.fn(async () => {})}
+          onIngestFile={vi.fn(async () => {})}
+          onPinDocument={onPinDocument}
+          onUnpinDocument={onUnpinDocument}
+        />
+      </ThemeProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Unpin' }))
+    expect(onUnpinDocument).toHaveBeenCalledWith('doc-1')
   })
 })

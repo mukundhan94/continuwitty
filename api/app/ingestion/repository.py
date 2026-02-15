@@ -249,6 +249,11 @@ def query_document_chunks(
         where_clauses.append("d.project_id = %s")
         where_params.append(request.project_id)
 
+    if request.document_ids:
+        # Limit retrieval to a caller-selected document subset (for session-pinned docs).
+        where_clauses.append("d.document_id = ANY(%s::uuid[])")
+        where_params.append(request.document_ids)
+
     where_sql = " AND ".join(where_clauses)
     candidate_limit = min(max(request.top_k * 4, request.top_k), 200)
 
