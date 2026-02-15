@@ -66,7 +66,7 @@ export function PinnedEngramPanel({
   })
 
   return (
-    <GlassPane as="aside" className="overflow-hidden">
+    <GlassPane as="aside" className="overflow-hidden" data-testid="pinned-engrams-panel">
       <PaneHeader>
         <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Pinned Engrams</h2>
         <button type="button" onClick={onRefresh} disabled={!selectedSessionId || loading}>

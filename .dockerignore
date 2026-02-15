@@ -1,0 +1,13 @@
+.git
+.idea
+**/__pycache__/
+**/*.pyc
+.env
+data/
+web/node_modules/
+web/dist/
+acceptance-tests/node_modules/
+acceptance-tests/artifacts/
+api/.venv/
+api/.pytest_cache/
+api/.ruff_cache/

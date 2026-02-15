@@ -104,7 +104,7 @@ export function SessionSidebar({
   }
 
   return (
-    <GlassPane as="aside">
+    <GlassPane as="aside" data-testid="session-sidebar">
       <PaneHeader>
         <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Sessions</h2>
       </PaneHeader>

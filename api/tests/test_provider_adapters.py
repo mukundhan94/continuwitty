@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 
 import pytest
+from botocore.exceptions import ClientError, NoCredentialsError
 
 from app.models import ChatProvider
 from app.providers.anthropic_provider import AnthropicProvider
 from app.providers.base import ProviderGenerateRequest, ProviderMessage
 from app.providers.bedrock_provider import BedrockProvider
-from app.providers.errors import ProviderAuthError
+from app.providers.errors import ProviderAuthError, ProviderRequestError
 from app.providers.openai_provider import OpenAIProvider
 
 
@@ -47,6 +48,14 @@ class _DummyBedrockClient:
     def invoke_model(self, **kwargs):
         self.calls.append(kwargs)
         return {"body": _DummyBody(self.payload)}
+
+
+class _FailingBedrockClient:
+    def __init__(self, error: Exception):
+        self.error = error
+
+    def invoke_model(self, **kwargs):  # noqa: ANN003, ARG002
+        raise self.error
 
 
 def _request() -> ProviderGenerateRequest:
@@ -129,3 +138,34 @@ def test_bedrock_healthcheck_requires_region() -> None:
     provider = BedrockProvider(region_name="")
     with pytest.raises(ProviderAuthError):
         provider.healthcheck()
+
+
+def test_bedrock_provider_surfaces_validation_error_details() -> None:
+    err = ClientError(
+        error_response={
+            "Error": {
+                "Code": "ValidationException",
+                "Message": "Invocation of model ID test-model requires inference profile.",
+            }
+        },
+        operation_name="InvokeModel",
+    )
+    provider = BedrockProvider(region_name="us-east-1", client=_FailingBedrockClient(err))
+
+    with pytest.raises(ProviderRequestError) as exc_info:
+        provider.generate(_request())
+
+    assert "ValidationException" in str(exc_info.value)
+    assert "inference profile" in str(exc_info.value)
+
+
+def test_bedrock_provider_reports_missing_credentials() -> None:
+    provider = BedrockProvider(
+        region_name="us-east-1",
+        client=_FailingBedrockClient(NoCredentialsError()),
+    )
+
+    with pytest.raises(ProviderAuthError) as exc_info:
+        provider.generate(_request())
+
+    assert "credentials not found" in str(exc_info.value)

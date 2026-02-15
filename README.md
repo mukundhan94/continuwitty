@@ -33,6 +33,8 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add React chat UI with session, streaming, pin/save/continue workflows.
 - [x] Migrate web styling to shared `styled-components` + Tailwind style system.
 - [x] Add backend dev-mode parsed-config logging with secret redaction.
+- [x] Dockerize API + web runtime with env-driven compose orchestration.
+- [x] Add Playwright + Gherkin acceptance framework with dockerized execution.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -46,6 +48,7 @@ This README is written for a newcomer and follows an implementation sequence bas
   - Phase 4 completed (chat API routes + context assembler + continuity flows).
   - Phase 5 completed (MCP stream endpoint + tool execution + JSON-RPC error framing).
   - Phase 6 completed (React chat workbench + frontend tests + web quality gates + shared style system migration).
+  - Phase 7 completed (dockerized acceptance-test baseline with Playwright + Cucumber).
 
 ## Agent Guide
 
@@ -69,6 +72,7 @@ Agent workflow skills are under `skills/`:
 - `domain-module-layout`: module/package conventions for long-run maintainability.
 - `react-chat-ui-operator`: frontend workflow conventions for chat/session/engram UX.
 - `frontend-style-system`: token-driven styled-components + Tailwind workflow rules.
+- `dockerized-acceptance-testing`: Playwright+Cucumber dockerized quality-gate workflow.
 
 ## Why This Exists
 
@@ -124,6 +128,7 @@ engram/
   Plan.md
   Plan.Next.md
   deep-research-report.md
+  .dockerignore
   .env.example
   docker-compose.yml
   Makefile
@@ -152,10 +157,13 @@ engram/
       SKILL.md
     frontend-style-system/
       SKILL.md
+    dockerized-acceptance-testing/
+      SKILL.md
   db/
     init/
       001_schema.sql
   api/
+    Dockerfile
     pyproject.toml
     uv.lock
     evals/
@@ -203,6 +211,7 @@ engram/
         login.html
         dashboard.html
   web/
+    Dockerfile
     .env.example
     package.json
     package-lock.json
@@ -237,11 +246,30 @@ engram/
       utils/
         sse.ts
         sse.test.ts
+  acceptance-tests/
+    Dockerfile
+    README.md
+    package.json
+    package-lock.json
+    cucumber.js
+    .env.example
+    features/
+      authentication.feature
+      session-layout.feature
+    src/
+      support/
+        env.ts
+        world.ts
+        hooks.ts
+      steps/
+        auth.steps.ts
+        session.steps.ts
 ```
 
 ## File-by-File Guide
 
-- `docker-compose.yml`: Local Postgres + pgvector service.
+- `.dockerignore`: build context exclusions for API/web/acceptance Docker builds.
+- `docker-compose.yml`: local DB + API + web + acceptance test orchestration.
 - `AGENT.md`: project operating guide for contributors and agents.
 - `Plan.md`: historical phased baseline plan.
 - `Plan.Next.md`: active roadmap for chat + MCP + multi-provider phases.
@@ -279,6 +307,7 @@ engram/
 - `api/app/templates/dashboard.html`: authenticated local dashboard for API testing.
 - `api/pyproject.toml`: project dependencies, pytest config, and ruff config.
 - `api/uv.lock`: locked dependency graph for reproducible local runs.
+- `api/Dockerfile`: containerized API runtime (`uvicorn` + `uv` lockfile sync).
 - `api/evals/harness.py`: local scenario-driven evaluation harness and scoring logic.
 - `api/evals/run_eval.py`: CLI runner for local evaluation output (`make eval`).
 - `api/tests/conftest.py`: API client, schema bootstrap, DB cleanup fixtures.
@@ -311,7 +340,13 @@ engram/
 - `web/src/**/*.test.ts(x)`: Vitest + Testing Library frontend tests.
 - `web/postcss.config.cjs`: PostCSS pipeline for Tailwind.
 - `web/tailwind.config.ts`: Tailwind token mapping to shared CSS variables.
-- `web/vite.config.ts`: Vite proxy + Vitest configuration.
+- `web/vite.config.ts`: Vite proxy/allowed-host config + Vitest configuration.
+- `web/Dockerfile`: containerized web runtime (Vite dev server for API proxy parity).
+- `acceptance-tests/README.md`: acceptance framework guide and commands.
+- `acceptance-tests/features/*.feature`: Gherkin acceptance scenarios.
+- `acceptance-tests/src/steps/*.ts`: Playwright-backed step definitions.
+- `acceptance-tests/src/support/*.ts`: shared world, env parsing, hooks, and failure artifacts.
+- `acceptance-tests/Dockerfile`: Playwright runtime image for dockerized acceptance runs.
 - `Makefile`: Local run shortcuts.
 - `.env.example`: Starter configuration for local setup.
 - `skills/`: reusable agent workflows for implementation and maintenance.
@@ -467,6 +502,67 @@ make cli ARGS="rehydrate --engram-id <engram_uuid>"
 make consolidate ARGS="--project-id engram-vault --dry-run"
 ```
 
+## Dockerized Stack (API + Web + DB)
+
+Use this path when you want one-command local infrastructure with no host-level Python/Node runtimes.
+
+1. Copy env:
+
+```bash
+cp .env.example .env
+```
+
+2. Start stack:
+
+```bash
+make stack-up
+docker compose ps
+```
+
+3. Open:
+
+- [http://localhost:8000/docs](http://localhost:8000/docs)
+- [http://localhost:5174](http://localhost:5174) (React chat workbench)
+
+4. Stop stack:
+
+```bash
+make stack-down
+```
+
+### Docker Env Matrix (Core)
+
+- DB: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`
+- API runtime: `APP_ENV`, `LOG_CONFIG_IN_DEV`, `EMBEDDING_DIM`, `APP_SESSION_SECRET`
+- UI auth seed: `UI_DEMO_USERNAME`, `UI_DEMO_PASSWORD`, `UI_DEMO_PASSWORD_HASH`
+- Providers: `DEFAULT_CHAT_PROVIDER`, `DEFAULT_CHAT_MODEL`, `OPENAI_*`, `ANTHROPIC_*`, `AWS_*`
+- Web runtime: `WEB_PORT`, `VITE_API_PROXY_TARGET`, `VITE_ALLOWED_HOSTS`, `VITE_DEFAULT_*`
+- Acceptance profile: `ACCEPTANCE_WEB_BASE_URL`, `ACCEPTANCE_API_BASE_URL`, `PW_HEADLESS`, `PW_TIMEOUT_MS`
+
+## Acceptance Tests (Gherkin + Playwright)
+
+Local runner:
+
+```bash
+make acceptance-sync
+make acceptance-typecheck
+make acceptance-test
+```
+
+Dockerized runner (uses compose services):
+
+```bash
+make acceptance-test-docker
+```
+
+Failure screenshots are persisted to `acceptance-tests/artifacts/`.
+
+Current feature coverage:
+
+- authentication handoff (sign-in without manual refresh)
+- chat pane layout stability while creating sessions
+- continue-in-new-chat continuity behavior
+
 ## Workflow Notes (Current Validation Sequence)
 
 Use this exact flow while you validate current local behavior end-to-end.
@@ -596,6 +692,47 @@ If you want to use a hashed local UI password instead of plaintext in `.env`, ge
 cd api
 uv run python -c "from app.auth import hash_password; print(hash_password('admin123'))"
 ```
+
+## High-Impact Test Workflow (Recommended)
+
+Use this when you want to exercise continuity, persistence, and replay behavior in one pass.
+
+1. Start full stack and acceptance baseline:
+
+```bash
+make stack-up
+make acceptance-test-docker
+```
+
+2. Open [http://localhost:5174](http://localhost:5174) and sign in (`admin` / `admin123`).
+
+3. Create three sessions in the same project:
+- Session A (`openai`) for general prompts.
+- Session B (`anthropic`) for comparison prompts.
+- Session C (`bedrock`) to validate adapter config/error surface.
+
+4. In Session A:
+- send a prompt,
+- save transcript as engram,
+- copy the returned engram ID from pinned panel.
+
+5. In Session B:
+- search project engrams,
+- pin the engram from Session A,
+- send a prompt that requires prior context,
+- verify `used_engram_ids` and source references are shown in response metadata/API.
+
+6. Run “Continue in New Chat” from Session B and verify pinned IDs carry forward automatically.
+
+7. Validate persistence outside UI:
+
+```bash
+make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
+```
+
+8. Confirm diagnostics:
+- API startup logs include redacted parsed config in dev mode.
+- Bedrock request errors are specific (`ValidationException`, `AccessDeniedException`, etc.), not generic failures.
 
 ## Implementation Log
 
@@ -974,9 +1111,49 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make web-check` -> all frontend checks passed
    - frontend tests: `10 passed`
 
+### 2026-02-15 (Bedrock error diagnostics and request mapping pass)
+
+1. Fixed Bedrock provider error handling to surface real AWS error code/message instead of generic credential failure text.
+2. Added provider error classification:
+   - `ValidationException` -> provider request error (`400`)
+   - auth-signature/token credential errors -> provider auth error (`503`)
+   - throttling errors -> provider rate-limit error (`429`)
+   - other AWS client errors -> provider API error (`502`)
+3. Added `ProviderRequestError` and mapped it in chat service to HTTP `400`.
+4. Added tests:
+   - Bedrock validation-message propagation and credential error mapping
+   - chat service mapping for provider request errors
+5. Validation:
+   - `make check` passed
+   - backend tests: `77 passed`
+
+### 2026-02-15 (Plan.Next phase 7: dockerized acceptance baseline)
+
+1. Dockerized runtime surfaces:
+   - added `api/Dockerfile` for uv-locked API container runtime
+   - added `web/Dockerfile` for Vite runtime with API proxy behavior
+   - expanded `docker-compose.yml` to orchestrate `db`, `api`, `web`, and `acceptance-tests` profile
+   - added `.dockerignore` to keep image build contexts lean
+2. Added acceptance framework in `acceptance-tests/`:
+   - Cucumber/Gherkin feature specs + Playwright step definitions
+   - env parsing + shared world hooks + failure screenshot capture
+   - feature coverage for login handoff, layout drift guardrail, and continuation flow
+3. Added workflow commands:
+   - `make stack-up`, `make stack-down`, `make stack-logs`
+   - `make acceptance-sync`, `make acceptance-typecheck`, `make acceptance-test`, `make acceptance-test-docker`
+4. Added docker/acceptance config hardening:
+   - env-driven Vite proxy target (`VITE_API_PROXY_TARGET`)
+   - Vite allowed host support (`VITE_ALLOWED_HOSTS`) to enable Playwright access from compose network hostnames
+   - docker env matrix expanded in `.env.example`
+5. Validation:
+   - `make check` passed
+   - `make web-check` passed
+   - `make acceptance-typecheck` passed
+   - `make acceptance-test-docker` passed (`3` scenarios, `13` steps)
+
 ### Next Immediate Steps (One By One)
 
-1. Add Playwright end-to-end coverage for login/chat/pin/save/continue flows.
+1. Expand acceptance coverage to include save-as-engram and pinned-engram reuse assertions with API fixture seeding.
 2. Add MCP client examples and validation fixtures for external agent integrations.
 3. Add final hardening pass for release and troubleshooting runbooks.
 
@@ -1103,7 +1280,7 @@ make consolidate ARGS="--project-id engram-vault"
 
 ## Test Suite
 
-Test files live under `api/tests`:
+Backend tests live under `api/tests`:
 
 - `test_embedding.py`: deterministic embedding behavior.
 - `test_repository_helpers.py`: retrieval text and vector literal helpers.
@@ -1117,11 +1294,28 @@ Test files live under `api/tests`:
 - `test_consolidation.py`: consolidation snapshot generation and safety checks.
 - `conftest.py`: DB fixture, schema bootstrap, and cleanup.
 
+Frontend unit/component tests live under `web/src/**/*.test.ts(x)`:
+
+- `src/api/auth.test.ts`
+- `src/utils/sse.test.ts`
+- `src/components/LoginView.test.tsx`
+- `src/components/ChatPanel.test.tsx`
+
+Acceptance tests live under `acceptance-tests`:
+
+- `features/authentication.feature`: login handoff regression.
+- `features/session-layout.feature`: pane height stability + continuation behavior.
+- `src/steps/*.ts`: Playwright step bindings.
+- `src/support/*.ts`: shared world/env/hooks.
+
 Notes:
 
 - Integration tests are marked with `@pytest.mark.integration` and configured in `api/pyproject.toml`.
 - If the DB is unavailable, integration tests are skipped with a clear reason.
 - `make eval` runs local memory-quality scenarios and exits non-zero if any case fails.
+- `make web-check` runs frontend lint/test/build.
+- `make acceptance-typecheck` validates acceptance TypeScript.
+- `make acceptance-test-docker` runs Gherkin acceptance tests against dockerized API+web.
 
 ## MemoryEngram Contract (MVP)
 

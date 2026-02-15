@@ -20,3 +20,8 @@ class ProviderRateLimitError(ProviderError):
 class ProviderAPIError(ProviderError):
     def __init__(self, message: str = "provider api error") -> None:
         super().__init__(message, code="provider_api_error")
+
+
+class ProviderRequestError(ProviderError):
+    def __init__(self, message: str = "provider request is invalid") -> None:
+        super().__init__(message, code="provider_request_error")

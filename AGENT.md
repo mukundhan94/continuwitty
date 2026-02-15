@@ -14,6 +14,9 @@ Use it as the default workflow when adding or refactoring features.
 - `web/`: React UI (chat/session/pinning workflows, streaming UX, frontend tests).
 - `web/src/styles/`: shared style system (theme tokens, global CSS vars, reusable styled shells).
 - `web/tailwind.config.ts` + `web/postcss.config.cjs`: Tailwind utility pipeline for the web app.
+- `acceptance-tests/`: Playwright + Cucumber acceptance framework (`features`, `steps`, `support`).
+- `api/Dockerfile`, `web/Dockerfile`, `acceptance-tests/Dockerfile`: container runtimes.
+- `docker-compose.yml`: local stack orchestration for DB/API/web and acceptance profile.
 - `skills/`: reusable agent workflows for this project.
 
 ## 2. Non-Negotiable Rules
@@ -28,9 +31,12 @@ Use it as the default workflow when adding or refactoring features.
 1. Pull latest and inspect `git status`.
 2. Run setup: `make sync`, `make db-up`.
 3. Implement one phase at a time.
-4. Run checks: `make lint`, `make test`, `make eval`, `make check`, `make web-check` (if `web/` changed).
-5. Update docs (`README.md`, `Plan.Next.md` progress, skill docs if needed).
-6. Commit with phase-scoped message.
+4. Run checks: `make lint`, `make test`, `make eval`, `make check`.
+5. If `web/` changed: run `make web-check`.
+6. If `acceptance-tests/`, `web/Dockerfile`, `api/Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-typecheck` and `make acceptance-test-docker`.
+7. For docker runtime changes: validate `docker compose config`.
+8. Update docs (`README.md`, `Plan.Next.md` progress, skill docs if needed).
+9. Commit with phase-scoped message.
 
 ## 4. Architecture Boundaries
 - Route handlers in `main.py` should orchestrate only.
@@ -88,8 +94,10 @@ Use it as the default workflow when adding or refactoring features.
 - Integration tests for API + DB behavior.
 - Eval tests for memory quality scenarios.
 - Frontend tests for UI helpers/components and session workflow logic.
+- Acceptance tests for end-to-end workflow regressions (`acceptance-tests/features/*.feature`).
 - Add regression tests when fixing bugs.
 - No phase is complete unless `make check` passes. If web files changed, `make web-check` is also required.
+- If dockerized UX or auth/session behavior changed, `make acceptance-test-docker` is required before merge.
 
 ## 10. Refactor Checklist
 Before merging refactors:
@@ -105,6 +113,7 @@ Before merging refactors:
 - If retrieval quality drops: run `make eval`, inspect reranking and citation packing paths.
 - If auth fails unexpectedly: inspect `data/audit_events.jsonl` and session settings.
 - If MCP stream fails: verify SSE endpoint wiring and JSON-RPC event framing.
+- If acceptance tests fail to render UI in Docker: verify Vite host allow list (`VITE_ALLOWED_HOSTS`) and proxy target (`VITE_API_PROXY_TARGET`).
 
 ## 12. Long-Run Maintenance Cadence
 - Weekly: run full quality gates and evals.

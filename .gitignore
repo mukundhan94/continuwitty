@@ -3,6 +3,10 @@
 api/.venv/
 api/.pytest_cache/
 api/.ruff_cache/
+web/node_modules/
+web/dist/
+acceptance-tests/node_modules/
+acceptance-tests/artifacts/
 data/
 api/evals/last_eval.json
 **/__pycache__/

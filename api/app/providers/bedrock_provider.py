@@ -6,12 +6,24 @@ from typing import Any
 from app.models import ChatProvider
 
 from .base import ProviderGenerateRequest, ProviderGenerateResult
-from .errors import ProviderAPIError, ProviderAuthError
+from .errors import (
+    ProviderAPIError,
+    ProviderAuthError,
+    ProviderRateLimitError,
+    ProviderRequestError,
+)
 
 try:
     import boto3
 except Exception:  # pragma: no cover
     boto3 = None
+
+try:
+    from botocore.exceptions import ClientError, NoCredentialsError, PartialCredentialsError
+except Exception:  # pragma: no cover
+    ClientError = None  # type: ignore[assignment]
+    NoCredentialsError = None  # type: ignore[assignment]
+    PartialCredentialsError = None  # type: ignore[assignment]
 
 
 class BedrockProvider:
@@ -72,6 +84,43 @@ class BedrockProvider:
             return "".join(parts)
         return ""
 
+    @staticmethod
+    def _client_error_code(exc: Exception) -> str:
+        if ClientError is not None and isinstance(exc, ClientError):
+            return str(exc.response.get("Error", {}).get("Code") or "")
+        return ""
+
+    @staticmethod
+    def _client_error_message(exc: Exception) -> str:
+        if ClientError is not None and isinstance(exc, ClientError):
+            return str(exc.response.get("Error", {}).get("Message") or "")
+        return str(exc)
+
+    def _raise_invocation_error(self, exc: Exception) -> None:
+        if NoCredentialsError is not None and isinstance(exc, NoCredentialsError):
+            raise ProviderAuthError(
+                "Bedrock credentials not found in environment or AWS profile"
+            ) from exc
+        if PartialCredentialsError is not None and isinstance(exc, PartialCredentialsError):
+            raise ProviderAuthError("Bedrock credentials are incomplete") from exc
+
+        code = self._client_error_code(exc)
+        message = self._client_error_message(exc)
+        if code in {"ThrottlingException", "TooManyRequestsException"}:
+            raise ProviderRateLimitError(f"Bedrock {code}: {message}") from exc
+        if code == "ValidationException":
+            raise ProviderRequestError(f"Bedrock {code}: {message}") from exc
+        if code in {
+            "UnrecognizedClientException",
+            "InvalidSignatureException",
+            "ExpiredTokenException",
+            "IncompleteSignatureException",
+        }:
+            raise ProviderAuthError(f"Bedrock {code}: {message}") from exc
+        if code:
+            raise ProviderAPIError(f"Bedrock {code}: {message}") from exc
+        raise ProviderAPIError(f"Bedrock invocation failed: {exc}") from exc
+
     def generate(self, request: ProviderGenerateRequest) -> ProviderGenerateResult:
         try:
             response = self._runtime_client().invoke_model(
@@ -81,9 +130,8 @@ class BedrockProvider:
                 body=json.dumps(self._request_body(request)),
             )
         except Exception as exc:
-            raise ProviderAuthError(
-                "Bedrock invocation failed; check AWS credentials/permissions"
-            ) from exc
+            self._raise_invocation_error(exc)
+            raise
 
         try:
             body = json.loads(response["body"].read())

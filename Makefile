@@ -3,7 +3,7 @@ SHELL := /bin/zsh
 -include .env
 export
 
-.PHONY: db-up db-down db-logs sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check
+.PHONY: db-up db-down db-logs stack-up stack-down stack-logs acceptance-sync acceptance-typecheck acceptance-test acceptance-test-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check
 
 db-up:
 	docker compose up -d db
@@ -13,6 +13,30 @@ db-down:
 
 db-logs:
 	docker compose logs -f db
+
+stack-up:
+	docker compose up -d db api web
+
+stack-down:
+	docker compose down
+
+stack-logs:
+	docker compose logs -f db api web
+
+acceptance-sync:
+	cd acceptance-tests && npm install
+
+acceptance-typecheck:
+	cd acceptance-tests && npm run typecheck
+
+acceptance-test:
+	cd acceptance-tests && npm run test
+
+acceptance-test-docker:
+	@exit_code=0; \
+	docker compose --profile acceptance up --build --abort-on-container-exit acceptance-tests || exit_code=$$?; \
+	docker compose --profile acceptance down; \
+	exit $$exit_code
 
 sync:
 	cd api && uv sync --group dev

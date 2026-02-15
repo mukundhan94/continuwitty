@@ -105,7 +105,7 @@ export function ChatPanel({
   }
 
   return (
-    <GlassPane>
+    <GlassPane data-testid="chat-panel">
       <PaneHeader as="header">
         <HeaderBlock>
           <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">

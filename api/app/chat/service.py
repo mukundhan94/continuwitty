@@ -38,6 +38,7 @@ from app.providers.errors import (
     ProviderAuthError,
     ProviderError,
     ProviderRateLimitError,
+    ProviderRequestError,
 )
 from app.providers.registry import get_provider_adapter
 from app.repository import create_engram
@@ -254,6 +255,12 @@ class ChatService:
             raise ChatProviderExecutionError(
                 detail=str(exc),
                 status_code=503,
+                error_code=exc.code,
+            ) from exc
+        if isinstance(exc, ProviderRequestError):
+            raise ChatProviderExecutionError(
+                detail=str(exc),
+                status_code=400,
                 error_code=exc.code,
             ) from exc
         if isinstance(exc, ProviderAPIError):

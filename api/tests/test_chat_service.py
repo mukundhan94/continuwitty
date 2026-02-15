@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from app.chat.context import AssembledChatContext
-from app.chat.errors import ChatValidationError
+from app.chat.errors import ChatProviderExecutionError, ChatValidationError
 from app.chat.service import ChatService
 from app.models import (
     ChatMessageCreateRequest,
@@ -22,6 +22,7 @@ from app.models import (
     VisibilityScope,
 )
 from app.providers.base import ProviderGenerateResult
+from app.providers.errors import ProviderRequestError
 
 
 def _session(owner_user_id) -> ChatSessionRecord:
@@ -289,3 +290,11 @@ def test_create_session_delegates_to_repository(monkeypatch) -> None:
     )
 
     assert created.session_id == expected.session_id
+
+
+def test_raise_provider_error_maps_provider_request_error() -> None:
+    with pytest.raises(ChatProviderExecutionError) as exc_info:
+        ChatService._raise_provider_error(ProviderRequestError("bad request to provider"))
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.error_code == "provider_request_error"
