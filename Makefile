@@ -3,7 +3,9 @@ SHELL := /bin/zsh
 -include .env
 export
 
-.PHONY: db-up db-down db-logs stack-up stack-down stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check
+DIAGRAM_PUML_FILES := docs/architecture-workflows.puml docs/model-switch-engram-usecases.puml
+
+.PHONY: db-up db-down db-logs stack-up stack-down stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check diagram-render diagram-render-png
 
 db-up:
 	docker compose up -d --build --force-recreate db
@@ -110,3 +112,9 @@ web-build:
 	cd web && npm run build
 
 web-check: web-lint web-test web-build
+
+diagram-render:
+	./docs/render-plantuml.sh svg $(DIAGRAM_PUML_FILES)
+
+diagram-render-png:
+	./docs/render-plantuml.sh png $(DIAGRAM_PUML_FILES)

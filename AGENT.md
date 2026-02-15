@@ -36,7 +36,7 @@ Use it as the default workflow when adding or refactoring features.
 6. If `acceptance-tests/`, `web/Dockerfile`, `api/Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-bddgen`, `make acceptance-typecheck`, and `make acceptance-test-docker`.
 7. If Bedrock provider behavior changed, run live non-deterministic acceptance gate: `make acceptance-test-bedrock-live` (or docker equivalent).
 8. For docker runtime changes: validate `docker compose config`.
-9. Update docs (`README.md`, `Plan.md` progress, skill docs if needed).
+9. Update docs (`README.md`, `Plan.md` progress, `docs/architecture-playbook.md` when call flows or schema semantics change, skill docs if needed).
 10. Commit with phase-scoped message.
 
 ## 4. Architecture Boundaries
@@ -120,5 +120,5 @@ Before merging refactors:
 ## 12. Long-Run Maintenance Cadence
 - Weekly: run full quality gates and evals.
 - Monthly: review dependency updates and provider API changes.
-- Each feature cycle: refresh `README.md`, `Plan.md`, and affected skill docs.
+- Each feature cycle: refresh `README.md`, `Plan.md`, and affected skill docs; update `docs/architecture-playbook.md` for call-flow or data-semantics changes.
 - Keep skill instructions short, precise, and executable.

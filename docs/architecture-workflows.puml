@@ -1,0 +1,132 @@
+@startuml EngramArchitectureWorkflows
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam ArrowThickness 1
+skinparam ArrowColor #334155
+skinparam noteBackgroundColor #fff7d6
+skinparam noteBorderColor #d97706
+skinparam defaultTextAlignment left
+
+title Engram Vault - Architecture and Workflow Map (Detailed)
+
+legend right
+|= Color |= Workflow |
+|<#2563eb> Blue | UI/REST call flow |
+|<#7c3aed> Purple | MCP JSON-RPC over SSE flow |
+|<#16a34a> Green | Provider generation/stream flow |
+|<#d97706> Amber | Persistence/retrieval continuity flow |
+endlegend
+
+actor "Human User" as User
+actor "MCP Agent Client" as Agent
+
+package "Client Layer" {
+  [React Chat Workbench\nweb/src/App.tsx] as WebUI
+  [Session + Chat Controls\ncreate/send/save/continue/pin] as UIControls
+  [Browser REST Client\nweb/src/api/chat.ts] as BrowserApi
+  [SSE Frame Parser\nweb/src/utils/sse.ts] as BrowserSSE
+}
+
+package "Transport Layer (FastAPI)" {
+  [Auth/UI Routes\n/login, /ui] as AuthRoutes
+  [Chat REST Router\napi/app/chat/api.py] as ChatRouter
+  [Engram REST Routes\napi/app/main.py] as EngramRouter
+  [MCP SSE Router\napi/app/mcp/api.py] as McpRouter
+}
+
+package "Domain Layer" {
+  [Chat Service\napi/app/chat/service.py] as ChatService
+  [Context Assembler\napi/app/chat/context.py] as ContextAssembler
+  [MCP Dispatcher\napi/app/mcp/service.py] as McpService
+  [Provider Registry\napi/app/providers/registry.py] as ProviderRegistry
+  [OpenAI Adapter] as OpenAIAdapter
+  [Anthropic Adapter] as AnthropicAdapter
+  [Bedrock Adapter] as BedrockAdapter
+}
+
+package "Persistence Layer" {
+  [Chat Repository\napi/app/chat_repository.py] as ChatRepository
+  [Engram Repository\napi/app/repository.py] as EngramRepository
+  database "Postgres + pgvector" as Postgres
+  collections "Core Tables\nchat_sessions\nchat_messages\nsession_pinned_engrams\nengrams\nsources\nartifacts" as CoreTables
+}
+
+User --> WebUI : Open app, login, run workflows
+WebUI --> UIControls : UI intent
+UIControls --> BrowserApi : Build HTTP requests
+UIControls --> BrowserSSE : Parse stream updates
+
+BrowserApi -[#2563eb]-> AuthRoutes : Login/logout/session cookie flow
+BrowserApi -[#2563eb]-> ChatRouter : POST /chat/sessions\nPOST /messages\nPOST /messages/stream\nPOST /save-engram\nPOST /continue\nPOST /engrams/pin
+BrowserApi -[#2563eb]-> EngramRouter : POST /engrams/query\nGET /engrams/{id}/rehydrate
+
+Agent -[#7c3aed]-> McpRouter : POST /api/v1/mcp/stream\n(JSON-RPC request)
+McpRouter -[#7c3aed]-> McpService : Validate envelope + route tool
+McpService -[#7c3aed]-> ChatService : chat.* tools
+McpService -[#7c3aed]-> EngramRepository : engram.query / engram.rehydrate
+McpService -[#7c3aed]-> ChatRepository : session + pin tools
+
+ChatRouter -[#2563eb]-> ChatService : REST orchestration
+EngramRouter -[#2563eb]-> EngramRepository : Query/rehydrate/create
+
+ChatService --> ContextAssembler : Build context pack\n(pinned + retrieved + citations)
+ContextAssembler -[#d97706]-> ChatRepository : Read pinned engrams
+ContextAssembler -[#d97706]-> EngramRepository : Retrieval + source packing
+ChatService -[#d97706]-> ChatRepository : Persist session/messages/pins
+ChatService -[#d97706]-> EngramRepository : Save-as-engram snapshots
+
+ChatService -[#16a34a]-> ProviderRegistry : resolve(provider, model)
+ProviderRegistry -[#16a34a]-> OpenAIAdapter
+ProviderRegistry -[#16a34a]-> AnthropicAdapter
+ProviderRegistry -[#16a34a]-> BedrockAdapter
+OpenAIAdapter -[#16a34a]-> ChatService : generated text / stream chunks
+AnthropicAdapter -[#16a34a]-> ChatService : generated text / stream chunks
+BedrockAdapter -[#16a34a]-> ChatService : generated text / stream chunks
+
+ChatRepository -[#d97706]-> Postgres
+EngramRepository -[#d97706]-> Postgres
+Postgres --> CoreTables
+
+ChatService --> ChatRouter : ChatSendResponse\nused_engram_ids + source_references
+ChatRouter --> BrowserApi : JSON/SSE responses
+BrowserSSE --> UIControls : Token-by-token transcript updates
+McpService --> McpRouter : result/error/mcp.event frames
+McpRouter --> Agent : SSE JSON-RPC events
+
+note right of ContextAssembler
+Workflow 1 - Streaming Chat:
+1) Send message
+2) Assemble context
+3) Stream provider output
+4) Persist assistant message + metadata
+5) Return used_engram_ids/source refs
+end note
+
+note right of EngramRepository
+Workflow 2 - Save as Engram:
+1) Capture transcript snapshot
+2) Derive abstract fallback if generic
+3) Persist engram + sources/artifacts
+4) Return engram_id for reuse
+end note
+
+note bottom of ChatRepository
+Workflow 3 - Continue in New Chat:
+1) Create new session from source
+2) Carry forward pinned engram links
+3) Ask continuity-dependent prompt
+4) Observe reused memory via used_engram_ids
+end note
+
+note left of McpService
+Workflow 4 - MCP Agent Calls:
+1) Receive JSON-RPC request
+2) Apply auth + visibility checks
+3) Execute tool via service/repository
+4) Stream progress via mcp.event
+5) Return structured result/error frame
+end note
+
+@enduml

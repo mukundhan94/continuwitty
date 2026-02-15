@@ -1,0 +1,93 @@
+@startuml EngramModelSwitchUseCases
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #f8fafc
+  BorderColor #334155
+  ArrowColor #334155
+}
+title Engram Vault - Use Case Diagram (Model Switching + Engram Continuity)
+
+actor "Human User" as User
+actor "MCP Agent Client" as Agent
+actor "Project Admin" as Admin
+
+rectangle "Engram Vault" {
+  usecase "Authenticate and\\nOpen Workspace" as UC_AUTH
+  usecase "Create Chat Session" as UC_CREATE
+  usecase "Select Provider + Model\\n(OpenAI / Anthropic / Bedrock)" as UC_SELECT_MODEL
+  usecase "Send Prompt" as UC_SEND
+  usecase "Stream Assistant Response" as UC_STREAM
+  usecase "Save Session as Engram" as UC_SAVE
+  usecase "Derive Abstract Fallback\\nfrom Transcript" as UC_ABSTRACT
+  usecase "Set Visibility Scope\\n(private / project)" as UC_VISIBILITY
+  usecase "Tag and Keyword Memory" as UC_TAGS
+  usecase "Pin Engram to Session" as UC_PIN
+  usecase "Continue in New Chat" as UC_CONTINUE
+  usecase "Switch Model for Follow-up\\nAnalysis" as UC_SWITCH_MODEL
+  usecase "Query Project Engrams" as UC_QUERY
+  usecase "Rehydrate Engram Context" as UC_REHYDRATE
+  usecase "Generate Cross-Model\\nSynthesis" as UC_SYNTH
+  usecase "Inspect Continuity Metadata\\n(used_engram_ids, source references)" as UC_METADATA
+  usecase "Execute MCP Tool Calls\\n(JSON-RPC over SSE)" as UC_MCP
+  usecase "Manage Access Scope\\nand Project Sharing Defaults" as UC_ACCESS
+}
+
+User --> UC_AUTH
+User --> UC_CREATE
+User --> UC_SEND
+User --> UC_SAVE
+User --> UC_PIN
+User --> UC_CONTINUE
+User --> UC_QUERY
+User --> UC_REHYDRATE
+User --> UC_SYNTH
+User --> UC_METADATA
+
+Admin --> UC_ACCESS
+Admin --> UC_VISIBILITY
+
+Agent --> UC_MCP
+
+UC_CREATE .> UC_SELECT_MODEL : <<include>>
+UC_SEND .> UC_STREAM : <<include>>
+
+UC_SAVE .> UC_ABSTRACT : <<include>>
+UC_SAVE .> UC_VISIBILITY : <<include>>
+UC_SAVE .> UC_TAGS : <<include>>
+
+UC_CONTINUE .> UC_SWITCH_MODEL : <<include>>
+UC_CONTINUE .> UC_PIN : <<include>>
+
+UC_SYNTH .> UC_QUERY : <<include>>
+UC_SYNTH .> UC_REHYDRATE : <<include>>
+UC_SYNTH .> UC_SEND : <<include>>
+
+UC_METADATA .> UC_SYNTH : <<extend>>
+
+UC_MCP .> UC_CREATE : <<include>>
+UC_MCP .> UC_SEND : <<include>>
+UC_MCP .> UC_SAVE : <<include>>
+UC_MCP .> UC_QUERY : <<include>>
+UC_MCP .> UC_REHYDRATE : <<include>>
+UC_MCP .> UC_PIN : <<include>>
+
+note right of UC_SWITCH_MODEL
+Model switching pattern:
+1) Save output as Engram E1
+2) Continue to new session with different provider/model
+3) Pin E1 and re-query supporting memory
+4) Produce critique/synthesis
+5) Save as Engram E2/E3
+end note
+
+note bottom of UC_METADATA
+Validation target:
+- response reflects prior memory
+- used_engram_ids present when context reused
+- source references available when citations are packed
+end note
+
+@enduml

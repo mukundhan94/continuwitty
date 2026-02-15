@@ -4,6 +4,29 @@ This project turns long LLM research runs into durable, queryable "memory engram
 
 This README is written for a newcomer and follows an implementation sequence based on `deep-research-report.md` and the unified roadmap in `Plan.md`.
 
+## Docs
+
+- Architecture playbook: `docs/architecture-playbook.md`
+- PlantUML architecture/workflow map: `docs/architecture-workflows.puml`
+- PlantUML use-case map (model switch + save/pin/continue): `docs/model-switch-engram-usecases.puml`
+- Render PlantUML via Docker (no local `dot` needed): `make diagram-render`
+- Scope note: playbook content documents existing behavior only (no API/schema changes).
+
+PlantUML rendering commands:
+
+```bash
+make diagram-render
+make diagram-render-png
+```
+
+Rendered files are written to `docs/rendered/`.
+`make diagram-render` generates:
+
+- `docs/rendered/architecture-workflows.svg`
+- `docs/rendered/model-switch-engram-usecases.svg`
+
+If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the Docker render commands above (or install Graphviz and set `GRAPHVIZ_DOT` to your local `dot` binary).
+
 ## Current Progress
 
 - [x] Read and convert research report into a local-first implementation plan.
@@ -45,6 +68,9 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Fix dark-theme scrollbar contrast and session sidebar split-scroll ergonomics.
 - [x] Add sticky creator footer, previous-session label, and stronger active-session highlight.
 - [x] Merge baseline and next roadmap into a single unified planning document.
+- [x] Add architecture playbook with Mermaid diagrams and multi-model continuity runbooks.
+- [x] Add detailed PlantUML architecture/workflow map and Docker-based renderer.
+- [x] Add detailed PlantUML use-case diagram for model switching and engram continuity lifecycle.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -135,6 +161,11 @@ engram/
   README.md
   AGENT.md
   Plan.md
+  docs/
+    architecture-playbook.md
+    architecture-workflows.puml
+    model-switch-engram-usecases.puml
+    render-plantuml.sh
   deep-research-report.md
   .dockerignore
   .env.example
@@ -294,6 +325,10 @@ engram/
 - `docker-compose.yml`: local DB + API + web + acceptance test orchestration.
 - `AGENT.md`: project operating guide for contributors and agents.
 - `Plan.md`: canonical merged roadmap (completed phases + upcoming phases).
+- `docs/architecture-playbook.md`: newcomer-first and technical architecture narrative with call-flow diagrams and multi-model continuity runbooks.
+- `docs/architecture-workflows.puml`: detailed PlantUML architecture and workflow map covering REST, MCP, provider streaming, and persistence flows.
+- `docs/model-switch-engram-usecases.puml`: detailed PlantUML use-case diagram for model switching, save/pin/continue workflows, and continuity metadata inspection.
+- `docs/render-plantuml.sh`: Docker-based PlantUML renderer that avoids local Graphviz path requirements.
 - `db/init/001_schema.sql`: Database extension, tables, and indexes.
 - `api/app/main.py`: FastAPI routes and API surface.
 - `api/app/agent_models.py`: request/response models for agent runs.
@@ -1372,6 +1407,65 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 3. Updated README references and file maps:
    - switched roadmap references from dual-plan status to unified-plan status.
    - refreshed repository/file guides with current web theme-mode modules and acceptance artifacts.
+
+### 2026-02-15 (Architecture playbook documentation pass)
+
+1. Added architecture playbook with mermaid diagrams and multi-model continuity runbooks.
+2. Added architecture guide:
+   - created `docs/architecture-playbook.md` with dual-layer narrative (newcomer + technical deep dive).
+   - added system/call-flow/data-model Mermaid diagrams and cross-model continuity visuals.
+3. Added multi-model runbooks:
+   - incident triage continuity flow (OpenAI -> Bedrock -> Anthropic).
+   - product strategy research flow.
+   - support escalation handoff flow.
+4. Added explicit call-surface mapping:
+   - REST, MCP JSON-RPC/SSE, and UI button-to-endpoint mappings.
+   - documented where `used_engram_ids` and source references appear.
+5. Added interface impact statement:
+   - no new runtime APIs.
+   - no schema or type changes.
+   - documentation clarifies existing contracts only.
+6. Updated README indexing:
+   - added top-level docs pointer.
+   - added file-map entry for architecture playbook.
+
+### 2026-02-15 (PlantUML architecture/workflow map pass)
+
+1. Added detailed PlantUML diagram:
+   - created `docs/architecture-workflows.puml`.
+   - diagram includes architecture layers and four core workflows (stream chat, save-as-engram, continue-in-new-chat, MCP tool flow).
+2. Added color-coded flow paths:
+   - REST/UI flow.
+   - MCP JSON-RPC/SSE flow.
+   - provider generation/stream flow.
+   - persistence/retrieval continuity flow.
+3. Updated README docs/file map:
+   - added docs pointer for PlantUML map.
+   - added file guide entry for `docs/architecture-workflows.puml`.
+
+### 2026-02-15 (PlantUML render portability pass)
+
+1. Added Docker-based PlantUML renderer script:
+   - created `docs/render-plantuml.sh`.
+   - renders all `docs/*.puml` to `docs/rendered/` as `svg` or `png`.
+2. Added Makefile shortcuts:
+   - `make diagram-render`
+   - `make diagram-render-png`
+3. Added troubleshooting guidance:
+   - documented fallback for local Graphviz path errors such as `/opt/local/bin/dot` not found.
+
+### 2026-02-15 (PlantUML use-case diagram pass)
+
+1. Added detailed use-case diagram:
+   - created `docs/model-switch-engram-usecases.puml`.
+   - covers actors, model switching, save/pin/continue lifecycle, query/rehydrate, and MCP tool usage.
+2. Added relationship semantics:
+   - explicit `<<include>>` and `<<extend>>` relations for session, continuity, and metadata-inspection paths.
+3. Updated README docs/file map:
+   - added docs pointer for use-case map.
+   - added file guide entry for `docs/model-switch-engram-usecases.puml`.
+4. Updated render automation:
+   - `make diagram-render` and `make diagram-render-png` now target both PlantUML diagram sources explicitly.
 
 ### Next Immediate Steps (One By One)
 
