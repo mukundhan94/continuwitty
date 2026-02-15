@@ -8,16 +8,24 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .agent_models import AgentResumeRequest, AgentRunRequest, AgentRunResponse
 from .agent_workflow import AgentWorkflowService
+from .auth import generate_csrf_token, verify_password
 from .config import get_settings
 from .models import (
     EngramCreateResponse,
     EngramQueryRequest,
     EngramQueryResult,
+    EngramSourceRecord,
     EngramSummary,
     MemoryEngramCreate,
     RehydrationBundle,
 )
-from .repository import create_engram, get_rehydration_bundle, list_engrams, query_engrams
+from .repository import (
+    create_engram,
+    get_engram_sources,
+    get_rehydration_bundle,
+    list_engrams,
+    query_engrams,
+)
 
 settings = get_settings()
 app = FastAPI(
@@ -43,6 +51,18 @@ def _login_redirect() -> RedirectResponse:
     return RedirectResponse(url="/login", status_code=303)
 
 
+def _csrf_token_for_request(request: Request) -> str:
+    token = request.session.get("csrf_token")
+    if not token:
+        token = generate_csrf_token()
+        request.session["csrf_token"] = token
+    return token
+
+
+def _verify_csrf_token(request: Request, submitted_token: str) -> bool:
+    return bool(submitted_token) and submitted_token == request.session.get("csrf_token")
+
+
 @app.get("/", include_in_schema=False)
 def home_redirect(request: Request) -> Response:
     if _is_authenticated(request):
@@ -57,7 +77,7 @@ def login_page(request: Request) -> Response:
     return templates.TemplateResponse(
         request,
         "login.html",
-        {"request": request, "error": None},
+        {"request": request, "error": None, "csrf_token": _csrf_token_for_request(request)},
     )
 
 
@@ -66,24 +86,38 @@ def login_submit(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    csrf_token: str = Form(...),
 ) -> Response:
+    if not _verify_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
     current_settings = get_settings()
-    if (
-        username == current_settings.ui_demo_username
-        and password == current_settings.ui_demo_password
-    ):
+    password_ok = False
+    if current_settings.ui_demo_password_hash:
+        password_ok = verify_password(password, current_settings.ui_demo_password_hash)
+    else:
+        password_ok = password == current_settings.ui_demo_password
+
+    if username == current_settings.ui_demo_username and password_ok:
         request.session["user"] = username
+        request.session["csrf_token"] = generate_csrf_token()
         return RedirectResponse(url="/ui", status_code=303)
     return templates.TemplateResponse(
         request,
         "login.html",
-        {"request": request, "error": "Invalid username or password."},
+        {
+            "request": request,
+            "error": "Invalid username or password.",
+            "csrf_token": _csrf_token_for_request(request),
+        },
         status_code=401,
     )
 
 
 @app.post("/logout", include_in_schema=False)
-def logout(request: Request) -> Response:
+def logout(request: Request, csrf_token: str = Form(...)) -> Response:
+    if not _verify_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
     request.session.clear()
     return _login_redirect()
 
@@ -95,7 +129,11 @@ def ui_dashboard(request: Request) -> Response:
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"request": request, "username": request.session.get("user", "unknown")},
+        {
+            "request": request,
+            "username": request.session.get("user", "unknown"),
+            "csrf_token": _csrf_token_for_request(request),
+        },
     )
 
 
@@ -111,6 +149,7 @@ def run_agent_workflow(payload: AgentRunRequest) -> AgentRunResponse:
         thread_id=payload.thread_id,
         status=result.get("status", "unknown"),
         engram_id=result.get("engram_id"),
+        snapshot_engram_ids=result.get("snapshot_engram_ids", []),
         state=result,
     )
 
@@ -124,17 +163,21 @@ def get_agent_run_state(thread_id: str) -> AgentRunResponse:
         thread_id=thread_id,
         status=state.get("status", "unknown"),
         engram_id=state.get("engram_id"),
+        snapshot_engram_ids=state.get("snapshot_engram_ids", []),
         state=state,
     )
 
 
 @app.post("/api/v1/agent-runs/{thread_id}/resume", response_model=AgentRunResponse)
 def resume_agent_workflow(thread_id: str, payload: AgentResumeRequest) -> AgentRunResponse:
-    result = agent_workflow.resume(thread_id, payload.model_dump(mode="json"))
+    result = agent_workflow.resume(thread_id, payload.model_dump(mode="json", exclude_none=True))
+    if not result:
+        raise HTTPException(status_code=404, detail="Thread state not found")
     return AgentRunResponse(
         thread_id=thread_id,
         status=result.get("status", "unknown"),
         engram_id=result.get("engram_id"),
+        snapshot_engram_ids=result.get("snapshot_engram_ids", []),
         state=result,
     )
 
@@ -158,6 +201,17 @@ def list_engrams_endpoint(
 def query_engrams_endpoint(payload: EngramQueryRequest) -> list[EngramQueryResult]:
     settings = get_settings()
     return query_engrams(payload, embedding_dim=settings.embedding_dim)
+
+
+@app.get("/api/v1/engrams/{engram_id}/sources", response_model=list[EngramSourceRecord])
+def list_engram_sources_endpoint(
+    engram_id: UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[EngramSourceRecord]:
+    bundle = get_rehydration_bundle(engram_id)
+    if not bundle:
+        raise HTTPException(status_code=404, detail="Engram not found")
+    return get_engram_sources(engram_id, limit=limit)
 
 
 @app.get("/api/v1/engrams/{engram_id}/rehydrate", response_model=RehydrationBundle)

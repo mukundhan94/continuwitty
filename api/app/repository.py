@@ -11,6 +11,7 @@ from .models import (
     EngramCreateResponse,
     EngramQueryRequest,
     EngramQueryResult,
+    EngramSourceRecord,
     EngramSummary,
     MemoryEngramCreate,
     RehydrationBundle,
@@ -275,3 +276,19 @@ def get_rehydration_bundle(engram_id: UUID) -> RehydrationBundle | None:
         top_citations=citations[:5],
         context_markdown=context_markdown,
     )
+
+
+def get_engram_sources(engram_id: UUID, limit: int = 100) -> list[EngramSourceRecord]:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT source_id, engram_id, captured_at, url, title, snippet
+            FROM sources
+            WHERE engram_id = %s
+            ORDER BY captured_at DESC
+            LIMIT %s
+            """,
+            (engram_id, limit),
+        )
+        rows = cur.fetchall()
+    return [EngramSourceRecord(**row) for row in rows]

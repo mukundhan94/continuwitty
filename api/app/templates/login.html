@@ -80,6 +80,7 @@
       <h1>Engram Vault Test UI</h1>
       <p>Sign in to access the local testing dashboard.</p>
       <form method="post" action="/login">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         <label for="username">Username</label>
         <input id="username" name="username" type="text" autocomplete="username" required />
         <label for="password">Password</label>

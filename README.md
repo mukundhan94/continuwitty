@@ -17,6 +17,9 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add lint/format best-practice gates with `ruff`.
 - [x] Add local UI test harness with simple login workflow.
 - [x] Add LangGraph checkpoint/resume workflow with automatic engram write.
+- [x] Add optional periodic snapshot engrams for long-running threads.
+- [x] Add provenance source-inspection endpoint and UI flow.
+- [x] Add CSRF-protected UI auth with optional hashed-password support.
 - [ ] Add CLI/UI for upload/search/rehydrate workflows.
 - [ ] Add automated evaluation harness (temporal + multi-engram reasoning).
 - [ ] Add security hardening and RBAC.
@@ -104,6 +107,7 @@ engram/
 - `api/app/main.py`: FastAPI routes and API surface.
 - `api/app/agent_models.py`: request/response models for agent runs.
 - `api/app/agent_workflow.py`: LangGraph workflow, checkpointing, and resume logic.
+- `api/app/auth.py`: password hashing/verification and CSRF token helpers.
 - `api/app/models.py`: Request/response and engram schema models.
 - `api/app/repository.py`: SQL persistence, semantic query, rehydration builder.
 - `api/app/embedding.py`: Deterministic local embedding helper.
@@ -176,6 +180,7 @@ Default local UI credentials (override in `.env` if needed):
 
 - username: `admin`
 - password: `admin123`
+- optional hash override: `UI_DEMO_PASSWORD_HASH` (if set, plain password env is ignored)
 
 LangGraph checkpoint file (local):
 
@@ -207,7 +212,7 @@ make format-check
 make check
 ```
 
-## Workflow Notes (Before Phase 4)
+## Workflow Notes (Before Phase 5)
 
 Use this exact flow while you validate Milestone 1 behavior.
 
@@ -280,7 +285,30 @@ curl -X POST http://localhost:8000/api/v1/agent-runs/thread-manual-001/resume \
 curl http://localhost:8000/api/v1/agent-runs/thread-manual-001
 ```
 
-Phase 4 security hardening is intentionally paused until this validation pass is complete.
+Then test periodic snapshots for longer runs:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/agent-runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "engram-vault",
+    "thread_id": "thread-snapshot-001",
+    "objective": "Validate periodic snapshot behavior",
+    "notes": ["note-1", "note-2", "note-3"],
+    "snapshot_enabled": true,
+    "snapshot_every_n_notes": 2,
+    "auto_persist_engram": false
+  }'
+```
+
+Phase 5 evaluation work is intentionally paused until this validation pass is complete.
+
+If you want to use a hashed local UI password instead of plaintext in `.env`, generate one with:
+
+```bash
+cd api
+uv run python -c "from app.auth import hash_password; print(hash_password('admin123'))"
+```
 
 ## Implementation Log
 
@@ -351,7 +379,7 @@ Phase 4 security hardening is intentionally paused until this validation pass is
 ### 2026-02-15 (LangGraph durability phase)
 
 1. Added LangGraph-backed agent workflow service:
-   - state graph nodes: collect -> synthesize -> persist
+   - state graph nodes: collect -> synthesize -> snapshot -> persist
    - SQLite checkpointing for thread persistence
    - resume support by `thread_id`
 2. Added agent-run API endpoints:
@@ -359,24 +387,44 @@ Phase 4 security hardening is intentionally paused until this validation pass is
    - `GET /api/v1/agent-runs/{thread_id}`
    - `POST /api/v1/agent-runs/{thread_id}/resume`
 3. Added automatic engram persistence at workflow completion (`auto_persist_engram` toggle).
-4. Added integration tests for run/create/resume/state retrieval.
-5. Verification:
+4. Added optional periodic snapshot engrams for long runs:
+   - `snapshot_enabled`
+   - `snapshot_every_n_notes`
+   - tracked `snapshot_engram_ids` and `snapshot_count`
+5. Added integration tests for run/create/resume/state retrieval and snapshot behavior.
+6. Verification:
    - `make lint` -> all checks passed
-   - `make test` -> `20 passed`
+   - `make test` -> `23 passed`
+
+### 2026-02-15 (Auth hardening + provenance inspection phase)
+
+1. Added UI auth hardening:
+   - CSRF token validation for `/login` and `/logout`
+   - optional hashed password support via `UI_DEMO_PASSWORD_HASH`
+2. Added provenance inspection support:
+   - endpoint `GET /api/v1/engrams/{engram_id}/sources`
+   - dashboard `Inspect Sources` action in `/ui`
+3. Added tests:
+   - CSRF and logout protection tests
+   - sources endpoint integration tests
+4. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `27 passed`
 
 ### Next Immediate Steps (One By One)
 
 1. Run the workflow notes section and complete your manual validation pass.
-2. Add optional periodic snapshot engrams for long runs.
-3. Harden UI auth for production (hashed user store, role model, CSRF).
-4. Add UI source-inspection view for provenance workflows.
-5. Build evaluation harness for temporal and cross-engram reasoning.
+2. Add multi-user auth model + role-based access controls.
+3. Build evaluation harness for temporal and cross-engram reasoning.
+4. Add reranking/citation-packing improvements for retrieval quality.
+5. Add background consolidation jobs for long-run memory maintenance.
 
 ## MVP API Surface
 
 - `POST /api/v1/engrams`
 - `GET /api/v1/engrams`
 - `POST /api/v1/engrams/query`
+- `GET /api/v1/engrams/{engram_id}/sources`
 - `GET /api/v1/engrams/{engram_id}/rehydrate`
 - `POST /api/v1/agent-runs`
 - `GET /api/v1/agent-runs/{thread_id}`
@@ -390,9 +438,9 @@ Test files live under `api/tests`:
 - `test_embedding.py`: deterministic embedding behavior.
 - `test_repository_helpers.py`: retrieval text and vector literal helpers.
 - `test_api_unit.py`: endpoint behavior with repository function mocking.
-- `test_api_integration.py`: end-to-end API roundtrip against local Postgres.
-- `test_ui_auth.py`: login/logout/session-protected UI workflow checks.
-- `test_agent_workflow.py`: LangGraph run checkpoint/resume + auto-persist checks.
+- `test_api_integration.py`: end-to-end API roundtrip + sources endpoint checks.
+- `test_ui_auth.py`: login/logout/session-protected UI + CSRF checks.
+- `test_agent_workflow.py`: LangGraph checkpoint/resume + auto-persist + snapshot checks.
 - `conftest.py`: DB fixture, schema bootstrap, and cleanup.
 
 Notes:
@@ -447,20 +495,20 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
 - Added authenticated dashboard for create/list/query/rehydrate API calls
 - Added UI auth tests for login/logout/session redirects
 
-### Milestone 3 (In Progress)
+### Milestone 3 (Completed)
 
 - LangGraph run checkpointing integrated
 - Automatic engram write at end of each research run integrated
-- Pending: optional periodic snapshot engrams for long runs
+- Optional periodic snapshot engrams integrated for long-running threads
 
-### Milestone 4 (Next)
+### Milestone 4 (In Progress)
 
-### Milestone 5
+- Added CSRF protection for login/logout UI forms
+- Added optional hashed-password authentication path (`UI_DEMO_PASSWORD_HASH`)
+- Added source-inspection endpoint and dashboard workflow
+- Pending: multi-user auth model and role-based access controls
 
-- Harden auth for production (user store, hashed secrets, CSRF, roles)
-- Add UI source-inspection view for provenance workflows
-
-### Milestone 6
+### Milestone 5 (Next)
 
 - Build eval harness:
   - fact recall
@@ -509,6 +557,28 @@ curl -X POST http://localhost:8000/api/v1/engrams/query \
   }'
 ```
 
+## Example: Agent Run (With Snapshots)
+
+```bash
+curl -X POST http://localhost:8000/api/v1/agent-runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "engram-vault",
+    "thread_id": "thread-demo-001",
+    "objective": "Track long run with periodic snapshots",
+    "notes": ["note-1", "note-2", "note-3", "note-4"],
+    "snapshot_enabled": true,
+    "snapshot_every_n_notes": 2,
+    "auto_persist_engram": true
+  }'
+```
+
+## Example: Inspect Engram Sources
+
+```bash
+curl http://localhost:8000/api/v1/engrams/<engram_id>/sources
+```
+
 ## "Successful If" Checklist
 
 - [x] I can save a full research result as an engram in one API call.
@@ -517,5 +587,6 @@ curl -X POST http://localhost:8000/api/v1/engrams/query \
 - [x] I can generate an LLM-ready rehydration bundle from any engram.
 - [x] I can resume a checkpointed agent run by `thread_id`.
 - [x] I can access a local UI using a simple login workflow to test endpoints.
+- [x] I can inspect stored provenance sources for an engram via API/UI.
 - [x] A newcomer can run the system locally using this README alone.
 - [ ] The same stored engram can be reused with different LLM providers later.

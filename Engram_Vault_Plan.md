@@ -117,6 +117,7 @@ LLM-ready rehydration bundle.
     - `POST /api/v1/agent-runs`
     - `GET /api/v1/agent-runs/{thread_id}`
     - `POST /api/v1/agent-runs/{thread_id}/resume`
+-   Supports optional periodic snapshot engrams during long runs.
 
 ------------------------------------------------------------------------
 
@@ -139,6 +140,13 @@ LLM-ready rehydration bundle.
 -   Search
 -   Detail page
 -   Rehydrate button
+-   Source inspection view (provenance)
+
+### Local MVP Status
+
+-   Login/logout UI with session auth is implemented.
+-   CSRF protection for UI form actions is implemented.
+-   Source inspection endpoint + dashboard action is implemented.
 
 ------------------------------------------------------------------------
 

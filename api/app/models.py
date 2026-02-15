@@ -87,6 +87,15 @@ class RehydrationCitation(BaseModel):
     captured_at: datetime
 
 
+class EngramSourceRecord(BaseModel):
+    source_id: UUID
+    engram_id: UUID
+    captured_at: datetime
+    url: str
+    title: str | None = None
+    snippet: str | None = None
+
+
 class RehydrationBundle(BaseModel):
     engram_id: UUID
     project_id: str

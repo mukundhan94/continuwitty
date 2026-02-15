@@ -21,6 +21,8 @@ class AgentRunRequest(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     sources: list[AgentSourceInput] = Field(default_factory=list)
     auto_persist_engram: bool = True
+    snapshot_enabled: bool = False
+    snapshot_every_n_notes: int = Field(default=3, ge=1)
 
 
 class AgentResumeRequest(BaseModel):
@@ -29,11 +31,14 @@ class AgentResumeRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
     sources: list[AgentSourceInput] = Field(default_factory=list)
-    auto_persist_engram: bool = True
+    auto_persist_engram: bool | None = None
+    snapshot_enabled: bool | None = None
+    snapshot_every_n_notes: int | None = Field(default=None, ge=1)
 
 
 class AgentRunResponse(BaseModel):
     thread_id: str
     status: str
     engram_id: str | None = None
+    snapshot_engram_ids: list[str] = Field(default_factory=list)
     state: dict[str, Any]

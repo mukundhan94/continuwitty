@@ -107,3 +107,42 @@ def test_query_metadata_filters(client, clean_db) -> None:
     items = filtered.json()
     assert len(items) >= 1
     assert all(item["project_id"] == "project-a" for item in items)
+
+
+@pytest.mark.integration
+def test_sources_endpoint_returns_provenance_records(client, clean_db) -> None:
+    payload = {
+        "project_id": "project-sources",
+        "thread_id": "run-sources",
+        "title": "Source test",
+        "abstract": "Source endpoint test",
+        "detailed_summary_markdown": "summary",
+        "claims": [
+            {
+                "claim": "Claim with source",
+                "supporting_sources": [
+                    {
+                        "url": "https://example.com/source",
+                        "title": "Source",
+                        "snippet": "Provenance snippet",
+                        "captured_at": "2026-02-15T10:00:00Z",
+                    }
+                ],
+            }
+        ],
+    }
+    created = client.post("/api/v1/engrams", json=payload)
+    assert created.status_code == 200
+    engram_id = created.json()["engram_id"]
+
+    sources_response = client.get(f"/api/v1/engrams/{engram_id}/sources")
+    assert sources_response.status_code == 200
+    records = sources_response.json()
+    assert len(records) == 1
+    assert records[0]["engram_id"] == engram_id
+    assert records[0]["url"] == "https://example.com/source"
+
+
+def test_sources_endpoint_returns_404_for_missing_engram(client) -> None:
+    response = client.get("/api/v1/engrams/00000000-0000-0000-0000-000000000000/sources")
+    assert response.status_code == 404
