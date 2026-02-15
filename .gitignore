@@ -1,0 +1,8 @@
+.env
+.idea/
+api/.venv/
+api/.pytest_cache/
+api/.ruff_cache/
+**/__pycache__/
+*.pyc
+.DS_Store
