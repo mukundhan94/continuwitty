@@ -12,6 +12,8 @@ type ScenarioState = {
   latestSessionTitle: string | null
   latestSessionId: string | null
   latestModelId: string | null
+  latestEngramId: string | null
+  latestEngramTitle: string | null
   latestAssistantText: string | null
 }
 
@@ -27,6 +29,8 @@ export const test = bddBase.extend<AcceptanceFixtures>({
       latestSessionTitle: null,
       latestSessionId: null,
       latestModelId: null,
+      latestEngramId: null,
+      latestEngramTitle: null,
       latestAssistantText: null,
     })
   },

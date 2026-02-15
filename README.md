@@ -36,6 +36,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Dockerize API + web runtime with env-driven compose orchestration.
 - [x] Add Playwright-BDD + `bddgen` acceptance framework with dockerized execution.
 - [x] Add tagged Bedrock live acceptance flow for non-deterministic provider validation.
+- [x] Add non-deterministic triage-continuity acceptance flow (save, continue, pin, handoff).
 - [x] Improve chat snapshot engram rehydration with transcript-derived summaries.
 - [x] Add markdown rendering support for chat transcript messages.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
@@ -565,10 +566,22 @@ Live Bedrock runner (real provider call, excluded from default deterministic sui
 make acceptance-test-bedrock-live
 ```
 
+Live triage continuity runner (real provider call, excluded from default deterministic suite):
+
+```bash
+make acceptance-test-triage-live
+```
+
 Dockerized live Bedrock runner:
 
 ```bash
 make acceptance-test-bedrock-live-docker
+```
+
+Dockerized live triage continuity runner:
+
+```bash
+make acceptance-test-triage-live-docker
 ```
 
 Failure screenshots are persisted to `acceptance-tests/artifacts/`.
@@ -581,6 +594,7 @@ Current feature coverage:
 - chat pane layout stability while creating sessions
 - continue-in-new-chat continuity behavior
 - tagged live Bedrock scenario for non-deterministic response validation with default model selection
+- tagged live triage scenario for save-as-engram, pinning, and continuity handoff generation
 
 ## Workflow Notes (Current Validation Sequence)
 
@@ -1224,11 +1238,39 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 4. Validation:
    - `make web-check` passed (`12` frontend tests)
 
+### 2026-02-15 (Live triage continuity acceptance scenario)
+
+1. Added a new non-deterministic triage workflow feature:
+   - `acceptance-tests/features/triage-live.feature` tagged with `@triage-live @bedrock-live`.
+   - covers live triage memo generation, save-as-engram, continue-in-new-chat, pinning, and continuity handoff brief generation.
+2. Added triage step bindings:
+   - `acceptance-tests/src/steps/triage.steps.ts`.
+   - asserts only structural continuity signals (keywords + length thresholds), not exact deterministic wording.
+3. Added reusable live-response helper:
+   - `acceptance-tests/src/support/chat.ts` for robust assistant text extraction compatible with markdown-rendered messages.
+4. Expanded execution commands:
+   - `make acceptance-test-triage-live`
+   - `make acceptance-test-triage-live-docker`
+   - `npm run test:triage-live`
+5. Validation:
+   - `make acceptance-typecheck` passed
+   - `npm run test:triage-live -- --list` confirmed triage scenario generation and selection
+
+### 2026-02-15 (Frontend save-as-engram cutoff fix)
+
+1. Fixed frontend truncation of default save abstract:
+   - removed the `320`-character truncation from chat-to-engram default abstract generation.
+   - extracted logic into `web/src/utils/chat.ts` for maintainable reuse.
+2. Added regression tests:
+   - `web/src/utils/chat.test.ts` verifies full latest assistant message is preserved and fallback behavior to user message.
+3. Validation:
+   - `make web-check` passed
+
 ### Next Immediate Steps (One By One)
 
-1. Expand acceptance coverage to include save-as-engram and pinned-engram reuse assertions with API fixture seeding.
-2. Add MCP client examples and validation fixtures for external agent integrations.
-3. Add final hardening pass for release and troubleshooting runbooks.
+1. Add MCP client examples and validation fixtures for external agent integrations.
+2. Add final hardening pass for release and troubleshooting runbooks.
+3. Add release-ready troubleshooting flowcharts for provider/rate-limit/auth incidents.
 
 ## MVP API Surface
 
@@ -1379,6 +1421,7 @@ Acceptance tests live under `acceptance-tests`:
 - `features/authentication.feature`: login handoff regression.
 - `features/session-layout.feature`: pane height stability + continuation behavior.
 - `features/bedrock-live.feature`: tagged non-deterministic Bedrock live-provider flow.
+- `features/triage-live.feature`: tagged non-deterministic triage continuity flow (save/pin/continue/handoff).
 - `src/steps/*.ts`: Playwright step bindings.
 - `src/support/*.ts`: shared world/env/hooks.
 
@@ -1392,6 +1435,7 @@ Notes:
 - `make acceptance-typecheck` validates acceptance TypeScript.
 - `make acceptance-test-docker` runs Gherkin acceptance tests against dockerized API+web.
 - `make acceptance-test-bedrock-live` runs only `@bedrock-live` scenarios against live Bedrock.
+- `make acceptance-test-triage-live` runs only `@triage-live` incident triage continuity scenarios.
 
 ## MemoryEngram Contract (MVP)
 

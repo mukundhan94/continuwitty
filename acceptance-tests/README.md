@@ -73,10 +73,22 @@ Live Bedrock run (excluded from default deterministic acceptance suite):
 make acceptance-test-bedrock-live
 ```
 
+Live triage continuity run (focused non-deterministic scenario):
+
+```bash
+make acceptance-test-triage-live
+```
+
 Dockerized live Bedrock run:
 
 ```bash
 make acceptance-test-bedrock-live-docker
+```
+
+Dockerized live triage continuity run:
+
+```bash
+make acceptance-test-triage-live-docker
 ```
 
 The `@bedrock-live` scenario intentionally validates non-deterministic behavior by asserting only:
@@ -84,5 +96,12 @@ The `@bedrock-live` scenario intentionally validates non-deterministic behavior 
 - Bedrock provider session is created with the default model field populated.
 - assistant response is received and exceeds a minimum character threshold.
 - response does not match known provider error text.
+
+The `@triage-live` scenario adds an incident-command workflow:
+
+- generates a live triage memo with structured incident signals,
+- saves that response as a project-visible engram,
+- continues into a new chat, pins the saved engram,
+- requests a commander handoff brief and validates continuity-oriented signals.
 
 When dockerized scenarios fail, screenshots are written to `acceptance-tests/artifacts/`.

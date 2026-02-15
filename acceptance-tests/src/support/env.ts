@@ -7,8 +7,19 @@ function asInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
-function asOptionalNonEmpty(value: string | undefined): string | undefined {
+function normalizeEnvText(value: string | undefined): string {
   const trimmed = (value || '').trim()
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim()
+  }
+  return trimmed
+}
+
+function asOptionalNonEmpty(value: string | undefined): string | undefined {
+  const trimmed = normalizeEnvText(value)
   return trimmed.length > 0 ? trimmed : undefined
 }
 

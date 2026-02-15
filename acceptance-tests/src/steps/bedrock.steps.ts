@@ -1,10 +1,6 @@
 import { Given, Then, When, expect, signInIfNeeded } from '../support/fixtures'
+import { uniqueTitle, waitForAssistantResponseText } from '../support/chat'
 import { acceptanceEnv } from '../support/env'
-
-function uniqueTitle(base: string): string {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 10000)}`
-  return `${base} ${suffix}`
-}
 
 Given('I am signed in for bedrock live testing', async ({ page }) => {
   await signInIfNeeded(page)
@@ -50,24 +46,11 @@ When('I send a live bedrock prompt', async ({ page }) => {
 })
 
 Then('I should receive a non-empty assistant response from bedrock', async ({ page, scenarioState }) => {
-  const chatPanel = page.getByTestId('chat-panel')
-  const assistantBubble = chatPanel.locator('article').filter({ hasText: /\bassistant\b/i }).last()
-  await expect(assistantBubble).toBeVisible({ timeout: 120000 })
-
-  const assistantTextBlock = assistantBubble.locator('p').nth(1)
-  await expect
-    .poll(
-      async () => {
-        const text = (await assistantTextBlock.innerText()).trim()
-        return text.length
-      },
-      { timeout: 120000 },
-    )
-    .toBeGreaterThanOrEqual(acceptanceEnv.bedrockLiveMinResponseChars)
-
-  await expect(chatPanel.getByRole('button', { name: /^Send$/i })).toBeVisible({ timeout: 120000 })
-
-  const assistantText = (await assistantTextBlock.innerText()).trim()
+  const assistantText = await waitForAssistantResponseText(
+    page,
+    acceptanceEnv.bedrockLiveMinResponseChars,
+    120000,
+  )
   scenarioState.latestAssistantText = assistantText
   expect(assistantText.toLowerCase()).not.toContain('bedrock credentials are not configured')
   expect(assistantText.toLowerCase()).not.toContain('provider error')
