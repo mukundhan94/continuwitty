@@ -1,0 +1,428 @@
+import { useEffect, useMemo, useState } from 'react'
+
+import { getSessionProfile, loginWithPassword, logoutCurrentUser } from './api/auth'
+import {
+  continueSession,
+  createChatSession,
+  listChatSessions,
+  listEngrams,
+  listPinnedEngrams,
+  listSessionMessages,
+  pinEngramToSession,
+  saveSessionAsEngram,
+  streamChatMessage,
+  unpinEngramFromSession,
+} from './api/chat'
+import { ApiError } from './api/http'
+import type { ChatMessage, ChatSession, ChatSourceReference, EngramSummary, UserProfile } from './api/types'
+import { ChatPanel } from './components/ChatPanel'
+import { LoginView } from './components/LoginView'
+import { PinnedEngramPanel } from './components/PinnedEngramPanel'
+import { SaveEngramModal } from './components/SaveEngramModal'
+import { SessionSidebar } from './components/SessionSidebar'
+import { WEB_CONFIG } from './config'
+
+function describeError(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.detail
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return 'Unexpected error'
+}
+
+function isUnauthorized(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401
+}
+
+function pickSession(sessions: ChatSession[], previousId: string | null): string | null {
+  if (previousId && sessions.some((item) => item.session_id === previousId)) {
+    return previousId
+  }
+  return sessions.length > 0 ? sessions[0].session_id : null
+}
+
+export default function App() {
+  const [authChecking, setAuthChecking] = useState(true)
+  const [authSubmitting, setAuthSubmitting] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [user, setUser] = useState<UserProfile | null>(null)
+
+  const [projectId, setProjectId] = useState(WEB_CONFIG.defaultProjectId)
+
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [creatingSession, setCreatingSession] = useState(false)
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [pendingUserText, setPendingUserText] = useState<string | null>(null)
+  const [streamingAssistantText, setStreamingAssistantText] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+  const [composerText, setComposerText] = useState('')
+  const [lastPrompt, setLastPrompt] = useState('')
+
+  const [sourceReferences, setSourceReferences] = useState<ChatSourceReference[]>([])
+
+  const [engramLoading, setEngramLoading] = useState(false)
+  const [pinnedEngrams, setPinnedEngrams] = useState<EngramSummary[]>([])
+  const [availableEngrams, setAvailableEngrams] = useState<EngramSummary[]>([])
+  const [engramSearch, setEngramSearch] = useState('')
+
+  const [saveModalOpen, setSaveModalOpen] = useState(false)
+  const [saveSubmitting, setSaveSubmitting] = useState(false)
+
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const selectedSession = useMemo(
+    () => sessions.find((item) => item.session_id === selectedSessionId) || null,
+    [selectedSessionId, sessions],
+  )
+
+  const loadSessions = async (nextProjectId: string, preferredSessionId: string | null) => {
+    setSessionsLoading(true)
+    try {
+      const loaded = await listChatSessions(nextProjectId)
+      setSessions(loaded)
+      setSelectedSessionId((current) => pickSession(loaded, preferredSessionId ?? current))
+    } catch (error) {
+      setChatError(describeError(error))
+    } finally {
+      setSessionsLoading(false)
+    }
+  }
+
+  const loadSessionData = async (sessionId: string, currentProjectId: string) => {
+    setEngramLoading(true)
+    try {
+      const [loadedMessages, loadedPinned, loadedEngrams] = await Promise.all([
+        listSessionMessages(sessionId),
+        listPinnedEngrams(sessionId),
+        listEngrams(currentProjectId),
+      ])
+      setMessages(loadedMessages)
+      setPinnedEngrams(loadedPinned)
+      setAvailableEngrams(loadedEngrams)
+    } catch (error) {
+      setChatError(describeError(error))
+    } finally {
+      setEngramLoading(false)
+    }
+  }
+
+  const refreshFromSession = async (sessionId: string) => {
+    await loadSessionData(sessionId, projectId)
+  }
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const profile = await getSessionProfile()
+        setUser(profile)
+        setAuthError(null)
+        await loadSessions(projectId, null)
+      } catch (error) {
+        if (!isUnauthorized(error)) {
+          setAuthError(describeError(error))
+        }
+      } finally {
+        setAuthChecking(false)
+      }
+    }
+    void run()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!user) {
+      return
+    }
+    void loadSessions(projectId, selectedSessionId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
+  useEffect(() => {
+    if (!user || !selectedSessionId) {
+      setMessages([])
+      setPinnedEngrams([])
+      setSourceReferences([])
+      return
+    }
+    void loadSessionData(selectedSessionId, projectId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSessionId])
+
+  const handleLogin = async (username: string, password: string) => {
+    setAuthSubmitting(true)
+    setAuthError(null)
+    try {
+      await loginWithPassword(username, password)
+      const profile = await getSessionProfile()
+      setUser(profile)
+      await loadSessions(projectId, null)
+    } catch (error) {
+      setAuthError(describeError(error))
+    } finally {
+      setAuthSubmitting(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logoutCurrentUser()
+    } catch {
+      // Ignore local logout errors and reset state.
+    }
+    setUser(null)
+    setSessions([])
+    setSelectedSessionId(null)
+    setMessages([])
+    setPinnedEngrams([])
+    setAvailableEngrams([])
+    setSourceReferences([])
+    setNotice(null)
+    setAuthError(null)
+  }
+
+  const handleCreateSession = async (payload: {
+    project_id: string
+    title: string
+    provider: 'openai' | 'anthropic' | 'bedrock'
+    model_id: string
+    system_prompt: string
+    visibility_scope: 'private' | 'project'
+    autosave_enabled: boolean
+  }) => {
+    setCreatingSession(true)
+    setChatError(null)
+    try {
+      const created = await createChatSession(payload)
+      setSessions((current) => [created, ...current])
+      setSelectedSessionId(created.session_id)
+      setComposerText('')
+    } catch (error) {
+      setChatError(describeError(error))
+    } finally {
+      setCreatingSession(false)
+    }
+  }
+
+  const sendPrompt = async (prompt: string) => {
+    if (!selectedSessionId) {
+      return
+    }
+
+    const content = prompt.trim()
+    if (!content) {
+      return
+    }
+
+    setLastPrompt(content)
+    setPendingUserText(content)
+    setComposerText('')
+    setStreamingAssistantText('')
+    setSourceReferences([])
+    setChatError(null)
+    setChatSending(true)
+
+    try {
+      for await (const event of streamChatMessage(selectedSessionId, content)) {
+        if (event.event === 'meta') {
+          setSourceReferences(event.data.source_references)
+        }
+        if (event.event === 'chunk') {
+          setStreamingAssistantText((current) => current + event.data.text)
+        }
+        if (event.event === 'done') {
+          setStreamingAssistantText(event.data.assistant_text)
+          setSourceReferences(event.data.source_references)
+        }
+        if (event.event === 'error') {
+          throw new Error(event.data.detail)
+        }
+      }
+      await refreshFromSession(selectedSessionId)
+      setPendingUserText(null)
+      setStreamingAssistantText('')
+    } catch (error) {
+      setChatError(describeError(error))
+      setComposerText(content)
+      setPendingUserText(null)
+      setStreamingAssistantText('')
+    } finally {
+      setChatSending(false)
+    }
+  }
+
+  const handleSend = async () => sendPrompt(composerText)
+
+  const handleRetry = async () => {
+    if (!lastPrompt.trim()) {
+      setChatError('No previous prompt available to retry.')
+      return
+    }
+    await sendPrompt(lastPrompt)
+  }
+
+  const handlePin = async (engramId: string) => {
+    if (!selectedSessionId) {
+      return
+    }
+    try {
+      await pinEngramToSession(selectedSessionId, engramId)
+      await refreshFromSession(selectedSessionId)
+      setNotice(`Pinned engram ${engramId}`)
+    } catch (error) {
+      setChatError(describeError(error))
+    }
+  }
+
+  const handleUnpin = async (engramId: string) => {
+    if (!selectedSessionId) {
+      return
+    }
+    try {
+      await unpinEngramFromSession(selectedSessionId, engramId)
+      await refreshFromSession(selectedSessionId)
+      setNotice(`Unpinned engram ${engramId}`)
+    } catch (error) {
+      setChatError(describeError(error))
+    }
+  }
+
+  const handleCopyEngramId = async (engramId: string) => {
+    try {
+      await navigator.clipboard.writeText(engramId)
+      setNotice(`Copied engram id: ${engramId}`)
+    } catch {
+      setChatError('Clipboard access failed. Copy manually from the card.')
+    }
+  }
+
+  const handleRefreshEngrams = async () => {
+    if (!selectedSessionId) {
+      return
+    }
+    await refreshFromSession(selectedSessionId)
+  }
+
+  const handleContinueSession = async () => {
+    if (!selectedSessionId) {
+      return
+    }
+    try {
+      const continued = await continueSession(selectedSessionId)
+      setSessions((current) => [continued.session, ...current])
+      setSelectedSessionId(continued.session.session_id)
+      setNotice(`Created continuation with ${continued.carried_engram_ids.length} carried engrams.`)
+    } catch (error) {
+      setChatError(describeError(error))
+    }
+  }
+
+  const handleSaveEngram = async (payload: {
+    title: string
+    abstract: string
+    visibility_scope: 'private' | 'project'
+    tags: string[]
+    keywords: string[]
+  }) => {
+    if (!selectedSessionId) {
+      return
+    }
+    setSaveSubmitting(true)
+    try {
+      const created = await saveSessionAsEngram(selectedSessionId, payload)
+      setNotice(`Saved session as engram ${created.engram_id}`)
+      setSaveModalOpen(false)
+      await refreshFromSession(selectedSessionId)
+    } catch (error) {
+      setChatError(describeError(error))
+    } finally {
+      setSaveSubmitting(false)
+    }
+  }
+
+  if (authChecking) {
+    return <div className="loading-screen">Loading local workspace...</div>
+  }
+
+  if (!user) {
+    return <LoginView isSubmitting={authSubmitting} error={authError} onSubmit={handleLogin} />
+  }
+
+  return (
+    <div className="app-shell">
+      <header className="top-nav">
+        <div>
+          <p className="eyebrow">Engram Vault</p>
+          <h1>Memory Continuity Workbench</h1>
+        </div>
+        <div className="top-nav-user">
+          <p>
+            {user.username} · {user.role}
+          </p>
+          <button onClick={handleLogout}>Logout</button>
+        </div>
+      </header>
+
+      {notice ? <p className="notice-line">{notice}</p> : null}
+
+      <main className="workspace-grid">
+        <SessionSidebar
+          sessions={sessions}
+          selectedSessionId={selectedSessionId}
+          projectId={projectId}
+          defaultProvider={WEB_CONFIG.defaultProvider}
+          defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
+          modelDefaults={WEB_CONFIG.defaultModelByProvider}
+          loading={sessionsLoading}
+          creating={creatingSession}
+          onProjectChange={setProjectId}
+          onSelectSession={setSelectedSessionId}
+          onCreateSession={handleCreateSession}
+        />
+
+        <ChatPanel
+          session={selectedSession}
+          messages={messages}
+          pendingUserText={pendingUserText}
+          streamingAssistantText={streamingAssistantText}
+          composerText={composerText}
+          sending={chatSending}
+          error={chatError}
+          sourceReferences={sourceReferences}
+          onComposerChange={setComposerText}
+          onSend={handleSend}
+          onRetry={handleRetry}
+          onOpenSaveModal={() => setSaveModalOpen(true)}
+          onContinueSession={handleContinueSession}
+        />
+
+        <PinnedEngramPanel
+          selectedSessionId={selectedSessionId}
+          pinnedEngrams={pinnedEngrams}
+          availableEngrams={availableEngrams}
+          search={engramSearch}
+          loading={engramLoading}
+          onSearchChange={setEngramSearch}
+          onRefresh={handleRefreshEngrams}
+          onPin={handlePin}
+          onUnpin={handleUnpin}
+          onCopyId={handleCopyEngramId}
+        />
+      </main>
+
+      {saveModalOpen ? (
+        <SaveEngramModal
+          defaultTitle={selectedSession ? `${selectedSession.title} Snapshot` : 'Chat Snapshot'}
+          saving={saveSubmitting}
+          onClose={() => setSaveModalOpen(false)}
+          onSave={handleSaveEngram}
+        />
+      ) : null}
+    </div>
+  )
+}

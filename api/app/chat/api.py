@@ -18,6 +18,7 @@ from app.models import (
     ChatSessionUpdateRequest,
     ContinueSessionRequest,
     ContinueSessionResponse,
+    EngramSummary,
     PinEngramRequest,
     PinnedEngramRecord,
     SaveSessionAsEngramRequest,
@@ -111,6 +112,17 @@ def create_chat_router(
                 session_id=session_id,
                 limit=limit,
                 offset=offset,
+            )
+        except ChatServiceError as exc:
+            raise _to_http_exception(exc) from exc
+
+    @router.get("/sessions/{session_id}/engrams", response_model=list[EngramSummary])
+    def list_pinned_engrams(request: Request, session_id: UUID) -> list[EngramSummary]:
+        actor = require_api_actor(request)
+        try:
+            return chat_service.list_pinned_engrams(
+                actor_user_id=UUID(actor["user_id"]),
+                session_id=session_id,
             )
         except ChatServiceError as exc:
             raise _to_http_exception(exc) from exc

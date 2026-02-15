@@ -3,7 +3,7 @@ SHELL := /bin/zsh
 -include .env
 export
 
-.PHONY: db-up db-down db-logs sync api cli consolidate lint format format-check check test test-unit test-integration eval
+.PHONY: db-up db-down db-logs sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check
 
 db-up:
 	docker compose up -d db
@@ -48,3 +48,20 @@ eval:
 	cd api && uv run python -m evals.run_eval --out evals/last_eval.json
 
 check: lint format-check test eval
+
+web-sync:
+	cd web && npm install
+
+web-dev:
+	cd web && npm run dev -- --host
+
+web-lint:
+	cd web && npm run lint
+
+web-test:
+	cd web && npm run test
+
+web-build:
+	cd web && npm run build
+
+web-check: web-lint web-test web-build

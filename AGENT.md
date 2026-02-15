@@ -11,7 +11,7 @@ Use it as the default workflow when adding or refactoring features.
 - `api/tests/`: unit and integration tests.
 - `api/evals/`: scenario-based eval harness.
 - `db/init/`: SQL schema and migration-style DDL.
-- `web/`: React UI (chat/session/pinning workflows).
+- `web/`: React UI (chat/session/pinning workflows, streaming UX, frontend tests).
 - `skills/`: reusable agent workflows for this project.
 
 ## 2. Non-Negotiable Rules
@@ -25,7 +25,7 @@ Use it as the default workflow when adding or refactoring features.
 1. Pull latest and inspect `git status`.
 2. Run setup: `make sync`, `make db-up`.
 3. Implement one phase at a time.
-4. Run checks: `make lint`, `make test`, `make eval`, `make check`.
+4. Run checks: `make lint`, `make test`, `make eval`, `make check`, `make web-check` (if `web/` changed).
 5. Update docs (`README.md`, `Plan.Next.md` progress, skill docs if needed).
 6. Commit with phase-scoped message.
 
@@ -83,8 +83,9 @@ Use it as the default workflow when adding or refactoring features.
 - Unit tests for pure logic and adapters.
 - Integration tests for API + DB behavior.
 - Eval tests for memory quality scenarios.
+- Frontend tests for UI helpers/components and session workflow logic.
 - Add regression tests when fixing bugs.
-- No phase is complete unless `make check` passes.
+- No phase is complete unless `make check` passes. If web files changed, `make web-check` is also required.
 
 ## 10. Refactor Checklist
 Before merging refactors:

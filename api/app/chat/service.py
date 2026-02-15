@@ -11,6 +11,7 @@ from app.chat_repository import (
     get_chat_session,
     list_chat_messages,
     list_chat_sessions,
+    list_pinned_engram_summaries,
     list_pinned_engrams,
     pin_engram_to_session,
     unpin_engram_from_session,
@@ -25,6 +26,7 @@ from app.models import (
     ChatSessionUpdateRequest,
     ContinueSessionRequest,
     ContinueSessionResponse,
+    EngramSummary,
     MemoryEngramCreate,
     PinEngramRequest,
     SaveSessionAsEngramRequest,
@@ -160,6 +162,17 @@ class ChatService:
             actor_user_id=actor_user_id,
             limit=limit,
             offset=offset,
+        )
+
+    def list_pinned_engrams(
+        self,
+        actor_user_id: UUID,
+        session_id: UUID,
+    ) -> list[EngramSummary]:
+        self.get_session(actor_user_id=actor_user_id, session_id=session_id)
+        return list_pinned_engram_summaries(
+            session_id=session_id,
+            actor_user_id=actor_user_id,
         )
 
     def pin_engram(

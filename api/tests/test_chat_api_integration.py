@@ -156,6 +156,10 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     assert pinned.status_code == 200
     assert pinned.json()["engram_id"] == engram_id
 
+    listed_pins = client.get(f"/api/v1/chat/sessions/{session_id}/engrams")
+    assert listed_pins.status_code == 200
+    assert [item["engram_id"] for item in listed_pins.json()] == [engram_id]
+
     sent = client.post(
         f"/api/v1/chat/sessions/{session_id}/messages",
         json={"content_text": "use prior context"},
@@ -195,3 +199,7 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     unpinned = client.delete(f"/api/v1/chat/sessions/{session_id}/engrams/{engram_id}")
     assert unpinned.status_code == 200
     assert unpinned.json() == {"removed": True}
+
+    listed_after = client.get(f"/api/v1/chat/sessions/{session_id}/engrams")
+    assert listed_after.status_code == 200
+    assert listed_after.json() == []

@@ -30,6 +30,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add provider adapter layer (OpenAI, Anthropic, Bedrock) with registry.
 - [x] Add chat APIs and continuity workflows (pin, save-as-engram, continue, stream).
 - [x] Add MCP JSON-RPC over SSE endpoint with chat/engram/user tool routing.
+- [x] Add React chat UI with session, streaming, pin/save/continue workflows.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -42,6 +43,7 @@ This README is written for a newcomer and follows an implementation sequence bas
   - Phase 3 completed (provider adapters + registry + provider config contracts).
   - Phase 4 completed (chat API routes + context assembler + continuity flows).
   - Phase 5 completed (MCP stream endpoint + tool execution + JSON-RPC error framing).
+  - Phase 6 completed (React chat workbench + frontend tests + web quality gates).
 
 ## Agent Guide
 
@@ -63,6 +65,7 @@ Agent workflow skills are under `skills/`:
 - `testing-and-evals`: test matrix and eval harness extension guidance.
 - `release-and-maintenance`: release checklist and long-run maintenance cadence.
 - `domain-module-layout`: module/package conventions for long-run maintainability.
+- `react-chat-ui-operator`: frontend workflow conventions for chat/session/engram UX.
 
 ## Why This Exists
 
@@ -142,6 +145,8 @@ engram/
       SKILL.md
     domain-module-layout/
       SKILL.md
+    react-chat-ui-operator/
+      SKILL.md
   db/
     init/
       001_schema.sql
@@ -192,6 +197,34 @@ engram/
         admin.html
         login.html
         dashboard.html
+  web/
+    .env.example
+    package.json
+    package-lock.json
+    vite.config.ts
+    tsconfig.app.json
+    src/
+      App.tsx
+      config.ts
+      index.css
+      api/
+        auth.ts
+        auth.test.ts
+        chat.ts
+        http.ts
+        types.ts
+      components/
+        ChatPanel.tsx
+        LoginView.tsx
+        LoginView.test.tsx
+        PinnedEngramPanel.tsx
+        SaveEngramModal.tsx
+        SessionSidebar.tsx
+      test/
+        setup.ts
+      utils/
+        sse.ts
+        sse.test.ts
 ```
 
 ## File-by-File Guide
@@ -254,6 +287,13 @@ engram/
 - `api/tests/test_provider_adapters.py`: adapter normalization and error-path tests.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
+- `web/src/App.tsx`: React chat workbench composition and workflow state management.
+- `web/src/config.ts`: frontend runtime config parsing + one-time debug console print.
+- `web/src/api/*.ts`: browser API clients for auth/chat/engram interactions.
+- `web/src/components/*.tsx`: UI modules for login, sessions, chat transcript, pinning, and save modal.
+- `web/src/utils/sse.ts`: SSE parser used for streaming chat responses.
+- `web/src/**/*.test.ts(x)`: Vitest + Testing Library frontend tests.
+- `web/vite.config.ts`: Vite proxy + Vitest configuration.
 - `Makefile`: Local run shortcuts.
 - `.env.example`: Starter configuration for local setup.
 - `skills/`: reusable agent workflows for implementation and maintenance.
@@ -293,15 +333,36 @@ uv sync --group dev
 cd ..
 ```
 
-4. Run API:
+4. Install web dependencies:
+
+```bash
+cd web
+npm install
+cd ..
+```
+
+5. Optional: set frontend defaults:
+
+```bash
+cp web/.env.example web/.env
+```
+
+6. Run API:
 
 ```bash
 make api
 ```
 
-5. Open API docs:
+7. In a second terminal, run web app:
+
+```bash
+make web-dev
+```
+
+8. Open API docs:
 
 - [http://localhost:8000/docs](http://localhost:8000/docs)
+- [http://localhost:5173](http://localhost:5173) (React chat workbench)
 
 UI testing entrypoints:
 
@@ -334,10 +395,16 @@ LangGraph checkpoint file (local):
 
 - `LANGGRAPH_CHECKPOINT_PATH=./data/langgraph_checkpoints.sqlite`
 
-6. Run tests:
+9. Run backend tests:
 
 ```bash
 make test
+```
+
+10. Run web checks:
+
+```bash
+make web-check
 ```
 
 Use these for targeted runs:
@@ -815,11 +882,36 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make test` -> `72 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
+### 2026-02-15 (Plan.Next phase 6: React chat UI)
+
+1. Initialized `web/` with Vite + React + TypeScript.
+2. Implemented full local chat workbench:
+   - login workflow using existing server session auth
+   - session list/create (provider/model/visibility selectors)
+   - streaming transcript UI with retry and error handling
+   - pinned engram panel with search, pin/unpin, copy engram ID
+   - save-as-engram modal and continue-in-new-chat action
+3. Added frontend domain modules for long-run maintainability:
+   - `web/src/api/*` for transport contracts
+   - `web/src/components/*` for workflow UI modules
+   - `web/src/utils/sse.ts` for stream parsing
+4. Added frontend tests and quality gates:
+   - Vitest + Testing Library setup
+   - tests for CSRF token parsing, SSE parsing, and login submit behavior
+   - `make web-check` target (`lint`, `test`, `build`)
+5. Extended backend chat API for UI parity:
+   - `GET /api/v1/chat/sessions/{session_id}/engrams` for pinned engram list state.
+6. Verification:
+   - `make check` -> all backend checks passed
+   - `make web-check` -> all frontend checks passed
+   - backend tests: `72 passed`
+   - frontend tests: `7 passed`
+
 ### Next Immediate Steps (One By One)
 
-1. Add React chat UI with session/pin/save workflows.
-2. Add UI-level tests for chat streaming, pin/share, and continue flows.
-3. Add MCP client examples and validation fixtures for external agent integrations.
+1. Add Playwright end-to-end coverage for login/chat/pin/save/continue flows.
+2. Add MCP client examples and validation fixtures for external agent integrations.
+3. Add final hardening pass for release and troubleshooting runbooks.
 
 ## MVP API Surface
 
@@ -837,6 +929,7 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
 - `GET /api/v1/chat/sessions/{session_id}`
 - `PATCH /api/v1/chat/sessions/{session_id}`
 - `GET /api/v1/chat/sessions/{session_id}/messages`
+- `GET /api/v1/chat/sessions/{session_id}/engrams`
 - `POST /api/v1/chat/sessions/{session_id}/messages`
 - `POST /api/v1/chat/sessions/{session_id}/messages/stream`
 - `POST /api/v1/chat/sessions/{session_id}/engrams/pin`
@@ -1090,12 +1183,20 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - auth/visibility parity with REST APIs
   - structured error frames and correlation IDs
 
-### Milestone 14 (Next)
+### Milestone 14 (Completed)
 
-- React chat UI layer:
-  - session list/create workflow
-  - streaming transcript and retry/error handling
+- React chat UI layer completed:
+  - session list/create workflow with provider and model selectors
+  - streaming transcript with retry/error handling
   - pin/save/continue controls and engram ID copy workflows
+  - frontend test baseline (`vitest`) and `make web-check`
+
+### Milestone 15 (Next)
+
+- UI hardening and browser integration testing:
+  - Playwright E2E coverage for login/chat/pin/save/continue workflows
+  - MCP client integration fixtures
+  - release-readiness documentation updates
 
 ## Example: Create Engram
 
