@@ -4,17 +4,18 @@ This folder contains behavior-level acceptance tests for the local chat workbenc
 
 ## Stack
 
-- `@cucumber/cucumber` for Gherkin scenarios and step binding.
-- `playwright` for browser automation.
-- `ts-node` for TypeScript step execution.
+- `playwright-bdd` for Gherkin step binding with Playwright runner.
+- `bddgen` for generating runnable Playwright tests from feature files.
+- `@playwright/test` for browser automation, traces, and artifacts.
 
 ## Layout
 
 - `features/*.feature`: Gherkin acceptance scenarios.
 - `src/steps/*.ts`: Step definitions.
-- `src/support/world.ts`: Shared Playwright world and login helper.
-- `src/support/hooks.ts`: Browser lifecycle hooks + failure screenshots.
+- `src/support/fixtures.ts`: shared fixtures, BDD bindings, login helpers, failure screenshots.
 - `src/support/env.ts`: Env parsing and defaults.
+- `playwright.config.ts`: Playwright + `defineBddConfig` wiring.
+- `.features-gen/`: generated tests from `bddgen` (do not edit directly).
 
 ## Environment
 
@@ -39,6 +40,7 @@ Local run:
 
 ```bash
 make acceptance-sync
+make acceptance-bddgen
 make acceptance-typecheck
 make acceptance-test
 ```

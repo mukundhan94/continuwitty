@@ -8,6 +8,7 @@ web/node_modules/
 web/dist/
 acceptance-tests/node_modules/
 acceptance-tests/artifacts/
+acceptance-tests/.features-gen/
 api/.venv/
 api/.pytest_cache/
 api/.ruff_cache/

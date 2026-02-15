@@ -34,7 +34,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Migrate web styling to shared `styled-components` + Tailwind style system.
 - [x] Add backend dev-mode parsed-config logging with secret redaction.
 - [x] Dockerize API + web runtime with env-driven compose orchestration.
-- [x] Add Playwright + Gherkin acceptance framework with dockerized execution.
+- [x] Add Playwright-BDD + `bddgen` acceptance framework with dockerized execution.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -48,7 +48,7 @@ This README is written for a newcomer and follows an implementation sequence bas
   - Phase 4 completed (chat API routes + context assembler + continuity flows).
   - Phase 5 completed (MCP stream endpoint + tool execution + JSON-RPC error framing).
   - Phase 6 completed (React chat workbench + frontend tests + web quality gates + shared style system migration).
-  - Phase 7 completed (dockerized acceptance-test baseline with Playwright + Cucumber).
+  - Phase 7 completed (dockerized acceptance-test baseline with Playwright-BDD + `bddgen`).
 
 ## Agent Guide
 
@@ -72,7 +72,7 @@ Agent workflow skills are under `skills/`:
 - `domain-module-layout`: module/package conventions for long-run maintainability.
 - `react-chat-ui-operator`: frontend workflow conventions for chat/session/engram UX.
 - `frontend-style-system`: token-driven styled-components + Tailwind workflow rules.
-- `dockerized-acceptance-testing`: Playwright+Cucumber dockerized quality-gate workflow.
+- `dockerized-acceptance-testing`: Playwright-BDD (`bddgen`) dockerized quality-gate workflow.
 
 ## Why This Exists
 
@@ -251,7 +251,7 @@ engram/
     README.md
     package.json
     package-lock.json
-    cucumber.js
+    playwright.config.ts
     .env.example
     features/
       authentication.feature
@@ -259,8 +259,7 @@ engram/
     src/
       support/
         env.ts
-        world.ts
-        hooks.ts
+        fixtures.ts
       steps/
         auth.steps.ts
         session.steps.ts
@@ -345,7 +344,8 @@ engram/
 - `acceptance-tests/README.md`: acceptance framework guide and commands.
 - `acceptance-tests/features/*.feature`: Gherkin acceptance scenarios.
 - `acceptance-tests/src/steps/*.ts`: Playwright-backed step definitions.
-- `acceptance-tests/src/support/*.ts`: shared world, env parsing, hooks, and failure artifacts.
+- `acceptance-tests/src/support/*.ts`: shared fixtures, env parsing, login helpers, and failure artifacts.
+- `acceptance-tests/playwright.config.ts`: `playwright-bdd` + `defineBddConfig` + runtime fixture wiring.
 - `acceptance-tests/Dockerfile`: Playwright runtime image for dockerized acceptance runs.
 - `Makefile`: Local run shortcuts.
 - `.env.example`: Starter configuration for local setup.
@@ -539,12 +539,13 @@ make stack-down
 - Web runtime: `WEB_PORT`, `VITE_API_PROXY_TARGET`, `VITE_ALLOWED_HOSTS`, `VITE_DEFAULT_*`
 - Acceptance profile: `ACCEPTANCE_WEB_BASE_URL`, `ACCEPTANCE_API_BASE_URL`, `PW_HEADLESS`, `PW_TIMEOUT_MS`
 
-## Acceptance Tests (Gherkin + Playwright)
+## Acceptance Tests (Playwright-BDD + bddgen)
 
 Local runner:
 
 ```bash
 make acceptance-sync
+make acceptance-bddgen
 make acceptance-typecheck
 make acceptance-test
 ```
@@ -556,6 +557,7 @@ make acceptance-test-docker
 ```
 
 Failure screenshots are persisted to `acceptance-tests/artifacts/`.
+Generated Playwright spec files are written to `acceptance-tests/.features-gen/` by `bddgen`.
 
 Current feature coverage:
 
@@ -1135,12 +1137,12 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - expanded `docker-compose.yml` to orchestrate `db`, `api`, `web`, and `acceptance-tests` profile
    - added `.dockerignore` to keep image build contexts lean
 2. Added acceptance framework in `acceptance-tests/`:
-   - Cucumber/Gherkin feature specs + Playwright step definitions
-   - env parsing + shared world hooks + failure screenshot capture
+   - Playwright-BDD feature specs + step definitions
+   - `bddgen` generated test pipeline + shared fixture model + failure screenshot capture
    - feature coverage for login handoff, layout drift guardrail, and continuation flow
 3. Added workflow commands:
    - `make stack-up`, `make stack-down`, `make stack-logs`
-   - `make acceptance-sync`, `make acceptance-typecheck`, `make acceptance-test`, `make acceptance-test-docker`
+   - `make acceptance-sync`, `make acceptance-bddgen`, `make acceptance-typecheck`, `make acceptance-test`, `make acceptance-test-docker`
 4. Added docker/acceptance config hardening:
    - env-driven Vite proxy target (`VITE_API_PROXY_TARGET`)
    - Vite allowed host support (`VITE_ALLOWED_HOSTS`) to enable Playwright access from compose network hostnames
@@ -1314,6 +1316,7 @@ Notes:
 - If the DB is unavailable, integration tests are skipped with a clear reason.
 - `make eval` runs local memory-quality scenarios and exits non-zero if any case fails.
 - `make web-check` runs frontend lint/test/build.
+- `make acceptance-bddgen` regenerates Playwright specs from `.feature` files.
 - `make acceptance-typecheck` validates acceptance TypeScript.
 - `make acceptance-test-docker` runs Gherkin acceptance tests against dockerized API+web.
 

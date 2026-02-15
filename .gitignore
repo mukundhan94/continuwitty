@@ -7,6 +7,7 @@ web/node_modules/
 web/dist/
 acceptance-tests/node_modules/
 acceptance-tests/artifacts/
+acceptance-tests/.features-gen/
 data/
 api/evals/last_eval.json
 **/__pycache__/

@@ -14,11 +14,12 @@ Keep end-to-end UX regressions detectable through Gherkin scenarios running agai
    - `make check`
    - `make web-check` (if `web/` changed)
 3. Validate acceptance code:
+   - `make acceptance-bddgen`
    - `make acceptance-typecheck`
 4. Run dockerized acceptance:
    - `make acceptance-test-docker`
 5. If failures occur:
-   - check `acceptance-tests/src/support/hooks.ts` screenshot artifacts behavior
+   - check `acceptance-tests/src/support/fixtures.ts` screenshot artifacts behavior
    - verify `VITE_ALLOWED_HOSTS` includes `web` for compose-network browser access
    - verify `VITE_API_PROXY_TARGET` points to `http://api:8000` in dockerized runs
 
@@ -34,6 +35,7 @@ Keep end-to-end UX regressions detectable through Gherkin scenarios running agai
 
 - `make check` passes
 - `make web-check` passes (when frontend changed)
+- `make acceptance-bddgen` passes
 - `make acceptance-typecheck` passes
 - `make acceptance-test-docker` passes
 - README contains updated workflow + env notes for newcomers

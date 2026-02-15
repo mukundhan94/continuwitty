@@ -3,7 +3,7 @@ SHELL := /bin/zsh
 -include .env
 export
 
-.PHONY: db-up db-down db-logs stack-up stack-down stack-logs acceptance-sync acceptance-typecheck acceptance-test acceptance-test-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check
+.PHONY: db-up db-down db-logs stack-up stack-down stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check
 
 db-up:
 	docker compose up -d db
@@ -25,6 +25,9 @@ stack-logs:
 
 acceptance-sync:
 	cd acceptance-tests && npm install
+
+acceptance-bddgen:
+	cd acceptance-tests && npm run bdd:gen
 
 acceptance-typecheck:
 	cd acceptance-tests && npm run typecheck

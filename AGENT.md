@@ -14,7 +14,7 @@ Use it as the default workflow when adding or refactoring features.
 - `web/`: React UI (chat/session/pinning workflows, streaming UX, frontend tests).
 - `web/src/styles/`: shared style system (theme tokens, global CSS vars, reusable styled shells).
 - `web/tailwind.config.ts` + `web/postcss.config.cjs`: Tailwind utility pipeline for the web app.
-- `acceptance-tests/`: Playwright + Cucumber acceptance framework (`features`, `steps`, `support`).
+- `acceptance-tests/`: Playwright-BDD acceptance framework (`features`, `steps`, `support`, `playwright.config.ts`).
 - `api/Dockerfile`, `web/Dockerfile`, `acceptance-tests/Dockerfile`: container runtimes.
 - `docker-compose.yml`: local stack orchestration for DB/API/web and acceptance profile.
 - `skills/`: reusable agent workflows for this project.
@@ -33,7 +33,7 @@ Use it as the default workflow when adding or refactoring features.
 3. Implement one phase at a time.
 4. Run checks: `make lint`, `make test`, `make eval`, `make check`.
 5. If `web/` changed: run `make web-check`.
-6. If `acceptance-tests/`, `web/Dockerfile`, `api/Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-typecheck` and `make acceptance-test-docker`.
+6. If `acceptance-tests/`, `web/Dockerfile`, `api/Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-bddgen`, `make acceptance-typecheck`, and `make acceptance-test-docker`.
 7. For docker runtime changes: validate `docker compose config`.
 8. Update docs (`README.md`, `Plan.Next.md` progress, skill docs if needed).
 9. Commit with phase-scoped message.
