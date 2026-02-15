@@ -1,4 +1,8 @@
 import type { FormEvent, KeyboardEvent } from 'react'
+import type { Components } from 'react-markdown'
+import ReactMarkdown from 'react-markdown'
+import remarkBreaks from 'remark-breaks'
+import remarkGfm from 'remark-gfm'
 import styled from 'styled-components'
 
 import type { ChatMessage, ChatSession, ChatSourceReference } from '../api/types'
@@ -57,10 +61,21 @@ interface ChatPanelProps {
 }
 
 function MessageBubble({ role, text }: { role: string; text: string }) {
+  const markdownComponents: Components = {
+    a: ({ node, ...props }) => {
+      void node
+      return <a {...props} rel="noreferrer" target="_blank" />
+    },
+  }
+
   return (
     <ChatMessageBubble $role={role}>
       <MessageRole>{role}</MessageRole>
-      <MessageText>{text || '(empty)'}</MessageText>
+      <MessageText>
+        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm, remarkBreaks]}>
+          {text || '(empty)'}
+        </ReactMarkdown>
+      </MessageText>
     </ChatMessageBubble>
   )
 }

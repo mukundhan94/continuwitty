@@ -37,6 +37,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add Playwright-BDD + `bddgen` acceptance framework with dockerized execution.
 - [x] Add tagged Bedrock live acceptance flow for non-deterministic provider validation.
 - [x] Improve chat snapshot engram rehydration with transcript-derived summaries.
+- [x] Add markdown rendering support for chat transcript messages.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -1210,6 +1211,18 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make acceptance-test` passed
    - `make acceptance-test-bedrock-live` passed
    - `make acceptance-test-bedrock-live-docker` passed
+
+### 2026-02-15 (Chat UI markdown rendering support)
+
+1. Added markdown rendering in chat transcript bubbles:
+   - integrated `react-markdown` with `remark-gfm` and `remark-breaks`.
+   - links in markdown now open in a new tab with `rel="noreferrer"`.
+2. Added markdown-aware transcript styling:
+   - list spacing, blockquote, inline code, and code block styles in shared primitives.
+3. Added frontend regression coverage:
+   - `ChatPanel` test verifies markdown headings/lists/links are rendered correctly.
+4. Validation:
+   - `make web-check` passed (`12` frontend tests)
 
 ### Next Immediate Steps (One By One)
 

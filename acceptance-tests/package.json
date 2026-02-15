@@ -6,6 +6,7 @@
     "bdd:gen": "bddgen",
     "test": "bddgen && playwright test",
     "test:headed": "PW_HEADLESS=false bddgen && playwright test --headed",
+    "test:ui": "WEB_BASE_URL=http://localhost:5174 API_BASE_URL=http://localhost:8000 PW_TIMEOUT_MS=120000 ACCEPTANCE_BDD_TAGS='@bedrock-live or not @bedrock-live' bddgen && playwright test --ui",
     "test:docker": "WEB_BASE_URL=http://web:5173 API_BASE_URL=http://api:8000 bddgen && playwright test",
     "test:bedrock-live": "PW_TIMEOUT_MS=120000 ACCEPTANCE_BDD_TAGS='@bedrock-live' bddgen && playwright test",
     "test:bedrock-live:headed": "PW_HEADLESS=false PW_TIMEOUT_MS=120000 ACCEPTANCE_BDD_TAGS='@bedrock-live' bddgen && playwright test --headed",

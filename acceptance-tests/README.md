@@ -49,6 +49,18 @@ make acceptance-typecheck
 make acceptance-test
 ```
 
+Single-command local UI full suite (includes `@bedrock-live`):
+
+```bash
+cd acceptance-tests && npm run test:ui:all
+```
+
+Open Playwright interactive UI for manual debugging:
+
+```bash
+cd acceptance-tests && npm run test:ui
+```
+
 Dockerized run (uses `docker compose` services):
 
 ```bash

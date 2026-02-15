@@ -238,9 +238,56 @@ export const MessageRole = styled.p`
   margin-bottom: 0.2rem;
 `
 
-export const MessageText = styled.p`
-  white-space: pre-wrap;
-  line-height: 1.4;
+export const MessageText = styled.div`
+  line-height: 1.45;
+
+  p,
+  ul,
+  ol,
+  pre,
+  blockquote {
+    margin: 0.35rem 0;
+  }
+
+  ul,
+  ol {
+    padding-left: 1.15rem;
+  }
+
+  li + li {
+    margin-top: 0.2rem;
+  }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.83rem;
+    background: rgba(15, 23, 42, 0.08);
+    border-radius: 6px;
+    padding: 0.1rem 0.3rem;
+  }
+
+  pre {
+    background: rgba(15, 23, 42, 0.08);
+    border-radius: 8px;
+    padding: 0.55rem 0.65rem;
+    overflow-x: auto;
+  }
+
+  pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  blockquote {
+    border-left: 3px solid var(--color-line);
+    padding-left: 0.6rem;
+    color: var(--color-ink-muted);
+  }
+
+  a {
+    color: var(--color-accent-alt);
+    text-decoration: underline;
+  }
 `
 
 export const TranscriptRail = styled.div`
