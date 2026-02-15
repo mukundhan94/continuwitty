@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -17,6 +18,8 @@ from .models import (
     RehydrationBundle,
     RehydrationCitation,
 )
+
+_TOKEN_PATTERN = re.compile(r"[a-z0-9]{2,}")
 
 
 def _vector_literal(values: list[float]) -> str:
@@ -39,6 +42,47 @@ def _build_retrieval_text(payload: MemoryEngramCreate) -> str:
             claim_text,
         ]
     ).strip()
+
+
+def _tokenize(text: str) -> set[str]:
+    return {match.group(0) for match in _TOKEN_PATTERN.finditer(text.lower())}
+
+
+def _lexical_overlap_score(query: str, candidate_parts: list[str]) -> float:
+    query_tokens = _tokenize(query)
+    if not query_tokens:
+        return 0.0
+
+    doc_tokens: set[str] = set()
+    for part in candidate_parts:
+        doc_tokens.update(_tokenize(part))
+
+    if not doc_tokens:
+        return 0.0
+
+    overlap = query_tokens & doc_tokens
+    return len(overlap) / len(query_tokens)
+
+
+def _combined_rank_score(distance: float, lexical_overlap: float) -> float:
+    dense_score = 1.0 / (1.0 + max(distance, 0.0))
+    return (dense_score * 0.8) + (lexical_overlap * 0.2)
+
+
+def _pack_citations(
+    citations: list[RehydrationCitation], limit: int = 5
+) -> list[RehydrationCitation]:
+    packed: list[RehydrationCitation] = []
+    seen_urls: set[str] = set()
+    for citation in citations:
+        url_key = citation.url.strip().lower()
+        if url_key in seen_urls:
+            continue
+        seen_urls.add(url_key)
+        packed.append(citation)
+        if len(packed) >= limit:
+            break
+    return packed
 
 
 def create_engram(payload: MemoryEngramCreate, embedding_dim: int) -> EngramCreateResponse:
@@ -184,6 +228,8 @@ def query_engrams(request: EngramQueryRequest, embedding_dim: int) -> list[Engra
     if where_clauses:
         where_sql = "WHERE " + " AND ".join(where_clauses)
 
+    candidate_limit = min(max(request.top_k * 4, request.top_k), 200)
+
     sql = f"""
         SELECT
             engram_id,
@@ -193,19 +239,55 @@ def query_engrams(request: EngramQueryRequest, embedding_dim: int) -> list[Engra
             created_at,
             tags,
             keywords,
+            retrieval_text,
             embed <=> %s::vector AS distance
         FROM engrams
         {where_sql}
         ORDER BY distance ASC, created_at DESC
         LIMIT %s
     """
-    params.append(request.top_k)
+    params.append(candidate_limit)
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
 
-    return [EngramQueryResult(**row) for row in rows]
+    reranked_rows = []
+    for row in rows:
+        lexical_overlap = _lexical_overlap_score(
+            request.query,
+            [
+                row.get("title") or "",
+                row.get("abstract") or "",
+                row.get("retrieval_text") or "",
+                " ".join(row.get("tags") or []),
+                " ".join(row.get("keywords") or []),
+            ],
+        )
+        combined_score = _combined_rank_score(float(row["distance"]), lexical_overlap)
+        reranked_rows.append((combined_score, row))
+
+    reranked_rows.sort(
+        key=lambda item: (
+            item[0],
+            item[1]["created_at"],
+        ),
+        reverse=True,
+    )
+    trimmed = [row for _, row in reranked_rows[: request.top_k]]
+    return [
+        EngramQueryResult(
+            engram_id=row["engram_id"],
+            project_id=row["project_id"],
+            title=row["title"],
+            abstract=row["abstract"],
+            created_at=row["created_at"],
+            tags=row.get("tags") or [],
+            keywords=row.get("keywords") or [],
+            distance=row["distance"],
+        )
+        for row in trimmed
+    ]
 
 
 def get_rehydration_bundle(engram_id: UUID) -> RehydrationBundle | None:
@@ -229,7 +311,7 @@ def get_rehydration_bundle(engram_id: UUID) -> RehydrationBundle | None:
             FROM sources
             WHERE engram_id = %s
             ORDER BY captured_at DESC
-            LIMIT 10
+            LIMIT 25
             """,
             (engram_id,),
         )
@@ -239,15 +321,22 @@ def get_rehydration_bundle(engram_id: UUID) -> RehydrationBundle | None:
     decisions = engram_json.get("decisions", [])
     open_questions = engram_json.get("open_questions", [])
     citations = [RehydrationCitation(**source_row) for source_row in source_rows]
+    packed_citations = _pack_citations(citations, limit=5)
 
     compact_summary = row["abstract"]
     if len(compact_summary) > 800:
         compact_summary = compact_summary[:797] + "..."
 
     citation_lines = []
-    for citation in citations[:5]:
+    for citation in packed_citations:
         label = citation.title or citation.url
-        citation_lines.append(f"- {label} ({citation.url})")
+        snippet = (citation.snippet or "").replace("\n", " ").strip()
+        if len(snippet) > 140:
+            snippet = snippet[:137] + "..."
+        line = f"- {label} ({citation.url})"
+        if snippet:
+            line += f": {snippet}"
+        citation_lines.append(line)
 
     citation_text = "\n".join(citation_lines) if citation_lines else "- No citations available"
     context_markdown = (
@@ -273,7 +362,7 @@ def get_rehydration_bundle(engram_id: UUID) -> RehydrationBundle | None:
         compact_summary=compact_summary,
         key_decisions=decisions,
         open_questions=open_questions,
-        top_citations=citations[:5],
+        top_citations=packed_citations,
         context_markdown=context_markdown,
     )
 

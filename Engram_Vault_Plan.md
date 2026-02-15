@@ -100,6 +100,12 @@ LLM-ready rehydration bundle.
 -   Top citations
 -   Referenced engram IDs
 
+### Local MVP Status
+
+-   Retrieval API endpoints are implemented (`/api/v1/engrams`, `/api/v1/engrams/query`, `/api/v1/engrams/{id}/rehydrate`).
+-   Query reranking combines dense vector distance with lexical overlap.
+-   Rehydration citation packing deduplicates URLs and includes snippet previews.
+
 ------------------------------------------------------------------------
 
 ## Phase 6 --- Agent Durability

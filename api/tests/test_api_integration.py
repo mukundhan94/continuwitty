@@ -146,3 +146,49 @@ def test_sources_endpoint_returns_provenance_records(client, clean_db) -> None:
 def test_sources_endpoint_returns_404_for_missing_engram(client) -> None:
     response = client.get("/api/v1/engrams/00000000-0000-0000-0000-000000000000/sources")
     assert response.status_code == 404
+
+
+@pytest.mark.integration
+def test_rehydrate_packs_unique_citations(client, clean_db) -> None:
+    payload = {
+        "project_id": "project-citations",
+        "title": "Citation packing",
+        "abstract": "Ensure duplicate source URLs are packed once.",
+        "detailed_summary_markdown": "summary",
+        "claims": [
+            {
+                "claim": "Primary claim",
+                "supporting_sources": [
+                    {
+                        "url": "https://example.com/source-a",
+                        "title": "Source A (first)",
+                        "snippet": "First snippet",
+                        "captured_at": "2026-02-15T10:00:00Z",
+                    },
+                    {
+                        "url": "https://example.com/source-a",
+                        "title": "Source A (duplicate)",
+                        "snippet": "Duplicate snippet",
+                        "captured_at": "2026-02-15T10:01:00Z",
+                    },
+                    {
+                        "url": "https://example.com/source-b",
+                        "title": "Source B",
+                        "snippet": "Second unique source",
+                        "captured_at": "2026-02-15T10:02:00Z",
+                    },
+                ],
+            }
+        ],
+    }
+    created = client.post("/api/v1/engrams", json=payload)
+    assert created.status_code == 200
+    engram_id = created.json()["engram_id"]
+
+    rehydrate = client.get(f"/api/v1/engrams/{engram_id}/rehydrate")
+    assert rehydrate.status_code == 200
+    body = rehydrate.json()
+
+    assert len(body["top_citations"]) == 2
+    urls = [item["url"] for item in body["top_citations"]]
+    assert urls == ["https://example.com/source-b", "https://example.com/source-a"]

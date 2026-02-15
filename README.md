@@ -23,6 +23,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add multi-user auth model + role-based access controls (admin/analyst/viewer).
 - [x] Add CLI/UI for upload/search/rehydrate workflows.
 - [x] Add automated evaluation harness (temporal + multi-engram reasoning).
+- [x] Add reranking/citation-packing improvements for retrieval quality.
 - [ ] Add production security hardening (oauth/oidc, audit logging, rate limits).
 
 ## Why This Exists
@@ -119,7 +120,7 @@ engram/
 - `api/app/auth.py`: password hashing/verification and CSRF token helpers.
 - `api/app/cli.py`: local terminal workflows for upload/search/rehydrate.
 - `api/app/models.py`: Request/response and engram schema models.
-- `api/app/repository.py`: SQL persistence, semantic query, rehydration builder.
+- `api/app/repository.py`: SQL persistence, reranked semantic query, and citation-packed rehydration builder.
 - `api/app/user_repository.py`: user persistence, seeding, and role-aware updates.
 - `api/app/embedding.py`: Deterministic local embedding helper.
 - `api/app/db.py`: DB connection lifecycle.
@@ -507,11 +508,27 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make test` -> `34 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
+### 2026-02-15 (Retrieval quality phase)
+
+1. Added retrieval reranking in `query_engrams`:
+   - combines dense vector distance with lexical token overlap
+   - fetches a wider candidate window, then reranks locally
+2. Added citation packing improvements in `get_rehydration_bundle`:
+   - deduplicates citations by URL
+   - preserves latest-first order
+   - includes snippet previews in context markdown
+3. Added/updated tests:
+   - helper tests for lexical overlap, combined score, and citation dedupe
+   - integration test verifying unique citation packing in rehydration output
+4. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `38 passed`
+   - `make eval` -> `4/4` cases passed (score `1.0`)
+
 ### Next Immediate Steps (One By One)
 
-1. Add reranking/citation-packing improvements for retrieval quality.
-2. Add background consolidation jobs for long-run memory maintenance.
-3. Add production auth hardening (oauth/oidc, audit events, rate limits).
+1. Add background consolidation jobs for long-run memory maintenance.
+2. Add production auth hardening (oauth/oidc, audit events, rate limits).
 
 ## MVP API Surface
 
@@ -663,10 +680,15 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - query/search from terminal
   - rehydrate bundles from terminal
 
-### Milestone 7 (Next)
+### Milestone 7 (Completed)
 
-- Retrieval quality and memory maintenance improvements:
-  - reranking/citation-packing
+- Retrieval quality improvements:
+  - reranking (dense + lexical overlap)
+  - citation-packing in rehydration context
+
+### Milestone 8 (Next)
+
+- Memory maintenance improvements:
   - background consolidation jobs
 - Add production auth/security hardening:
   - oauth/oidc integration
@@ -748,5 +770,6 @@ curl http://localhost:8000/api/v1/engrams/<engram_id>/sources
 - [x] I can manage users and enforce admin-only routes with role checks.
 - [x] I can run local eval scenarios for fact/cross/temporal/abstention behavior.
 - [x] I can upload/search/rehydrate engrams from terminal using local CLI commands.
+- [x] Query and rehydration quality include reranking and citation-packing improvements.
 - [x] A newcomer can run the system locally using this README alone.
 - [ ] The same stored engram can be reused with different LLM providers later.
