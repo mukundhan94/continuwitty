@@ -7,6 +7,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 ## Docs
 
 - Architecture playbook: `docs/architecture-playbook.md`
+- UI user flow (sessions + engrams): `docs/user-flow-engram-workflow.md`
 - PlantUML architecture/workflow map: `docs/architecture-workflows.puml`
 - PlantUML use-case map (model switch + save/pin/continue): `docs/model-switch-engram-usecases.puml`
 - Render PlantUML via Docker (no local `dot` needed): `make diagram-render`
@@ -165,9 +166,15 @@ engram/
   Plan.md
   docs/
     architecture-playbook.md
+    user-flow-engram-workflow.md
     architecture-workflows.puml
     model-switch-engram-usecases.puml
     render-plantuml.sh
+    screenshots/
+      user-flow/
+        01-login.png
+        ...
+        12-continued-session.png
   deep-research-report.md
   .dockerignore
   .env.example
@@ -328,9 +335,11 @@ engram/
 - `AGENT.md`: project operating guide for contributors and agents.
 - `Plan.md`: canonical merged roadmap (completed phases + upcoming phases).
 - `docs/architecture-playbook.md`: newcomer-first and technical architecture narrative with call-flow diagrams and multi-model continuity runbooks.
+- `docs/user-flow-engram-workflow.md`: ordered UI walkthrough for session creation, save-as-engram, pinning, and continuation with screenshots.
 - `docs/architecture-workflows.puml`: detailed PlantUML architecture and workflow map covering REST, MCP, provider streaming, and persistence flows.
 - `docs/model-switch-engram-usecases.puml`: detailed PlantUML use-case diagram for model switching, save/pin/continue workflows, and continuity metadata inspection.
 - `docs/render-plantuml.sh`: Docker-based PlantUML renderer that avoids local Graphviz path requirements.
+- `docs/screenshots/user-flow/`: screenshot assets used in the user-flow walkthrough.
 - `db/init/001_schema.sql`: Database extension, tables, and indexes.
 - `api/app/main.py`: FastAPI routes and API surface.
 - `api/app/agent_models.py`: request/response models for agent runs.
@@ -859,6 +868,24 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 8. Updated tooltip sizing/positioning to be viewport-aware so it no longer overflows or breaks compact screens.
 9. Verification:
    - `make web-check` -> all lint, unit tests, and production build checks passed.
+
+### 2026-02-15 (User flow screenshot documentation pass)
+
+1. Added a dedicated UI workflow document:
+   - `docs/user-flow-engram-workflow.md`.
+2. Re-captured an expanded ordered screenshot set for the full local flow under:
+   - `docs/screenshots/user-flow/01-login.png`
+   - ...
+   - `docs/screenshots/user-flow/27-engram-4-saved-final-catalog.png`
+3. Documented a complete continuity chain with the enforced pattern:
+   - save engram
+   - continue in new chat
+   - pin all available engrams
+   - continue conversation
+4. The final documented flow now covers 4 engrams across 4 linked sessions using the same default model.
+4. Updated README docs navigation and file-by-file guide to include the new workflow doc and screenshot assets.
+5. Verification:
+   - confirmed all workflow screenshot files are present and embedded in order in the user-flow document.
 
 ### 2026-02-15 (Completed in this pass)
 
