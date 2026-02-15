@@ -17,6 +17,17 @@ class Settings(BaseSettings):
     login_rate_limit_window_seconds: int = 300
     login_rate_limit_max_attempts: int = 5
     login_lockout_seconds: int = 900
+    default_chat_provider: str = "openai"
+    default_chat_model: str = "gpt-4o-mini"
+    openai_api_key: str | None = None
+    openai_base_url: str = "https://api.openai.com"
+    anthropic_api_key: str | None = None
+    anthropic_base_url: str = "https://api.anthropic.com"
+    anthropic_version: str = "2023-06-01"
+    aws_region: str = "us-east-1"
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    aws_session_token: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

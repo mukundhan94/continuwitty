@@ -5,6 +5,7 @@ Use it as the default workflow when adding or refactoring features.
 
 ## 1. Repository Map
 - `api/app/`: FastAPI services, models, repositories, auth, provider adapters, MCP server.
+- `api/app/providers/`: provider domain package (`base`, `errors`, concrete adapters, `registry`).
 - `api/tests/`: unit and integration tests.
 - `api/evals/`: scenario-based eval harness.
 - `db/init/`: SQL schema and migration-style DDL.
@@ -33,6 +34,15 @@ Use it as the default workflow when adding or refactoring features.
 - MCP tool handlers should call service/repository layers, not raw SQL.
 - UI should call API/MCP contracts only, not reimplement business logic.
 
+## 4a. Domain Module Layout Rules
+- For each new domain, create a dedicated module/package under `api/app/`:
+  - data access (`*_repository.py`)
+  - domain logic (`*_service.py` when logic grows)
+  - transport boundary (routes/MCP handlers in separate files where feasible)
+- Keep shared contracts in `models.py` only when broadly reused.
+- Prefer domain-local helper modules over adding unrelated helpers to `main.py`.
+- Add tests in matching domain-focused files (`test_<domain>*.py`).
+
 ## 5. Schema and Migration Policy
 - Prefer additive, forward-only SQL changes.
 - Never silently drop columns or rewrite semantics without migration notes.
@@ -54,6 +64,7 @@ Use it as the default workflow when adding or refactoring features.
 - Normalize errors to app-level exceptions.
 - Keep provider-specific payload differences internal.
 - Never call providers directly from routes or templates.
+- Keep adapter selection centralized in `api/app/providers/registry.py`.
 
 ## 8. MCP Tool Authoring Standards
 - Tool names are verb/object and stable (`chat.create_session`).

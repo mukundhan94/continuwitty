@@ -27,6 +27,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add background consolidation jobs for long-run memory maintenance.
 - [x] Add local security baseline (audit log + login rate limiting/lockout).
 - [x] Add schema/repository layer for chat sessions, pinning, and visibility.
+- [x] Add provider adapter layer (OpenAI, Anthropic, Bedrock) with registry.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -36,6 +37,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - Phase status:
   - Phase 0-1 completed (`Plan.Next.md`, `AGENT.md`, `skills/`).
   - Phase 2 completed (chat/session schema + repositories + visibility enforcement).
+  - Phase 3 completed (provider adapters + registry + provider config contracts).
 
 ## Agent Guide
 
@@ -56,6 +58,7 @@ Agent workflow skills are under `skills/`:
 - `schema-migrations-and-backfill`: forward-only schema evolution and compatibility.
 - `testing-and-evals`: test matrix and eval harness extension guidance.
 - `release-and-maintenance`: release checklist and long-run maintenance cadence.
+- `domain-module-layout`: module/package conventions for long-run maintainability.
 
 ## Why This Exists
 
@@ -133,6 +136,8 @@ engram/
       SKILL.md
     release-and-maintenance/
       SKILL.md
+    domain-module-layout/
+      SKILL.md
   db/
     init/
       001_schema.sql
@@ -158,6 +163,14 @@ engram/
       login_guard.py
       main.py
       models.py
+      providers/
+        __init__.py
+        base.py
+        errors.py
+        openai_provider.py
+        anthropic_provider.py
+        bedrock_provider.py
+        registry.py
       repository.py
       user_repository.py
       templates/
@@ -183,6 +196,12 @@ engram/
 - `api/app/consolidation.py`: local background maintenance logic for consolidation snapshots.
 - `api/app/login_guard.py`: login attempt rate-limit and lockout state machine.
 - `api/app/models.py`: Request/response and engram schema models.
+- `api/app/providers/base.py`: provider adapter contract and normalized request/response types.
+- `api/app/providers/errors.py`: provider-layer error taxonomy.
+- `api/app/providers/openai_provider.py`: OpenAI endpoint adapter implementation.
+- `api/app/providers/anthropic_provider.py`: Anthropic endpoint adapter implementation.
+- `api/app/providers/bedrock_provider.py`: Bedrock adapter implementation.
+- `api/app/providers/registry.py`: provider adapter factory and resolver.
 - `api/app/repository.py`: SQL persistence, reranked semantic query, and citation-packed rehydration builder.
 - `api/app/user_repository.py`: user persistence, seeding, and role-aware updates.
 - `api/app/embedding.py`: Deterministic local embedding helper.
@@ -205,6 +224,8 @@ engram/
 - `api/tests/test_ui_auth.py`: login/logout/session workflow + CSRF + rate-limit + audit checks.
 - `api/tests/test_chat_repository.py`: integration coverage for chat sessions/messages/pinning visibility.
 - `api/tests/test_engram_visibility.py`: integration checks for owner/project scope filtering behavior.
+- `api/tests/test_provider_registry.py`: provider registry construction and adapter selection checks.
+- `api/tests/test_provider_adapters.py`: adapter normalization and error-path tests.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
 - `Makefile`: Local run shortcuts.
@@ -274,6 +295,14 @@ Local security baseline knobs (optional in `.env`):
 - `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` (default `5`)
 - `LOGIN_RATE_LIMIT_WINDOW_SECONDS` (default `300`)
 - `LOGIN_LOCKOUT_SECONDS` (default `900`)
+
+Provider configuration knobs (optional in `.env` unless provider enabled):
+
+- `DEFAULT_CHAT_PROVIDER` (default `openai`)
+- `DEFAULT_CHAT_MODEL` (default `gpt-4o-mini`)
+- `OPENAI_API_KEY`, `OPENAI_BASE_URL`
+- `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_VERSION`
+- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`
 
 LangGraph checkpoint file (local):
 
@@ -684,11 +713,37 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make test` -> `49 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
+### 2026-02-15 (Plan.Next phase 3: provider adapter layer)
+
+1. Added provider domain package under `api/app/providers`:
+   - shared adapter contract (`base.py`)
+   - provider errors (`errors.py`)
+   - concrete adapters: OpenAI, Anthropic, Bedrock
+   - central registry resolver (`registry.py`)
+2. Added provider configuration keys:
+   - `DEFAULT_CHAT_PROVIDER`, `DEFAULT_CHAT_MODEL`
+   - OpenAI/Anthropic API settings
+   - AWS region/credential settings for Bedrock
+3. Added runtime dependencies for provider integration:
+   - `httpx` (runtime)
+   - `boto3`
+   - updated `api/uv.lock`
+4. Added unit tests:
+   - `api/tests/test_provider_registry.py`
+   - `api/tests/test_provider_adapters.py`
+5. Updated maintainability guidance:
+   - `AGENT.md` now includes explicit domain module layout rules
+   - added `skills/domain-module-layout/SKILL.md`
+6. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `58 passed`
+   - `make eval` -> `4/4` cases passed (score `1.0`)
+
 ### Next Immediate Steps (One By One)
 
-1. Add provider adapter layer for OpenAI, Anthropic, and Bedrock.
-2. Add chat API endpoints and continuity flows.
-3. Add MCP JSON-RPC over SSE endpoint and tool routing.
+1. Add chat API endpoints and continuity flows.
+2. Add MCP JSON-RPC over SSE endpoint and tool routing.
+3. Add React chat UI with session/pin/save workflows.
 
 ## MVP API Surface
 
@@ -876,12 +931,20 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - engram ownership and visibility fields
   - visibility-aware repository filtering
 
-### Milestone 11 (Next)
+### Milestone 11 (Completed)
 
-- Provider adapter layer:
-  - OpenAI
-  - Anthropic
-  - Bedrock
+- Provider adapter layer completed:
+  - OpenAI adapter with normalized request/response mapping
+  - Anthropic adapter with normalized request/response mapping
+  - Bedrock adapter with normalized request/response mapping
+  - provider registry and configuration contract
+
+### Milestone 12 (Next)
+
+- Chat API and continuity layer:
+  - session/message endpoints
+  - save-as-engram and continue-session flows
+  - context assembly and `used_engram_ids` response metadata
 
 ## Example: Create Engram
 
