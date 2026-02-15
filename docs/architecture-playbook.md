@@ -14,7 +14,7 @@ If one model gives you a strong draft, another can critique it, and a third can 
 
 What this means for you.
 
-Engram persists chat outcomes as structured records with metadata (`project_id`, tags, keywords), access controls (`visibility_scope`, `owner_user_id`), and retrieval context. Runtime response metadata (`used_engram_ids`, source references) lets you audit what prior memory influenced a response.
+Engram persists chat outcomes as structured records with metadata (`project_id`, tags, keywords), access controls (`visibility_scope`, `owner_user_id`), and retrieval context. Runtime response metadata (`used_engram_ids`, `used_document_chunk_ids`, source references) lets you audit what prior memory influenced a response.
 
 ## The Core Idea in 90 Seconds
 
@@ -99,6 +99,9 @@ The three call surfaces are behavior-aligned. You can pick the client path that 
 - `POST /api/v1/chat/sessions/{session_id}/messages/stream`
 - `POST /api/v1/chat/sessions/{session_id}/save-engram`
 - `POST /api/v1/chat/sessions/{session_id}/continue`
+- `POST /api/v1/ingestion/text`
+- `POST /api/v1/ingestion/file`
+- `POST /api/v1/ingestion/query/blended`
 
 **Input fields (typical)**
 
@@ -106,6 +109,9 @@ The three call surfaces are behavior-aligned. You can pick the client path that 
 - send message: `content_text`
 - save engram: `title`, `abstract`, `tags`, `keywords`, `visibility_scope`
 - continue: `title`, optional overrides
+- ingest text: `project_id`, `title`, `text`, `visibility_scope`
+- ingest file: `project_id`, `file`, optional `title`, `visibility_scope`
+- blended query: `query`, `project_id`, `top_k_engrams`, `top_k_document_chunks`
 
 **Output highlights**
 
@@ -113,8 +119,13 @@ The three call surfaces are behavior-aligned. You can pick the client path that 
 - message endpoints return assistant response text and metadata
 - save endpoint returns `engram_id`
 - continue endpoint returns new `session_id` with carried context links
+- ingestion endpoints return `document_id`, `chunk_count`, and document metadata
 
 **Where `used_engram_ids` appears**
+
+- assistant message response metadata (`POST /messages` and stream completion payload)
+
+**Where `used_document_chunk_ids` appears**
 
 - assistant message response metadata (`POST /messages` and stream completion payload)
 
@@ -129,7 +140,7 @@ curl -X POST http://localhost:8000/api/v1/chat/sessions \
     "project_id": "engram-vault",
     "title": "Incident Triage Session A",
     "provider": "openai",
-    "model": "gpt-4o-mini",
+    "model_id": "gpt-4o-mini",
     "visibility_scope": "project"
   }'
 ```
@@ -148,6 +159,17 @@ curl -X POST http://localhost:8000/api/v1/chat/sessions/<session_id>/save-engram
     "abstract": "Early triage state and evidence.",
     "tags": ["incident", "payments"],
     "keywords": ["latency", "rollback"],
+    "visibility_scope": "project"
+  }'
+```
+
+```bash
+curl -X POST http://localhost:8000/api/v1/ingestion/text \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "engram-vault",
+    "title": "Payments Runbook Notes",
+    "text": "If queue depth exceeds 10k for 20m, escalate and apply shed policy.",
     "visibility_scope": "project"
   }'
 ```
@@ -194,7 +216,7 @@ How to verify it worked.
     "project_id": "engram-vault",
     "title": "Cross-model review",
     "provider": "anthropic",
-    "model": "claude-3-5-haiku-20241022",
+    "model_id": "claude-3-5-haiku-20241022",
     "visibility_scope": "project"
   }
 }
@@ -227,6 +249,9 @@ How to verify it worked.
 - `Save as Engram` -> `POST /api/v1/chat/sessions/{session_id}/save-engram`
 - `Continue in New Chat` -> `POST /api/v1/chat/sessions/{session_id}/continue`
 - `Pin` (in pinned panel) -> `POST /api/v1/chat/sessions/{session_id}/engrams/pin`
+- `Upload and Chunk` -> `POST /api/v1/ingestion/file`
+- `Ingest Text` -> `POST /api/v1/ingestion/text`
+- `Document Refresh` -> `GET /api/v1/ingestion/documents`
 
 **Input fields from UI controls**
 
@@ -238,11 +263,16 @@ How to verify it worked.
 
 - live assistant stream in transcript
 - engram IDs in pinned panel
+- ingested document cards with chunk counts in document panel
 - continuity behavior in new session after continue
 
 **Where `used_engram_ids` appears**
 
 - returned by backend in response metadata; can be inspected via API responses and continuity-aware logs
+
+**Where `used_document_chunk_ids` appears**
+
+- returned by backend in response metadata when document chunk retrieval contributes context
 
 **Where source references appear**
 
@@ -368,6 +398,7 @@ erDiagram
     engrams ||--o{ session_pinned_engrams : "is_pinned_in"
     engrams ||--o{ sources : "supported_by"
     chat_sessions ||--o{ engrams : "source_session_id"
+    documents ||--o{ document_chunks : "contains"
 
     chat_sessions {
         uuid session_id PK
@@ -413,6 +444,25 @@ erDiagram
         string title
         text snippet
         timestamp captured_at
+    }
+
+    documents {
+        uuid document_id PK
+        string project_id
+        string title
+        string source_type
+        string visibility_scope
+        string owner_user_id
+        string content_hash
+        int chunk_count
+    }
+
+    document_chunks {
+        uuid chunk_id PK
+        uuid document_id FK
+        int chunk_index
+        text snippet
+        string embedding_model
     }
 ```
 
@@ -636,6 +686,7 @@ These are existing interfaces. This playbook does not introduce new runtime cont
 
 - `/api/v1/chat/sessions*`
 - `/api/v1/engrams*`
+- `/api/v1/ingestion*`
 - `/api/v1/mcp/stream`
 
 ### MCP Methods (existing)
@@ -648,13 +699,14 @@ These are existing interfaces. This playbook does not introduce new runtime cont
 ### Runtime Metadata Semantics (existing)
 
 - `used_engram_ids`: identifies engrams reused during response generation.
+- `used_document_chunk_ids`: identifies retrieved document chunks reused during response generation.
 - source references: identifies citation/source context merged into response generation.
 
 ### API/Schema/Type Impact
 
-- No new runtime APIs added.
-- No schema/type changes.
-- This document clarifies existing behavior only.
+- Runtime APIs include ingestion routes (`/api/v1/ingestion/text`, `/api/v1/ingestion/file`, `/api/v1/ingestion/query`, `/api/v1/ingestion/query/blended`).
+- Schema includes `documents` and `document_chunks` for RAG-ready persistence.
+- Chat response metadata includes `used_document_chunk_ids` when chunk retrieval is used.
 
 ## Failure Modes and Debug Guide
 

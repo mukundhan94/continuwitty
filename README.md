@@ -75,6 +75,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add detailed PlantUML use-case diagram for model switching and engram continuity lifecycle.
 - [x] Add clean reset scripts and stale-session reconciliation to keep chat creation stable after DB resets.
 - [x] Add MCP interoperability layer (`initialize`, `tools/list`, `tools/call`) plus typed Python/TypeScript JSON-RPC/SSE clients and contract tests.
+- [x] Add Phase 17 ingestion stack: text/file document ingest APIs, deterministic chunking, embedding abstraction with local fallback, chat-context chunk blending, and upload UI.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -84,7 +85,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
   - phases 0-15 completed (foundation, schema/storage, retrieval/rehydration, durability, chat continuity, providers, MCP, UI, acceptance, theme/UX hardening).
 - Next implementation scope:
   - phase 16: MCP developer tooling and typed clients (in progress: compatibility + typed clients complete, CLI smoke command deferred).
-  - phase 17: document ingestion and RAG-ready retrieval.
+  - phase 17: document ingestion and RAG-ready retrieval (implemented; pending phase verification/commit).
   - phase 18: memory lifecycle policies (autosave/retention/consolidation).
   - phase 19: collaboration and sharing model.
   - phase 20: production security hardening.
@@ -112,6 +113,7 @@ Agent workflow skills are under `skills/`:
 - `react-chat-ui-operator`: frontend workflow conventions for chat/session/engram UX.
 - `frontend-style-system`: token-driven styled-components + Tailwind workflow rules.
 - `dockerized-acceptance-testing`: Playwright-BDD (`bddgen`) dockerized quality-gate workflow.
+- `document-ingestion-rag`: deterministic document chunking, ingestion APIs, and blended retrieval workflow.
 
 ## Why This Exists
 
@@ -127,7 +129,7 @@ Long research threads lose useful context once a session ends. The goal here is 
 ```text
 +---------------------------+         +-------------------------------+
 | Research Agent / User     |         | Optional Local UI / CLI       |
-| (today: manual ingestion) |         | (next milestone)              |
+| (chat + ingest workflows) |         | (automation/agent expansion)  |
 +-------------+-------------+         +---------------+---------------+
               |                                         |
               | POST /api/v1/engrams                   | POST /api/v1/engrams/query
@@ -208,6 +210,8 @@ engram/
       SKILL.md
     dockerized-acceptance-testing/
       SKILL.md
+    document-ingestion-rag/
+      SKILL.md
   db/
     init/
       001_schema.sql
@@ -237,6 +241,21 @@ engram/
       config.py
       db.py
       embedding.py
+      embeddings/
+        __init__.py
+        base.py
+        errors.py
+        local_provider.py
+        openai_provider.py
+        service.py
+      ingestion/
+        __init__.py
+        api.py
+        chunking.py
+        errors.py
+        models.py
+        repository.py
+        service.py
       login_guard.py
       main.py
       mcp/
@@ -287,10 +306,13 @@ engram/
         auth.test.ts
         chat.ts
         http.ts
+        ingestion.ts
         types.ts
       components/
         ChatPanel.tsx
         ChatPanel.test.tsx
+        DocumentIngestionPanel.tsx
+        DocumentIngestionPanel.test.tsx
         LoginView.tsx
         LoginView.test.tsx
         PinnedEngramPanel.tsx
@@ -354,6 +376,11 @@ engram/
 - `api/app/chat_repository.py`: chat session/message and pinned-engram persistence with visibility checks.
 - `api/app/cli.py`: local terminal workflows for upload/search/rehydrate.
 - `api/app/consolidation.py`: local background maintenance logic for consolidation snapshots.
+- `api/app/ingestion/api.py`: ingestion REST routes (`/api/v1/ingestion/*`) for text/file intake and retrieval.
+- `api/app/ingestion/chunking.py`: deterministic content hashing + chunk boundary and chunk ID generation.
+- `api/app/ingestion/repository.py`: document/chunk persistence and vector query with lexical rerank blend.
+- `api/app/ingestion/service.py`: ingestion validation, UTF-8 file guards, and blended retrieval orchestration.
+- `api/app/ingestion/models.py`: ingestion request/response contracts and blended query models.
 - `api/app/login_guard.py`: login attempt rate-limit and lockout state machine.
 - `api/app/mcp/api.py`: MCP JSON-RPC over SSE route layer.
 - `api/app/mcp/client.py`: typed Python JSON-RPC/SSE MCP client helper for external integrations.
@@ -366,6 +393,10 @@ engram/
 - `api/app/providers/anthropic_provider.py`: Anthropic endpoint adapter implementation.
 - `api/app/providers/bedrock_provider.py`: Bedrock adapter implementation.
 - `api/app/providers/registry.py`: provider adapter factory and resolver.
+- `api/app/embeddings/base.py`: embedding provider protocol and result metadata contract.
+- `api/app/embeddings/local_provider.py`: deterministic local embedding provider implementation.
+- `api/app/embeddings/openai_provider.py`: optional OpenAI embeddings adapter (with size coercion guards).
+- `api/app/embeddings/service.py`: embedding provider resolver + local fallback strategy.
 - `api/app/repository.py`: SQL persistence, reranked semantic query, and citation-packed rehydration builder.
 - `api/app/user_repository.py`: user persistence, lookup, and role-aware updates.
 - `api/app/embedding.py`: Deterministic local embedding helper.
@@ -398,14 +429,21 @@ engram/
 - `api/tests/test_provider_adapters.py`: adapter normalization and error-path tests.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
+- `api/tests/test_ingestion_chunking.py`: deterministic chunking/hash/document-id behavior tests.
+- `api/tests/test_ingestion_service.py`: ingestion validation and persistence orchestration tests.
+- `api/tests/test_ingestion_api_integration.py`: authenticated ingestion + retrieval API lifecycle tests.
+- `api/tests/test_embeddings_service.py`: embedding provider fallback behavior tests.
 - `api/tests/test_config_settings.py`: settings debug logging and secret redaction checks.
 - `web/src/App.tsx`: React chat workbench composition, workflow state, and theme toggle control.
 - `web/src/ThemedApp.tsx`: mode-aware `ThemeProvider` wrapper for runtime light/dark switching.
 - `web/src/config.ts`: frontend runtime config parsing + one-time debug console print.
 - `web/src/api/*.ts`: browser API clients for auth/chat/engram interactions.
+- `web/src/api/ingestion.ts`: browser API client for document ingestion and project document listing.
 - `web/src/api/mcpClient.ts`: typed TypeScript JSON-RPC/SSE MCP client helper.
 - `web/src/api/mcpClient.test.ts`: TypeScript MCP client protocol parsing and stream contract tests.
 - `web/src/components/*.tsx`: UI modules for login, sessions, chat transcript, pinning, and save modal.
+- `web/src/components/DocumentIngestionPanel.tsx`: project-scoped file/text ingestion surface with status and recent document list.
+- `web/src/components/DocumentIngestionPanel.test.tsx`: ingestion panel interaction tests (text + file flows).
 - `web/src/components/SessionSidebar.test.tsx`: sidebar interaction tests (toggle, labels, active-state marker).
 - `web/src/styles/theme.ts`: shared frontend light/dark design tokens and theme registry.
 - `web/src/styles/globalStyles.ts`: global CSS variables and base element styles.
@@ -620,7 +658,7 @@ make stack-reset
 ### Docker Env Matrix (Core)
 
 - DB: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`
-- API runtime: `APP_ENV`, `LOG_CONFIG_IN_DEV`, `EMBEDDING_DIM`, `APP_SESSION_SECRET`
+- API runtime: `APP_ENV`, `LOG_CONFIG_IN_DEV`, `EMBEDDING_DIM`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_FALLBACK_TO_LOCAL`, `INGESTION_MAX_FILE_BYTES`, `INGESTION_MAX_TEXT_CHARS`, `APP_SESSION_SECRET`
 - UI auth defaults come from DB seed (`db/init/001_schema.sql`); acceptance runner reads `UI_USERNAME`/`UI_PASSWORD`.
 - Providers: `DEFAULT_CHAT_PROVIDER`, `DEFAULT_CHAT_MODEL`, `OPENAI_*`, `ANTHROPIC_*`, `AWS_*`
 - Web runtime: `WEB_PORT`, `VITE_API_PROXY_TARGET`, `VITE_ALLOWED_HOSTS`, `VITE_DEFAULT_*`
@@ -1579,14 +1617,37 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make lint` passed
    - `make format-check` passed
 
+### 2026-02-15 (Phase 17 - ingestion and blended retrieval pass)
+
+1. Added ingestion domain and schema:
+   - new `documents` and `document_chunks` tables with owner/project/visibility indexes and vector index for chunk retrieval.
+   - added `api/app/ingestion/*` package (models, chunking, repository, service, API router).
+2. Added embedding abstraction for RAG-ready storage:
+   - new `api/app/embeddings/*` package with local deterministic provider and optional OpenAI embeddings provider.
+   - repository embedding calls now route through abstraction with provider metadata persisted in `embedding_model`.
+3. Added query blending behavior:
+   - chat context now merges engram snapshots with document chunk retrieval.
+   - chat responses/stream metadata now include `used_document_chunk_ids` alongside `used_engram_ids`.
+4. Added React ingestion UX:
+   - `DocumentIngestionPanel` for file/text ingest with status/error feedback.
+   - project-scoped recent document list surfaced in the right rail.
+5. Added tests:
+   - API: chunking determinism, embedding fallback, ingestion service, ingestion integration lifecycle, chat-context chunk blend assertions.
+   - Web: ingestion panel interaction tests.
+6. Validation:
+   - `cd api && uv run ruff check app tests` passed.
+   - `cd api && uv run pytest -q` passed (`99` tests).
+   - `cd web && npm run lint` passed.
+   - `cd web && npm run test` passed (`36` tests).
+   - `cd web && npm run build` passed.
+
 ### Next Immediate Steps (One By One)
 
 1. Phase 16 follow-up (deferred by request): add `engram-cli mcp-call` smoke command for terminal MCP debugging.
 2. Phase 16 architecture note: evaluate `FastMCP` adapter pilot (non-breaking, optional) before any protocol-layer rewrite.
-3. Phase 17 kickoff: implement document/chunk ingestion with upload UX and retrieval blending with chat snapshots.
-4. Phase 18 kickoff: ship memory lifecycle controls for autosave cadence, retention, and consolidation policies.
-5. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
-6. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
+3. Phase 18 kickoff: ship memory lifecycle controls for autosave cadence, retention, and consolidation policies.
+4. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
+5. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
 
 ## MVP API Surface
 
@@ -1599,6 +1660,11 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 - `POST /api/v1/engrams/query`
 - `GET /api/v1/engrams/{engram_id}/sources`
 - `GET /api/v1/engrams/{engram_id}/rehydrate`
+- `POST /api/v1/ingestion/text`
+- `POST /api/v1/ingestion/file`
+- `GET /api/v1/ingestion/documents`
+- `POST /api/v1/ingestion/query`
+- `POST /api/v1/ingestion/query/blended`
 - `POST /api/v1/chat/sessions`
 - `GET /api/v1/chat/sessions`
 - `GET /api/v1/chat/sessions/{session_id}`

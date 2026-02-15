@@ -68,6 +68,8 @@ def clean_db(db_conn, ensure_schema) -> None:
                 session_pinned_engrams,
                 chat_messages,
                 chat_sessions,
+                document_chunks,
+                documents,
                 engrams
             CASCADE
             """

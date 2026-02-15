@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import styled from 'styled-components'
 
 import { getSessionProfile, loginWithPassword, logoutCurrentUser } from './api/auth'
 import {
@@ -14,8 +15,17 @@ import {
   unpinEngramFromSession,
 } from './api/chat'
 import { ApiError } from './api/http'
-import type { ChatMessage, ChatSession, ChatSourceReference, EngramSummary, UserProfile } from './api/types'
+import { ingestFileDocument, ingestTextDocument, listProjectDocuments } from './api/ingestion'
+import type {
+  ChatMessage,
+  ChatSession,
+  ChatSourceReference,
+  DocumentRecord,
+  EngramSummary,
+  UserProfile,
+} from './api/types'
 import { ChatPanel } from './components/ChatPanel'
+import { DocumentIngestionPanel } from './components/DocumentIngestionPanel'
 import { LoginView } from './components/LoginView'
 import { PinnedEngramPanel } from './components/PinnedEngramPanel'
 import { SaveEngramModal } from './components/SaveEngramModal'
@@ -23,7 +33,6 @@ import { SessionSidebar } from './components/SessionSidebar'
 import { WEB_CONFIG } from './config'
 import {
   AppShell,
-  EyebrowText,
   LoadingScreen,
   NoticeBanner,
   TopNavShell,
@@ -33,6 +42,18 @@ import {
 } from './styles/primitives'
 import { useThemeMode } from './styles/useThemeMode'
 import { buildDefaultSaveAbstract } from './utils/chat'
+
+const RightRail = styled.div<{ $showIngestion: boolean }>`
+  min-height: 0;
+  display: grid;
+  grid-template-rows: ${({ $showIngestion }) =>
+    $showIngestion ? 'minmax(12rem, 0.65fr) minmax(0, 1.35fr)' : 'minmax(0, 1fr)'};
+  gap: 0.9rem;
+
+  @media (max-width: 1180px) {
+    grid-template-rows: none;
+  }
+`
 
 function describeError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -83,6 +104,11 @@ export default function App() {
   const [pinnedEngrams, setPinnedEngrams] = useState<EngramSummary[]>([])
   const [availableEngrams, setAvailableEngrams] = useState<EngramSummary[]>([])
   const [engramSearch, setEngramSearch] = useState('')
+  const [documentsLoading, setDocumentsLoading] = useState(false)
+  const [documentsSubmitting, setDocumentsSubmitting] = useState(false)
+  const [documents, setDocuments] = useState<DocumentRecord[]>([])
+  const [documentsError, setDocumentsError] = useState<string | null>(null)
+  const [showIngestionPanel, setShowIngestionPanel] = useState(true)
 
   const [saveModalOpen, setSaveModalOpen] = useState(false)
   const [saveSubmitting, setSaveSubmitting] = useState(false)
@@ -126,6 +152,19 @@ export default function App() {
     }
   }
 
+  const loadProjectDocuments = async (currentProjectId: string) => {
+    setDocumentsLoading(true)
+    setDocumentsError(null)
+    try {
+      const loaded = await listProjectDocuments(currentProjectId)
+      setDocuments(loaded)
+    } catch (error) {
+      setDocumentsError(describeError(error))
+    } finally {
+      setDocumentsLoading(false)
+    }
+  }
+
   const refreshFromSession = async (sessionId: string) => {
     await loadSessionData(sessionId, projectId)
   }
@@ -136,7 +175,7 @@ export default function App() {
         const profile = await getSessionProfile()
         setUser(profile)
         setAuthError(null)
-        await loadSessions(projectId, null)
+        await Promise.all([loadSessions(projectId, null), loadProjectDocuments(projectId)])
       } catch (error) {
         if (!isUnauthorized(error)) {
           setAuthError(describeError(error))
@@ -153,7 +192,7 @@ export default function App() {
     if (!user) {
       return
     }
-    void loadSessions(projectId, selectedSessionId)
+    void Promise.all([loadSessions(projectId, selectedSessionId), loadProjectDocuments(projectId)])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
@@ -175,7 +214,7 @@ export default function App() {
       await loginWithPassword(username, password)
       const profile = await getSessionProfile()
       setUser(profile)
-      await loadSessions(projectId, null)
+      await Promise.all([loadSessions(projectId, null), loadProjectDocuments(projectId)])
     } catch (error) {
       setAuthError(describeError(error))
     } finally {
@@ -196,6 +235,8 @@ export default function App() {
     setPinnedEngrams([])
     setAvailableEngrams([])
     setSourceReferences([])
+    setDocuments([])
+    setDocumentsError(null)
     setNotice(null)
     setAuthError(null)
   }
@@ -322,6 +363,56 @@ export default function App() {
     await refreshFromSession(selectedSessionId)
   }
 
+  const handleRefreshDocuments = async () => {
+    await loadProjectDocuments(projectId)
+  }
+
+  const handleIngestText = async (payload: {
+    title: string
+    text: string
+    visibility_scope: 'private' | 'project'
+    chunk_size_chars: number
+    chunk_overlap_chars: number
+  }) => {
+    setDocumentsSubmitting(true)
+    setDocumentsError(null)
+    try {
+      const created = await ingestTextDocument({
+        project_id: projectId,
+        ...payload,
+      })
+      setNotice(`Ingested text document ${created.title} (${created.chunk_count} chunks)`)
+      await loadProjectDocuments(projectId)
+    } catch (error) {
+      setDocumentsError(describeError(error))
+    } finally {
+      setDocumentsSubmitting(false)
+    }
+  }
+
+  const handleIngestFile = async (payload: {
+    title: string
+    file: File
+    visibility_scope: 'private' | 'project'
+    chunk_size_chars: number
+    chunk_overlap_chars: number
+  }) => {
+    setDocumentsSubmitting(true)
+    setDocumentsError(null)
+    try {
+      const created = await ingestFileDocument({
+        project_id: projectId,
+        ...payload,
+      })
+      setNotice(`Ingested file ${created.source_name || created.title} (${created.chunk_count} chunks)`)
+      await loadProjectDocuments(projectId)
+    } catch (error) {
+      setDocumentsError(describeError(error))
+    } finally {
+      setDocumentsSubmitting(false)
+    }
+  }
+
   const handleContinueSession = async () => {
     if (!selectedSessionId) {
       return
@@ -371,10 +462,7 @@ export default function App() {
     <AppShell>
       <TopNavShell>
         <TopNavTitleBlock>
-          <EyebrowText>Engram Vault</EyebrowText>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">
-            Memory Continuity Workbench
-          </h1>
+          <h1 className="font-display text-lg font-semibold tracking-tight text-ink">Memory Continuity Workbench</h1>
         </TopNavTitleBlock>
 
         <TopNavUserBlock>
@@ -383,6 +471,9 @@ export default function App() {
           </p>
           <button type="button" onClick={toggleMode}>
             {mode === 'dark' ? 'Light Theme' : 'Dark Theme'}
+          </button>
+          <button type="button" onClick={() => setShowIngestionPanel((current) => !current)}>
+            {showIngestionPanel ? 'Hide Docs' : 'Show Docs'}
           </button>
           <button type="button" onClick={handleLogout}>
             Logout
@@ -423,18 +514,33 @@ export default function App() {
           onContinueSession={handleContinueSession}
         />
 
-        <PinnedEngramPanel
-          selectedSessionId={selectedSessionId}
-          pinnedEngrams={pinnedEngrams}
-          availableEngrams={availableEngrams}
-          search={engramSearch}
-          loading={engramLoading}
-          onSearchChange={setEngramSearch}
-          onRefresh={handleRefreshEngrams}
-          onPin={handlePin}
-          onUnpin={handleUnpin}
-          onCopyId={handleCopyEngramId}
-        />
+        <RightRail $showIngestion={showIngestionPanel}>
+          {showIngestionPanel ? (
+            <DocumentIngestionPanel
+              projectId={projectId}
+              documents={documents}
+              loading={documentsLoading}
+              submitting={documentsSubmitting}
+              error={documentsError}
+              onRefresh={handleRefreshDocuments}
+              onIngestText={handleIngestText}
+              onIngestFile={handleIngestFile}
+            />
+          ) : null}
+
+          <PinnedEngramPanel
+            selectedSessionId={selectedSessionId}
+            pinnedEngrams={pinnedEngrams}
+            availableEngrams={availableEngrams}
+            search={engramSearch}
+            loading={engramLoading}
+            onSearchChange={setEngramSearch}
+            onRefresh={handleRefreshEngrams}
+            onPin={handlePin}
+            onUnpin={handleUnpin}
+            onCopyId={handleCopyEngramId}
+          />
+        </RightRail>
       </WorkspaceGrid>
 
       {saveModalOpen ? (

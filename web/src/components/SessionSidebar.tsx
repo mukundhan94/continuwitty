@@ -57,13 +57,6 @@ const CreatorPanel = styled.section`
   gap: 0.55rem;
 `
 
-const CreatorHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-`
-
 const ToggleButton = styled.button`
   padding: 0.38rem 0.58rem;
   border: 1px solid var(--color-line);
@@ -192,18 +185,14 @@ export function SessionSidebar({
   return (
     <GlassPane as="aside" data-testid="session-sidebar">
       <PaneHeader>
-        <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Sessions</h2>
+        <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Create Session</h2>
+        <ToggleButton type="button" onClick={() => setShowCreator((current) => !current)}>
+          {showCreator ? 'Hide Creator' : 'Show Creator'}
+        </ToggleButton>
       </PaneHeader>
 
       <SidebarBody $showCreator={showCreator}>
         <CreatorPanel data-testid="session-create-panel">
-          <CreatorHeader>
-            <SectionLabel>Create Session</SectionLabel>
-            <ToggleButton type="button" onClick={() => setShowCreator((current) => !current)}>
-              {showCreator ? 'Hide Creator' : 'Show Creator'}
-            </ToggleButton>
-          </CreatorHeader>
-
           {showCreator ? (
             <CreatorForm onSubmit={handleSubmit}>
               <CreatorFields>

@@ -33,6 +33,7 @@ export interface StreamMetaPayload {
   session_id: string
   message_id: string
   used_engram_ids: string[]
+  used_document_chunk_ids: string[]
   source_references: ChatSourceReference[]
 }
 
@@ -46,6 +47,7 @@ export interface StreamDonePayload {
   reply_message_id: string
   assistant_text: string
   used_engram_ids: string[]
+  used_document_chunk_ids: string[]
   source_references: ChatSourceReference[]
 }
 

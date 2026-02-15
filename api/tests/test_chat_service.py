@@ -91,6 +91,7 @@ def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
         lambda **kwargs: AssembledChatContext(
             context_markdown="ctx",
             used_engram_ids=[referenced_engram_id],
+            used_document_chunk_ids=[],
             source_references=[
                 {
                     "engram_id": referenced_engram_id,
@@ -135,6 +136,7 @@ def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
     assert response.reply_message_id == reply_message_id
     assert response.assistant_text == "Proceed with option A."
     assert response.used_engram_ids == [referenced_engram_id]
+    assert response.used_document_chunk_ids == []
     assert response.source_references[0].url == "https://example.com/source"
 
 

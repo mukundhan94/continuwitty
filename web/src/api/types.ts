@@ -21,6 +21,21 @@ export interface EngramSummary {
   visibility_scope: VisibilityScope
 }
 
+export interface DocumentRecord {
+  document_id: string
+  owner_user_id: string
+  project_id: string
+  title: string
+  source_type: 'text' | 'file'
+  source_name: string | null
+  mime_type: string | null
+  visibility_scope: VisibilityScope
+  content_hash: string
+  chunk_count: number
+  created_at: string
+  updated_at: string
+}
+
 export interface ChatSession {
   session_id: string
   owner_user_id: string
@@ -62,6 +77,7 @@ export interface ChatSendResponse {
   reply_message_id: string
   assistant_text: string
   used_engram_ids: string[]
+  used_document_chunk_ids: string[]
   source_references: ChatSourceReference[]
 }
 

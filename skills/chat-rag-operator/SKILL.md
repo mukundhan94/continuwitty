@@ -1,6 +1,6 @@
 ---
 name: chat-rag-operator
-description: Use this skill when implementing chat sessions, context assembly with engrams, continuity across sessions, and save-as-engram flows.
+description: Use this skill when implementing chat sessions, context assembly with engrams/document chunks, continuity across sessions, and save-as-engram flows.
 ---
 
 # Chat RAG Operator
@@ -8,6 +8,7 @@ description: Use this skill when implementing chat sessions, context assembly wi
 ## Use This Skill When
 - Building chat session APIs/UI.
 - Wiring pinned engrams into model context.
+- Blending ingested document chunk evidence with snapshot memory.
 - Implementing continue-in-new-chat flows.
 
 ## Workflow
@@ -16,9 +17,10 @@ description: Use this skill when implementing chat sessions, context assembly wi
    - pinned engrams
    - dynamic retrieval hits
    - short citation pack
+   - document chunk evidence (when available)
 3. Call provider adapter through registry.
 4. Save assistant/user messages and metadata.
-5. Expose `used_engram_ids` and `source_references` in chat response payloads.
+5. Expose `used_engram_ids`, `used_document_chunk_ids`, and `source_references` in chat response payloads.
 6. Add save-as-engram endpoint to snapshot useful chat state.
 
 ## Module Layout (Current)

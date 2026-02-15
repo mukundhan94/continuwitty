@@ -14,6 +14,7 @@ def test_build_debug_settings_snapshot_redacts_secrets() -> None:
         aws_access_key_id="aws-access",
         aws_secret_access_key="aws-secret",
         aws_session_token="aws-session",
+        default_chat_provider="openai",
     )
 
     snapshot = build_debug_settings_snapshot(settings)

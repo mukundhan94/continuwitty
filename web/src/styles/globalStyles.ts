@@ -104,7 +104,9 @@ export const GlobalStyle = createGlobalStyle`
     background: var(--color-accent);
     color: #ffffff;
     cursor: pointer;
-    padding: 0.5rem 0.8rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.82rem;
+    font-weight: 500;
     display: inline-flex;
     align-items: center;
     justify-content: center;

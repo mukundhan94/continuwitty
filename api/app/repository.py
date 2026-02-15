@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from psycopg.types.json import Jsonb
 
 from .db import get_conn
-from .embedding import embed_text_local
+from .embeddings import embed_text
 from .models import (
     EngramCreateResponse,
     EngramQueryRequest,
@@ -146,8 +146,8 @@ def create_engram(
     engram_id = uuid4()
     now = datetime.now(UTC)
     retrieval_text = _build_retrieval_text(payload)
-    embedding = embed_text_local(retrieval_text, embedding_dim)
-    embedding_literal = _vector_literal(embedding)
+    embedding_result = embed_text(retrieval_text, dim=embedding_dim)
+    embedding_literal = _vector_literal(embedding_result.vector)
 
     engram_json = {
         "schema_version": "1.0",
@@ -179,7 +179,7 @@ def create_engram(
                 VALUES (
                     %(engram_id)s, %(project_id)s, %(thread_id)s, %(created_at)s, %(updated_at)s, '1.0',
                     %(title)s, %(abstract)s, %(engram_json)s, %(engram_markdown)s, %(tags)s, %(keywords)s, %(owner_user_id)s,
-                    %(visibility_scope)s, %(source_session_id)s, %(retrieval_text)s, 'local-deterministic-v1', %(embed)s::vector
+                    %(visibility_scope)s, %(source_session_id)s, %(retrieval_text)s, %(embedding_model)s, %(embed)s::vector
                 )
                 """,
             {
@@ -198,6 +198,7 @@ def create_engram(
                 "visibility_scope": payload.visibility_scope,
                 "source_session_id": payload.source_session_id,
                 "retrieval_text": retrieval_text,
+                "embedding_model": embedding_result.provider_id,
                 "embed": embedding_literal,
             },
         )
@@ -278,8 +279,8 @@ def query_engrams(
     embedding_dim: int,
     actor_user_id: UUID | None = None,
 ) -> list[EngramQueryResult]:
-    query_embedding = embed_text_local(request.query, embedding_dim)
-    query_literal = _vector_literal(query_embedding)
+    query_embedding = embed_text(request.query, dim=embedding_dim)
+    query_literal = _vector_literal(query_embedding.vector)
 
     where_clauses: list[str] = []
     params: list = [query_literal]

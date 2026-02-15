@@ -155,6 +155,57 @@ CREATE TABLE IF NOT EXISTS session_pinned_engrams (
 CREATE INDEX IF NOT EXISTS session_pinned_engrams_by_user_idx
   ON session_pinned_engrams (pinned_by_user_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS documents (
+  document_id UUID PRIMARY KEY,
+  owner_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  source_type TEXT NOT NULL CHECK (source_type IN ('text', 'file')),
+  source_name TEXT,
+  mime_type TEXT,
+  visibility_scope TEXT NOT NULL DEFAULT 'private' CHECK (visibility_scope IN ('private', 'project')),
+  content_text TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  chunk_count INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS documents_owner_project_created_idx
+  ON documents (owner_user_id, project_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS documents_project_created_idx
+  ON documents (project_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS documents_visibility_idx
+  ON documents (visibility_scope);
+
+CREATE INDEX IF NOT EXISTS documents_content_hash_idx
+  ON documents (content_hash);
+
+CREATE TABLE IF NOT EXISTS document_chunks (
+  chunk_id UUID PRIMARY KEY,
+  document_id UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
+  chunk_text TEXT NOT NULL,
+  snippet TEXT NOT NULL,
+  char_start INTEGER NOT NULL,
+  char_end INTEGER NOT NULL,
+  token_estimate INTEGER NOT NULL DEFAULT 0,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  embedding_model TEXT NOT NULL DEFAULT 'local-deterministic-v1',
+  embed VECTOR(256),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (document_id, chunk_index)
+);
+
+CREATE INDEX IF NOT EXISTS document_chunks_document_idx
+  ON document_chunks (document_id, chunk_index);
+
+CREATE INDEX IF NOT EXISTS document_chunks_embed_hnsw_idx
+  ON document_chunks USING hnsw (embed vector_cosine_ops);
+
 DO $$
 BEGIN
   IF NOT EXISTS (

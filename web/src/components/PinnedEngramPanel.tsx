@@ -44,18 +44,19 @@ const CardActionButton = styled.button`
   }
 `
 
-const SplitSections = styled.div`
+const SplitSections = styled.div<{ $hasPins: boolean }>`
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: ${({ $hasPins }) =>
+    $hasPins ? 'minmax(0, 0.8fr) auto minmax(0, 1.2fr)' : 'auto auto minmax(0, 1fr)'};
   gap: 0.55rem;
 `
 
-const SectionPanel = styled.section`
+const SectionPanel = styled.section<{ $hasBodyScroll?: boolean }>`
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: ${({ $hasBodyScroll }) => ($hasBodyScroll ? 'auto minmax(0, 1fr)' : 'auto auto')};
   gap: 0.45rem;
 `
 
@@ -349,41 +350,43 @@ export function PinnedEngramPanel({
       {!selectedSessionId ? <MutedText>Select a session to manage engrams.</MutedText> : null}
 
       <SectionDivider />
-      <SplitSections>
-        <SectionPanel data-testid="pinned-section">
+      <SplitSections $hasPins={pinnedEngrams.length > 0}>
+        <SectionPanel $hasBodyScroll={pinnedEngrams.length > 0} data-testid="pinned-section">
           <SectionTitle>Session Pins</SectionTitle>
-          <SectionScroll>
-            {pinnedEngrams.length === 0 ? <MutedText>No pinned engrams yet.</MutedText> : null}
+          {pinnedEngrams.length === 0 ? <MutedText>No pinned engrams yet.</MutedText> : null}
 
-            {pinnedEngrams.map((engram) => (
-              <EngramCardSelectable
-                key={engram.engram_id}
-                $pinned={true}
-                aria-selected="true"
-                data-testid={`engram-card-${engram.engram_id}`}
-                onMouseEnter={handleCardMouseEnter(engram)}
-                onMouseLeave={scheduleHideTooltip}
-                onFocus={handleCardFocus(engram)}
-                onBlur={scheduleHideTooltip}
-              >
-                <EngramTitle>{engram.title}</EngramTitle>
-                <EngramActions>
-                  <CardActionButton type="button" onClick={() => onCopyId(engram.engram_id)}>
-                    Copy ID
-                  </CardActionButton>
-                  <CardActionButton type="button" onClick={() => onUnpin(engram.engram_id)}>
-                    Unpin
-                  </CardActionButton>
-                </EngramActions>
-              </EngramCardSelectable>
-            ))}
-          </SectionScroll>
+          {pinnedEngrams.length > 0 ? (
+            <SectionScroll>
+              {pinnedEngrams.map((engram) => (
+                <EngramCardSelectable
+                  key={engram.engram_id}
+                  $pinned={true}
+                  aria-selected="true"
+                  data-testid={`engram-card-${engram.engram_id}`}
+                  onMouseEnter={handleCardMouseEnter(engram)}
+                  onMouseLeave={scheduleHideTooltip}
+                  onFocus={handleCardFocus(engram)}
+                  onBlur={scheduleHideTooltip}
+                >
+                  <EngramTitle>{engram.title}</EngramTitle>
+                  <EngramActions>
+                    <CardActionButton type="button" onClick={() => onCopyId(engram.engram_id)}>
+                      Copy ID
+                    </CardActionButton>
+                    <CardActionButton type="button" onClick={() => onUnpin(engram.engram_id)}>
+                      Unpin
+                    </CardActionButton>
+                  </EngramActions>
+                </EngramCardSelectable>
+              ))}
+            </SectionScroll>
+          ) : null}
         </SectionPanel>
 
         <MidDottedDivider data-testid="engram-mid-divider" />
 
         <SearchPanel data-testid="unpinned-section">
-          <SectionTitle>Search Project Engrams</SectionTitle>
+          <SectionTitle>Search Project Engrams ({filteredAvailable.length})</SectionTitle>
           <input
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}

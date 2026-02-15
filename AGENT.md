@@ -6,8 +6,10 @@ Use it as the default workflow when adding or refactoring features.
 ## 1. Repository Map
 - `api/app/`: FastAPI services, models, repositories, auth, provider adapters, MCP server.
 - `api/app/chat/`: chat domain package (API router, service orchestration, context assembly, errors).
+- `api/app/ingestion/`: document ingestion domain package (text/file intake, deterministic chunking, blended query path).
 - `api/app/mcp/`: MCP domain package (SSE transport, JSON-RPC dispatch, tool errors).
 - `api/app/providers/`: provider domain package (`base`, `errors`, concrete adapters, `registry`).
+- `api/app/embeddings/`: embedding provider abstraction (local deterministic + optional external provider fallback).
 - `api/tests/`: unit and integration tests.
 - `api/evals/`: scenario-based eval harness.
 - `db/init/`: SQL schema and migration-style DDL.
@@ -45,6 +47,8 @@ Use it as the default workflow when adding or refactoring features.
 - DB access must live in repository modules.
 - Context assembly logic belongs in domain context modules (`api/app/chat/context.py`), not route handlers.
 - Provider SDK calls must stay in `api/app/providers/`.
+- Document chunking and retrieval behavior belongs in `api/app/ingestion/`.
+- Embedding provider routing belongs in `api/app/embeddings/`; do not call provider endpoints directly from repositories.
 - MCP tool handlers should call service/repository layers, not raw SQL.
 - UI should call API/MCP contracts only, not reimplement business logic.
 - UI styling should use shared tokens in `web/src/styles/theme.ts`; avoid ad-hoc hardcoded palette values in components.
@@ -70,7 +74,8 @@ Use it as the default workflow when adding or refactoring features.
 - Validate all external payloads with Pydantic models.
 - Include stable identifiers in responses (`user_id`, `session_id`, `engram_id`).
 - For chat responses, return `used_engram_ids` whenever context retrieval is used.
-- For chat responses, return `source_references` whenever retrieval context includes citations.
+- For chat responses, return `used_document_chunk_ids` when document chunks are used for context.
+- For chat responses, return `source_references` whenever retrieval context includes citations or document chunk evidence.
 
 ## 7. Provider Adapter Contract
 - Implement common methods across providers:

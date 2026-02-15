@@ -105,6 +105,11 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 16 - MCP Developer Experience and Tooling
 
+### Status
+
+- In progress: compatibility surface (`initialize`, `tools/list`, `tools/call`) and typed clients are complete.
+- Deferred by request: CLI smoke command (`engram-cli mcp-call`).
+
 ### Goals
 
 - Make MCP integration easy for external agents/clients.
@@ -124,6 +129,11 @@ Build a local-first memory system where agents and humans can:
 ---
 
 ### Phase 17 - Engram Ingestion V2 (RAG-Ready Documents)
+
+### Status
+
+- Implemented in current cycle (pending phase verification/commit).
+- Delivered: ingestion routes, deterministic chunking, embedding abstraction/fallback, chat context blending, and UI upload workflow.
 
 ### Goals
 
@@ -411,11 +421,10 @@ Build a local-first memory system where agents and humans can:
 ## Near-Term Execution Order
 
 1. Phase 16 (MCP developer tooling)
-2. Phase 17 (RAG-ready ingestion)
-3. Phase 18 (memory lifecycle policies)
-4. Phase 20 (security hardening) in parallel design track with Phase 19
-5. Phase 21 onward after security and data-sharing model stabilize
-6. After Phase 23, execute link-graph roadmap in order:
+2. Phase 18 (memory lifecycle policies)
+3. Phase 19 (sharing model) and Phase 20 (security hardening) parallel planning
+4. Phase 21 onward after security and data-sharing model stabilize
+5. After Phase 23, execute link-graph roadmap in order:
    - Phase 24 (graph foundations)
    - Phase 25 (link APIs/MCP + suggestions)
    - Phase 26 (graph-aware recall)

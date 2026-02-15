@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     log_config_in_dev: bool = True
     database_url: str = "postgresql://engram:engram@localhost:5432/engram_vault"
     embedding_dim: int = 256
+    embedding_provider: str = "local"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_fallback_to_local: bool = True
+    embedding_timeout_seconds: float = 20.0
+    ingestion_max_file_bytes: int = 2_000_000
+    ingestion_max_text_chars: int = 200_000
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     app_session_secret: str = "engram-local-dev-session-secret"

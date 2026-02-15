@@ -12,6 +12,7 @@ description: Use this skill when adding tests, extending eval scenarios, and val
 ## Test Strategy
 - Unit tests for deterministic logic.
 - Integration tests for API + DB + auth/visibility behavior.
+- Ingestion tests for text/file intake, chunk persistence, and blended retrieval responses.
 - Eval harness tests for recall, temporal correctness, abstention.
 - Add chat continuity eval scenarios when chat logic changes.
 - For MCP contract changes, include:

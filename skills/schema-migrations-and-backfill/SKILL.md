@@ -8,6 +8,7 @@ description: Use this skill when evolving SQL schema, adding indexes, and preser
 ## Use This Skill When
 - Adding/altering tables or indexes.
 - Backfilling ownership or visibility fields.
+- Introducing retrieval-side tables such as document/chunk stores.
 
 ## Workflow
 1. Add forward-only idempotent SQL changes.
@@ -23,3 +24,4 @@ description: Use this skill when evolving SQL schema, adding indexes, and preser
 ## Validation
 - Local DB bootstraps without errors.
 - Existing API tests remain green.
+- New retrieval paths have explicit indexes (owner/project filters and vector search index).

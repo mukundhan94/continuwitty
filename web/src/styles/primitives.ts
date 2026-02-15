@@ -50,16 +50,16 @@ export const LoginCard = styled.div`
 export const AppShell = styled.div`
   min-height: 100vh;
   height: 100vh;
-  padding: 1.1rem;
+  padding: 0.7rem;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 0.6rem;
   overflow: hidden;
 `
 
 export const TopNavShell = styled.header`
-  border-radius: 18px;
-  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  padding: 0.5rem 0.78rem;
   background: var(--surface-glass);
   border: 1px solid var(--surface-glass-border);
   box-shadow: var(--shadow-nav);
@@ -124,6 +124,7 @@ export const PaneHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  min-height: 2rem;
 `
 
 export const SectionDivider = styled.div`

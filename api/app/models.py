@@ -216,12 +216,16 @@ class PinnedEngramRecord(BaseModel):
 
 
 class ChatSourceReference(BaseModel):
+    source_type: str = "engram_source"
     engram_id: UUID
     engram_title: str
     url: str
     title: str | None = None
     snippet: str
     captured_at: datetime
+    document_id: UUID | None = None
+    chunk_id: UUID | None = None
+    chunk_index: int | None = None
 
 
 class ChatSendResponse(BaseModel):
@@ -230,6 +234,7 @@ class ChatSendResponse(BaseModel):
     reply_message_id: UUID
     assistant_text: str
     used_engram_ids: list[UUID] = Field(default_factory=list)
+    used_document_chunk_ids: list[UUID] = Field(default_factory=list)
     source_references: list[ChatSourceReference] = Field(default_factory=list)
 
 

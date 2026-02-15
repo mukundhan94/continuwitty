@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.chat.context import assemble_chat_context
+from app.ingestion.models import DocumentChunkQueryResult
 from app.models import ChatSessionRecord, EngramQueryResult, EngramSummary, RehydrationBundle
 
 
@@ -106,6 +107,24 @@ def test_assemble_chat_context_merges_pinned_and_retrieved(monkeypatch) -> None:
             title="Pinned" if engram_id == pinned_id else "Retrieved",
         ),
     )
+    document_chunk_id = uuid4()
+    monkeypatch.setattr(
+        "app.chat.context.query_document_chunks",
+        lambda actor_user_id, request, embedding_dim: [
+            DocumentChunkQueryResult(
+                chunk_id=document_chunk_id,
+                document_id=uuid4(),
+                project_id="project-chat",
+                title="Runbook Notes",
+                source_name="runbook.md",
+                chunk_index=0,
+                snippet="Escalate when queue depth remains high for 20 minutes.",
+                created_at=datetime.now(UTC),
+                visibility_scope="project",
+                distance=0.2,
+            )
+        ],
+    )
 
     assembled = assemble_chat_context(
         session=session,
@@ -115,8 +134,10 @@ def test_assemble_chat_context_merges_pinned_and_retrieved(monkeypatch) -> None:
     )
 
     assert assembled.used_engram_ids == [pinned_id, retrieved_id]
-    assert len(assembled.source_references) == 2
+    assert assembled.used_document_chunk_ids == [document_chunk_id]
+    assert len(assembled.source_references) == 3
     assert "Engram Retrieval Context" in assembled.context_markdown
     assert "Pinned summary" in assembled.context_markdown
     assert "Pinned detailed notes" in assembled.context_markdown
     assert "Retrieved summary" in assembled.context_markdown
+    assert "Document Retrieval Context" in assembled.context_markdown

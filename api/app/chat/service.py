@@ -361,6 +361,7 @@ class ChatService:
             reply_message_id=assistant_message.message_id,
             assistant_text=result.text,
             used_engram_ids=prepared.context.used_engram_ids,
+            used_document_chunk_ids=prepared.context.used_document_chunk_ids,
             source_references=prepared.context.source_references,
         )
 
@@ -383,6 +384,7 @@ class ChatService:
                 "session_id": prepared.session.session_id,
                 "message_id": prepared.user_message.message_id,
                 "used_engram_ids": prepared.context.used_engram_ids,
+                "used_document_chunk_ids": prepared.context.used_document_chunk_ids,
                 "source_references": prepared.context.source_references,
             },
         )
@@ -442,6 +444,7 @@ class ChatService:
                 "reply_message_id": assistant_message.message_id,
                 "assistant_text": full_text,
                 "used_engram_ids": prepared.context.used_engram_ids,
+                "used_document_chunk_ids": prepared.context.used_document_chunk_ids,
                 "source_references": prepared.context.source_references,
             },
         )
