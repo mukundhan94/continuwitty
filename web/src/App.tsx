@@ -47,6 +47,21 @@ import {
 import { useThemeMode } from './styles/useThemeMode'
 import { buildDefaultSaveAbstract } from './utils/chat'
 
+const PROJECT_ID_STORAGE_KEY = 'engram.lastProjectId'
+
+function normalizeProjectId(value: string): string {
+  const trimmed = value.trim()
+  return trimmed || WEB_CONFIG.defaultProjectId
+}
+
+function initialProjectId(): string {
+  if (typeof window === 'undefined') {
+    return WEB_CONFIG.defaultProjectId
+  }
+  const stored = window.localStorage.getItem(PROJECT_ID_STORAGE_KEY)
+  return normalizeProjectId(stored || WEB_CONFIG.defaultProjectId)
+}
+
 const RightRail = styled.div`
   min-height: 0;
   display: grid;
@@ -86,7 +101,7 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null)
   const [user, setUser] = useState<UserProfile | null>(null)
 
-  const [projectId, setProjectId] = useState(WEB_CONFIG.defaultProjectId)
+  const [projectId, setProjectId] = useState(initialProjectId)
 
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [creatingSession, setCreatingSession] = useState(false)
@@ -127,7 +142,7 @@ export default function App() {
   const loadSessions = async (nextProjectId: string, preferredSessionId: string | null) => {
     setSessionsLoading(true)
     try {
-      const loaded = await listChatSessions(nextProjectId)
+      const loaded = await listChatSessions(normalizeProjectId(nextProjectId))
       setSessions(loaded)
       setSelectedSessionId((current) => pickSession(loaded, preferredSessionId ?? current))
     } catch (error) {
@@ -144,7 +159,7 @@ export default function App() {
         listSessionMessages(sessionId),
         listPinnedEngrams(sessionId),
         listPinnedDocuments(sessionId),
-        listEngrams(currentProjectId),
+        listEngrams(normalizeProjectId(currentProjectId)),
       ])
       setMessages(loadedMessages)
       setPinnedEngrams(loadedPinned)
@@ -161,7 +176,7 @@ export default function App() {
     setDocumentsLoading(true)
     setDocumentsError(null)
     try {
-      const loaded = await listProjectDocuments(currentProjectId)
+      const loaded = await listProjectDocuments(normalizeProjectId(currentProjectId))
       setDocuments(loaded)
     } catch (error) {
       setDocumentsError(describeError(error))
@@ -173,6 +188,11 @@ export default function App() {
   const refreshFromSession = async (sessionId: string) => {
     await loadSessionData(sessionId, projectId)
   }
+
+  useEffect(() => {
+    // Keep the current project scope sticky across hard refreshes.
+    window.localStorage.setItem(PROJECT_ID_STORAGE_KEY, normalizeProjectId(projectId))
+  }, [projectId])
 
   useEffect(() => {
     const run = async () => {
@@ -410,13 +430,14 @@ export default function App() {
   }) => {
     setDocumentsSubmitting(true)
     setDocumentsError(null)
+    const normalizedProjectId = normalizeProjectId(projectId)
     try {
       const created = await ingestTextDocument({
-        project_id: projectId,
+        project_id: normalizedProjectId,
         ...payload,
       })
       setNotice(`Ingested text document ${created.title} (${created.chunk_count} chunks)`)
-      await loadProjectDocuments(projectId)
+      await loadProjectDocuments(normalizedProjectId)
     } catch (error) {
       setDocumentsError(describeError(error))
     } finally {
@@ -433,13 +454,14 @@ export default function App() {
   }) => {
     setDocumentsSubmitting(true)
     setDocumentsError(null)
+    const normalizedProjectId = normalizeProjectId(projectId)
     try {
       const created = await ingestFileDocument({
-        project_id: projectId,
+        project_id: normalizedProjectId,
         ...payload,
       })
       setNotice(`Ingested file ${created.source_name || created.title} (${created.chunk_count} chunks)`)
-      await loadProjectDocuments(projectId)
+      await loadProjectDocuments(normalizedProjectId)
     } catch (error) {
       setDocumentsError(describeError(error))
     } finally {
@@ -524,7 +546,7 @@ export default function App() {
           modelDefaults={WEB_CONFIG.defaultModelByProvider}
           loading={sessionsLoading}
           creating={creatingSession}
-          onProjectChange={setProjectId}
+          onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
           onSelectSession={setSelectedSessionId}
           onCreateSession={handleCreateSession}
         />
