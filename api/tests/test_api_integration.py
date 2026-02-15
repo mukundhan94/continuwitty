@@ -192,3 +192,28 @@ def test_rehydrate_packs_unique_citations(client, clean_db) -> None:
     assert len(body["top_citations"]) == 2
     urls = [item["url"] for item in body["top_citations"]]
     assert urls == ["https://example.com/source-b", "https://example.com/source-a"]
+
+
+@pytest.mark.integration
+def test_rehydrate_uses_detailed_summary_when_abstract_is_generic(client, clean_db) -> None:
+    payload = {
+        "project_id": "project-chat-save",
+        "title": "Chat snapshot",
+        "abstract": "Snapshot from active chat session.",
+        "detailed_summary_markdown": (
+            "# Chat Session Snapshot: Incident\n\n"
+            "## ASSISTANT (2026-02-15T16:00:12Z)\n"
+            "Primary cause was DB CPU saturation from an unbounded query; "
+            "rate limiting mitigated user impact while rollback had no effect."
+        ),
+    }
+    created = client.post("/api/v1/engrams", json=payload)
+    assert created.status_code == 200
+    engram_id = created.json()["engram_id"]
+
+    rehydrate = client.get(f"/api/v1/engrams/{engram_id}/rehydrate")
+    assert rehydrate.status_code == 200
+    body = rehydrate.json()
+
+    assert "Primary cause was DB CPU saturation" in body["compact_summary"]
+    assert "Detailed Notes Excerpt" in body["context_markdown"]

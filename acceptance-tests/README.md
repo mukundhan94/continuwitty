@@ -31,6 +31,10 @@ Supported env keys:
 - `API_BASE_URL`: base URL for API utilities (reserved for future steps).
 - `UI_USERNAME`: login username.
 - `UI_PASSWORD`: login password.
+- `ACCEPTANCE_BDD_TAGS`: tag expression for `playwright-bdd` selection. Default is `not @bedrock-live`.
+- `BEDROCK_LIVE_EXPECTED_MODEL`: optional strict model-id assertion for live Bedrock scenario.
+- `BEDROCK_LIVE_PROMPT`: prompt used by the `@bedrock-live` scenario.
+- `BEDROCK_LIVE_MIN_RESPONSE_CHARS`: minimum assistant response length for non-deterministic Bedrock validation.
 - `PW_HEADLESS`: set to `false` for headed runs.
 - `PW_TIMEOUT_MS`: default per-action timeout.
 
@@ -50,5 +54,23 @@ Dockerized run (uses `docker compose` services):
 ```bash
 make acceptance-test-docker
 ```
+
+Live Bedrock run (excluded from default deterministic acceptance suite):
+
+```bash
+make acceptance-test-bedrock-live
+```
+
+Dockerized live Bedrock run:
+
+```bash
+make acceptance-test-bedrock-live-docker
+```
+
+The `@bedrock-live` scenario intentionally validates non-deterministic behavior by asserting only:
+
+- Bedrock provider session is created with the default model field populated.
+- assistant response is received and exceeds a minimum character threshold.
+- response does not match known provider error text.
 
 When dockerized scenarios fail, screenshots are written to `acceptance-tests/artifacts/`.

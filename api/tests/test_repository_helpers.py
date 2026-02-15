@@ -4,8 +4,10 @@ from app.models import MemoryEngramCreate, RehydrationCitation
 from app.repository import (
     _build_retrieval_text,
     _combined_rank_score,
+    _extract_detailed_excerpt,
     _lexical_overlap_score,
     _pack_citations,
+    _resolve_compact_summary,
     _vector_literal,
 )
 
@@ -82,3 +84,27 @@ def test_pack_citations_deduplicates_urls() -> None:
     assert len(packed) == 2
     assert packed[0].url == "https://example.com/a"
     assert packed[1].url == "https://example.com/b"
+
+
+def test_resolve_compact_summary_uses_detailed_for_generic_chat_snapshot() -> None:
+    resolved = _resolve_compact_summary(
+        abstract="Snapshot from active chat session.",
+        detailed_summary_markdown=(
+            "# Chat Session Snapshot\n\n"
+            "## ASSISTANT (ts)\nPrimary cause was DB CPU saturation; rollback did not help."
+        ),
+    )
+    assert "Primary cause was DB CPU saturation" in resolved
+
+
+def test_extract_detailed_excerpt_prefers_assistant_section() -> None:
+    excerpt = _extract_detailed_excerpt(
+        (
+            "# Chat Session Snapshot\n\n"
+            "## USER (ts)\nWhat happened?\n\n"
+            "## ASSISTANT (ts)\nDatabase saturation triggered payment latency.\n\n"
+            "## USER (ts)\nThanks."
+        ),
+        max_chars=200,
+    )
+    assert excerpt.startswith("Database saturation triggered payment latency.")

@@ -6,6 +6,7 @@ import { ModalBackdrop, ModalCard } from '../styles/primitives'
 
 interface SaveEngramModalProps {
   defaultTitle: string
+  defaultAbstract?: string
   saving: boolean
   onClose: () => void
   onSave: (payload: {
@@ -24,9 +25,17 @@ function splitCsv(input: string): string[] {
     .filter((item) => item.length > 0)
 }
 
-export function SaveEngramModal({ defaultTitle, saving, onClose, onSave }: SaveEngramModalProps) {
+export function SaveEngramModal({
+  defaultTitle,
+  defaultAbstract,
+  saving,
+  onClose,
+  onSave,
+}: SaveEngramModalProps) {
   const [title, setTitle] = useState(defaultTitle)
-  const [abstract, setAbstract] = useState('Snapshot from active chat session.')
+  const [abstract, setAbstract] = useState(
+    defaultAbstract || 'Captured session insights from chat transcript.',
+  )
   const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>('private')
   const [tagsText, setTagsText] = useState('chat,snapshot')
   const [keywordsText, setKeywordsText] = useState('continuity,engram')

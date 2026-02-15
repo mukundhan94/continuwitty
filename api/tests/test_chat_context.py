@@ -31,6 +31,7 @@ def _bundle(engram_id, title: str) -> RehydrationBundle:
         project_id="project-chat",
         title=title,
         compact_summary=f"{title} summary",
+        detailed_summary_markdown=f"{title} detailed notes",
         key_decisions=[{"decision": f"{title} decision", "rationale": "because"}],
         open_questions=[f"{title} question"],
         top_citations=[
@@ -117,4 +118,5 @@ def test_assemble_chat_context_merges_pinned_and_retrieved(monkeypatch) -> None:
     assert len(assembled.source_references) == 2
     assert "Engram Retrieval Context" in assembled.context_markdown
     assert "Pinned summary" in assembled.context_markdown
+    assert "Pinned detailed notes" in assembled.context_markdown
     assert "Retrieved summary" in assembled.context_markdown

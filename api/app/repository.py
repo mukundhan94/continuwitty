@@ -20,6 +20,17 @@ from .models import (
 )
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]{2,}")
+_ASSISTANT_SECTION_PATTERN = re.compile(
+    r"^##\s*ASSISTANT[^\n]*\n(?P<body>.*?)(?=^##\s|\Z)",
+    re.IGNORECASE | re.MULTILINE | re.DOTALL,
+)
+_GENERIC_CHAT_ABSTRACTS = {
+    "",
+    "snapshot from active chat session.",
+    "snapshot from active chat session",
+    "chat snapshot",
+    "session snapshot",
+}
 
 
 def _vector_literal(values: list[float]) -> str:
@@ -46,6 +57,48 @@ def _build_retrieval_text(payload: MemoryEngramCreate) -> str:
 
 def _tokenize(text: str) -> set[str]:
     return {match.group(0) for match in _TOKEN_PATTERN.finditer(text.lower())}
+
+
+def _normalize_spaces(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip())
+
+
+def _truncate_text(value: str, max_chars: int) -> str:
+    if len(value) <= max_chars:
+        return value
+    return value[: max_chars - 3].rstrip() + "..."
+
+
+def _extract_detailed_excerpt(markdown: str, max_chars: int) -> str:
+    text = markdown.strip()
+    if not text:
+        return ""
+
+    assistant_match = _ASSISTANT_SECTION_PATTERN.search(text)
+    excerpt = assistant_match.group("body").strip() if assistant_match else text
+    if not excerpt:
+        return ""
+    return _truncate_text(excerpt, max_chars=max_chars)
+
+
+def _resolve_compact_summary(
+    *,
+    abstract: str,
+    detailed_summary_markdown: str,
+    max_chars: int = 800,
+) -> str:
+    abstract_clean = _normalize_spaces(abstract)
+    if abstract_clean.lower() not in _GENERIC_CHAT_ABSTRACTS:
+        return _truncate_text(abstract_clean, max_chars=max_chars)
+
+    fallback = _normalize_spaces(
+        _extract_detailed_excerpt(detailed_summary_markdown, max_chars=max_chars)
+    )
+    if fallback:
+        return fallback
+    if abstract_clean:
+        return _truncate_text(abstract_clean, max_chars=max_chars)
+    return "No summary available."
 
 
 def _lexical_overlap_score(query: str, candidate_parts: list[str]) -> float:
@@ -367,9 +420,14 @@ def get_rehydration_bundle(
     citations = [RehydrationCitation(**source_row) for source_row in source_rows]
     packed_citations = _pack_citations(citations, limit=5)
 
-    compact_summary = row["abstract"]
-    if len(compact_summary) > 800:
-        compact_summary = compact_summary[:797] + "..."
+    detailed_summary_markdown = str(
+        engram_json.get("detailed_summary_markdown") or row.get("engram_markdown") or ""
+    ).strip()
+    compact_summary = _resolve_compact_summary(
+        abstract=str(row.get("abstract") or ""),
+        detailed_summary_markdown=detailed_summary_markdown,
+    )
+    detailed_excerpt = _extract_detailed_excerpt(detailed_summary_markdown, max_chars=2400)
 
     citation_lines = []
     for citation in packed_citations:
@@ -383,27 +441,34 @@ def get_rehydration_bundle(
         citation_lines.append(line)
 
     citation_text = "\n".join(citation_lines) if citation_lines else "- No citations available"
-    context_markdown = (
-        f"# Rehydration Context: {row['title']}\n\n"
-        f"## Compact Summary\n{compact_summary}\n\n"
-        f"## Key Decisions\n"
-        + (
-            "\n".join(
-                f"- {item.get('decision', '')}: {item.get('rationale', '')}" for item in decisions
-            )
-            or "- None"
+    decisions_text = (
+        "\n".join(
+            f"- {item.get('decision', '')}: {item.get('rationale', '')}" for item in decisions
         )
-        + "\n\n## Open Questions\n"
-        + ("\n".join(f"- {question}" for question in open_questions) or "- None")
-        + "\n\n## Top Citations\n"
-        + citation_text
+        or "- None"
     )
+    questions_text = "\n".join(f"- {question}" for question in open_questions) or "- None"
+    sections = [
+        f"# Rehydration Context: {row['title']}",
+        f"## Compact Summary\n{compact_summary}",
+    ]
+    if detailed_excerpt:
+        sections.append(f"## Detailed Notes Excerpt\n{detailed_excerpt}")
+    sections.extend(
+        [
+            f"## Key Decisions\n{decisions_text}",
+            f"## Open Questions\n{questions_text}",
+            f"## Top Citations\n{citation_text}",
+        ]
+    )
+    context_markdown = "\n\n".join(sections)
 
     return RehydrationBundle(
         engram_id=row["engram_id"],
         project_id=row["project_id"],
         title=row["title"],
         compact_summary=compact_summary,
+        detailed_summary_markdown=detailed_summary_markdown,
         key_decisions=decisions,
         open_questions=open_questions,
         top_citations=packed_citations,

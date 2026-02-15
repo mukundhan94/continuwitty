@@ -18,7 +18,10 @@ Keep end-to-end UX regressions detectable through Gherkin scenarios running agai
    - `make acceptance-typecheck`
 4. Run dockerized acceptance:
    - `make acceptance-test-docker`
-5. If failures occur:
+5. If Bedrock integration changed, run live acceptance:
+   - `make acceptance-test-bedrock-live`
+   - or `make acceptance-test-bedrock-live-docker` when validating compose-network behavior.
+6. If failures occur:
    - check `acceptance-tests/src/support/fixtures.ts` screenshot artifacts behavior
    - verify `VITE_ALLOWED_HOSTS` includes `web` for compose-network browser access
    - verify `VITE_API_PROXY_TARGET` points to `http://api:8000` in dockerized runs
@@ -38,4 +41,5 @@ Keep end-to-end UX regressions detectable through Gherkin scenarios running agai
 - `make acceptance-bddgen` passes
 - `make acceptance-typecheck` passes
 - `make acceptance-test-docker` passes
+- If Bedrock changed: `make acceptance-test-bedrock-live` passes
 - README contains updated workflow + env notes for newcomers

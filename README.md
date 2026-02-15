@@ -35,6 +35,8 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add backend dev-mode parsed-config logging with secret redaction.
 - [x] Dockerize API + web runtime with env-driven compose orchestration.
 - [x] Add Playwright-BDD + `bddgen` acceptance framework with dockerized execution.
+- [x] Add tagged Bedrock live acceptance flow for non-deterministic provider validation.
+- [x] Improve chat snapshot engram rehydration with transcript-derived summaries.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -537,7 +539,7 @@ make stack-down
 - UI auth seed: `UI_DEMO_USERNAME`, `UI_DEMO_PASSWORD`, `UI_DEMO_PASSWORD_HASH`
 - Providers: `DEFAULT_CHAT_PROVIDER`, `DEFAULT_CHAT_MODEL`, `OPENAI_*`, `ANTHROPIC_*`, `AWS_*`
 - Web runtime: `WEB_PORT`, `VITE_API_PROXY_TARGET`, `VITE_ALLOWED_HOSTS`, `VITE_DEFAULT_*`
-- Acceptance profile: `ACCEPTANCE_WEB_BASE_URL`, `ACCEPTANCE_API_BASE_URL`, `PW_HEADLESS`, `PW_TIMEOUT_MS`
+- Acceptance profile: `ACCEPTANCE_WEB_BASE_URL`, `ACCEPTANCE_API_BASE_URL`, `ACCEPTANCE_BDD_TAGS`, `BEDROCK_LIVE_*`, `PW_HEADLESS`, `PW_TIMEOUT_MS`
 
 ## Acceptance Tests (Playwright-BDD + bddgen)
 
@@ -556,14 +558,28 @@ Dockerized runner (uses compose services):
 make acceptance-test-docker
 ```
 
+Live Bedrock runner (real provider call, excluded from default deterministic suite):
+
+```bash
+make acceptance-test-bedrock-live
+```
+
+Dockerized live Bedrock runner:
+
+```bash
+make acceptance-test-bedrock-live-docker
+```
+
 Failure screenshots are persisted to `acceptance-tests/artifacts/`.
 Generated Playwright spec files are written to `acceptance-tests/.features-gen/` by `bddgen`.
+Default acceptance execution filters to `not @bedrock-live` so CI-style local runs stay deterministic.
 
 Current feature coverage:
 
 - authentication handoff (sign-in without manual refresh)
 - chat pane layout stability while creating sessions
 - continue-in-new-chat continuity behavior
+- tagged live Bedrock scenario for non-deterministic response validation with default model selection
 
 ## Workflow Notes (Current Validation Sequence)
 
@@ -1153,6 +1169,48 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make acceptance-typecheck` passed
    - `make acceptance-test-docker` passed (`3` scenarios, `13` steps)
 
+### 2026-02-15 (Chat snapshot continuity fix: transcript-aware rehydration)
+
+1. Root cause fixed:
+   - chat snapshot engrams were saved with detailed transcript markdown, but rehydration/context assembly used only `abstract` as compact summary.
+   - default snapshot abstracts (for example `Snapshot from active chat session.`) led to low-signal context in pinned engram prompts.
+2. Backend improvements:
+   - rehydration now derives compact summary from transcript content when abstract is generic.
+   - rehydration context now includes a `Detailed Notes Excerpt` section.
+   - `RehydrationBundle` now carries `detailed_summary_markdown`.
+3. Save-as-engram improvements:
+   - when saving with a generic snapshot abstract, backend auto-derives a stronger abstract from latest assistant/user message.
+4. Frontend improvements:
+   - save modal now accepts a `defaultAbstract` and pre-fills it from recent chat content.
+5. Added tests:
+   - repository helper tests for transcript fallback and assistant-section extraction.
+   - chat service test for abstract auto-derivation.
+   - integration test for generic-abstract rehydration fallback.
+   - frontend test for save modal abstract prefill behavior.
+6. Validation:
+   - `make check` passed (`81` backend tests + eval `4/4`)
+   - `make web-check` passed (`11` frontend tests)
+
+### 2026-02-15 (Plan.Next phase 7 extension: Bedrock live acceptance coverage)
+
+1. Added a tagged live-provider acceptance scenario:
+   - `acceptance-tests/features/bedrock-live.feature` with `@bedrock-live` tag.
+   - asserts Bedrock session creation from UI default model and non-empty live assistant response.
+2. Added Bedrock step bindings:
+   - `acceptance-tests/src/steps/bedrock.steps.ts`.
+   - non-deterministic assertion strategy uses response length threshold and explicit provider-error-text guard.
+3. Added acceptance env controls:
+   - `ACCEPTANCE_BDD_TAGS`, `BEDROCK_LIVE_EXPECTED_MODEL`, `BEDROCK_LIVE_PROMPT`, `BEDROCK_LIVE_MIN_RESPONSE_CHARS`.
+   - wired through `acceptance-tests/src/support/env.ts`, `docker-compose.yml`, `.env.example`, and `acceptance-tests/.env.example`.
+4. Added workflow commands:
+   - `make acceptance-test-bedrock-live`
+   - `make acceptance-test-bedrock-live-docker`
+5. Validation:
+   - `make acceptance-typecheck` passed
+   - `make acceptance-test` passed
+   - `make acceptance-test-bedrock-live` passed
+   - `make acceptance-test-bedrock-live-docker` passed
+
 ### Next Immediate Steps (One By One)
 
 1. Expand acceptance coverage to include save-as-engram and pinned-engram reuse assertions with API fixture seeding.
@@ -1307,6 +1365,7 @@ Acceptance tests live under `acceptance-tests`:
 
 - `features/authentication.feature`: login handoff regression.
 - `features/session-layout.feature`: pane height stability + continuation behavior.
+- `features/bedrock-live.feature`: tagged non-deterministic Bedrock live-provider flow.
 - `src/steps/*.ts`: Playwright step bindings.
 - `src/support/*.ts`: shared world/env/hooks.
 
@@ -1319,6 +1378,7 @@ Notes:
 - `make acceptance-bddgen` regenerates Playwright specs from `.feature` files.
 - `make acceptance-typecheck` validates acceptance TypeScript.
 - `make acceptance-test-docker` runs Gherkin acceptance tests against dockerized API+web.
+- `make acceptance-test-bedrock-live` runs only `@bedrock-live` scenarios against live Bedrock.
 
 ## MemoryEngram Contract (MVP)
 

@@ -3,7 +3,7 @@ SHELL := /bin/zsh
 -include .env
 export
 
-.PHONY: db-up db-down db-logs stack-up stack-down stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check
+.PHONY: db-up db-down db-logs stack-up stack-down stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-bedrock-live acceptance-test-docker acceptance-test-bedrock-live-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web-dev web-lint web-test web-build web-check
 
 db-up:
 	docker compose up -d db
@@ -35,9 +35,18 @@ acceptance-typecheck:
 acceptance-test:
 	cd acceptance-tests && npm run test
 
+acceptance-test-bedrock-live:
+	cd acceptance-tests && npm run test:bedrock-live
+
 acceptance-test-docker:
 	@exit_code=0; \
 	docker compose --profile acceptance up --build --abort-on-container-exit acceptance-tests || exit_code=$$?; \
+	docker compose --profile acceptance down; \
+	exit $$exit_code
+
+acceptance-test-bedrock-live-docker:
+	@exit_code=0; \
+	ACCEPTANCE_BDD_TAGS='@bedrock-live' docker compose --profile acceptance up --build --abort-on-container-exit acceptance-tests || exit_code=$$?; \
 	docker compose --profile acceptance down; \
 	exit $$exit_code
 

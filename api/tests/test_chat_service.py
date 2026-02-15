@@ -257,6 +257,55 @@ def test_save_session_as_engram_sets_source_session_id(monkeypatch) -> None:
     assert captured["payload"].thread_id == f"chat-session:{session.session_id}"
 
 
+def test_save_session_as_engram_derives_abstract_from_latest_assistant(monkeypatch) -> None:
+    actor_id = uuid4()
+    session = _session(actor_id)
+    service = ChatService(embedding_dim=256)
+    message_a = _message(
+        message_id=uuid4(),
+        session_id=session.session_id,
+        role="user",
+        content_text="Need a clean incident summary",
+    )
+    message_b = _message(
+        message_id=uuid4(),
+        session_id=session.session_id,
+        role="assistant",
+        content_text="Payment outage caused by DB saturation; rollback ineffective due to query-plan drift.",
+    )
+    captured: dict = {}
+
+    monkeypatch.setattr(
+        "app.chat.service.get_chat_session", lambda session_id, actor_user_id: session
+    )
+    monkeypatch.setattr(
+        "app.chat.service.list_chat_messages",
+        lambda session_id, actor_user_id, limit, offset: [message_a, message_b],
+    )
+
+    def _fake_create_engram(payload, embedding_dim: int, owner_user_id):  # noqa: ANN001
+        captured["payload"] = payload
+        captured["embedding_dim"] = embedding_dim
+        captured["owner_user_id"] = owner_user_id
+        return EngramCreateResponse(engram_id=uuid4(), created_at=datetime.now(UTC))
+
+    monkeypatch.setattr("app.chat.service.create_engram", _fake_create_engram)
+
+    service.save_session_as_engram(
+        actor_user_id=actor_id,
+        session_id=session.session_id,
+        payload=SaveSessionAsEngramRequest(
+            title="Saved Session",
+            abstract="Snapshot from active chat session.",
+            visibility_scope=VisibilityScope.project,
+            tags=["chat"],
+            keywords=["continuity"],
+        ),
+    )
+
+    assert captured["payload"].abstract.startswith("Payment outage caused by DB saturation")
+
+
 def test_pin_engram_raises_for_inaccessible_resources(monkeypatch) -> None:
     actor_id = uuid4()
     service = ChatService(embedding_dim=256)

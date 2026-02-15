@@ -34,9 +34,10 @@ Use it as the default workflow when adding or refactoring features.
 4. Run checks: `make lint`, `make test`, `make eval`, `make check`.
 5. If `web/` changed: run `make web-check`.
 6. If `acceptance-tests/`, `web/Dockerfile`, `api/Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-bddgen`, `make acceptance-typecheck`, and `make acceptance-test-docker`.
-7. For docker runtime changes: validate `docker compose config`.
-8. Update docs (`README.md`, `Plan.Next.md` progress, skill docs if needed).
-9. Commit with phase-scoped message.
+7. If Bedrock provider behavior changed, run live non-deterministic acceptance gate: `make acceptance-test-bedrock-live` (or docker equivalent).
+8. For docker runtime changes: validate `docker compose config`.
+9. Update docs (`README.md`, `Plan.Next.md` progress, skill docs if needed).
+10. Commit with phase-scoped message.
 
 ## 4. Architecture Boundaries
 - Route handlers in `main.py` should orchestrate only.
@@ -95,6 +96,7 @@ Use it as the default workflow when adding or refactoring features.
 - Eval tests for memory quality scenarios.
 - Frontend tests for UI helpers/components and session workflow logic.
 - Acceptance tests for end-to-end workflow regressions (`acceptance-tests/features/*.feature`).
+- `@bedrock-live` acceptance tests are optional for deterministic local runs, but required when Bedrock adapter/runtime behavior changes.
 - Add regression tests when fixing bugs.
 - No phase is complete unless `make check` passes. If web files changed, `make web-check` is also required.
 - If dockerized UX or auth/session behavior changed, `make acceptance-test-docker` is required before merge.

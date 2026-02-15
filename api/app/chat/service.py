@@ -51,6 +51,14 @@ from .errors import (
     ChatValidationError,
 )
 
+_GENERIC_SNAPSHOT_ABSTRACTS = {
+    "",
+    "snapshot from active chat session.",
+    "snapshot from active chat session",
+    "chat snapshot",
+    "session snapshot",
+}
+
 
 @dataclass(frozen=True)
 class PreparedGeneration:
@@ -104,6 +112,32 @@ def _transcript_markdown(session: ChatSessionRecord, messages: list[ChatMessageR
 def _retrieval_text_from_messages(messages: list[ChatMessageRecord], tail_count: int = 8) -> str:
     tail = messages[-tail_count:]
     return " ".join(item.content_text.strip() for item in tail if item.content_text.strip())
+
+
+def _normalize_spaces(value: str) -> str:
+    return " ".join(value.strip().split())
+
+
+def _truncate_text(value: str, max_chars: int) -> str:
+    if len(value) <= max_chars:
+        return value
+    return value[: max_chars - 3].rstrip() + "..."
+
+
+def _is_generic_snapshot_abstract(value: str) -> bool:
+    return _normalize_spaces(value).lower() in _GENERIC_SNAPSHOT_ABSTRACTS
+
+
+def _derive_chat_snapshot_abstract(messages: list[ChatMessageRecord], max_chars: int = 320) -> str:
+    for role in ("assistant", "user"):
+        for message in reversed(messages):
+            if message.role != role:
+                continue
+            normalized = _normalize_spaces(message.content_text)
+            if not normalized:
+                continue
+            return _truncate_text(normalized, max_chars=max_chars)
+    return ""
 
 
 class ChatService:
@@ -428,12 +462,18 @@ class ChatService:
         if not messages:
             raise ChatValidationError("Cannot save an empty chat session as engram")
 
+        abstract = payload.abstract.strip()
+        if _is_generic_snapshot_abstract(abstract):
+            derived_abstract = _derive_chat_snapshot_abstract(messages)
+            if derived_abstract:
+                abstract = derived_abstract
+
         created = create_engram(
             payload=MemoryEngramCreate(
                 project_id=session.project_id,
                 thread_id=f"chat-session:{session.session_id}",
                 title=payload.title,
-                abstract=payload.abstract,
+                abstract=abstract,
                 detailed_summary_markdown=_transcript_markdown(session, messages),
                 tags=payload.tags,
                 keywords=payload.keywords,

@@ -146,6 +146,7 @@ class RehydrationBundle(BaseModel):
     project_id: str
     title: str
     compact_summary: str
+    detailed_summary_markdown: str = ""
     key_decisions: list[Decision] = Field(default_factory=list)
     open_questions: list[str] = Field(default_factory=list)
     top_citations: list[RehydrationCitation] = Field(default_factory=list)

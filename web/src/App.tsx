@@ -53,6 +53,34 @@ function pickSession(sessions: ChatSession[], previousId: string | null): string
   return sessions.length > 0 ? sessions[0].session_id : null
 }
 
+function normalizeSpaces(value: string): string {
+  return value.trim().replace(/\s+/g, ' ')
+}
+
+function truncateText(value: string, maxChars: number): string {
+  if (value.length <= maxChars) {
+    return value
+  }
+  return `${value.slice(0, maxChars - 3).trimEnd()}...`
+}
+
+function buildDefaultSaveAbstract(messages: ChatMessage[]): string {
+  for (const role of ['assistant', 'user'] as const) {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index]
+      if (message.role !== role) {
+        continue
+      }
+      const normalized = normalizeSpaces(message.content_text || '')
+      if (!normalized) {
+        continue
+      }
+      return truncateText(normalized, 320)
+    }
+  }
+  return 'Captured session insights from chat transcript.'
+}
+
 export default function App() {
   const [authChecking, setAuthChecking] = useState(true)
   const [authSubmitting, setAuthSubmitting] = useState(false)
@@ -90,6 +118,7 @@ export default function App() {
     () => sessions.find((item) => item.session_id === selectedSessionId) || null,
     [selectedSessionId, sessions],
   )
+  const defaultSaveAbstract = useMemo(() => buildDefaultSaveAbstract(messages), [messages])
 
   const loadSessions = async (nextProjectId: string, preferredSessionId: string | null) => {
     setSessionsLoading(true)
@@ -433,6 +462,7 @@ export default function App() {
       {saveModalOpen ? (
         <SaveEngramModal
           defaultTitle={selectedSession ? `${selectedSession.title} Snapshot` : 'Chat Snapshot'}
+          defaultAbstract={defaultSaveAbstract}
           saving={saveSubmitting}
           onClose={() => setSaveModalOpen(false)}
           onSave={handleSaveEngram}

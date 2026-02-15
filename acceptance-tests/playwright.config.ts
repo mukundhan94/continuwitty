@@ -6,6 +6,7 @@ import { acceptanceEnv } from './src/support/env'
 const testDir = defineBddConfig({
   features: 'features/**/*.feature',
   steps: ['src/steps/**/*.ts', 'src/support/fixtures.ts'],
+  tags: acceptanceEnv.bddTags,
 })
 
 export default defineConfig({

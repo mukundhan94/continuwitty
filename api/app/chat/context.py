@@ -27,6 +27,11 @@ def _dedupe_preserve_order(ids: list[UUID]) -> list[UUID]:
 
 
 def _bundle_section(bundle: RehydrationBundle) -> str:
+    detailed_excerpt = bundle.detailed_summary_markdown.strip()
+    if detailed_excerpt and len(detailed_excerpt) > 1200:
+        detailed_excerpt = detailed_excerpt[:1197].rstrip() + "..."
+    if not detailed_excerpt:
+        detailed_excerpt = "- None"
     decisions = (
         "\n".join(f"- {item.decision}: {item.rationale}" for item in bundle.key_decisions[:3])
         or "- None"
@@ -42,6 +47,7 @@ def _bundle_section(bundle: RehydrationBundle) -> str:
     return (
         f"## {bundle.title} ({bundle.engram_id})\n"
         f"Summary: {bundle.compact_summary}\n\n"
+        f"Detailed notes excerpt:\n{detailed_excerpt}\n\n"
         f"Key decisions:\n{decisions}\n\n"
         f"Open questions:\n{questions}\n\n"
         f"Top citations:\n{citations}"

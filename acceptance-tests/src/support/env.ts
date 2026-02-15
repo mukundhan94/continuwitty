@@ -7,6 +7,11 @@ function asInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
+function asOptionalNonEmpty(value: string | undefined): string | undefined {
+  const trimmed = (value || '').trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
 export const acceptanceEnv = {
   webBaseUrl: process.env.WEB_BASE_URL || 'http://localhost:5174',
   apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:8000',
@@ -14,4 +19,10 @@ export const acceptanceEnv = {
   password: process.env.UI_PASSWORD || 'admin123',
   headless: (process.env.PW_HEADLESS || 'true').toLowerCase() !== 'false',
   timeoutMs: asInt(process.env.PW_TIMEOUT_MS, 45000),
+  bddTags: asOptionalNonEmpty(process.env.ACCEPTANCE_BDD_TAGS) || 'not @bedrock-live',
+  bedrockLiveExpectedModel: asOptionalNonEmpty(process.env.BEDROCK_LIVE_EXPECTED_MODEL),
+  bedrockLivePrompt:
+    asOptionalNonEmpty(process.env.BEDROCK_LIVE_PROMPT) ||
+    'Provide two concise bullet points on why session-to-engram continuity helps support handoffs.',
+  bedrockLiveMinResponseChars: asInt(process.env.BEDROCK_LIVE_MIN_RESPONSE_CHARS, 20),
 }

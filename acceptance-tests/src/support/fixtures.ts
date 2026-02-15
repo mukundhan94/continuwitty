@@ -10,6 +10,9 @@ type ScenarioState = {
   baselinePanelHeight: number | null
   latestPanelHeight: number | null
   latestSessionTitle: string | null
+  latestSessionId: string | null
+  latestModelId: string | null
+  latestAssistantText: string | null
 }
 
 type AcceptanceFixtures = {
@@ -22,6 +25,9 @@ export const test = bddBase.extend<AcceptanceFixtures>({
       baselinePanelHeight: null,
       latestPanelHeight: null,
       latestSessionTitle: null,
+      latestSessionId: null,
+      latestModelId: null,
+      latestAssistantText: null,
     })
   },
   page: async ({ page }, use) => {
