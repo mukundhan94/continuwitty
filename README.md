@@ -15,6 +15,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add full local test suite (unit + API + integration).
 - [x] Migrate setup to `uv` with lockfile-based dependencies.
 - [x] Add lint/format best-practice gates with `ruff`.
+- [x] Add local UI test harness with simple login workflow.
 - [ ] Add LangGraph durable run pipeline integration.
 - [ ] Add CLI/UI for upload/search/rehydrate workflows.
 - [ ] Add automated evaluation harness (temporal + multi-engram reasoning).
@@ -89,6 +90,9 @@ engram/
       main.py
       models.py
       repository.py
+      templates/
+        login.html
+        dashboard.html
 ```
 
 ## File-by-File Guide
@@ -101,11 +105,14 @@ engram/
 - `api/app/embedding.py`: Deterministic local embedding helper.
 - `api/app/db.py`: DB connection lifecycle.
 - `api/app/config.py`: Environment-backed settings.
+- `api/app/templates/login.html`: local sign-in page for UI testing.
+- `api/app/templates/dashboard.html`: authenticated local dashboard for API testing.
 - `api/pyproject.toml`: project dependencies, pytest config, and ruff config.
 - `api/uv.lock`: locked dependency graph for reproducible local runs.
 - `api/tests/conftest.py`: API client, schema bootstrap, DB cleanup fixtures.
 - `api/tests/test_api_unit.py`: unit tests for API routing behavior.
 - `api/tests/test_api_integration.py`: full API + DB integration tests.
+- `api/tests/test_ui_auth.py`: login/logout/session workflow tests.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
 - `Makefile`: Local run shortcuts.
@@ -155,6 +162,16 @@ make api
 5. Open API docs:
 
 - [http://localhost:8000/docs](http://localhost:8000/docs)
+
+UI testing entrypoints:
+
+- [http://localhost:8000/login](http://localhost:8000/login)
+- [http://localhost:8000/ui](http://localhost:8000/ui)
+
+Default local UI credentials (override in `.env` if needed):
+
+- username: `admin`
+- password: `admin123`
 
 6. Run tests:
 
@@ -226,7 +243,7 @@ Comment: verifies API and DB behavior end-to-end.
 make api
 ```
 
-Comment: open `http://localhost:8000/docs`, run create/list/query/rehydrate once.
+Comment: open `http://localhost:8000/login`, sign in, then use `/ui` to run create/list/query/rehydrate from the dashboard.
 
 Phase 2 is intentionally paused until this validation pass is complete.
 
@@ -280,13 +297,29 @@ Phase 2 is intentionally paused until this validation pass is complete.
    - `make format-check` -> all files formatted
    - `make test` -> `13 passed`
 
+### 2026-02-15 (UI login phase)
+
+1. Added local browser UI with session-based login:
+   - `/login` sign-in page
+   - `/ui` authenticated dashboard for manual API testing
+2. Added UI dependencies and config:
+   - `jinja2`, `python-multipart`, `itsdangerous`
+   - new settings: `APP_SESSION_SECRET`, `UI_DEMO_USERNAME`, `UI_DEMO_PASSWORD`
+3. Added auth workflow tests:
+   - unauthenticated redirect checks
+   - invalid login rejection
+   - login/logout session behavior
+4. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `17 passed`
+
 ### Next Immediate Steps (One By One)
 
 1. Run the workflow notes section and complete your manual validation pass.
 2. Integrate LangGraph checkpointing and thread resume support.
 3. Add automatic end-of-run engram writes from the agent workflow.
 4. Add optional periodic snapshot engrams for long runs.
-5. Add minimal UI for list/search/detail/rehydrate actions.
+5. Harden UI auth for production (hashed user store, role model, CSRF).
 
 ## MVP API Surface
 
@@ -304,6 +337,7 @@ Test files live under `api/tests`:
 - `test_repository_helpers.py`: retrieval text and vector literal helpers.
 - `test_api_unit.py`: endpoint behavior with repository function mocking.
 - `test_api_integration.py`: end-to-end API roundtrip against local Postgres.
+- `test_ui_auth.py`: login/logout/session-protected UI workflow checks.
 - `conftest.py`: DB fixture, schema bootstrap, and cleanup.
 
 Notes:
@@ -352,18 +386,24 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
 - API skeleton created
 - CRUD + query + rehydrate endpoints wired
 
-### Milestone 2 (Next)
+### Milestone 2 (Completed)
+
+- Added local UI login workflow for manual testing
+- Added authenticated dashboard for create/list/query/rehydrate API calls
+- Added UI auth tests for login/logout/session redirects
+
+### Milestone 3 (Next)
 
 - Integrate LangGraph run checkpointing
 - Automatic engram write at end of each research run
 - Optional periodic snapshot engrams for long runs
 
-### Milestone 3
-
-- Add minimal UI (list/search/detail/rehydrate copy action)
-- Add source-inspection view for provenance
-
 ### Milestone 4
+
+- Harden auth for production (user store, hashed secrets, CSRF, roles)
+- Add UI source-inspection view for provenance workflows
+
+### Milestone 5
 
 - Build eval harness:
   - fact recall
@@ -418,5 +458,6 @@ curl -X POST http://localhost:8000/api/v1/engrams/query \
 - [x] Each major claim has URL + snippet + timestamp provenance.
 - [x] I can retrieve relevant engrams by semantic query + metadata filters.
 - [x] I can generate an LLM-ready rehydration bundle from any engram.
+- [x] I can access a local UI using a simple login workflow to test endpoints.
 - [x] A newcomer can run the system locally using this README alone.
 - [ ] The same stored engram can be reused with different LLM providers later.

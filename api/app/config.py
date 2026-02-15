@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     embedding_dim: int = 256
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    app_session_secret: str = "engram-local-dev-session-secret"
+    ui_demo_username: str = "admin"
+    ui_demo_password: str = "admin123"
 
     model_config = SettingsConfigDict(
         env_file=".env",

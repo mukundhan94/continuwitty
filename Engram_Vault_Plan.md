@@ -112,7 +112,18 @@ LLM-ready rehydration bundle.
 
 ------------------------------------------------------------------------
 
-## Phase 7 --- MVP UI
+## Phase 7 --- Local Test UI + Simple Login
+
+### Features
+
+- Login page for local operator access
+- Session-based auth (local/dev baseline)
+- Browser dashboard to call create/list/query/rehydrate endpoints
+- Logout + route protection for UI pages
+
+------------------------------------------------------------------------
+
+## Phase 8 --- MVP UI Expansion
 
 ### Features
 
@@ -123,7 +134,7 @@ LLM-ready rehydration bundle.
 
 ------------------------------------------------------------------------
 
-## Phase 8 --- Evaluation & Hardening
+## Phase 9 --- Evaluation & Hardening
 
 ### Tests
 
