@@ -31,6 +31,7 @@ import {
   TopNavUserBlock,
   WorkspaceGrid,
 } from './styles/primitives'
+import { useThemeMode } from './styles/useThemeMode'
 import { buildDefaultSaveAbstract } from './utils/chat'
 
 function describeError(error: unknown): string {
@@ -55,6 +56,7 @@ function pickSession(sessions: ChatSession[], previousId: string | null): string
 }
 
 export default function App() {
+  const { mode, toggleMode } = useThemeMode()
   const [authChecking, setAuthChecking] = useState(true)
   const [authSubmitting, setAuthSubmitting] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
@@ -379,6 +381,9 @@ export default function App() {
           <p className="text-sm text-inkMuted">
             {user.username} · {user.role}
           </p>
+          <button type="button" onClick={toggleMode}>
+            {mode === 'dark' ? 'Light Theme' : 'Dark Theme'}
+          </button>
           <button type="button" onClick={handleLogout}>
             Logout
           </button>

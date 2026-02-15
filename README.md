@@ -41,6 +41,9 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add markdown rendering support for chat transcript messages.
 - [x] Fix SSE stream parsing for CRLF frame boundaries to restore live token streaming.
 - [x] Refresh UI theme (no green palette) with richer markdown presentation.
+- [x] Add persistent light/dark theme mode with in-app toggle.
+- [x] Fix dark-theme scrollbar contrast and session sidebar split-scroll ergonomics.
+- [x] Add sticky creator footer, previous-session label, and stronger active-session highlight.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -1282,6 +1285,57 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 4. Improved markdown readability:
    - richer heading, table, blockquote, and horizontal-rule styles in transcript message renderer.
 5. Validation:
+   - `make web-check` passed
+
+### 2026-02-15 (Dark theme mode and toggle support)
+
+1. Added dual theme definitions:
+   - `web/src/styles/theme.ts` now exports `lightTheme`, `darkTheme`, and `appThemes`.
+   - both themes include complete color tokens for panels, bubbles, markdown surfaces, and modal layers.
+2. Added persistent theme-mode state:
+   - `web/src/styles/themeMode.tsx` introduces `ThemeModeProvider`.
+   - `web/src/styles/useThemeMode.ts` provides theme-mode hook access.
+   - `web/src/styles/themeModeUtils.ts` centralizes mode normalization/initial-resolution logic.
+   - mode is stored in `localStorage` and restored on load.
+3. Wired runtime theme switching:
+   - `web/src/main.tsx` + `web/src/ThemedApp.tsx` now select `ThemeProvider` theme from active mode.
+   - `web/src/App.tsx` top-nav toggle switches between Light/Dark themes.
+4. Updated style layers for mode-aware rendering:
+   - `web/src/styles/globalStyles.ts` adds CSS variables for surfaces/background glows/markdown UI.
+   - `web/src/styles/primitives.ts` consumes those variables for cards, panes, notices, bubbles, tables, blockquotes, and modals.
+5. Added tests:
+   - `web/src/styles/themeMode.test.ts` validates mode normalization and initial mode resolution logic.
+6. Validation:
+   - `make web-check` passed
+   - `make acceptance-test` passed
+
+### 2026-02-15 (Dark scrollbar contrast and sidebar scroll-layout pass)
+
+1. Improved themed scrollbar styling:
+   - added light/dark scrollbar tokens in `web/src/styles/theme.ts`.
+   - applied global scrollbar styling in `web/src/styles/globalStyles.ts` for both WebKit and Firefox (`scrollbar-color`).
+2. Improved session-sidebar ergonomics:
+   - split sidebar into two independent scroll zones in `web/src/components/SessionSidebar.tsx`:
+     - create-session panel (`session-create-panel`) remains scrollable.
+     - session list panel (`session-list-panel`) gets larger relative height and independent scrolling.
+3. Validation:
+   - `make web-check` passed
+
+### 2026-02-15 (Session sidebar sticky controls and active-state UX pass)
+
+1. Made creator controls permanent and sticky:
+   - `web/src/components/SessionSidebar.tsx` now keeps the create button in a sticky footer area.
+   - create panel remains independently scrollable for long forms.
+2. Added optional creator collapse toggle:
+   - `Hide Creator` / `Show Creator` toggle in sidebar create header.
+3. Added explicit session-list label:
+   - bottom panel now includes sticky section heading `Previous Sessions`.
+4. Improved active session highlighting:
+   - stronger active card colors via theme tokens.
+   - selected session now sets `aria-current="true"` for accessibility/testing hooks.
+5. Added regression tests:
+   - `web/src/components/SessionSidebar.test.tsx` validates list label, creator toggle, and selected-session marker.
+6. Validation:
    - `make web-check` passed
 
 ### Next Immediate Steps (One By One)

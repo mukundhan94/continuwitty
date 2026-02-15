@@ -4,7 +4,7 @@ import { ThemeProvider } from 'styled-components'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ChatMessage, ChatSession, ChatSourceReference } from '../api/types'
-import { appTheme } from '../styles/theme'
+import { lightTheme } from '../styles/theme'
 import { ChatPanel } from './ChatPanel'
 
 function buildSession(): ChatSession {
@@ -43,7 +43,7 @@ function renderPanel(overrides: Partial<ComponentProps<typeof ChatPanel>> = {}) 
   }
 
   render(
-    <ThemeProvider theme={appTheme}>
+    <ThemeProvider theme={lightTheme}>
       <ChatPanel {...props} />
     </ThemeProvider>,
   )

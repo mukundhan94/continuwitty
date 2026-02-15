@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from 'styled-components'
 import { describe, expect, it, vi } from 'vitest'
 
-import { appTheme } from '../styles/theme'
+import { lightTheme } from '../styles/theme'
 import { LoginView } from './LoginView'
 
 describe('LoginView', () => {
@@ -12,7 +12,7 @@ describe('LoginView', () => {
     const user = userEvent.setup()
 
     render(
-      <ThemeProvider theme={appTheme}>
+      <ThemeProvider theme={lightTheme}>
         <LoginView isSubmitting={false} error={null} onSubmit={onSubmit} />
       </ThemeProvider>,
     )

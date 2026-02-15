@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from 'styled-components'
 import { describe, expect, it, vi } from 'vitest'
 
-import { appTheme } from '../styles/theme'
+import { lightTheme } from '../styles/theme'
 import { SaveEngramModal } from './SaveEngramModal'
 
 describe('SaveEngramModal', () => {
@@ -12,7 +12,7 @@ describe('SaveEngramModal', () => {
     const user = userEvent.setup()
 
     render(
-      <ThemeProvider theme={appTheme}>
+      <ThemeProvider theme={lightTheme}>
         <SaveEngramModal
           defaultTitle="Incident Snapshot"
           defaultAbstract="DB saturation caused cascading payment latency."

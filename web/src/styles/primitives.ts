@@ -39,8 +39,8 @@ export const LoginShell = styled.div`
 
 export const LoginCard = styled.div`
   width: min(480px, 100%);
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: var(--surface-glass);
+  border: 1px solid var(--surface-glass-border);
   border-radius: ${({ theme }) => theme.radius.xl};
   box-shadow: var(--shadow-card);
   padding: 1.5rem;
@@ -60,8 +60,8 @@ export const AppShell = styled.div`
 export const TopNavShell = styled.header`
   border-radius: 18px;
   padding: 1rem 1.1rem;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: var(--surface-glass);
+  border: 1px solid var(--surface-glass-border);
   box-shadow: var(--shadow-nav);
   display: flex;
   align-items: center;
@@ -91,8 +91,8 @@ export const WorkspaceGrid = styled.main`
 `
 
 export const GlassPane = styled.section`
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: var(--surface-glass);
+  border: 1px solid var(--surface-glass-border);
   border-radius: ${({ theme }) => theme.radius.lg};
   box-shadow: var(--shadow-panel);
   min-height: 0;
@@ -182,26 +182,33 @@ export const ErrorText = styled.p`
 export const NoticeBanner = styled.p`
   padding: 0.5rem 0.75rem;
   border-radius: ${({ theme }) => theme.radius.md};
-  background: #e8efff;
+  background: var(--color-notice-bg);
   color: var(--color-success);
-  border: 1px solid #c5d4fb;
+  border: 1px solid var(--color-notice-border);
 `
 
 export const SessionItemButton = styled.button<{ $active: boolean }>`
   width: 100%;
   text-align: left;
-  background: #ffffff;
+  background: var(--surface-raised);
   color: var(--color-ink);
   border: 1px solid var(--color-line);
   display: grid;
   gap: 0.12rem;
   padding: 0.5rem 0.6rem;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 
   ${({ $active }) =>
     $active
       ? css`
-          border-color: var(--color-accent-alt);
-          box-shadow: inset 0 0 0 1px var(--color-accent-alt);
+          background: var(--session-active-bg);
+          border-color: var(--session-active-border);
+          box-shadow:
+            inset 0 0 0 1px var(--session-active-border),
+            0 0 0 1px var(--session-active-shadow);
         `
       : null}
 `
@@ -222,11 +229,11 @@ export const ChatMessageBubble = styled.article<{ $role: string }>`
     $role === 'user'
       ? css`
           align-self: flex-end;
-          background: linear-gradient(140deg, #fbe2cb, #f8c8aa);
+          background: linear-gradient(140deg, var(--bubble-user-start), var(--bubble-user-end));
         `
       : css`
           align-self: flex-start;
-          background: linear-gradient(130deg, #e7ecff, #d1dcff);
+          background: linear-gradient(130deg, var(--bubble-assistant-start), var(--bubble-assistant-end));
         `}
 `
 
@@ -291,13 +298,13 @@ export const MessageText = styled.div`
   code {
     font-family: var(--font-mono);
     font-size: 0.83rem;
-    background: rgba(15, 23, 42, 0.08);
+    background: var(--markdown-code-bg);
     border-radius: 6px;
     padding: 0.1rem 0.3rem;
   }
 
   pre {
-    background: rgba(15, 23, 42, 0.08);
+    background: var(--markdown-code-bg);
     border-radius: 8px;
     padding: 0.55rem 0.65rem;
     overflow-x: auto;
@@ -309,10 +316,10 @@ export const MessageText = styled.div`
   }
 
   blockquote {
-    border-left: 3px solid #b8c7ef;
+    border-left: 3px solid var(--markdown-blockquote-border);
     padding-left: 0.6rem;
     color: var(--color-ink-muted);
-    background: rgba(48, 93, 156, 0.05);
+    background: var(--markdown-blockquote-bg);
     border-radius: 0 8px 8px 0;
   }
 
@@ -325,26 +332,26 @@ export const MessageText = styled.div`
     width: 100%;
     border-collapse: collapse;
     font-size: 0.84rem;
-    border: 1px solid #cfd9ec;
-    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid var(--markdown-table-border);
+    background: var(--surface-raised);
   }
 
   th,
   td {
-    border: 1px solid #cfd9ec;
+    border: 1px solid var(--markdown-table-border);
     padding: 0.32rem 0.4rem;
     text-align: left;
     vertical-align: top;
   }
 
   th {
-    background: rgba(48, 93, 156, 0.1);
+    background: var(--markdown-table-header-bg);
     font-weight: 700;
   }
 
   hr {
     border: 0;
-    border-top: 1px dashed #cfd9ec;
+    border-top: 1px dashed var(--markdown-table-border);
   }
 `
 
@@ -381,7 +388,7 @@ export const EngramCard = styled.article`
   border: 1px solid var(--color-line);
   border-radius: 12px;
   padding: 0.55rem;
-  background: #ffffff;
+  background: var(--surface-raised);
   display: grid;
   gap: 0.35rem;
 `
@@ -400,7 +407,7 @@ export const EngramAbstract = styled.p`
 export const ModalBackdrop = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(18, 28, 32, 0.45);
+  background: var(--modal-backdrop);
   display: grid;
   place-items: center;
   padding: 1rem;
@@ -410,7 +417,7 @@ export const ModalCard = styled.div`
   width: min(560px, 100%);
   border-radius: ${({ theme }) => theme.radius.lg};
   background: var(--color-card);
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--modal-border);
   box-shadow: var(--shadow-modal);
   padding: 1rem;
 `

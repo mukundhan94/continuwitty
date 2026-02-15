@@ -12,6 +12,30 @@ export const GlobalStyle = createGlobalStyle`
     --color-line: ${({ theme }) => theme.colors.line};
     --color-success: ${({ theme }) => theme.colors.success};
     --color-error: ${({ theme }) => theme.colors.error};
+    --surface-glass: ${({ theme }) => theme.colors.surfaceGlass};
+    --surface-glass-border: ${({ theme }) => theme.colors.surfaceGlassBorder};
+    --surface-raised: ${({ theme }) => theme.colors.surfaceRaised};
+    --surface-raised-border: ${({ theme }) => theme.colors.surfaceRaisedBorder};
+    --color-input-bg: ${({ theme }) => theme.colors.inputBg};
+    --color-notice-bg: ${({ theme }) => theme.colors.noticeBg};
+    --color-notice-border: ${({ theme }) => theme.colors.noticeBorder};
+    --bubble-user-start: ${({ theme }) => theme.colors.bubbleUserStart};
+    --bubble-user-end: ${({ theme }) => theme.colors.bubbleUserEnd};
+    --bubble-assistant-start: ${({ theme }) => theme.colors.bubbleAssistantStart};
+    --bubble-assistant-end: ${({ theme }) => theme.colors.bubbleAssistantEnd};
+    --markdown-code-bg: ${({ theme }) => theme.colors.markdownCodeBg};
+    --markdown-blockquote-border: ${({ theme }) => theme.colors.markdownBlockquoteBorder};
+    --markdown-blockquote-bg: ${({ theme }) => theme.colors.markdownBlockquoteBg};
+    --markdown-table-border: ${({ theme }) => theme.colors.markdownTableBorder};
+    --markdown-table-header-bg: ${({ theme }) => theme.colors.markdownTableHeaderBg};
+    --modal-backdrop: ${({ theme }) => theme.colors.modalBackdrop};
+    --modal-border: ${({ theme }) => theme.colors.modalBorder};
+    --scrollbar-track: ${({ theme }) => theme.colors.scrollbarTrack};
+    --scrollbar-thumb: ${({ theme }) => theme.colors.scrollbarThumb};
+    --scrollbar-thumb-hover: ${({ theme }) => theme.colors.scrollbarThumbHover};
+    --session-active-bg: ${({ theme }) => theme.colors.sessionActiveBg};
+    --session-active-border: ${({ theme }) => theme.colors.sessionActiveBorder};
+    --session-active-shadow: ${({ theme }) => theme.colors.sessionActiveShadow};
     --font-display: ${({ theme }) => theme.fonts.display};
     --font-body: ${({ theme }) => theme.fonts.body};
     --font-mono: ${({ theme }) => theme.fonts.mono};
@@ -23,6 +47,28 @@ export const GlobalStyle = createGlobalStyle`
 
   * {
     box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 999px;
+    border: 2px solid var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
   }
 
   html,
@@ -40,8 +86,8 @@ export const GlobalStyle = createGlobalStyle`
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background:
-      radial-gradient(circle at 16% 14%, #ffd8bf 0%, transparent 32%),
-      radial-gradient(circle at 84% 82%, #d7e0ff 0%, transparent 35%),
+      radial-gradient(circle at 16% 14%, ${({ theme }) => theme.colors.bgGlowPrimary} 0%, transparent 32%),
+      radial-gradient(circle at 84% 82%, ${({ theme }) => theme.colors.bgGlowSecondary} 0%, transparent 35%),
       linear-gradient(165deg, var(--color-bg-soft), var(--color-bg-strong));
   }
 
@@ -88,7 +134,7 @@ export const GlobalStyle = createGlobalStyle`
     border: 1px solid var(--color-line);
     border-radius: ${({ theme }) => theme.radius.md};
     padding: 0.55rem 0.7rem;
-    background: #ffffff;
+    background: var(--color-input-bg);
     color: var(--color-ink);
     line-height: 1.35;
   }
