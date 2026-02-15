@@ -160,6 +160,14 @@ LLM-ready rehydration bundle.
 -   Temporal correctness
 -   Abstention behavior
 
+### Local MVP Status
+
+-   Implemented local eval harness in `api/evals/harness.py`.
+-   Added runner `python -m evals.run_eval` (`make eval`) with JSON output.
+-   Added integration check `api/tests/test_eval_harness.py`.
+-   Current local run result: 4/4 scenarios passed.
+-   Remaining work in this phase: production auth/security hardening.
+
 ------------------------------------------------------------------------
 
 ## Acceptance Criteria

@@ -22,7 +22,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add CSRF-protected UI auth with optional hashed-password support.
 - [x] Add multi-user auth model + role-based access controls (admin/analyst/viewer).
 - [ ] Add CLI/UI for upload/search/rehydrate workflows.
-- [ ] Add automated evaluation harness (temporal + multi-engram reasoning).
+- [x] Add automated evaluation harness (temporal + multi-engram reasoning).
 - [ ] Add production security hardening (oauth/oidc, audit logging, rate limits).
 
 ## Why This Exists
@@ -86,6 +86,10 @@ engram/
   api/
     pyproject.toml
     uv.lock
+    evals/
+      __init__.py
+      harness.py
+      run_eval.py
     app/
       __init__.py
       agent_models.py
@@ -123,11 +127,14 @@ engram/
 - `api/app/templates/dashboard.html`: authenticated local dashboard for API testing.
 - `api/pyproject.toml`: project dependencies, pytest config, and ruff config.
 - `api/uv.lock`: locked dependency graph for reproducible local runs.
+- `api/evals/harness.py`: local scenario-driven evaluation harness and scoring logic.
+- `api/evals/run_eval.py`: CLI runner for local evaluation output (`make eval`).
 - `api/tests/conftest.py`: API client, schema bootstrap, DB cleanup fixtures.
 - `api/tests/test_api_unit.py`: unit tests for API routing behavior.
 - `api/tests/test_api_integration.py`: full API + DB integration tests.
 - `api/tests/test_ui_auth.py`: login/logout/session workflow tests.
 - `api/tests/test_user_rbac.py`: multi-user auth and role-based access checks.
+- `api/tests/test_eval_harness.py`: integration check that evaluation scenarios pass.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
 - `Makefile`: Local run shortcuts.
@@ -220,9 +227,17 @@ make format-check
 make check
 ```
 
-## Workflow Notes (Before Phase 5)
+9. Run local memory quality evaluations:
 
-Use this exact flow while you validate Milestone 1 behavior.
+```bash
+make eval
+```
+
+Evaluation output is written to `api/evals/last_eval.json`.
+
+## Workflow Notes (Current Validation Sequence)
+
+Use this exact flow while you validate current local behavior end-to-end.
 
 1. Start infra:
 
@@ -258,7 +273,15 @@ make test
 
 Comment: verifies API and DB behavior end-to-end.
 
-5. Manual API smoke test:
+5. Run memory evaluation harness:
+
+```bash
+make eval
+```
+
+Comment: validates fact recall, cross-engram retrieval proxy, temporal ordering, and abstention behavior.
+
+6. Manual API smoke test:
 
 ```bash
 make api
@@ -310,8 +333,6 @@ curl -X POST http://localhost:8000/api/v1/agent-runs \
     "auto_persist_engram": false
   }'
 ```
-
-Phase 5 evaluation work is intentionally paused until this validation pass is complete.
 
 If you want to use a hashed local UI password instead of plaintext in `.env`, generate one with:
 
@@ -437,13 +458,27 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make lint` -> all checks passed
    - `make test` -> `29 passed`
 
+### 2026-02-15 (Evaluation harness phase)
+
+1. Added a local evaluation harness under `api/evals`:
+   - fact recall
+   - cross-engram reasoning proxy
+   - temporal correctness
+   - abstention on empty results
+2. Added `make eval` and JSON output write to `api/evals/last_eval.json`.
+3. Added integration test coverage for harness execution:
+   - `api/tests/test_eval_harness.py`
+4. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `30 passed`
+   - `make eval` -> `4/4` cases passed (score `1.0`)
+
 ### Next Immediate Steps (One By One)
 
-1. Run the workflow notes section and complete your manual validation pass.
-2. Build evaluation harness for temporal and cross-engram reasoning.
-3. Add reranking/citation-packing improvements for retrieval quality.
-4. Add background consolidation jobs for long-run memory maintenance.
-5. Add production auth hardening (oauth/oidc, audit events, rate limits).
+1. Add local CLI workflow for upload/search/rehydrate.
+2. Add reranking/citation-packing improvements for retrieval quality.
+3. Add background consolidation jobs for long-run memory maintenance.
+4. Add production auth hardening (oauth/oidc, audit events, rate limits).
 
 ## MVP API Surface
 
@@ -472,12 +507,14 @@ Test files live under `api/tests`:
 - `test_ui_auth.py`: login/logout/session-protected UI + CSRF checks.
 - `test_user_rbac.py`: user management and role-based access control checks.
 - `test_agent_workflow.py`: LangGraph checkpoint/resume + auto-persist + snapshot checks.
+- `test_eval_harness.py`: scenario-based evaluation harness pass/fail checks.
 - `conftest.py`: DB fixture, schema bootstrap, and cleanup.
 
 Notes:
 
 - Integration tests are marked with `@pytest.mark.integration` and configured in `api/pyproject.toml`.
 - If the DB is unavailable, integration tests are skipped with a clear reason.
+- `make eval` runs local memory-quality scenarios and exits non-zero if any case fails.
 
 ## MemoryEngram Contract (MVP)
 
@@ -539,13 +576,20 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
 - Added source-inspection endpoint and dashboard workflow
 - Added multi-user auth model and role-based access controls
 
-### Milestone 5 (Next)
+### Milestone 5 (Completed)
 
-- Build eval harness:
+- Added local eval harness:
   - fact recall
-  - cross-engram reasoning
+  - cross-engram reasoning proxy
   - temporal updates
   - abstention checks
+
+### Milestone 6 (Next)
+
+- Add local CLI workflow:
+  - upload engrams from JSON
+  - query/search from terminal
+  - rehydrate bundles from terminal
 - Add production auth/security hardening:
   - oauth/oidc integration
   - audit-event logging
@@ -624,5 +668,6 @@ curl http://localhost:8000/api/v1/engrams/<engram_id>/sources
 - [x] I can access a local UI using a simple login workflow to test endpoints.
 - [x] I can inspect stored provenance sources for an engram via API/UI.
 - [x] I can manage users and enforce admin-only routes with role checks.
+- [x] I can run local eval scenarios for fact/cross/temporal/abstention behavior.
 - [x] A newcomer can run the system locally using this README alone.
 - [ ] The same stored engram can be reused with different LLM providers later.

@@ -4,6 +4,7 @@ api/.venv/
 api/.pytest_cache/
 api/.ruff_cache/
 data/
+api/evals/last_eval.json
 **/__pycache__/
 *.pyc
 .DS_Store
