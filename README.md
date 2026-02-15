@@ -2,7 +2,7 @@
 
 This project turns long LLM research runs into durable, queryable "memory engrams" so context does not disappear between sessions.
 
-This README is written for a newcomer and follows an implementation sequence based on `deep-research-report.md`, `Plan.md`, and `Plan.Next.md`.
+This README is written for a newcomer and follows an implementation sequence based on `deep-research-report.md` and the unified roadmap in `Plan.md`.
 
 ## Current Progress
 
@@ -44,26 +44,26 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add persistent light/dark theme mode with in-app toggle.
 - [x] Fix dark-theme scrollbar contrast and session sidebar split-scroll ergonomics.
 - [x] Add sticky creator footer, previous-session label, and stronger active-session highlight.
+- [x] Merge baseline and next roadmap into a single unified planning document.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
-## Plan.Next Status
+## Unified Plan Status
 
-- `Plan.md`: historical baseline plan and completed local-first milestones.
-- `Plan.Next.md`: active implementation roadmap for chat continuity, multi-provider adapters, and MCP streaming.
-- Phase status:
-  - Phase 0-1 completed (`Plan.Next.md`, `AGENT.md`, `skills/`).
-  - Phase 2 completed (chat/session schema + repositories + visibility enforcement).
-  - Phase 3 completed (provider adapters + registry + provider config contracts).
-  - Phase 4 completed (chat API routes + context assembler + continuity flows).
-  - Phase 5 completed (MCP stream endpoint + tool execution + JSON-RPC error framing).
-  - Phase 6 completed (React chat workbench + frontend tests + web quality gates + shared style system migration).
-  - Phase 7 completed (dockerized acceptance-test baseline with Playwright-BDD + `bddgen`).
+- `Plan.md`: canonical roadmap (historical baseline + chat/MCP expansion + future phases).
+- Completed scope:
+  - phases 0-15 completed (foundation, schema/storage, retrieval/rehydration, durability, chat continuity, providers, MCP, UI, acceptance, theme/UX hardening).
+- Next implementation scope:
+  - phase 16: MCP developer tooling and typed clients.
+  - phase 17: document ingestion and RAG-ready retrieval.
+  - phase 18: memory lifecycle policies (autosave/retention/consolidation).
+  - phase 19: collaboration and sharing model.
+  - phase 20: production security hardening.
 
 ## Agent Guide
 
 - `AGENT.md` is the canonical contribution and maintenance contract for human contributors and agents.
 - Before changing architecture, API contracts, or schema behavior, read `AGENT.md` first.
-- Every phase updates this README and keeps `Plan.Next.md` and `skills/` aligned.
+- Every phase updates this README and keeps `Plan.md` and `skills/` aligned.
 
 ## Skills Catalog
 
@@ -135,7 +135,6 @@ engram/
   README.md
   AGENT.md
   Plan.md
-  Plan.Next.md
   deep-research-report.md
   .dockerignore
   .env.example
@@ -230,6 +229,7 @@ engram/
     tsconfig.app.json
     src/
       App.tsx
+      ThemedApp.tsx
       config.ts
       index.css
       styles/
@@ -237,6 +237,10 @@ engram/
         primitives.ts
         styled.d.ts
         theme.ts
+        themeMode.tsx
+        themeModeContext.ts
+        themeModeUtils.ts
+        useThemeMode.ts
       api/
         auth.ts
         auth.test.ts
@@ -245,14 +249,19 @@ engram/
         types.ts
       components/
         ChatPanel.tsx
+        ChatPanel.test.tsx
         LoginView.tsx
         LoginView.test.tsx
         PinnedEngramPanel.tsx
         SaveEngramModal.tsx
+        SaveEngramModal.test.tsx
         SessionSidebar.tsx
+        SessionSidebar.test.tsx
       test/
         setup.ts
       utils/
+        chat.ts
+        chat.test.ts
         sse.ts
         sse.test.ts
   acceptance-tests/
@@ -264,14 +273,19 @@ engram/
     .env.example
     features/
       authentication.feature
+      bedrock-live.feature
       session-layout.feature
+      triage-live.feature
     src/
       support/
+        chat.ts
         env.ts
         fixtures.ts
       steps/
         auth.steps.ts
+        bedrock.steps.ts
         session.steps.ts
+        triage.steps.ts
 ```
 
 ## File-by-File Guide
@@ -279,8 +293,7 @@ engram/
 - `.dockerignore`: build context exclusions for API/web/acceptance Docker builds.
 - `docker-compose.yml`: local DB + API + web + acceptance test orchestration.
 - `AGENT.md`: project operating guide for contributors and agents.
-- `Plan.md`: historical phased baseline plan.
-- `Plan.Next.md`: active roadmap for chat + MCP + multi-provider phases.
+- `Plan.md`: canonical merged roadmap (completed phases + upcoming phases).
 - `db/init/001_schema.sql`: Database extension, tables, and indexes.
 - `api/app/main.py`: FastAPI routes and API surface.
 - `api/app/agent_models.py`: request/response models for agent runs.
@@ -337,13 +350,21 @@ engram/
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
 - `api/tests/test_config_settings.py`: settings debug logging and secret redaction checks.
-- `web/src/App.tsx`: React chat workbench composition and workflow state management.
+- `web/src/App.tsx`: React chat workbench composition, workflow state, and theme toggle control.
+- `web/src/ThemedApp.tsx`: mode-aware `ThemeProvider` wrapper for runtime light/dark switching.
 - `web/src/config.ts`: frontend runtime config parsing + one-time debug console print.
 - `web/src/api/*.ts`: browser API clients for auth/chat/engram interactions.
 - `web/src/components/*.tsx`: UI modules for login, sessions, chat transcript, pinning, and save modal.
-- `web/src/styles/theme.ts`: shared frontend design tokens (colors/fonts/shadows/radius).
+- `web/src/components/SessionSidebar.test.tsx`: sidebar interaction tests (toggle, labels, active-state marker).
+- `web/src/styles/theme.ts`: shared frontend light/dark design tokens and theme registry.
 - `web/src/styles/globalStyles.ts`: global CSS variables and base element styles.
 - `web/src/styles/primitives.ts`: reusable styled panels/cards/typography primitives.
+- `web/src/styles/themeMode.tsx`: persisted theme-mode provider state.
+- `web/src/styles/themeModeContext.ts`: theme-mode context contract.
+- `web/src/styles/themeModeUtils.ts`: theme-mode parsing and initialization helpers.
+- `web/src/styles/useThemeMode.ts`: theme-mode hook.
+- `web/src/utils/chat.ts`: save-as-engram default abstract derivation.
+- `web/src/utils/chat.test.ts`: tests for abstract derivation behavior.
 - `web/src/utils/sse.ts`: SSE parser used for streaming chat responses.
 - `web/src/**/*.test.ts(x)`: Vitest + Testing Library frontend tests.
 - `web/postcss.config.cjs`: PostCSS pipeline for Tailwind.
@@ -353,7 +374,7 @@ engram/
 - `acceptance-tests/README.md`: acceptance framework guide and commands.
 - `acceptance-tests/features/*.feature`: Gherkin acceptance scenarios.
 - `acceptance-tests/src/steps/*.ts`: Playwright-backed step definitions.
-- `acceptance-tests/src/support/*.ts`: shared fixtures, env parsing, login helpers, and failure artifacts.
+- `acceptance-tests/src/support/*.ts`: shared fixtures, env parsing, chat helpers, login helpers, and failure artifacts.
 - `acceptance-tests/playwright.config.ts`: `playwright-bdd` + `defineBddConfig` + runtime fixture wiring.
 - `acceptance-tests/Dockerfile`: Playwright runtime image for dockerized acceptance runs.
 - `Makefile`: Local run shortcuts.
@@ -979,7 +1000,7 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make test` -> `44 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
-### 2026-02-15 (Plan.Next phase 2: schema and repository layer)
+### 2026-02-15 (Unified roadmap phase 10: schema and repository layer)
 
 1. Added schema extensions for continuity and access control:
    - `engrams.owner_user_id`
@@ -1004,7 +1025,7 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make test` -> `49 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
-### 2026-02-15 (Plan.Next phase 3: provider adapter layer)
+### 2026-02-15 (Unified roadmap phase 11: provider adapter layer)
 
 1. Added provider domain package under `api/app/providers`:
    - shared adapter contract (`base.py`)
@@ -1030,7 +1051,7 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make test` -> `58 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
-### 2026-02-15 (Plan.Next phase 4: chat API and continuity flow)
+### 2026-02-15 (Unified roadmap phase 12: chat API and continuity flow)
 
 1. Added chat domain package under `api/app/chat`:
    - `api.py`: `/api/v1/chat/*` route layer
@@ -1057,7 +1078,7 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make test` -> `67 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
-### 2026-02-15 (Plan.Next phase 5: MCP HTTP stream server)
+### 2026-02-15 (Unified roadmap phase 13: MCP HTTP stream server)
 
 1. Added MCP domain package under `api/app/mcp`:
    - `api.py`: `/api/v1/mcp/stream` transport endpoint
@@ -1080,7 +1101,7 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make test` -> `72 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
-### 2026-02-15 (Plan.Next phase 6: React chat UI)
+### 2026-02-15 (Unified roadmap phase 14: React chat UI)
 
 1. Initialized `web/` with Vite + React + TypeScript.
 2. Implemented full local chat workbench:
@@ -1165,7 +1186,7 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make check` passed
    - backend tests: `77 passed`
 
-### 2026-02-15 (Plan.Next phase 7: dockerized acceptance baseline)
+### 2026-02-15 (Unified roadmap phase 15: dockerized acceptance baseline)
 
 1. Dockerized runtime surfaces:
    - added `api/Dockerfile` for uv-locked API container runtime
@@ -1211,7 +1232,7 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make check` passed (`81` backend tests + eval `4/4`)
    - `make web-check` passed (`11` frontend tests)
 
-### 2026-02-15 (Plan.Next phase 7 extension: Bedrock live acceptance coverage)
+### 2026-02-15 (Unified roadmap phase 15 extension: Bedrock live acceptance coverage)
 
 1. Added a tagged live-provider acceptance scenario:
    - `acceptance-tests/features/bedrock-live.feature` with `@bedrock-live` tag.
@@ -1338,11 +1359,27 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 6. Validation:
    - `make web-check` passed
 
+### 2026-02-15 (Unified roadmap merge and next-phase design pass)
+
+1. Merged planning sources:
+   - combined historical baseline and chat/MCP expansion roadmap into one canonical unified `Plan.md`.
+2. Added concrete next implementation phases in unified plan:
+   - phase 16: MCP developer tooling and typed clients.
+   - phase 17: document ingestion and RAG-ready retrieval.
+   - phase 18: memory lifecycle policies (autosave/retention/consolidation).
+   - phase 19: collaboration and sharing model.
+   - phase 20+: security hardening, observability, release automation, evalops.
+3. Updated README references and file maps:
+   - switched roadmap references from dual-plan status to unified-plan status.
+   - refreshed repository/file guides with current web theme-mode modules and acceptance artifacts.
+
 ### Next Immediate Steps (One By One)
 
-1. Add MCP client examples and validation fixtures for external agent integrations.
-2. Add final hardening pass for release and troubleshooting runbooks.
-3. Add release-ready troubleshooting flowcharts for provider/rate-limit/auth incidents.
+1. Phase 16 kickoff: add typed MCP client helpers (Python/TypeScript) and contract tests for JSON-RPC/SSE tools.
+2. Phase 17 kickoff: implement document/chunk ingestion with upload UX and retrieval blending with chat snapshots.
+3. Phase 18 kickoff: ship memory lifecycle controls for autosave cadence, retention, and consolidation policies.
+4. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
+5. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
 
 ## MVP API Surface
 
@@ -1484,9 +1521,13 @@ Backend tests live under `api/tests`:
 Frontend unit/component tests live under `web/src/**/*.test.ts(x)`:
 
 - `src/api/auth.test.ts`
+- `src/styles/themeMode.test.ts`
+- `src/utils/chat.test.ts`
 - `src/utils/sse.test.ts`
 - `src/components/LoginView.test.tsx`
 - `src/components/ChatPanel.test.tsx`
+- `src/components/SaveEngramModal.test.tsx`
+- `src/components/SessionSidebar.test.tsx`
 
 Acceptance tests live under `acceptance-tests`:
 
@@ -1607,7 +1648,7 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
 
 ### Milestone 10 (Completed)
 
-- Plan.Next phase 2 schema and repository layer:
+- Unified roadmap phase 10 schema and repository layer:
   - chat/session/pinning tables
   - engram ownership and visibility fields
   - visibility-aware repository filtering
@@ -1644,12 +1685,48 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - pin/save/continue controls and engram ID copy workflows
   - frontend test baseline (`vitest`) and `make web-check`
 
-### Milestone 15 (Next)
+### Milestone 15 (Completed)
 
 - UI hardening and browser integration testing:
-  - Playwright E2E coverage for login/chat/pin/save/continue workflows
-  - MCP client integration fixtures
-  - release-readiness documentation updates
+  - Playwright-BDD acceptance baseline for login/chat/continuation flows
+  - tagged live Bedrock and triage continuity scenarios
+  - markdown rendering + stream parsing reliability fixes
+  - dark/light theming and sidebar UX hardening
+
+### Milestone 16 (Next)
+
+- MCP developer experience and tooling:
+  - typed MCP client helpers (Python + TypeScript)
+  - MCP contract tests and local smoke CLI tools
+  - expanded MCP usage docs and copy-ready examples
+
+### Milestone 17 (Next)
+
+- RAG-ready ingestion and retrieval expansion:
+  - file/document upload ingestion
+  - chunking + metadata pipeline
+  - retrieval blending between chat snapshots and document chunks
+
+### Milestone 18 (Next)
+
+- Memory lifecycle controls:
+  - autosave policy options
+  - retention windows and pruning controls
+  - consolidation visibility and controls in UI
+
+### Milestone 19 (Planned)
+
+- Collaboration and sharing:
+  - project membership model
+  - scoped sharing/revocation workflows
+  - audit-visible memory collaboration events
+
+### Milestone 20 (Planned)
+
+- Production security hardening:
+  - OIDC integration
+  - distributed auth rate limiting
+  - centralized audit and security regression gates
 
 ## Example: Create Engram
 
