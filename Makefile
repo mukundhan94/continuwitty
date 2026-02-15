@@ -3,7 +3,7 @@ SHELL := /bin/zsh
 -include .env
 export
 
-.PHONY: db-up db-down db-logs sync api cli lint format format-check check test test-unit test-integration eval
+.PHONY: db-up db-down db-logs sync api cli consolidate lint format format-check check test test-unit test-integration eval
 
 db-up:
 	docker compose up -d db
@@ -22,6 +22,9 @@ api:
 
 cli:
 	cd api && uv run python -m app.cli $(ARGS)
+
+consolidate:
+	cd api && uv run python -m app.cli consolidate $(ARGS)
 
 lint:
 	cd api && uv run ruff check .

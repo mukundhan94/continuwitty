@@ -136,3 +136,34 @@ def test_cli_rehydrate_not_found(monkeypatch, capsys) -> None:
 
     assert code == 1
     assert "Engram not found" in output.err
+
+
+def test_cli_consolidate(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "app.cli.run_project_consolidation",
+        lambda **_kwargs: {
+            "project_id": "proj-a",
+            "created": False,
+            "reason": "dry_run",
+            "source_count": 4,
+        },
+    )
+
+    code = main(
+        [
+            "consolidate",
+            "--project-id",
+            "proj-a",
+            "--source-limit",
+            "10",
+            "--min-items",
+            "2",
+            "--dry-run",
+        ]
+    )
+    stdout = capsys.readouterr().out
+
+    assert code == 0
+    body = json.loads(stdout)
+    assert body["project_id"] == "proj-a"
+    assert body["reason"] == "dry_run"

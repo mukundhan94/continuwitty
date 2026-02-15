@@ -155,6 +155,7 @@ LLM-ready rehydration bundle.
 -   Source inspection endpoint + dashboard action is implemented.
 -   Multi-user RBAC is implemented (`admin`, `analyst`, `viewer`) with admin-only user management APIs.
 -   Local operator CLI is implemented for upload/search/rehydrate workflows (`api/app/cli.py`).
+-   Local consolidation maintenance job is implemented (`api/app/consolidation.py`, `engram-cli consolidate`).
 
 ------------------------------------------------------------------------
 

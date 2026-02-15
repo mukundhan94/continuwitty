@@ -24,6 +24,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add CLI/UI for upload/search/rehydrate workflows.
 - [x] Add automated evaluation harness (temporal + multi-engram reasoning).
 - [x] Add reranking/citation-packing improvements for retrieval quality.
+- [x] Add background consolidation jobs for long-run memory maintenance.
 - [ ] Add production security hardening (oauth/oidc, audit logging, rate limits).
 
 ## Why This Exists
@@ -97,6 +98,7 @@ engram/
       agent_workflow.py
       auth.py
       cli.py
+      consolidation.py
       config.py
       db.py
       embedding.py
@@ -119,6 +121,7 @@ engram/
 - `api/app/agent_workflow.py`: LangGraph workflow, checkpointing, and resume logic.
 - `api/app/auth.py`: password hashing/verification and CSRF token helpers.
 - `api/app/cli.py`: local terminal workflows for upload/search/rehydrate.
+- `api/app/consolidation.py`: local background maintenance logic for consolidation snapshots.
 - `api/app/models.py`: Request/response and engram schema models.
 - `api/app/repository.py`: SQL persistence, reranked semantic query, and citation-packed rehydration builder.
 - `api/app/user_repository.py`: user persistence, seeding, and role-aware updates.
@@ -139,6 +142,7 @@ engram/
 - `api/tests/test_user_rbac.py`: multi-user auth and role-based access checks.
 - `api/tests/test_eval_harness.py`: integration check that evaluation scenarios pass.
 - `api/tests/test_cli.py`: unit tests for CLI argument handling and command behavior.
+- `api/tests/test_consolidation.py`: unit tests for consolidation job behavior and guardrails.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
 - `Makefile`: Local run shortcuts.
@@ -245,6 +249,7 @@ Evaluation output is written to `api/evals/last_eval.json`.
 make cli ARGS="upload --file /tmp/engram.json"
 make cli ARGS="search --query 'durable runs' --project-id engram-vault --top-k 5"
 make cli ARGS="rehydrate --engram-id <engram_uuid>"
+make consolidate ARGS="--project-id engram-vault --dry-run"
 ```
 
 ## Workflow Notes (Current Validation Sequence)
@@ -353,6 +358,14 @@ make cli ARGS="search --query 'local-first memory' --project-id engram-vault --t
 ```
 
 Comment: validates non-UI operator workflow from terminal.
+
+8. Consolidation dry-run:
+
+```bash
+make consolidate ARGS="--project-id engram-vault --dry-run"
+```
+
+Comment: previews background memory maintenance without writing a new consolidation engram.
 
 If you want to use a hashed local UI password instead of plaintext in `.env`, generate one with:
 
@@ -525,10 +538,27 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make test` -> `38 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
+### 2026-02-15 (Consolidation maintenance phase)
+
+1. Added local consolidation service (`api/app/consolidation.py`) to create periodic summary engrams.
+2. Added guardrails:
+   - skip when a recent consolidation engram already exists
+   - require a minimum number of non-consolidated source engrams
+   - support dry-run mode
+3. Extended CLI:
+   - `engram-cli consolidate`
+   - `make consolidate ARGS=\"--project-id <id> [--dry-run]\"`
+4. Added tests:
+   - `api/tests/test_consolidation.py`
+   - CLI coverage for `consolidate` command
+5. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `42 passed`
+   - `make eval` -> `4/4` cases passed (score `1.0`)
+
 ### Next Immediate Steps (One By One)
 
-1. Add background consolidation jobs for long-run memory maintenance.
-2. Add production auth hardening (oauth/oidc, audit events, rate limits).
+1. Add production auth hardening (oauth/oidc, audit events, rate limits).
 
 ## MVP API Surface
 
@@ -584,6 +614,13 @@ make cli ARGS="search --query 'uploaded from local cli' --project-id engram-vaul
 make cli ARGS="rehydrate --engram-id <engram_uuid>"
 ```
 
+5. Run consolidation maintenance (dry-run or create):
+
+```bash
+make consolidate ARGS="--project-id engram-vault --dry-run"
+make consolidate ARGS="--project-id engram-vault"
+```
+
 ## Test Suite
 
 Test files live under `api/tests`:
@@ -597,6 +634,7 @@ Test files live under `api/tests`:
 - `test_agent_workflow.py`: LangGraph checkpoint/resume + auto-persist + snapshot checks.
 - `test_eval_harness.py`: scenario-based evaluation harness pass/fail checks.
 - `test_cli.py`: upload/search/rehydrate CLI command behavior.
+- `test_consolidation.py`: consolidation snapshot generation and safety checks.
 - `conftest.py`: DB fixture, schema bootstrap, and cleanup.
 
 Notes:
@@ -686,10 +724,13 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - reranking (dense + lexical overlap)
   - citation-packing in rehydration context
 
-### Milestone 8 (Next)
+### Milestone 8 (Completed)
 
 - Memory maintenance improvements:
   - background consolidation jobs
+
+### Milestone 9 (Next)
+
 - Add production auth/security hardening:
   - oauth/oidc integration
   - audit-event logging
@@ -771,5 +812,6 @@ curl http://localhost:8000/api/v1/engrams/<engram_id>/sources
 - [x] I can run local eval scenarios for fact/cross/temporal/abstention behavior.
 - [x] I can upload/search/rehydrate engrams from terminal using local CLI commands.
 - [x] Query and rehydration quality include reranking and citation-packing improvements.
+- [x] I can run local consolidation maintenance jobs (dry-run or persist) per project.
 - [x] A newcomer can run the system locally using this README alone.
 - [ ] The same stored engram can be reused with different LLM providers later.

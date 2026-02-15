@@ -12,6 +12,7 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from .config import get_settings
+from .consolidation import run_project_consolidation
 from .models import EngramQueryRequest, MemoryEngramCreate
 from .repository import create_engram, get_rehydration_bundle, query_engrams
 
@@ -75,6 +76,17 @@ def _rehydrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _consolidate(args: argparse.Namespace) -> int:
+    result = run_project_consolidation(
+        project_id=args.project_id,
+        source_limit=args.source_limit,
+        min_items=args.min_items,
+        dry_run=args.dry_run,
+    )
+    _print_json(result)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="engram-cli",
@@ -115,6 +127,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rehydrate_parser.add_argument("--engram-id", required=True, help="Engram UUID")
 
+    consolidate_parser = subparsers.add_parser(
+        "consolidate", help="Create an automated consolidation engram for a project"
+    )
+    consolidate_parser.add_argument("--project-id", required=True, help="Project scope")
+    consolidate_parser.add_argument(
+        "--source-limit",
+        type=int,
+        default=20,
+        help="Max number of source engrams to consolidate",
+    )
+    consolidate_parser.add_argument(
+        "--min-items",
+        type=int,
+        default=3,
+        help="Minimum non-consolidated source engrams required",
+    )
+    consolidate_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview consolidation without creating a new engram",
+    )
+
     return parser
 
 
@@ -129,6 +163,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _search(args)
         if args.command == "rehydrate":
             return _rehydrate(args)
+        if args.command == "consolidate":
+            return _consolidate(args)
     except (OSError, json.JSONDecodeError, ValueError, ValidationError) as exc:
         print(f"CLI error: {exc}", file=sys.stderr)
         return 2
