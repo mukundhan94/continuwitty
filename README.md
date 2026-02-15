@@ -67,6 +67,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add persistent light/dark theme mode with in-app toggle.
 - [x] Fix dark-theme scrollbar contrast and session sidebar split-scroll ergonomics.
 - [x] Add sticky creator footer, previous-session label, and stronger active-session highlight.
+- [x] Refine engram panel UX with title-first cards, compact actions, floating markdown tooltips, pinned-state highlights, and a fixed mid divider.
 - [x] Merge baseline and next roadmap into a single unified planning document.
 - [x] Add architecture playbook with Mermaid diagrams and multi-model continuity runbooks.
 - [x] Add detailed PlantUML architecture/workflow map and Docker-based renderer.
@@ -836,6 +837,28 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 - Bedrock request errors are specific (`ValidationException`, `AccessDeniedException`, etc.), not generic failures.
 
 ## Implementation Log
+
+### 2026-02-15 (Engram panel UX pass)
+
+1. Updated engram cards to show only titles by default and reveal full markdown abstract on hover/focus.
+2. Added pinned-state visual highlighting so selected engrams are clearly distinguishable.
+3. Switched pinned/unpinned layout to a fixed split with a stable dotted mid-divider.
+4. Added frontend tests for split layout, pinned selected-state semantics, and markdown-link rendering.
+5. Verification:
+   - `make web-check` -> all lint, unit tests, and production build checks passed.
+
+### 2026-02-15 (Engram tooltip refinement pass)
+
+1. Replaced inline abstract expansion with a floating tooltip that keeps card height stable.
+2. Kept tooltip content markdown-rendered and scrollable for long abstracts.
+3. Reduced engram action button sizing to keep the panel compact and readable.
+4. Switched tooltip to an opaque card surface and tightened markdown alignment/spacing for cleaner readability.
+5. Added markdown normalization before tooltip rendering so mixed inline separators/headings format correctly.
+6. Increased tooltip viewport size and line spacing for clearer long-form abstract previews.
+7. Verified behavior in Playwright against local UI (`http://localhost:5173`) and retained panel split/divider behavior.
+8. Updated tooltip sizing/positioning to be viewport-aware so it no longer overflows or breaks compact screens.
+9. Verification:
+   - `make web-check` -> all lint, unit tests, and production build checks passed.
 
 ### 2026-02-15 (Completed in this pass)
 
