@@ -1,7 +1,39 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 
+import styled from 'styled-components'
+
 import type { ChatProvider, ChatSession, VisibilityScope } from '../api/types'
+import {
+  FormGrid,
+  GlassPane,
+  MutedText,
+  PaneHeader,
+  ScrollColumn,
+  SessionItemButton,
+  SessionMeta,
+  SplitGrid,
+} from '../styles/primitives'
+
+const FieldBlock = styled.div`
+  display: grid;
+  gap: 0.3rem;
+`
+
+const CheckboxRow = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.82rem;
+
+  input {
+    width: auto;
+    height: 1rem;
+    width: 1rem;
+  }
+`
 
 interface CreateSessionRequest {
   project_id: string
@@ -72,20 +104,22 @@ export function SessionSidebar({
   }
 
   return (
-    <aside className="pane pane-sessions">
-      <div className="pane-header">
-        <h2>Sessions</h2>
-      </div>
+    <GlassPane as="aside">
+      <PaneHeader>
+        <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Sessions</h2>
+      </PaneHeader>
 
-      <label htmlFor="project-id">Project ID</label>
-      <input
-        id="project-id"
-        value={projectId}
-        onChange={(event) => onProjectChange(event.target.value)}
-        placeholder="project-id"
-      />
+      <FieldBlock>
+        <label htmlFor="project-id">Project ID</label>
+        <input
+          id="project-id"
+          value={projectId}
+          onChange={(event) => onProjectChange(event.target.value)}
+          placeholder="project-id"
+        />
+      </FieldBlock>
 
-      <form className="session-form" onSubmit={handleSubmit}>
+      <FormGrid onSubmit={handleSubmit}>
         <label htmlFor="session-title">Title</label>
         <input
           id="session-title"
@@ -94,8 +128,8 @@ export function SessionSidebar({
           required
         />
 
-        <div className="split-row">
-          <div>
+        <SplitGrid>
+          <FieldBlock>
             <label htmlFor="provider">Provider</label>
             <select
               id="provider"
@@ -106,8 +140,9 @@ export function SessionSidebar({
               <option value="anthropic">Anthropic</option>
               <option value="bedrock">Bedrock</option>
             </select>
-          </div>
-          <div>
+          </FieldBlock>
+
+          <FieldBlock>
             <label htmlFor="visibility">Visibility</label>
             <select
               id="visibility"
@@ -117,8 +152,8 @@ export function SessionSidebar({
               <option value="private">Private</option>
               <option value="project">Project</option>
             </select>
-          </div>
-        </div>
+          </FieldBlock>
+        </SplitGrid>
 
         <label htmlFor="model-id">Model</label>
         <input id="model-id" value={modelId} onChange={(event) => setModelId(event.target.value)} required />
@@ -132,7 +167,7 @@ export function SessionSidebar({
           placeholder="Optional guidance for the assistant"
         />
 
-        <label className="checkbox-row" htmlFor="autosave-enabled">
+        <CheckboxRow htmlFor="autosave-enabled">
           <input
             id="autosave-enabled"
             type="checkbox"
@@ -140,29 +175,31 @@ export function SessionSidebar({
             onChange={(event) => setAutosaveEnabled(event.target.checked)}
           />
           <span>Enable autosave snapshots</span>
-        </label>
+        </CheckboxRow>
 
         <button type="submit" disabled={creating || !projectId.trim() || !title.trim()}>
           {creating ? 'Creating...' : 'Create Session'}
         </button>
-      </form>
+      </FormGrid>
 
-      <div className="session-list">
-        {loading ? <p className="muted">Loading sessions...</p> : null}
-        {!loading && sortedSessions.length === 0 ? <p className="muted">No sessions for this project.</p> : null}
+      <ScrollColumn className="flex-1">
+        {loading ? <MutedText>Loading sessions...</MutedText> : null}
+        {!loading && sortedSessions.length === 0 ? <MutedText>No sessions for this project.</MutedText> : null}
+
         {sortedSessions.map((session) => (
-          <button
+          <SessionItemButton
             key={session.session_id}
-            className={`session-item ${selectedSessionId === session.session_id ? 'active' : ''}`}
+            $active={selectedSessionId === session.session_id}
+            type="button"
             onClick={() => onSelectSession(session.session_id)}
           >
-            <span className="session-title">{session.title}</span>
-            <span className="session-meta">
+            <span className="font-semibold">{session.title}</span>
+            <SessionMeta>
               {session.provider}/{session.model_id}
-            </span>
-          </button>
+            </SessionMeta>
+          </SessionItemButton>
         ))}
-      </div>
-    </aside>
+      </ScrollColumn>
+    </GlassPane>
   )
 }

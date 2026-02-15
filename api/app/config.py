@@ -2,8 +2,24 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_SENSITIVE_SETTING_KEYS = {
+    "database_url",
+    "app_session_secret",
+    "ui_demo_password",
+    "ui_demo_password_hash",
+    "openai_api_key",
+    "anthropic_api_key",
+    "aws_access_key_id",
+    "aws_secret_access_key",
+    "aws_session_token",
+}
+
+_DEV_ENV_NAMES = {"dev", "development", "local"}
+
 
 class Settings(BaseSettings):
+    app_env: str = "development"
+    log_config_in_dev: bool = True
     database_url: str = "postgresql://engram:engram@localhost:5432/engram_vault"
     embedding_dim: int = 256
     api_host: str = "0.0.0.0"
@@ -39,3 +55,15 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def build_debug_settings_snapshot(settings: Settings) -> dict[str, object]:
+    snapshot = settings.model_dump(mode="python")
+    for key in _SENSITIVE_SETTING_KEYS:
+        if key in snapshot and snapshot[key]:
+            snapshot[key] = "<redacted>"
+    return snapshot
+
+
+def should_log_settings(settings: Settings) -> bool:
+    return settings.log_config_in_dev and settings.app_env.strip().lower() in _DEV_ENV_NAMES

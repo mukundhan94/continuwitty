@@ -1,8 +1,10 @@
 import { createEvent, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
+import { ThemeProvider } from 'styled-components'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ChatMessage, ChatSession, ChatSourceReference } from '../api/types'
+import { appTheme } from '../styles/theme'
 import { ChatPanel } from './ChatPanel'
 
 function buildSession(): ChatSession {
@@ -40,7 +42,11 @@ function renderPanel(overrides: Partial<ComponentProps<typeof ChatPanel>> = {}) 
     ...overrides,
   }
 
-  render(<ChatPanel {...props} />)
+  render(
+    <ThemeProvider theme={appTheme}>
+      <ChatPanel {...props} />
+    </ThemeProvider>,
+  )
   return { props, onSend }
 }
 

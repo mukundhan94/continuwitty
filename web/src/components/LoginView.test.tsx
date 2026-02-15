@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { ThemeProvider } from 'styled-components'
 import { describe, expect, it, vi } from 'vitest'
 
+import { appTheme } from '../styles/theme'
 import { LoginView } from './LoginView'
 
 describe('LoginView', () => {
@@ -9,7 +11,11 @@ describe('LoginView', () => {
     const onSubmit = vi.fn(async () => {})
     const user = userEvent.setup()
 
-    render(<LoginView isSubmitting={false} error={null} onSubmit={onSubmit} />)
+    render(
+      <ThemeProvider theme={appTheme}>
+        <LoginView isSubmitting={false} error={null} onSubmit={onSubmit} />
+      </ThemeProvider>,
+    )
 
     await user.clear(screen.getByLabelText(/username/i))
     await user.type(screen.getByLabelText(/username/i), 'analyst')

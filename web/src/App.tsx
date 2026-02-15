@@ -21,6 +21,16 @@ import { PinnedEngramPanel } from './components/PinnedEngramPanel'
 import { SaveEngramModal } from './components/SaveEngramModal'
 import { SessionSidebar } from './components/SessionSidebar'
 import { WEB_CONFIG } from './config'
+import {
+  AppShell,
+  EyebrowText,
+  LoadingScreen,
+  NoticeBanner,
+  TopNavShell,
+  TopNavTitleBlock,
+  TopNavUserBlock,
+  WorkspaceGrid,
+} from './styles/primitives'
 
 function describeError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -346,7 +356,7 @@ export default function App() {
   }
 
   if (authChecking) {
-    return <div className="loading-screen">Loading local workspace...</div>
+    return <LoadingScreen>Loading local workspace...</LoadingScreen>
   }
 
   if (!user) {
@@ -354,23 +364,28 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      <header className="top-nav">
-        <div>
-          <p className="eyebrow">Engram Vault</p>
-          <h1>Memory Continuity Workbench</h1>
-        </div>
-        <div className="top-nav-user">
-          <p>
+    <AppShell>
+      <TopNavShell>
+        <TopNavTitleBlock>
+          <EyebrowText>Engram Vault</EyebrowText>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">
+            Memory Continuity Workbench
+          </h1>
+        </TopNavTitleBlock>
+
+        <TopNavUserBlock>
+          <p className="text-sm text-inkMuted">
             {user.username} · {user.role}
           </p>
-          <button onClick={handleLogout}>Logout</button>
-        </div>
-      </header>
+          <button type="button" onClick={handleLogout}>
+            Logout
+          </button>
+        </TopNavUserBlock>
+      </TopNavShell>
 
-      {notice ? <p className="notice-line">{notice}</p> : null}
+      {notice ? <NoticeBanner>{notice}</NoticeBanner> : null}
 
-      <main className="workspace-grid">
+      <WorkspaceGrid>
         <SessionSidebar
           sessions={sessions}
           selectedSessionId={selectedSessionId}
@@ -413,7 +428,7 @@ export default function App() {
           onUnpin={handleUnpin}
           onCopyId={handleCopyEngramId}
         />
-      </main>
+      </WorkspaceGrid>
 
       {saveModalOpen ? (
         <SaveEngramModal
@@ -423,6 +438,6 @@ export default function App() {
           onSave={handleSaveEngram}
         />
       ) : null}
-    </div>
+    </AppShell>
   )
 }

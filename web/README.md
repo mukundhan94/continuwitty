@@ -1,6 +1,7 @@
 # Engram Web Workbench
 
 React + Vite frontend for chat sessions, streaming responses, and engram continuity workflows.
+Styling stack: `styled-components` + Tailwind utility classes with shared theme tokens.
 
 ## Commands
 
@@ -27,6 +28,13 @@ npm run build
   - `VITE_DEFAULT_OPENAI_MODEL`
   - `VITE_DEFAULT_ANTHROPIC_MODEL`
   - `VITE_DEFAULT_BEDROCK_MODEL`
+- Shared theme and style modules:
+  - `src/styles/theme.ts` (single source of tokens)
+  - `src/styles/globalStyles.ts` (global CSS variables/base styles)
+  - `src/styles/primitives.ts` (reusable styled UI shells/cards)
+- Tailwind config:
+  - `tailwind.config.ts`
+  - `postcss.config.cjs`
 
 On startup, the parsed frontend config is printed once in the browser console for debugging.
 

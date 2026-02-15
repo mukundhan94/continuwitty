@@ -12,6 +12,8 @@ Use it as the default workflow when adding or refactoring features.
 - `api/evals/`: scenario-based eval harness.
 - `db/init/`: SQL schema and migration-style DDL.
 - `web/`: React UI (chat/session/pinning workflows, streaming UX, frontend tests).
+- `web/src/styles/`: shared style system (theme tokens, global CSS vars, reusable styled shells).
+- `web/tailwind.config.ts` + `web/postcss.config.cjs`: Tailwind utility pipeline for the web app.
 - `skills/`: reusable agent workflows for this project.
 
 ## 2. Non-Negotiable Rules
@@ -20,6 +22,7 @@ Use it as the default workflow when adding or refactoring features.
 - Update `README.md` in every implementation phase.
 - Preserve backward compatibility for existing endpoints unless intentionally versioned.
 - Add tests for every non-trivial behavior change.
+- Keep all frontend colors/typography/shadows in `web/src/styles/theme.ts` and consume via shared primitives/utilities.
 
 ## 3. Daily Workflow
 1. Pull latest and inspect `git status`.
@@ -37,6 +40,7 @@ Use it as the default workflow when adding or refactoring features.
 - Provider SDK calls must stay in `api/app/providers/`.
 - MCP tool handlers should call service/repository layers, not raw SQL.
 - UI should call API/MCP contracts only, not reimplement business logic.
+- UI styling should use shared tokens in `web/src/styles/theme.ts`; avoid ad-hoc hardcoded palette values in components.
 
 ## 4a. Domain Module Layout Rules
 - For each new domain, create a dedicated module/package under `api/app/`:
@@ -97,6 +101,7 @@ Before merging refactors:
 
 ## 11. Operations and Incident Handling (Local)
 - If API is unhealthy: check `/healthz`, DB container status, and env vars.
+- For startup/debug issues: use `APP_ENV=development` and `LOG_CONFIG_IN_DEV=true` to print a redacted parsed config snapshot.
 - If retrieval quality drops: run `make eval`, inspect reranking and citation packing paths.
 - If auth fails unexpectedly: inspect `data/audit_events.jsonl` and session settings.
 - If MCP stream fails: verify SSE endpoint wiring and JSON-RPC event framing.

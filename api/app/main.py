@@ -13,7 +13,7 @@ from .agent_workflow import AgentWorkflowService
 from .audit import log_audit_event
 from .auth import generate_csrf_token, hash_password, verify_password
 from .chat import ChatService, create_chat_router
-from .config import get_settings
+from .config import build_debug_settings_snapshot, get_settings, should_log_settings
 from .db import ensure_schema_initialized
 from .login_guard import LoginAttemptGuard
 from .mcp import McpService, create_mcp_router
@@ -48,6 +48,9 @@ from .user_repository import (
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    current_settings = get_settings()
+    if should_log_settings(current_settings):
+        print("[engram-api] parsed config", build_debug_settings_snapshot(current_settings))
     try:
         ensure_schema_initialized()
     except Exception as exc:  # pragma: no cover - defensive for local startup mismatches

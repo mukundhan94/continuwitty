@@ -1,4 +1,30 @@
 import type { EngramSummary } from '../api/types'
+import styled from 'styled-components'
+
+import {
+  EngramAbstract,
+  EngramCard,
+  EngramTitle,
+  GlassPane,
+  MutedText,
+  PaneHeader,
+  ScrollColumn,
+  SectionDivider,
+} from '../styles/primitives'
+
+const SectionTitle = styled.h3`
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--color-ink);
+`
+
+const EngramActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+`
 
 interface PinnedEngramPanelProps {
   selectedSessionId: string | null
@@ -40,54 +66,67 @@ export function PinnedEngramPanel({
   })
 
   return (
-    <aside className="pane pane-engrams">
-      <div className="pane-header">
-        <h2>Pinned Engrams</h2>
-        <button onClick={onRefresh} disabled={!selectedSessionId || loading}>
+    <GlassPane as="aside" className="overflow-hidden">
+      <PaneHeader>
+        <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Pinned Engrams</h2>
+        <button type="button" onClick={onRefresh} disabled={!selectedSessionId || loading}>
           Refresh
         </button>
-      </div>
+      </PaneHeader>
 
-      {!selectedSessionId ? <p className="muted">Select a session to manage engrams.</p> : null}
+      {!selectedSessionId ? <MutedText>Select a session to manage engrams.</MutedText> : null}
 
-      <div className="engram-section">
-        <h3>Session Pins</h3>
-        {pinnedEngrams.length === 0 ? <p className="muted">No pinned engrams yet.</p> : null}
+      <SectionDivider />
+      <ScrollColumn>
+        <SectionTitle>Session Pins</SectionTitle>
+        {pinnedEngrams.length === 0 ? <MutedText>No pinned engrams yet.</MutedText> : null}
+
         {pinnedEngrams.map((engram) => (
-          <article key={engram.engram_id} className="engram-card">
-            <p className="engram-title">{engram.title}</p>
-            <p className="engram-abstract">{engram.abstract}</p>
-            <div className="engram-actions">
-              <button onClick={() => onCopyId(engram.engram_id)}>Copy ID</button>
-              <button onClick={() => onUnpin(engram.engram_id)}>Unpin</button>
-            </div>
-          </article>
+          <EngramCard key={engram.engram_id}>
+            <EngramTitle>{engram.title}</EngramTitle>
+            <EngramAbstract>{engram.abstract}</EngramAbstract>
+            <EngramActions>
+              <button type="button" onClick={() => onCopyId(engram.engram_id)}>
+                Copy ID
+              </button>
+              <button type="button" onClick={() => onUnpin(engram.engram_id)}>
+                Unpin
+              </button>
+            </EngramActions>
+          </EngramCard>
         ))}
-      </div>
+      </ScrollColumn>
 
-      <div className="engram-section">
-        <h3>Search Project Engrams</h3>
+      <SectionDivider />
+      <ScrollColumn>
+        <SectionTitle>Search Project Engrams</SectionTitle>
         <input
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Search title, abstract, or engram id"
         />
+
         {filteredAvailable.map((engram) => (
-          <article key={engram.engram_id} className="engram-card">
-            <p className="engram-title">{engram.title}</p>
-            <p className="engram-abstract">{engram.abstract}</p>
-            <div className="engram-actions">
-              <button onClick={() => onCopyId(engram.engram_id)}>Copy ID</button>
+          <EngramCard key={engram.engram_id}>
+            <EngramTitle>{engram.title}</EngramTitle>
+            <EngramAbstract>{engram.abstract}</EngramAbstract>
+            <EngramActions>
+              <button type="button" onClick={() => onCopyId(engram.engram_id)}>
+                Copy ID
+              </button>
               <button
+                type="button"
                 onClick={() => onPin(engram.engram_id)}
                 disabled={!selectedSessionId || pinnedIds.has(engram.engram_id)}
               >
                 {pinnedIds.has(engram.engram_id) ? 'Pinned' : 'Pin to Session'}
               </button>
-            </div>
-          </article>
+            </EngramActions>
+          </EngramCard>
         ))}
-      </div>
-    </aside>
+
+        {filteredAvailable.length === 0 ? <MutedText>No matching engrams found.</MutedText> : null}
+      </ScrollColumn>
+    </GlassPane>
   )
 }

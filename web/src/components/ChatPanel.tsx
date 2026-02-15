@@ -1,6 +1,44 @@
 import type { FormEvent, KeyboardEvent } from 'react'
+import styled from 'styled-components'
 
 import type { ChatMessage, ChatSession, ChatSourceReference } from '../api/types'
+import {
+  ChatMessageBubble,
+  ErrorText,
+  GlassPane,
+  MessageRole,
+  MessageText,
+  MutedText,
+  PaneHeader,
+  SectionDivider,
+  SourceStrip,
+  SourceTitle,
+  TranscriptRail,
+} from '../styles/primitives'
+
+const HeaderBlock = styled.div`
+  display: grid;
+  gap: 0.2rem;
+`
+
+const ActionRow = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+`
+
+const ComposerActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+`
+
+const ComposerForm = styled.form`
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.2rem;
+`
 
 interface ChatPanelProps {
   session: ChatSession | null
@@ -20,10 +58,10 @@ interface ChatPanelProps {
 
 function MessageBubble({ role, text }: { role: string; text: string }) {
   return (
-    <article className={`message message-${role}`}>
-      <p className="message-role">{role}</p>
-      <p className="message-text">{text || '(empty)'}</p>
-    </article>
+    <ChatMessageBubble $role={role}>
+      <MessageRole>{role}</MessageRole>
+      <MessageText>{text || '(empty)'}</MessageText>
+    </ChatMessageBubble>
   )
 }
 
@@ -67,36 +105,42 @@ export function ChatPanel({
   }
 
   return (
-    <section className="pane pane-chat">
-      <header className="pane-header chat-header">
-        <div>
-          <h2>{session ? session.title : 'Select or create a session'}</h2>
-          <p className="muted">
+    <GlassPane>
+      <PaneHeader as="header">
+        <HeaderBlock>
+          <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">
+            {session ? session.title : 'Select or create a session'}
+          </h2>
+          <MutedText>
             {session ? `${session.provider}/${session.model_id} · ${session.visibility_scope}` : 'No active session'}
-          </p>
-        </div>
-        <div className="chat-actions">
-          <button onClick={onOpenSaveModal} disabled={!hasSession || sending}>
+          </MutedText>
+        </HeaderBlock>
+
+        <ActionRow>
+          <button type="button" onClick={onOpenSaveModal} disabled={!hasSession || sending}>
             Save as Engram
           </button>
-          <button onClick={onContinueSession} disabled={!hasSession || sending}>
+          <button type="button" onClick={onContinueSession} disabled={!hasSession || sending}>
             Continue in New Chat
           </button>
-        </div>
-      </header>
+        </ActionRow>
+      </PaneHeader>
 
-      <div className="transcript">
+      <SectionDivider />
+
+      <TranscriptRail>
         {messages.map((message) => (
           <MessageBubble key={message.message_id} role={message.role} text={message.content_text} />
         ))}
+
         {pendingUserText ? <MessageBubble role="user" text={pendingUserText} /> : null}
         {streamingAssistantText ? <MessageBubble role="assistant" text={streamingAssistantText} /> : null}
-        {!hasSession ? <p className="muted">Session messages will appear here.</p> : null}
-      </div>
+        {!hasSession ? <MutedText>Session messages will appear here.</MutedText> : null}
+      </TranscriptRail>
 
       {sourceReferences.length > 0 ? (
-        <div className="source-strip">
-          <p className="source-title">Source references used:</p>
+        <SourceStrip>
+          <SourceTitle>Source references used:</SourceTitle>
           <ul>
             {sourceReferences.map((ref) => (
               <li key={`${ref.engram_id}-${ref.url}`}>
@@ -107,10 +151,10 @@ export function ChatPanel({
               </li>
             ))}
           </ul>
-        </div>
+        </SourceStrip>
       ) : null}
 
-      <form className="composer" onSubmit={handleSubmit}>
+      <ComposerForm onSubmit={handleSubmit}>
         <textarea
           value={composerText}
           onChange={(event) => onComposerChange(event.target.value)}
@@ -119,17 +163,18 @@ export function ChatPanel({
           placeholder={hasSession ? 'Ask something and stream a response...' : 'Create a session first'}
           disabled={!hasSession || sending}
         />
-        <div className="composer-actions">
+
+        <ComposerActions>
           <button type="submit" disabled={!hasSession || sending || !composerText.trim()}>
             {sending ? 'Streaming...' : 'Send'}
           </button>
           <button type="button" onClick={onRetry} disabled={!hasSession || sending}>
             Retry Last Prompt
           </button>
-        </div>
-      </form>
+        </ComposerActions>
+      </ComposerForm>
 
-      {error ? <p className="error-line">{error}</p> : null}
-    </section>
+      {error ? <ErrorText>{error}</ErrorText> : null}
+    </GlassPane>
   )
 }

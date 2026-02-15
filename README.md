@@ -31,6 +31,8 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add chat APIs and continuity workflows (pin, save-as-engram, continue, stream).
 - [x] Add MCP JSON-RPC over SSE endpoint with chat/engram/user tool routing.
 - [x] Add React chat UI with session, streaming, pin/save/continue workflows.
+- [x] Migrate web styling to shared `styled-components` + Tailwind style system.
+- [x] Add backend dev-mode parsed-config logging with secret redaction.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -43,7 +45,7 @@ This README is written for a newcomer and follows an implementation sequence bas
   - Phase 3 completed (provider adapters + registry + provider config contracts).
   - Phase 4 completed (chat API routes + context assembler + continuity flows).
   - Phase 5 completed (MCP stream endpoint + tool execution + JSON-RPC error framing).
-  - Phase 6 completed (React chat workbench + frontend tests + web quality gates).
+  - Phase 6 completed (React chat workbench + frontend tests + web quality gates + shared style system migration).
 
 ## Agent Guide
 
@@ -66,6 +68,7 @@ Agent workflow skills are under `skills/`:
 - `release-and-maintenance`: release checklist and long-run maintenance cadence.
 - `domain-module-layout`: module/package conventions for long-run maintainability.
 - `react-chat-ui-operator`: frontend workflow conventions for chat/session/engram UX.
+- `frontend-style-system`: token-driven styled-components + Tailwind workflow rules.
 
 ## Why This Exists
 
@@ -147,6 +150,8 @@ engram/
       SKILL.md
     react-chat-ui-operator/
       SKILL.md
+    frontend-style-system/
+      SKILL.md
   db/
     init/
       001_schema.sql
@@ -201,12 +206,19 @@ engram/
     .env.example
     package.json
     package-lock.json
+    postcss.config.cjs
+    tailwind.config.ts
     vite.config.ts
     tsconfig.app.json
     src/
       App.tsx
       config.ts
       index.css
+      styles/
+        globalStyles.ts
+        primitives.ts
+        styled.d.ts
+        theme.ts
       api/
         auth.ts
         auth.test.ts
@@ -261,7 +273,7 @@ engram/
 - `api/app/user_repository.py`: user persistence, seeding, and role-aware updates.
 - `api/app/embedding.py`: Deterministic local embedding helper.
 - `api/app/db.py`: DB connection lifecycle.
-- `api/app/config.py`: Environment-backed settings.
+- `api/app/config.py`: Environment-backed settings plus dev-mode safe config snapshot helpers.
 - `api/app/templates/admin.html`: admin console for user/role inspection.
 - `api/app/templates/login.html`: local sign-in page for UI testing.
 - `api/app/templates/dashboard.html`: authenticated local dashboard for API testing.
@@ -287,12 +299,18 @@ engram/
 - `api/tests/test_provider_adapters.py`: adapter normalization and error-path tests.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
+- `api/tests/test_config_settings.py`: settings debug logging and secret redaction checks.
 - `web/src/App.tsx`: React chat workbench composition and workflow state management.
 - `web/src/config.ts`: frontend runtime config parsing + one-time debug console print.
 - `web/src/api/*.ts`: browser API clients for auth/chat/engram interactions.
 - `web/src/components/*.tsx`: UI modules for login, sessions, chat transcript, pinning, and save modal.
+- `web/src/styles/theme.ts`: shared frontend design tokens (colors/fonts/shadows/radius).
+- `web/src/styles/globalStyles.ts`: global CSS variables and base element styles.
+- `web/src/styles/primitives.ts`: reusable styled panels/cards/typography primitives.
 - `web/src/utils/sse.ts`: SSE parser used for streaming chat responses.
 - `web/src/**/*.test.ts(x)`: Vitest + Testing Library frontend tests.
+- `web/postcss.config.cjs`: PostCSS pipeline for Tailwind.
+- `web/tailwind.config.ts`: Tailwind token mapping to shared CSS variables.
 - `web/vite.config.ts`: Vite proxy + Vitest configuration.
 - `Makefile`: Local run shortcuts.
 - `.env.example`: Starter configuration for local setup.
@@ -382,6 +400,11 @@ Local security baseline knobs (optional in `.env`):
 - `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` (default `5`)
 - `LOGIN_RATE_LIMIT_WINDOW_SECONDS` (default `300`)
 - `LOGIN_LOCKOUT_SECONDS` (default `900`)
+
+Backend debug logging knobs (optional in `.env`):
+
+- `APP_ENV` (default `development`)
+- `LOG_CONFIG_IN_DEV` (default `true`, prints a redacted parsed-config snapshot on startup in dev/local envs)
 
 Provider configuration knobs (optional in `.env` unless provider enabled):
 
@@ -905,6 +928,47 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make check` -> all backend checks passed
    - `make web-check` -> all frontend checks passed
    - backend tests: `72 passed`
+   - frontend tests: `7 passed`
+
+### 2026-02-15 (UI style-system + backend config debug pass)
+
+1. Migrated frontend styling to shared `styled-components` + Tailwind architecture:
+   - added token source: `web/src/styles/theme.ts`
+   - added global token/cssvar bridge: `web/src/styles/globalStyles.ts`
+   - added reusable shells/cards/typography primitives: `web/src/styles/primitives.ts`
+   - replaced legacy class-based CSS usage in `App.tsx` and all primary UI components
+2. Added Tailwind pipeline for reusable utility classes:
+   - `web/postcss.config.cjs`
+   - `web/tailwind.config.ts`
+   - simplified `web/src/index.css` to Tailwind layers
+3. Added backend dev-mode config logging with safe redaction:
+   - `APP_ENV` + `LOG_CONFIG_IN_DEV` settings
+   - redacted config snapshot printer on app startup in dev/local environments
+4. Added tests for new behavior:
+   - `api/tests/test_config_settings.py` for redaction and env gating
+   - updated React component tests to render with shared theme provider
+5. Verification:
+   - `make check` -> all backend checks passed
+   - `make web-check` -> all frontend checks passed
+   - backend tests: `74 passed`
+   - frontend tests: `7 passed`
+   - one-time debug sanity check:
+     - `cd api && APP_ENV=development LOG_CONFIG_IN_DEV=true uv run python -c "...build_debug_settings_snapshot(...)"` prints a redacted config snapshot
+
+### 2026-02-15 (UI spacing and layout stabilization pass)
+
+1. Restored stable pane spacing and paddings with styled primitives:
+   - `TopNavShell`, `GlassPane`, and grid gap defaults now enforce consistent layout without relying on utility-only classes.
+2. Added reusable layout primitives for consistent section structure:
+   - `PaneHeader`, `SectionDivider`, `FormGrid`, `SplitGrid`, `ScrollColumn`
+3. Updated session/chat/pinned panels to use these primitives for predictable spacing on desktop and smaller breakpoints.
+4. Fixed workspace growth bug during repeated session creation:
+   - root cause: grid row used auto height, so growing session list expanded all panes.
+   - fix: constrained workspace row with `grid-template-rows: minmax(0, 1fr)` and `flex: 1` container sizing, with pane-internal scroll.
+5. Refined base controls:
+   - button text centering and form-control line-height/min-height adjustments in global styles.
+6. Verification:
+   - `make web-check` -> all frontend checks passed
    - frontend tests: `7 passed`
 
 ### Next Immediate Steps (One By One)

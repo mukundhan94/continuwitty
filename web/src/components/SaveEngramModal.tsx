@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 
 import type { VisibilityScope } from '../api/types'
+import { ModalBackdrop, ModalCard } from '../styles/primitives'
 
 interface SaveEngramModalProps {
   defaultTitle: string
@@ -42,10 +43,11 @@ export function SaveEngramModal({ defaultTitle, saving, onClose, onSave }: SaveE
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-        <h3>Save Session as Engram</h3>
-        <form className="modal-form" onSubmit={handleSubmit}>
+    <ModalBackdrop role="presentation" onClick={onClose}>
+      <ModalCard role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+        <h3 className="font-display text-lg font-semibold text-ink">Save Session as Engram</h3>
+
+        <form className="mt-3 grid gap-2.5" onSubmit={handleSubmit}>
           <label htmlFor="save-title">Title</label>
           <input id="save-title" value={title} onChange={(event) => setTitle(event.target.value)} required />
 
@@ -74,8 +76,13 @@ export function SaveEngramModal({ defaultTitle, saving, onClose, onSave }: SaveE
           <label htmlFor="save-keywords">Keywords (comma separated)</label>
           <input id="save-keywords" value={keywordsText} onChange={(event) => setKeywordsText(event.target.value)} />
 
-          <div className="modal-actions">
-            <button type="button" onClick={onClose} disabled={saving}>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              className="border border-line bg-white text-ink"
+              onClick={onClose}
+              disabled={saving}
+            >
               Cancel
             </button>
             <button type="submit" disabled={saving || !title.trim() || !abstract.trim()}>
@@ -83,7 +90,7 @@ export function SaveEngramModal({ defaultTitle, saving, onClose, onSave }: SaveE
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </ModalCard>
+    </ModalBackdrop>
   )
 }
