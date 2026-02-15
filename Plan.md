@@ -256,6 +256,146 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 24 - Engram Graph Foundations (Link Schema + Repository)
+
+### Goals
+
+- Add first-class engram-to-engram links to support traceable, brain-like associative memory.
+
+### Deliverables
+
+1. Add `engram_links` table with directed edges and lifecycle metadata:
+   - `source_engram_id`, `target_engram_id`, `relation_type`
+   - `weight`, `temporal_weight`, `confidence`
+   - `origin`, `status`, `evidence_json`
+   - `created_by_user_id`, `last_reinforced_at`, timestamps
+2. Add optional `engram_link_events` table for lifecycle/audit transitions.
+3. Add indexes for project/source/target/status/relation/recency paths.
+4. Add repository layer methods for:
+   - create/list/update/archive links
+   - depth-limited traversal
+   - score-aware ordering with visibility checks
+5. Keep migration style forward-only and idempotent.
+
+### Exit Criteria
+
+- Link graph records are persisted and queryable with same-project and visibility-safe enforcement.
+
+---
+
+### Phase 25 - Link APIs, MCP Tools, and Suggestion Pipeline
+
+### Goals
+
+- Expose link operations to UI/agents and add suggestion-driven linking with user confirmation.
+
+### Deliverables
+
+1. Add REST link APIs:
+   - `POST /api/v1/engrams/{engram_id}/links`
+   - `GET /api/v1/engrams/{engram_id}/links`
+   - `PATCH /api/v1/engrams/links/{link_id}`
+   - `DELETE /api/v1/engrams/links/{link_id}` (archive/soft delete)
+   - `POST /api/v1/engrams/{engram_id}/links/suggest`
+   - `POST /api/v1/engrams/{engram_id}/trace`
+2. Add MCP link tools:
+   - `engram.link_create`, `engram.link_list`, `engram.link_update`
+   - `engram.link_archive`, `engram.link_suggest`, `engram.trace_path`
+3. Add hybrid suggestion service:
+   - candidate generation from semantic overlap + shared sources + continuity hints
+   - accept/reject workflow for suggestions
+4. Enforce v1 scope constraints:
+   - same-project links only
+   - role/visibility parity with existing engram access model
+
+### Exit Criteria
+
+- Users and agents can create/manage/trace links through REST and MCP with auth parity.
+
+---
+
+### Phase 26 - Graph-Aware Context Assembly (Configurable Recall Depth)
+
+### Goals
+
+- Use linked engrams in response context without overloading prompt budgets.
+
+### Deliverables
+
+1. Upgrade context assembler to include linked neighbors:
+   - default traversal depth = 1
+   - optional user/session override (bounded max depth)
+2. Add configurable recall controls:
+   - `link_recall_enabled`
+   - `link_recall_depth` (default 1)
+   - `link_recall_max_neighbors`
+3. Add pruning/scoring policy:
+   - relevance + link score + temporal score + token budget caps
+4. Extend response metadata:
+   - `used_engram_link_ids`
+   - compact trace chain metadata (`engram_trace_paths`)
+5. Keep existing `used_engram_ids` behavior fully backward compatible.
+
+### Exit Criteria
+
+- Linked memory is used by default (depth 1) and higher-depth traversal is optional and bounded.
+
+---
+
+### Phase 27 - Memory Graph UX and Traceability
+
+### Goals
+
+- Make link graph navigation clear in UI so users can understand where responses come from.
+
+### Deliverables
+
+1. Add linked-memory UI surfaces:
+   - linked engram panel (relation type, weight, age)
+   - trace view for response provenance chains
+2. Add suggestion workflow UX:
+   - accept/reject link suggestions
+3. Add session-level controls:
+   - toggle graph recall on/off
+   - configure traversal depth (within limits)
+4. Add explainability affordances:
+   - "this answer used" chain across engram links and citations
+
+### Exit Criteria
+
+- Newcomers can answer "where did this answer come from?" directly in UI without API inspection.
+
+---
+
+### Phase 28 - Temporal Dynamics and Graph Quality Controls
+
+### Goals
+
+- Keep the memory graph high-signal over time via reinforcement/decay and quality maintenance.
+
+### Deliverables
+
+1. Add temporal weighting rules:
+   - decay stale links over time
+   - reinforce links reused in successful sessions
+2. Add graph hygiene jobs:
+   - duplicate/conflict detection
+   - stale/low-value link archival recommendations
+3. Add graph-focused eval coverage:
+   - trace correctness
+   - retrieval relevance impact
+   - drift and stale-link tolerance
+4. Add operational guardrails:
+   - traversal caps
+   - cycle-safe path expansion
+   - noisy-link suppression thresholds
+
+### Exit Criteria
+
+- Graph quality stays stable at scale with measurable improvements in continuity and traceability.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -274,3 +414,9 @@ Build a local-first memory system where agents and humans can:
 3. Phase 18 (memory lifecycle policies)
 4. Phase 20 (security hardening) in parallel design track with Phase 19
 5. Phase 21 onward after security and data-sharing model stabilize
+6. After Phase 23, execute link-graph roadmap in order:
+   - Phase 24 (graph foundations)
+   - Phase 25 (link APIs/MCP + suggestions)
+   - Phase 26 (graph-aware recall)
+   - Phase 27 (traceability UX)
+   - Phase 28 (temporal dynamics + graph quality)
