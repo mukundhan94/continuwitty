@@ -161,6 +161,17 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     )
     assert document_response.status_code == 201
     document_id = document_response.json()["document"]["document_id"]
+    second_document_response = client.post(
+        "/api/v1/ingestion/text",
+        json={
+            "project_id": "project-chat",
+            "title": "Escalation Matrix",
+            "text": "Escalate to DB oncall after 15 minutes and notify support incident commander.",
+            "visibility_scope": "project",
+        },
+    )
+    assert second_document_response.status_code == 201
+    second_document_id = second_document_response.json()["document"]["document_id"]
 
     pinned = client.post(
         f"/api/v1/chat/sessions/{session_id}/engrams/pin",
@@ -179,10 +190,19 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     )
     assert pinned_document.status_code == 200
     assert pinned_document.json()["document_id"] == document_id
+    pinned_second_document = client.post(
+        f"/api/v1/chat/sessions/{session_id}/documents/pin",
+        json={"document_id": second_document_id},
+    )
+    assert pinned_second_document.status_code == 200
+    assert pinned_second_document.json()["document_id"] == second_document_id
 
     listed_documents = client.get(f"/api/v1/chat/sessions/{session_id}/documents")
     assert listed_documents.status_code == 200
-    assert [item["document_id"] for item in listed_documents.json()] == [document_id]
+    assert {item["document_id"] for item in listed_documents.json()} == {
+        document_id,
+        second_document_id,
+    }
 
     sent = client.post(
         f"/api/v1/chat/sessions/{session_id}/messages",
@@ -190,7 +210,7 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     )
     assert sent.status_code == 201
     assert engram_id in sent.json()["used_engram_ids"]
-    assert len(sent.json()["used_document_chunk_ids"]) >= 1
+    assert len(sent.json()["used_document_chunk_ids"]) >= 2
     assert any(
         ref.get("source_type") == "document_chunk" for ref in sent.json()["source_references"]
     )
@@ -222,7 +242,10 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
 
     continued_documents = client.get(f"/api/v1/chat/sessions/{continued_session_id}/documents")
     assert continued_documents.status_code == 200
-    assert [item["document_id"] for item in continued_documents.json()] == [document_id]
+    assert {item["document_id"] for item in continued_documents.json()} == {
+        document_id,
+        second_document_id,
+    }
 
     continued_messages = client.get(f"/api/v1/chat/sessions/{continued_session_id}/messages")
     assert continued_messages.status_code == 200
@@ -239,6 +262,11 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     unpinned_document = client.delete(f"/api/v1/chat/sessions/{session_id}/documents/{document_id}")
     assert unpinned_document.status_code == 200
     assert unpinned_document.json() == {"removed": True}
+    unpinned_second_document = client.delete(
+        f"/api/v1/chat/sessions/{session_id}/documents/{second_document_id}"
+    )
+    assert unpinned_second_document.status_code == 200
+    assert unpinned_second_document.json() == {"removed": True}
 
     listed_documents_after = client.get(f"/api/v1/chat/sessions/{session_id}/documents")
     assert listed_documents_after.status_code == 200

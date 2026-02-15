@@ -77,6 +77,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add MCP interoperability layer (`initialize`, `tools/list`, `tools/call`) plus typed Python/TypeScript JSON-RPC/SSE clients and contract tests.
 - [x] Add Phase 17 ingestion stack: text/file document ingest APIs, deterministic chunking, embedding abstraction with local fallback, chat-context chunk blending, and upload UI.
 - [x] Add session-level document pinning so uploaded docs can be explicitly carried into chat context and continuation sessions.
+- [x] Guarantee multi-document pin behavior so all pinned docs contribute to context and source metadata.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -1666,6 +1667,18 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 6. Validation:
    - `make check` passed (`100` API tests + eval suite).
    - `make web-check` passed (`38` web tests + build).
+
+### 2026-02-16 (Phase 17 follow-up - multi-document pin context pass)
+
+1. Upgraded pinned-document context assembly:
+   - pinned document retrieval now guarantees one representative chunk per pinned document.
+   - this prevents a single high-similarity document from crowding out other pinned docs in the same session.
+2. Expanded integration coverage:
+   - chat API integration now validates pinning two documents to one session, using both, carrying both into continuation, and unpinning both.
+3. Expanded context coverage:
+   - added unit test to ensure all pinned documents appear in `used_document_chunk_ids` and document source references.
+4. Validation:
+   - `make check` passed (`103` API tests + eval suite).
 
 ### Next Immediate Steps (One By One)
 

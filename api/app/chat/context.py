@@ -42,6 +42,37 @@ def _dedupe_chunks_preserve_order(
     return ordered
 
 
+def _collect_pinned_document_chunks(
+    *,
+    actor_user_id: UUID,
+    project_id: str,
+    user_query: str,
+    embedding_dim: int,
+    pinned_document_ids: list[UUID],
+) -> list[DocumentChunkQueryResult]:
+    """Return one representative chunk per pinned document.
+
+    We issue one scoped retrieval per pinned document so pinning N documents
+    guarantees N document contributions (when each document has chunks).
+    """
+
+    chunks: list[DocumentChunkQueryResult] = []
+    for document_id in _dedupe_preserve_order(pinned_document_ids):
+        scoped = query_document_chunks(
+            actor_user_id=actor_user_id,
+            request=DocumentChunkQueryRequest(
+                query=user_query,
+                project_id=project_id,
+                document_ids=[document_id],
+                top_k=1,
+            ),
+            embedding_dim=embedding_dim,
+        )
+        if scoped:
+            chunks.append(scoped[0])
+    return chunks
+
+
 def _bundle_section(bundle: RehydrationBundle) -> str:
     detailed_excerpt = bundle.detailed_summary_markdown.strip()
     if detailed_excerpt and len(detailed_excerpt) > 1200:
@@ -197,20 +228,13 @@ def assemble_chat_context(
     used_engram_ids = [item.engram_id for item in bundles]
 
     pinned_document_ids = [item.document_id for item in pinned_documents]
-    pinned_chunks: list[DocumentChunkQueryResult] = []
-    if pinned_document_ids:
-        # Pinning means "always consider these docs first" while still using semantic ranking
-        # inside the pinned subset.
-        pinned_chunks = query_document_chunks(
-            actor_user_id=actor_user_id,
-            request=DocumentChunkQueryRequest(
-                query=user_query,
-                project_id=session.project_id,
-                document_ids=pinned_document_ids,
-                top_k=min(max(document_top_k, 2), 8),
-            ),
-            embedding_dim=embedding_dim,
-        )
+    pinned_chunks = _collect_pinned_document_chunks(
+        actor_user_id=actor_user_id,
+        project_id=session.project_id,
+        user_query=user_query,
+        embedding_dim=embedding_dim,
+        pinned_document_ids=pinned_document_ids,
+    )
 
     retrieved_chunks = query_document_chunks(
         actor_user_id=actor_user_id,
@@ -222,7 +246,7 @@ def assemble_chat_context(
         embedding_dim=embedding_dim,
     )
 
-    chunk_budget = min(max(document_top_k, len(pinned_chunks)), 8)
+    chunk_budget = min(max(document_top_k, len(pinned_chunks)), 12)
     selected_chunks = _dedupe_chunks_preserve_order(pinned_chunks + retrieved_chunks)[:chunk_budget]
     used_document_chunk_ids = [item.chunk_id for item in selected_chunks]
 

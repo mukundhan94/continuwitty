@@ -314,3 +314,82 @@ def test_assemble_chat_context_dedupes_multiple_chunks_from_same_document(monkey
     assert len(document_refs) == 1
     assert document_refs[0].document_id == shared_document_id
     assert document_refs[0].title == "AGENT.md"
+
+
+def test_assemble_chat_context_uses_all_pinned_documents(monkeypatch) -> None:
+    session = _session()
+    pinned_document_a = uuid4()
+    pinned_document_b = uuid4()
+    chunk_a = uuid4()
+    chunk_b = uuid4()
+
+    monkeypatch.setattr("app.chat.context.list_pinned_engram_summaries", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        "app.chat.context.list_pinned_documents",
+        lambda session_id, actor_user_id: [
+            PinnedDocumentRecord(
+                session_id=session_id,
+                document_id=pinned_document_a,
+                pinned_by_user_id=actor_user_id,
+                created_at=datetime.now(UTC),
+            ),
+            PinnedDocumentRecord(
+                session_id=session_id,
+                document_id=pinned_document_b,
+                pinned_by_user_id=actor_user_id,
+                created_at=datetime.now(UTC),
+            ),
+        ],
+    )
+    monkeypatch.setattr("app.chat.context.query_engrams", lambda *args, **kwargs: [])
+    monkeypatch.setattr("app.chat.context.get_rehydration_bundle", lambda *args, **kwargs: None)
+
+    def _fake_query_document_chunks(actor_user_id, request, embedding_dim):  # noqa: ANN001
+        if request.document_ids == [pinned_document_a]:
+            return [
+                DocumentChunkQueryResult(
+                    chunk_id=chunk_a,
+                    document_id=pinned_document_a,
+                    project_id="project-chat",
+                    title="Doc A",
+                    source_name="doc-a.md",
+                    chunk_index=0,
+                    snippet="doc a",
+                    created_at=datetime.now(UTC),
+                    visibility_scope="project",
+                    distance=0.3,
+                )
+            ]
+        if request.document_ids == [pinned_document_b]:
+            return [
+                DocumentChunkQueryResult(
+                    chunk_id=chunk_b,
+                    document_id=pinned_document_b,
+                    project_id="project-chat",
+                    title="Doc B",
+                    source_name="doc-b.md",
+                    chunk_index=1,
+                    snippet="doc b",
+                    created_at=datetime.now(UTC),
+                    visibility_scope="project",
+                    distance=0.4,
+                )
+            ]
+        return []
+
+    monkeypatch.setattr("app.chat.context.query_document_chunks", _fake_query_document_chunks)
+
+    assembled = assemble_chat_context(
+        session=session,
+        actor_user_id=session.owner_user_id,
+        user_query="run checks",
+        embedding_dim=256,
+        document_top_k=1,
+    )
+
+    assert assembled.used_document_chunk_ids == [chunk_a, chunk_b]
+    assert "Pinned Document Context" in assembled.context_markdown
+    document_refs = [
+        ref for ref in assembled.source_references if ref.source_type == "document_chunk"
+    ]
+    assert {ref.document_id for ref in document_refs} == {pinned_document_a, pinned_document_b}
