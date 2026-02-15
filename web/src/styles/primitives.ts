@@ -182,9 +182,9 @@ export const ErrorText = styled.p`
 export const NoticeBanner = styled.p`
   padding: 0.5rem 0.75rem;
   border-radius: ${({ theme }) => theme.radius.md};
-  background: #e0f2ee;
+  background: #e8efff;
   color: var(--color-success);
-  border: 1px solid #c4e6dc;
+  border: 1px solid #c5d4fb;
 `
 
 export const SessionItemButton = styled.button<{ $active: boolean }>`
@@ -226,7 +226,7 @@ export const ChatMessageBubble = styled.article<{ $role: string }>`
         `
       : css`
           align-self: flex-start;
-          background: linear-gradient(130deg, #d9f1ec, #bfe5dd);
+          background: linear-gradient(130deg, #e7ecff, #d1dcff);
         `}
 `
 
@@ -241,11 +241,41 @@ export const MessageRole = styled.p`
 export const MessageText = styled.div`
   line-height: 1.45;
 
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    line-height: 1.22;
+    margin: 0.55rem 0 0.35rem;
+    letter-spacing: 0.01em;
+    color: var(--color-ink);
+  }
+
+  h1 {
+    font-size: 1.02rem;
+  }
+
+  h2 {
+    font-size: 0.96rem;
+  }
+
+  h3,
+  h4 {
+    font-size: 0.9rem;
+  }
+
+  strong {
+    color: var(--color-ink);
+  }
+
   p,
   ul,
   ol,
   pre,
-  blockquote {
+  blockquote,
+  table,
+  hr {
     margin: 0.35rem 0;
   }
 
@@ -279,14 +309,42 @@ export const MessageText = styled.div`
   }
 
   blockquote {
-    border-left: 3px solid var(--color-line);
+    border-left: 3px solid #b8c7ef;
     padding-left: 0.6rem;
     color: var(--color-ink-muted);
+    background: rgba(48, 93, 156, 0.05);
+    border-radius: 0 8px 8px 0;
   }
 
   a {
     color: var(--color-accent-alt);
     text-decoration: underline;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+    border: 1px solid #cfd9ec;
+    background: rgba(255, 255, 255, 0.65);
+  }
+
+  th,
+  td {
+    border: 1px solid #cfd9ec;
+    padding: 0.32rem 0.4rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: rgba(48, 93, 156, 0.1);
+    font-weight: 700;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px dashed #cfd9ec;
   }
 `
 

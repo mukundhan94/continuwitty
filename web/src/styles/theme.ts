@@ -1,13 +1,13 @@
 export const colorTokens = {
-  bgSoft: '#f6f1e9',
-  bgStrong: '#e9d9c6',
-  ink: '#1f2a30',
-  inkMuted: '#5d6c75',
-  accent: '#c35528',
-  accentAlt: '#0f7a7b',
+  bgSoft: '#f7f3ed',
+  bgStrong: '#e8dfd2',
+  ink: '#1d2430',
+  inkMuted: '#5b6372',
+  accent: '#be4f2a',
+  accentAlt: '#305d9c',
   card: '#ffffff',
-  line: '#d6d9dc',
-  success: '#0d7a5f',
+  line: '#d8dce4',
+  success: '#295ea8',
   error: '#a53a2a',
 } as const
 

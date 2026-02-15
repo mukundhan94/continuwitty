@@ -39,6 +39,8 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add non-deterministic triage-continuity acceptance flow (save, continue, pin, handoff).
 - [x] Improve chat snapshot engram rehydration with transcript-derived summaries.
 - [x] Add markdown rendering support for chat transcript messages.
+- [x] Fix SSE stream parsing for CRLF frame boundaries to restore live token streaming.
+- [x] Refresh UI theme (no green palette) with richer markdown presentation.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Plan.Next Status
@@ -1264,6 +1266,22 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 2. Added regression tests:
    - `web/src/utils/chat.test.ts` verifies full latest assistant message is preserved and fallback behavior to user message.
 3. Validation:
+   - `make web-check` passed
+
+### 2026-02-15 (Streaming parser and visual refresh pass)
+
+1. Restored robust SSE parsing for chat streaming:
+   - updated `web/src/utils/sse.ts` to handle both `\n\n` and `\r\n\r\n` framing via normalization.
+   - added end-of-stream buffer flush behavior for partial final frames.
+2. Added regression coverage:
+   - `web/src/utils/sse.test.ts` now includes CRLF + chunk-boundary frame parsing.
+3. Refreshed UI away from green:
+   - updated theme tokens in `web/src/styles/theme.ts`.
+   - removed green background accents in `web/src/styles/globalStyles.ts`.
+   - switched assistant bubble/notice/surface accents to blue-amber family in `web/src/styles/primitives.ts`.
+4. Improved markdown readability:
+   - richer heading, table, blockquote, and horizontal-rule styles in transcript message renderer.
+5. Validation:
    - `make web-check` passed
 
 ### Next Immediate Steps (One By One)

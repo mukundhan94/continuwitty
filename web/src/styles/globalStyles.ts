@@ -41,7 +41,7 @@ export const GlobalStyle = createGlobalStyle`
     -moz-osx-font-smoothing: grayscale;
     background:
       radial-gradient(circle at 16% 14%, #ffd8bf 0%, transparent 32%),
-      radial-gradient(circle at 84% 82%, #b4ece3 0%, transparent 35%),
+      radial-gradient(circle at 84% 82%, #d7e0ff 0%, transparent 35%),
       linear-gradient(165deg, var(--color-bg-soft), var(--color-bg-strong));
   }
 
