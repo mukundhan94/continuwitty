@@ -184,6 +184,17 @@ CREATE INDEX IF NOT EXISTS documents_visibility_idx
 CREATE INDEX IF NOT EXISTS documents_content_hash_idx
   ON documents (content_hash);
 
+CREATE TABLE IF NOT EXISTS session_pinned_documents (
+  session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
+  document_id UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
+  pinned_by_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (session_id, document_id)
+);
+
+CREATE INDEX IF NOT EXISTS session_pinned_documents_by_user_idx
+  ON session_pinned_documents (pinned_by_user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS document_chunks (
   chunk_id UUID PRIMARY KEY,
   document_id UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,

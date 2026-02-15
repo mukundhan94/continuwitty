@@ -215,6 +215,17 @@ class PinnedEngramRecord(BaseModel):
     created_at: datetime
 
 
+class PinDocumentRequest(BaseModel):
+    document_id: UUID
+
+
+class PinnedDocumentRecord(BaseModel):
+    session_id: UUID
+    document_id: UUID
+    pinned_by_user_id: UUID
+    created_at: datetime
+
+
 class ChatSourceReference(BaseModel):
     source_type: str = "engram_source"
     engram_id: UUID

@@ -11,9 +11,12 @@ from app.chat_repository import (
     get_chat_session,
     list_chat_messages,
     list_chat_sessions,
+    list_pinned_documents,
     list_pinned_engram_summaries,
     list_pinned_engrams,
+    pin_document_to_session,
     pin_engram_to_session,
+    unpin_document_from_session,
     unpin_engram_from_session,
     update_chat_session,
 )
@@ -28,7 +31,9 @@ from app.models import (
     ContinueSessionResponse,
     EngramSummary,
     MemoryEngramCreate,
+    PinDocumentRequest,
     PinEngramRequest,
+    PinnedDocumentRecord,
     SaveSessionAsEngramRequest,
     SaveSessionAsEngramResponse,
 )
@@ -210,6 +215,17 @@ class ChatService:
             actor_user_id=actor_user_id,
         )
 
+    def list_pinned_documents(
+        self,
+        actor_user_id: UUID,
+        session_id: UUID,
+    ) -> list[PinnedDocumentRecord]:
+        self.get_session(actor_user_id=actor_user_id, session_id=session_id)
+        return list_pinned_documents(
+            session_id=session_id,
+            actor_user_id=actor_user_id,
+        )
+
     def pin_engram(
         self,
         actor_user_id: UUID,
@@ -225,6 +241,21 @@ class ChatService:
             raise ChatValidationError("Session or engram is not accessible for pinning")
         return pinned
 
+    def pin_document(
+        self,
+        actor_user_id: UUID,
+        session_id: UUID,
+        payload: PinDocumentRequest,
+    ) -> PinnedDocumentRecord:
+        pinned = pin_document_to_session(
+            session_id=session_id,
+            document_id=payload.document_id,
+            actor_user_id=actor_user_id,
+        )
+        if not pinned:
+            raise ChatValidationError("Session or document is not accessible for pinning")
+        return pinned
+
     def unpin_engram(self, actor_user_id: UUID, session_id: UUID, engram_id: UUID) -> None:
         removed = unpin_engram_from_session(
             session_id=session_id,
@@ -233,6 +264,15 @@ class ChatService:
         )
         if not removed:
             raise ChatSessionNotFoundError("Pinned engram not found for session")
+
+    def unpin_document(self, actor_user_id: UUID, session_id: UUID, document_id: UUID) -> None:
+        removed = unpin_document_from_session(
+            session_id=session_id,
+            document_id=document_id,
+            actor_user_id=actor_user_id,
+        )
+        if not removed:
+            raise ChatSessionNotFoundError("Pinned document not found for session")
 
     def _prepare_generation(
         self,
@@ -524,6 +564,15 @@ class ChatService:
             )
             if copied:
                 carried_ids.append(copied.engram_id)
+
+        for pinned_document in list_pinned_documents(
+            session_id=session.session_id, actor_user_id=actor_user_id
+        ):
+            pin_document_to_session(
+                session_id=continued.session_id,
+                document_id=pinned_document.document_id,
+                actor_user_id=actor_user_id,
+            )
 
         return ContinueSessionResponse(
             session=continued,

@@ -12,6 +12,7 @@ from .models import (
     ChatSessionRecord,
     ChatSessionUpdateRequest,
     EngramSummary,
+    PinnedDocumentRecord,
     PinnedEngramRecord,
 )
 
@@ -425,3 +426,110 @@ def list_pinned_engram_summaries(
         )
         rows = cur.fetchall()
     return [EngramSummary(**row) for row in rows]
+
+
+def pin_document_to_session(
+    session_id: UUID,
+    document_id: UUID,
+    actor_user_id: UUID,
+) -> PinnedDocumentRecord | None:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH accessible_session AS (
+                SELECT s.session_id
+                FROM chat_sessions s
+                WHERE
+                    s.session_id = %s
+                    AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
+            ),
+            accessible_document AS (
+                SELECT d.document_id
+                FROM documents d
+                WHERE
+                    d.document_id = %s
+                    AND (d.owner_user_id = %s OR d.visibility_scope = 'project')
+            )
+            INSERT INTO session_pinned_documents (
+                session_id,
+                document_id,
+                pinned_by_user_id,
+                created_at
+            )
+            SELECT
+                s.session_id,
+                d.document_id,
+                %s,
+                %s
+            FROM accessible_session s
+            CROSS JOIN accessible_document d
+            ON CONFLICT (session_id, document_id) DO UPDATE
+                SET pinned_by_user_id = EXCLUDED.pinned_by_user_id
+            RETURNING
+                session_id,
+                document_id,
+                pinned_by_user_id,
+                created_at
+            """,
+            (
+                session_id,
+                actor_user_id,
+                document_id,
+                actor_user_id,
+                actor_user_id,
+                datetime.now(UTC),
+            ),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    return PinnedDocumentRecord(**row)
+
+
+def unpin_document_from_session(
+    session_id: UUID,
+    document_id: UUID,
+    actor_user_id: UUID,
+) -> bool:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM session_pinned_documents p
+            USING chat_sessions s
+            WHERE
+                p.session_id = s.session_id
+                AND p.session_id = %s
+                AND p.document_id = %s
+                AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
+            RETURNING p.session_id
+            """,
+            (session_id, document_id, actor_user_id),
+        )
+        row = cur.fetchone()
+    return row is not None
+
+
+def list_pinned_documents(session_id: UUID, actor_user_id: UUID) -> list[PinnedDocumentRecord]:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                p.session_id,
+                p.document_id,
+                p.pinned_by_user_id,
+                p.created_at
+            FROM session_pinned_documents p
+            JOIN chat_sessions s
+              ON s.session_id = p.session_id
+            JOIN documents d
+              ON d.document_id = p.document_id
+            WHERE
+                p.session_id = %s
+                AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
+                AND (d.owner_user_id = %s OR d.visibility_scope = 'project')
+            ORDER BY p.created_at ASC
+            """,
+            (session_id, actor_user_id, actor_user_id),
+        )
+        rows = cur.fetchall()
+    return [PinnedDocumentRecord(**row) for row in rows]
