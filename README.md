@@ -20,9 +20,10 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add optional periodic snapshot engrams for long-running threads.
 - [x] Add provenance source-inspection endpoint and UI flow.
 - [x] Add CSRF-protected UI auth with optional hashed-password support.
+- [x] Add multi-user auth model + role-based access controls (admin/analyst/viewer).
 - [ ] Add CLI/UI for upload/search/rehydrate workflows.
 - [ ] Add automated evaluation harness (temporal + multi-engram reasoning).
-- [ ] Add security hardening and RBAC.
+- [ ] Add production security hardening (oauth/oidc, audit logging, rate limits).
 
 ## Why This Exists
 
@@ -89,13 +90,16 @@ engram/
       __init__.py
       agent_models.py
       agent_workflow.py
+      auth.py
       config.py
       db.py
       embedding.py
       main.py
       models.py
       repository.py
+      user_repository.py
       templates/
+        admin.html
         login.html
         dashboard.html
 ```
@@ -110,9 +114,11 @@ engram/
 - `api/app/auth.py`: password hashing/verification and CSRF token helpers.
 - `api/app/models.py`: Request/response and engram schema models.
 - `api/app/repository.py`: SQL persistence, semantic query, rehydration builder.
+- `api/app/user_repository.py`: user persistence, seeding, and role-aware updates.
 - `api/app/embedding.py`: Deterministic local embedding helper.
 - `api/app/db.py`: DB connection lifecycle.
 - `api/app/config.py`: Environment-backed settings.
+- `api/app/templates/admin.html`: admin console for user/role inspection.
 - `api/app/templates/login.html`: local sign-in page for UI testing.
 - `api/app/templates/dashboard.html`: authenticated local dashboard for API testing.
 - `api/pyproject.toml`: project dependencies, pytest config, and ruff config.
@@ -121,6 +127,7 @@ engram/
 - `api/tests/test_api_unit.py`: unit tests for API routing behavior.
 - `api/tests/test_api_integration.py`: full API + DB integration tests.
 - `api/tests/test_ui_auth.py`: login/logout/session workflow tests.
+- `api/tests/test_user_rbac.py`: multi-user auth and role-based access checks.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
 - `Makefile`: Local run shortcuts.
@@ -175,6 +182,7 @@ UI testing entrypoints:
 
 - [http://localhost:8000/login](http://localhost:8000/login)
 - [http://localhost:8000/ui](http://localhost:8000/ui)
+- [http://localhost:8000/ui/admin](http://localhost:8000/ui/admin) (admin role)
 
 Default local UI credentials (override in `.env` if needed):
 
@@ -257,6 +265,8 @@ make api
 ```
 
 Comment: open `http://localhost:8000/login`, sign in, then use `/ui` to run create/list/query/rehydrate from the dashboard.
+
+For admin role validation, open `http://localhost:8000/ui/admin` and verify user list visibility.
 
 Then test durable agent runs:
 
@@ -411,16 +421,36 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make lint` -> all checks passed
    - `make test` -> `27 passed`
 
+### 2026-02-15 (Multi-user RBAC phase)
+
+1. Added multi-user store with seeded local admin account (`users` table).
+2. Added role model (`admin`, `analyst`, `viewer`) and session role propagation.
+3. Added role-protected admin APIs:
+   - `GET /api/v1/users`
+   - `POST /api/v1/users`
+   - `PATCH /api/v1/users/{user_id}`
+   - `GET /api/v1/me`
+4. Added admin UI route:
+   - `GET /ui/admin` (admin role required)
+5. Added tests for admin management and non-admin access denial.
+6. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `29 passed`
+
 ### Next Immediate Steps (One By One)
 
 1. Run the workflow notes section and complete your manual validation pass.
-2. Add multi-user auth model + role-based access controls.
-3. Build evaluation harness for temporal and cross-engram reasoning.
-4. Add reranking/citation-packing improvements for retrieval quality.
-5. Add background consolidation jobs for long-run memory maintenance.
+2. Build evaluation harness for temporal and cross-engram reasoning.
+3. Add reranking/citation-packing improvements for retrieval quality.
+4. Add background consolidation jobs for long-run memory maintenance.
+5. Add production auth hardening (oauth/oidc, audit events, rate limits).
 
 ## MVP API Surface
 
+- `GET /api/v1/me`
+- `GET /api/v1/users`
+- `POST /api/v1/users`
+- `PATCH /api/v1/users/{user_id}`
 - `POST /api/v1/engrams`
 - `GET /api/v1/engrams`
 - `POST /api/v1/engrams/query`
@@ -440,6 +470,7 @@ Test files live under `api/tests`:
 - `test_api_unit.py`: endpoint behavior with repository function mocking.
 - `test_api_integration.py`: end-to-end API roundtrip + sources endpoint checks.
 - `test_ui_auth.py`: login/logout/session-protected UI + CSRF checks.
+- `test_user_rbac.py`: user management and role-based access control checks.
 - `test_agent_workflow.py`: LangGraph checkpoint/resume + auto-persist + snapshot checks.
 - `conftest.py`: DB fixture, schema bootstrap, and cleanup.
 
@@ -501,12 +532,12 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
 - Automatic engram write at end of each research run integrated
 - Optional periodic snapshot engrams integrated for long-running threads
 
-### Milestone 4 (In Progress)
+### Milestone 4 (Completed)
 
 - Added CSRF protection for login/logout UI forms
 - Added optional hashed-password authentication path (`UI_DEMO_PASSWORD_HASH`)
 - Added source-inspection endpoint and dashboard workflow
-- Pending: multi-user auth model and role-based access controls
+- Added multi-user auth model and role-based access controls
 
 ### Milestone 5 (Next)
 
@@ -515,6 +546,10 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - cross-engram reasoning
   - temporal updates
   - abstention checks
+- Add production auth/security hardening:
+  - oauth/oidc integration
+  - audit-event logging
+  - auth rate limits and lockout policy
 
 ## Example: Create Engram
 
@@ -588,5 +623,6 @@ curl http://localhost:8000/api/v1/engrams/<engram_id>/sources
 - [x] I can resume a checkpointed agent run by `thread_id`.
 - [x] I can access a local UI using a simple login workflow to test endpoints.
 - [x] I can inspect stored provenance sources for an engram via API/UI.
+- [x] I can manage users and enforce admin-only routes with role checks.
 - [x] A newcomer can run the system locally using this README alone.
 - [ ] The same stored engram can be reused with different LLM providers later.

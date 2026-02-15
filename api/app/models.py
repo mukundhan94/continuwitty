@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -94,6 +95,33 @@ class EngramSourceRecord(BaseModel):
     url: str
     title: str | None = None
     snippet: str | None = None
+
+
+class UserRole(str, Enum):
+    admin = "admin"
+    analyst = "analyst"
+    viewer = "viewer"
+
+
+class UserRecord(BaseModel):
+    user_id: UUID
+    username: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+
+
+class UserCreateRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
+    password: str = Field(min_length=8, max_length=128)
+    role: UserRole = UserRole.analyst
+    is_active: bool = True
+
+
+class UserUpdateRequest(BaseModel):
+    role: UserRole | None = None
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 class RehydrationBundle(BaseModel):

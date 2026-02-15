@@ -147,6 +147,7 @@ LLM-ready rehydration bundle.
 -   Login/logout UI with session auth is implemented.
 -   CSRF protection for UI form actions is implemented.
 -   Source inspection endpoint + dashboard action is implemented.
+-   Multi-user RBAC is implemented (`admin`, `analyst`, `viewer`) with admin-only user management APIs.
 
 ------------------------------------------------------------------------
 

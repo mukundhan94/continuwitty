@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Engram Vault Admin</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 20px;
+        border-bottom: 1px solid #cbd5e1;
+        background: #fff;
+      }
+      main {
+        max-width: 1000px;
+        margin: 18px auto;
+        padding: 0 16px;
+      }
+      .panel {
+        background: #fff;
+        border: 1px solid #dbeafe;
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+      }
+      th,
+      td {
+        border-bottom: 1px solid #e2e8f0;
+        text-align: left;
+        padding: 8px 6px;
+      }
+      code {
+        background: #0b1220;
+        color: #e2e8f0;
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+      .error {
+        color: #b91c1c;
+      }
+      a {
+        color: #0369a1;
+      }
+      button {
+        border: 0;
+        border-radius: 8px;
+        background: #ef4444;
+        color: #fee2e2;
+        padding: 8px 12px;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <strong>Admin Console</strong>
+        <div>Signed in as {{ username }} ({{ role }})</div>
+      </div>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit">Logout</button>
+      </form>
+    </header>
+    <main>
+      <div class="panel">
+        <p><a href="/ui">Back to dashboard</a></p>
+        <p>
+          Use admin APIs for user management:
+          <code>GET /api/v1/users</code>,
+          <code>POST /api/v1/users</code>,
+          <code>PATCH /api/v1/users/{user_id}</code>.
+        </p>
+      </div>
+      <div class="panel">
+        <h2>Users</h2>
+        {% if error %}
+        <p class="error">Failed to load users: {{ error }}</p>
+        {% endif %}
+        <table>
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Active</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in users %}
+            <tr>
+              <td>{{ user.username }}</td>
+              <td>{{ user.role }}</td>
+              <td>{{ user.is_active }}</td>
+              <td>{{ user.created_at }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </body>
+</html>

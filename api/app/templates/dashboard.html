@@ -114,7 +114,10 @@
     <header>
       <div>
         <h1>Engram Vault Test UI</h1>
-        <p>Signed in as <strong>{{ username }}</strong></p>
+        <p>Signed in as <strong>{{ username }}</strong> ({{ role }})</p>
+        {% if role == "admin" %}
+        <p><a href="/ui/admin">Open admin console</a></p>
+        {% endif %}
       </div>
       <form method="post" action="/logout">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
