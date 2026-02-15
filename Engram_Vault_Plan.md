@@ -174,6 +174,7 @@ LLM-ready rehydration bundle.
 -   Added runner `python -m evals.run_eval` (`make eval`) with JSON output.
 -   Added integration check `api/tests/test_eval_harness.py`.
 -   Current local run result: 4/4 scenarios passed.
+-   Added local auth hardening baseline: login rate limiting/lockout + audit event logging.
 -   Remaining work in this phase: production auth/security hardening.
 
 ------------------------------------------------------------------------

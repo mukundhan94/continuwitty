@@ -25,7 +25,8 @@ This README is written for a newcomer and follows an implementation sequence bas
 - [x] Add automated evaluation harness (temporal + multi-engram reasoning).
 - [x] Add reranking/citation-packing improvements for retrieval quality.
 - [x] Add background consolidation jobs for long-run memory maintenance.
-- [ ] Add production security hardening (oauth/oidc, audit logging, rate limits).
+- [x] Add local security baseline (audit log + login rate limiting/lockout).
+- [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Why This Exists
 
@@ -96,12 +97,14 @@ engram/
       __init__.py
       agent_models.py
       agent_workflow.py
+      audit.py
       auth.py
       cli.py
       consolidation.py
       config.py
       db.py
       embedding.py
+      login_guard.py
       main.py
       models.py
       repository.py
@@ -119,9 +122,11 @@ engram/
 - `api/app/main.py`: FastAPI routes and API surface.
 - `api/app/agent_models.py`: request/response models for agent runs.
 - `api/app/agent_workflow.py`: LangGraph workflow, checkpointing, and resume logic.
+- `api/app/audit.py`: append-only local audit event writer (`jsonl`).
 - `api/app/auth.py`: password hashing/verification and CSRF token helpers.
 - `api/app/cli.py`: local terminal workflows for upload/search/rehydrate.
 - `api/app/consolidation.py`: local background maintenance logic for consolidation snapshots.
+- `api/app/login_guard.py`: login attempt rate-limit and lockout state machine.
 - `api/app/models.py`: Request/response and engram schema models.
 - `api/app/repository.py`: SQL persistence, reranked semantic query, and citation-packed rehydration builder.
 - `api/app/user_repository.py`: user persistence, seeding, and role-aware updates.
@@ -138,11 +143,11 @@ engram/
 - `api/tests/conftest.py`: API client, schema bootstrap, DB cleanup fixtures.
 - `api/tests/test_api_unit.py`: unit tests for API routing behavior.
 - `api/tests/test_api_integration.py`: full API + DB integration tests.
-- `api/tests/test_ui_auth.py`: login/logout/session workflow tests.
 - `api/tests/test_user_rbac.py`: multi-user auth and role-based access checks.
 - `api/tests/test_eval_harness.py`: integration check that evaluation scenarios pass.
 - `api/tests/test_cli.py`: unit tests for CLI argument handling and command behavior.
 - `api/tests/test_consolidation.py`: unit tests for consolidation job behavior and guardrails.
+- `api/tests/test_ui_auth.py`: login/logout/session workflow + CSRF + rate-limit + audit checks.
 - `api/tests/test_embedding.py`: embedding utility tests.
 - `api/tests/test_repository_helpers.py`: repository helper tests.
 - `Makefile`: Local run shortcuts.
@@ -204,6 +209,13 @@ Default local UI credentials (override in `.env` if needed):
 - username: `admin`
 - password: `admin123`
 - optional hash override: `UI_DEMO_PASSWORD_HASH` (if set, plain password env is ignored)
+
+Local security baseline knobs (optional in `.env`):
+
+- `AUDIT_LOG_PATH` (default `./data/audit_events.jsonl`)
+- `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` (default `5`)
+- `LOGIN_RATE_LIMIT_WINDOW_SECONDS` (default `300`)
+- `LOGIN_LOCKOUT_SECONDS` (default `900`)
 
 LangGraph checkpoint file (local):
 
@@ -366,6 +378,14 @@ make consolidate ARGS="--project-id engram-vault --dry-run"
 ```
 
 Comment: previews background memory maintenance without writing a new consolidation engram.
+
+9. Inspect recent audit events:
+
+```bash
+tail -n 10 data/audit_events.jsonl
+```
+
+Comment: verifies login/logout and admin actions are being written to local audit log.
 
 If you want to use a hashed local UI password instead of plaintext in `.env`, generate one with:
 
@@ -556,6 +576,31 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
    - `make test` -> `42 passed`
    - `make eval` -> `4/4` cases passed (score `1.0`)
 
+### 2026-02-15 (Local security baseline phase)
+
+1. Added local audit logging (`api/app/audit.py`):
+   - append-only JSONL events with timestamp, route, IP, actor, and outcome
+2. Added login protection guard (`api/app/login_guard.py`):
+   - per-user+IP attempt tracking
+   - rate-limit window + lockout duration controls
+3. Hardened auth and admin routes:
+   - login CSRF rejection events
+   - login failed/success/rate-limited events
+   - logout CSRF rejection/success events
+   - user create/update audit events
+4. Added environment toggles in `.env.example`:
+   - `AUDIT_LOG_PATH`
+   - `LOGIN_RATE_LIMIT_MAX_ATTEMPTS`
+   - `LOGIN_RATE_LIMIT_WINDOW_SECONDS`
+   - `LOGIN_LOCKOUT_SECONDS`
+5. Added tests:
+   - rate-limit behavior after repeated failed logins
+   - audit-log write on failed login
+6. Verification:
+   - `make lint` -> all checks passed
+   - `make test` -> `44 passed`
+   - `make eval` -> `4/4` cases passed (score `1.0`)
+
 ### Next Immediate Steps (One By One)
 
 1. Add production auth hardening (oauth/oidc, audit events, rate limits).
@@ -629,7 +674,7 @@ Test files live under `api/tests`:
 - `test_repository_helpers.py`: retrieval text and vector literal helpers.
 - `test_api_unit.py`: endpoint behavior with repository function mocking.
 - `test_api_integration.py`: end-to-end API roundtrip + sources endpoint checks.
-- `test_ui_auth.py`: login/logout/session-protected UI + CSRF checks.
+- `test_ui_auth.py`: login/logout/session-protected UI + CSRF + rate-limit + audit checks.
 - `test_user_rbac.py`: user management and role-based access control checks.
 - `test_agent_workflow.py`: LangGraph checkpoint/resume + auto-persist + snapshot checks.
 - `test_eval_harness.py`: scenario-based evaluation harness pass/fail checks.
@@ -729,12 +774,15 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
 - Memory maintenance improvements:
   - background consolidation jobs
 
-### Milestone 9 (Next)
+### Milestone 9 (In Progress)
 
-- Add production auth/security hardening:
+- Completed local baseline:
+  - local audit event logging
+  - login rate limiting + lockout guard
+- Remaining production auth/security hardening:
   - oauth/oidc integration
-  - audit-event logging
-  - auth rate limits and lockout policy
+  - centralized audit-event pipeline
+  - distributed auth rate limits and lockout policy
 
 ## Example: Create Engram
 
@@ -813,5 +861,6 @@ curl http://localhost:8000/api/v1/engrams/<engram_id>/sources
 - [x] I can upload/search/rehydrate engrams from terminal using local CLI commands.
 - [x] Query and rehydration quality include reranking and citation-packing improvements.
 - [x] I can run local consolidation maintenance jobs (dry-run or persist) per project.
+- [x] I can enforce local login rate limits and inspect local audit events.
 - [x] A newcomer can run the system locally using this README alone.
 - [ ] The same stored engram can be reused with different LLM providers later.

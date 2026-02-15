@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     ui_demo_password: str = "admin123"
     ui_demo_password_hash: str | None = None
     langgraph_checkpoint_path: str = "./data/langgraph_checkpoints.sqlite"
+    audit_log_path: str = "./data/audit_events.jsonl"
+    login_rate_limit_window_seconds: int = 300
+    login_rate_limit_max_attempts: int = 5
+    login_lockout_seconds: int = 900
 
     model_config = SettingsConfigDict(
         env_file=".env",

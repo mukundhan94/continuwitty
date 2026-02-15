@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
-from app.main import app
+from app.main import app, login_attempt_guard
 
 DEFAULT_DB_URL = "postgresql://engram:engram@localhost:5432/engram_vault"
 
@@ -18,6 +18,13 @@ def clear_settings_cache() -> None:
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_login_guard_state() -> None:
+    login_attempt_guard.reset()
+    yield
+    login_attempt_guard.reset()
 
 
 @pytest.fixture

@@ -10,8 +10,10 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .agent_models import AgentResumeRequest, AgentRunRequest, AgentRunResponse
 from .agent_workflow import AgentWorkflowService
+from .audit import log_audit_event
 from .auth import generate_csrf_token, hash_password, verify_password
 from .config import get_settings
+from .login_guard import LoginAttemptGuard
 from .models import (
     EngramCreateResponse,
     EngramQueryRequest,
@@ -67,6 +69,11 @@ app.add_middleware(
 )
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 agent_workflow = AgentWorkflowService()
+login_attempt_guard = LoginAttemptGuard(
+    max_attempts=settings.login_rate_limit_max_attempts,
+    window_seconds=settings.login_rate_limit_window_seconds,
+    lockout_seconds=settings.login_lockout_seconds,
+)
 
 
 def _session_user(request: Request) -> dict[str, Any] | None:
@@ -94,6 +101,16 @@ def _csrf_token_for_request(request: Request) -> str:
 
 def _verify_csrf_token(request: Request, submitted_token: str) -> bool:
     return bool(submitted_token) and submitted_token == request.session.get("csrf_token")
+
+
+def _client_ip(request: Request) -> str:
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _login_attempt_key(request: Request, username: str) -> str:
+    return f"{username.lower()}:{_client_ip(request)}"
 
 
 def _authenticate_user(username: str, password: str) -> dict[str, Any] | None:
@@ -163,14 +180,49 @@ def login_submit(
     csrf_token: str = Form(...),
 ) -> Response:
     if not _verify_csrf_token(request, csrf_token):
+        log_audit_event(
+            request=request,
+            event_type="login_csrf_rejected",
+            success=False,
+            username=username,
+        )
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    attempt_key = _login_attempt_key(request, username)
+    allowed, retry_seconds = login_attempt_guard.check(attempt_key)
+    if not allowed:
+        log_audit_event(
+            request=request,
+            event_type="login_rate_limited",
+            success=False,
+            username=username,
+            detail=f"retry_in_seconds={retry_seconds}",
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many login attempts. Retry in {retry_seconds} seconds.",
+        )
 
     authenticated_user = _authenticate_user(username, password)
     if authenticated_user:
+        login_attempt_guard.register_success(attempt_key)
         request.session["user"] = authenticated_user
         request.session["csrf_token"] = generate_csrf_token()
+        log_audit_event(
+            request=request,
+            event_type="login_success",
+            success=True,
+            username=authenticated_user["username"],
+        )
         return RedirectResponse(url="/ui", status_code=303)
 
+    login_attempt_guard.register_failure(attempt_key)
+    log_audit_event(
+        request=request,
+        event_type="login_failed",
+        success=False,
+        username=username,
+    )
     return templates.TemplateResponse(
         request,
         "login.html",
@@ -185,8 +237,21 @@ def login_submit(
 
 @app.post("/logout", include_in_schema=False)
 def logout(request: Request, csrf_token: str = Form(...)) -> Response:
+    user = _session_user(request)
     if not _verify_csrf_token(request, csrf_token):
+        log_audit_event(
+            request=request,
+            event_type="logout_csrf_rejected",
+            success=False,
+            username=user["username"] if user else None,
+        )
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    log_audit_event(
+        request=request,
+        event_type="logout_success",
+        success=True,
+        username=user["username"] if user else None,
+    )
     request.session.clear()
     return _login_redirect()
 
@@ -261,21 +326,37 @@ def list_users_endpoint(
 
 @app.post("/api/v1/users", response_model=UserRecord, status_code=201)
 def create_user_endpoint(request: Request, payload: UserCreateRequest) -> UserRecord:
-    _require_roles_api(request, {UserRole.admin.value})
+    actor = _require_roles_api(request, {UserRole.admin.value})
     try:
-        return create_user(
+        created = create_user(
             username=payload.username,
             password_hash=hash_password(payload.password),
             role=payload.role,
             is_active=payload.is_active,
         )
+        log_audit_event(
+            request=request,
+            event_type="user_created",
+            success=True,
+            username=actor["username"],
+            metadata={"target_username": payload.username, "role": payload.role.value},
+        )
+        return created
     except ValueError as exc:
+        log_audit_event(
+            request=request,
+            event_type="user_create_conflict",
+            success=False,
+            username=actor["username"],
+            metadata={"target_username": payload.username},
+            detail=str(exc),
+        )
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.patch("/api/v1/users/{user_id}", response_model=UserRecord)
 def update_user_endpoint(request: Request, user_id: UUID, payload: UserUpdateRequest) -> UserRecord:
-    _require_roles_api(request, {UserRole.admin.value})
+    actor = _require_roles_api(request, {UserRole.admin.value})
 
     if payload.role is None and payload.is_active is None and payload.password is None:
         raise HTTPException(status_code=400, detail="No update fields provided")
@@ -287,7 +368,26 @@ def update_user_endpoint(request: Request, user_id: UUID, payload: UserUpdateReq
         password_hash=hash_password(payload.password) if payload.password else None,
     )
     if not updated:
+        log_audit_event(
+            request=request,
+            event_type="user_update_missing",
+            success=False,
+            username=actor["username"],
+            metadata={"target_user_id": str(user_id)},
+        )
         raise HTTPException(status_code=404, detail="User not found")
+    log_audit_event(
+        request=request,
+        event_type="user_updated",
+        success=True,
+        username=actor["username"],
+        metadata={
+            "target_user_id": str(user_id),
+            "role": payload.role.value if payload.role else None,
+            "is_active": payload.is_active,
+            "password_updated": payload.password is not None,
+        },
+    )
     return updated
 
 

@@ -43,6 +43,30 @@ def test_login_rejects_invalid_credentials() -> None:
     assert "Invalid username or password." in response.text
 
 
+def test_login_rate_limit_after_repeated_failures() -> None:
+    client = TestClient(app)
+
+    for _ in range(5):
+        login_page = client.get("/login")
+        csrf_token = _extract_csrf_token(login_page.text)
+        response = client.post(
+            "/login",
+            data={"username": "admin", "password": "wrong", "csrf_token": csrf_token},
+            follow_redirects=False,
+        )
+        assert response.status_code == 401
+
+    login_page = client.get("/login")
+    csrf_token = _extract_csrf_token(login_page.text)
+    blocked = client.post(
+        "/login",
+        data={"username": "admin", "password": "wrong", "csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+    assert blocked.status_code == 429
+    assert "Too many login attempts" in blocked.json()["detail"]
+
+
 def test_login_rejects_invalid_csrf() -> None:
     client = TestClient(app)
     _ = client.get("/login")
@@ -119,3 +143,22 @@ def test_logout_rejects_invalid_csrf() -> None:
 
     still_authenticated = client.get("/ui")
     assert still_authenticated.status_code == 200
+
+
+def test_login_failure_writes_audit_log(monkeypatch, tmp_path) -> None:
+    audit_path = tmp_path / "audit.log"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(audit_path))
+
+    client = TestClient(app)
+    login_page = client.get("/login")
+    csrf_token = _extract_csrf_token(login_page.text)
+    response = client.post(
+        "/login",
+        data={"username": "admin", "password": "wrong", "csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 401
+    assert audit_path.exists()
+    lines = [line for line in audit_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert any('"event_type": "login_failed"' in line for line in lines)
