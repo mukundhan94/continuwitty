@@ -550,6 +550,42 @@ Default local UI credentials (seeded in `db/init/001_schema.sql`):
 - username: `admin`
 - password: `admin123`
 
+### Admin Console Test Runbook (Multi-Document Pin + MCP)
+
+Use this sequence to validate the latest multi-document continuity path end-to-end with admin credentials.
+
+1. Sign in as admin:
+- open [http://localhost:5173](http://localhost:5173) (or [http://localhost:5174](http://localhost:5174) in docker mode)
+- login with `admin` / `admin123`
+
+2. Optional admin-role sanity check:
+- open [http://localhost:8000/ui/admin](http://localhost:8000/ui/admin)
+- verify user list renders (confirms admin role/session health)
+
+3. Create a session:
+- in `Create Session`, set `Project ID` to `engram-vault` (or your test project)
+- click `Create Session`
+
+4. Ingest two documents:
+- in `Document Ingestion` -> `Show Upload Form`, ingest two text/file docs into the same project
+- verify both appear in `Recent Documents`
+
+5. Pin both docs:
+- click `Pin to Chat` on both documents
+- verify both cards show pinned state
+
+6. Send a prompt:
+- ask for a summary that should use both docs
+- verify `Source references used` includes document entries
+
+7. Continue chat:
+- click `Continue in New Chat`
+- verify pinned docs are still present in the continued session
+
+8. MCP parity check:
+- use `tools/list` and confirm document-pin tools are exposed
+- call `chat.list_pinned_documents` and verify both document IDs are returned
+
 Local security baseline knobs (optional in `.env`):
 
 - `AUDIT_LOG_PATH` (default `./data/audit_events.jsonl`)
@@ -1680,6 +1716,24 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 4. Validation:
    - `make check` passed (`103` API tests + eval suite).
 
+### 2026-02-16 (Phase 16 follow-up - MCP workflow expansion pass)
+
+1. Expanded MCP chat workflow coverage:
+   - added tool methods for message history and pin lifecycle:
+     - `chat.list_messages`
+     - `chat.list_pinned_engrams`, `chat.pin_engram`, `chat.unpin_engram`
+     - `chat.list_pinned_documents`, `chat.pin_document`, `chat.unpin_document`
+     - `chat.list_project_documents`
+2. Fixed MCP non-stream `chat.send_message` path:
+   - `tools/call` with `stream: false` now resolves through a direct success result instead of method fallback errors.
+3. Added integration tests for new MCP flows:
+   - tool catalog assertions include all newly exposed methods.
+   - end-to-end MCP test validates: create session, list docs, pin 2 docs, list pinned docs, send message, and unpin.
+4. Added admin-console runbook:
+   - documented manual validation sequence for admin login, ingest, multi-pin, continuity, and MCP parity checks.
+5. Validation:
+   - `make check` passed (`104` API tests + eval suite).
+
 ### Next Immediate Steps (One By One)
 
 1. Phase 16 follow-up (deferred by request): add `engram-cli mcp-call` smoke command for terminal MCP debugging.
@@ -1788,7 +1842,15 @@ Core tools:
 - `chat.create_session`
 - `chat.list_sessions`
 - `chat.get_session`
+- `chat.list_messages`
 - `chat.send_message`
+- `chat.list_pinned_engrams`
+- `chat.pin_engram`
+- `chat.unpin_engram`
+- `chat.list_pinned_documents`
+- `chat.pin_document`
+- `chat.unpin_document`
+- `chat.list_project_documents`
 - `chat.save_as_engram`
 - `chat.continue_session`
 - `engram.create`
@@ -1819,6 +1881,37 @@ Example calls by tool group:
     "model_id": "gpt-4o-mini",
     "visibility_scope": "private",
     "autosave_enabled": false
+  }
+}
+```
+
+Document continuity helpers:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "chat-pin-doc-1",
+  "method": "tools/call",
+  "params": {
+    "name": "chat.pin_document",
+    "arguments": {
+      "session_id": "00000000-0000-0000-0000-000000000000",
+      "document_id": "11111111-1111-1111-1111-111111111111"
+    }
+  }
+}
+```
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "chat-list-pins-1",
+  "method": "tools/call",
+  "params": {
+    "name": "chat.list_pinned_documents",
+    "arguments": {
+      "session_id": "00000000-0000-0000-0000-000000000000"
+    }
   }
 }
 ```

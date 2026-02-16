@@ -81,11 +81,15 @@ login_attempt_guard = LoginAttemptGuard(
     lockout_seconds=settings.login_lockout_seconds,
 )
 chat_service = ChatService(embedding_dim=settings.embedding_dim)
-mcp_service = McpService(chat_service=chat_service, embedding_dim=settings.embedding_dim)
 ingestion_service = DocumentIngestionService(
     embedding_dim=settings.embedding_dim,
     max_file_bytes=settings.ingestion_max_file_bytes,
     max_text_chars=settings.ingestion_max_text_chars,
+)
+mcp_service = McpService(
+    chat_service=chat_service,
+    embedding_dim=settings.embedding_dim,
+    ingestion_service=ingestion_service,
 )
 
 

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from app.chat.errors import ChatProviderExecutionError, ChatServiceError
 from app.chat.service import ChatService
+from app.ingestion.service import DocumentIngestionService
 from app.models import (
     ChatMessageCreateRequest,
     ChatSessionCreateRequest,
@@ -16,6 +17,7 @@ from app.models import (
     EngramQueryRequest,
     McpJsonRpcRequest,
     MemoryEngramCreate,
+    PinDocumentRequest,
     PinEngramRequest,
     SaveSessionAsEngramRequest,
 )
@@ -34,9 +36,15 @@ class McpService:
     - Keep auth and visibility parity with REST handlers by requiring a resolved actor.
     """
 
-    def __init__(self, chat_service: ChatService, embedding_dim: int) -> None:
+    def __init__(
+        self,
+        chat_service: ChatService,
+        embedding_dim: int,
+        ingestion_service: DocumentIngestionService | None = None,
+    ) -> None:
         self._chat_service = chat_service
         self._embedding_dim = embedding_dim
+        self._ingestion_service = ingestion_service
 
     @staticmethod
     def _success(id_value: str | int, result: dict[str, Any]) -> dict[str, Any]:
@@ -162,6 +170,19 @@ class McpService:
                 },
             },
             {
+                "name": "chat.list_messages",
+                "description": "List persisted messages for a chat session.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "limit": {"type": "integer", "minimum": 1},
+                        "offset": {"type": "integer", "minimum": 0},
+                    },
+                },
+            },
+            {
                 "name": "chat.send_message",
                 "description": "Send a user message in a chat session (streaming supported).",
                 "inputSchema": {
@@ -171,6 +192,84 @@ class McpService:
                         "session_id": {"type": "string", "format": "uuid"},
                         "content_text": {"type": "string"},
                         "stream": {"type": "boolean"},
+                    },
+                },
+            },
+            {
+                "name": "chat.list_pinned_engrams",
+                "description": "List engrams pinned to a chat session.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {"session_id": {"type": "string", "format": "uuid"}},
+                },
+            },
+            {
+                "name": "chat.pin_engram",
+                "description": "Pin an engram to a chat session context chain.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id", "engram_id"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "engram_id": {"type": "string", "format": "uuid"},
+                    },
+                },
+            },
+            {
+                "name": "chat.unpin_engram",
+                "description": "Remove a pinned engram from a chat session.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id", "engram_id"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "engram_id": {"type": "string", "format": "uuid"},
+                    },
+                },
+            },
+            {
+                "name": "chat.list_pinned_documents",
+                "description": "List uploaded documents pinned to a chat session.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {"session_id": {"type": "string", "format": "uuid"}},
+                },
+            },
+            {
+                "name": "chat.pin_document",
+                "description": "Pin an uploaded document into chat context.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id", "document_id"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "document_id": {"type": "string", "format": "uuid"},
+                    },
+                },
+            },
+            {
+                "name": "chat.unpin_document",
+                "description": "Remove a pinned document from chat context.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id", "document_id"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "document_id": {"type": "string", "format": "uuid"},
+                    },
+                },
+            },
+            {
+                "name": "chat.list_project_documents",
+                "description": "List ingested documents visible in a project scope.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {"type": "string"},
+                        "limit": {"type": "integer", "minimum": 1},
+                        "offset": {"type": "integer", "minimum": 0},
                     },
                 },
             },
@@ -316,6 +415,84 @@ class McpService:
             )
             return {"session": session.model_dump(mode="json")}
 
+        if method == "chat.list_messages":
+            messages = self._chat_service.list_messages(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+                limit=int(params.get("limit", 200)),
+                offset=int(params.get("offset", 0)),
+            )
+            return {"messages": [item.model_dump(mode="json") for item in messages]}
+
+        if method == "chat.send_message":
+            message = self._chat_service.send_message(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+                payload=ChatMessageCreateRequest(content_text=params.get("content_text", "")),
+            )
+            return {"message": message.model_dump(mode="json")}
+
+        if method == "chat.list_pinned_engrams":
+            pinned = self._chat_service.list_pinned_engrams(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+            )
+            return {"pinned_engrams": [item.model_dump(mode="json") for item in pinned]}
+
+        if method in {"chat.pin_engram", "engram.pin_to_session"}:
+            pinned = self._chat_service.pin_engram(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+                payload=PinEngramRequest(engram_id=self._parse_uuid(params, "engram_id")),
+            )
+            return {"pinned": pinned.model_dump(mode="json")}
+
+        if method == "chat.unpin_engram":
+            self._chat_service.unpin_engram(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+                engram_id=self._parse_uuid(params, "engram_id"),
+            )
+            return {"removed": True}
+
+        if method == "chat.list_pinned_documents":
+            pinned = self._chat_service.list_pinned_documents(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+            )
+            return {"pinned_documents": [item.model_dump(mode="json") for item in pinned]}
+
+        if method == "chat.pin_document":
+            pinned = self._chat_service.pin_document(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+                payload=PinDocumentRequest(document_id=self._parse_uuid(params, "document_id")),
+            )
+            return {"pinned": pinned.model_dump(mode="json")}
+
+        if method == "chat.unpin_document":
+            self._chat_service.unpin_document(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+                document_id=self._parse_uuid(params, "document_id"),
+            )
+            return {"removed": True}
+
+        if method == "chat.list_project_documents":
+            if self._ingestion_service is None:
+                raise McpRpcError(
+                    code=-32000,
+                    message="Ingestion service unavailable for MCP tool",
+                    data={"method": method},
+                )
+            documents = self._ingestion_service.list_documents(
+                actor_user_id=actor_user_id,
+                project_id=params.get("project_id"),
+                limit=int(params.get("limit", 200)),
+                offset=int(params.get("offset", 0)),
+            )
+            return {"documents": [item.model_dump(mode="json") for item in documents]}
+
         if method == "chat.save_as_engram":
             saved = self._chat_service.save_session_as_engram(
                 actor_user_id=actor_user_id,
@@ -364,14 +541,6 @@ class McpService:
                     data={"engram_id": str(engram_id)},
                 )
             return {"bundle": bundle.model_dump(mode="json")}
-
-        if method == "engram.pin_to_session":
-            pinned = self._chat_service.pin_engram(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                payload=PinEngramRequest(engram_id=self._parse_uuid(params, "engram_id")),
-            )
-            return {"pinned": pinned.model_dump(mode="json")}
 
         if method == "user.get_profile":
             return {"profile": actor}

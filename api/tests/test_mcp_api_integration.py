@@ -125,6 +125,14 @@ def test_mcp_initialize_and_tools_list_contract(client, clean_db) -> None:
     tools = _final_result_frame(tools_frames)["result"]["tools"]
     tool_names = {item["name"] for item in tools}
     assert "chat.create_session" in tool_names
+    assert "chat.list_messages" in tool_names
+    assert "chat.list_pinned_engrams" in tool_names
+    assert "chat.pin_engram" in tool_names
+    assert "chat.unpin_engram" in tool_names
+    assert "chat.list_pinned_documents" in tool_names
+    assert "chat.pin_document" in tool_names
+    assert "chat.unpin_document" in tool_names
+    assert "chat.list_project_documents" in tool_names
     assert "chat.send_message" in tool_names
     assert "engram.query" in tool_names
     assert "user.get_profile" in tool_names
@@ -231,6 +239,137 @@ def test_mcp_tools_call_stream_flow(client, clean_db, monkeypatch) -> None:
     assert final["result"]["tool_name"] == "chat.send_message"
     assert final["result"]["isError"] is False
     assert final["result"]["structuredContent"]["message"]["assistant_text"] == "assistant:streamed"
+
+
+@pytest.mark.integration
+def test_mcp_tools_call_document_pinning_workflow(client, clean_db, monkeypatch) -> None:
+    _login(client)
+    _install_fake_provider(monkeypatch)
+
+    create_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.create_session",
+            "arguments": {
+                "project_id": "project-mcp-docs",
+                "title": "MCP document pin session",
+                "provider": "openai",
+                "model_id": "gpt-4o-mini",
+                "visibility_scope": "private",
+                "autosave_enabled": False,
+            },
+        },
+        request_id="mcp-doc-create-session",
+    )
+    session_id = _final_result_frame(create_frames)["result"]["structuredContent"]["session"][
+        "session_id"
+    ]
+
+    doc_a = client.post(
+        "/api/v1/ingestion/text",
+        json={
+            "project_id": "project-mcp-docs",
+            "title": "MCP Runbook",
+            "text": "Service degraded. Start queue drain and monitor retries.",
+            "visibility_scope": "project",
+        },
+    )
+    assert doc_a.status_code == 201
+    doc_a_id = doc_a.json()["document"]["document_id"]
+
+    doc_b = client.post(
+        "/api/v1/ingestion/text",
+        json={
+            "project_id": "project-mcp-docs",
+            "title": "Escalation Notes",
+            "text": "Escalate to DB oncall after 15 minutes and notify support.",
+            "visibility_scope": "project",
+        },
+    )
+    assert doc_b.status_code == 201
+    doc_b_id = doc_b.json()["document"]["document_id"]
+
+    list_docs = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.list_project_documents",
+            "arguments": {"project_id": "project-mcp-docs"},
+        },
+        request_id="mcp-doc-list",
+    )
+    listed_documents = _final_result_frame(list_docs)["result"]["structuredContent"]["documents"]
+    assert {item["document_id"] for item in listed_documents} >= {doc_a_id, doc_b_id}
+
+    pin_a = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.pin_document",
+            "arguments": {"session_id": session_id, "document_id": doc_a_id},
+        },
+        request_id="mcp-doc-pin-a",
+    )
+    assert (
+        _final_result_frame(pin_a)["result"]["structuredContent"]["pinned"]["document_id"]
+        == doc_a_id
+    )
+
+    pin_b = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.pin_document",
+            "arguments": {"session_id": session_id, "document_id": doc_b_id},
+        },
+        request_id="mcp-doc-pin-b",
+    )
+    assert (
+        _final_result_frame(pin_b)["result"]["structuredContent"]["pinned"]["document_id"]
+        == doc_b_id
+    )
+
+    pinned_docs = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.list_pinned_documents",
+            "arguments": {"session_id": session_id},
+        },
+        request_id="mcp-doc-pins",
+    )
+    pinned_list = _final_result_frame(pinned_docs)["result"]["structuredContent"][
+        "pinned_documents"
+    ]
+    assert {item["document_id"] for item in pinned_list} == {doc_a_id, doc_b_id}
+
+    send = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.send_message",
+            "arguments": {
+                "session_id": session_id,
+                "content_text": "Summarize pinned docs",
+                "stream": True,
+            },
+        },
+        request_id="mcp-doc-send",
+    )
+    final_send = _final_result_frame(send)["result"]["structuredContent"]["message"]
+    assert len(final_send["used_document_chunk_ids"]) >= 2
+
+    unpin_a = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.unpin_document",
+            "arguments": {"session_id": session_id, "document_id": doc_a_id},
+        },
+        request_id="mcp-doc-unpin-a",
+    )
+    assert _final_result_frame(unpin_a)["result"]["structuredContent"]["removed"] is True
 
 
 @pytest.mark.integration
