@@ -79,6 +79,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add session-level document pinning so uploaded docs can be explicitly carried into chat context and continuation sessions.
 - [x] Guarantee multi-document pin behavior so all pinned docs contribute to context and source metadata.
 - [x] Add chat debug traces with embed/LLM timing, token usage, and input/output inspection (optional Langfuse sink).
+- [x] Harden observability with latest Langfuse API-only tracing, explicit publish/error logs, and scrollable in-UI debug trace inspection.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -1784,11 +1785,27 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make check` passed (`107` API tests + eval suite).
    - `make web-check` passed (`39` web tests + build).
 
+### 2026-02-16 (Observability hardening - Langfuse v3 API + debug UX)
+
+1. Switched Langfuse integration to latest API only:
+   - uses `start_as_current_observation` and `update_current_trace`.
+   - legacy `trace()/generation()` branch removed for simpler long-term maintenance.
+2. Added explicit telemetry diagnostics:
+   - startup logs now clearly indicate disabled, missing dependency, missing keys, or incompatible client shape.
+   - publish logs now include success and exception traces for faster debugging in dev.
+3. Improved debug trace UI usability:
+   - debug trace panel now uses bounded scroll containers so large JSON payloads are inspectable without breaking chat layout.
+4. Expanded tests:
+   - added telemetry publisher tests for success, failure, missing credentials, and incompatible client behaviors.
+5. Validation:
+   - `make check` passed (`111` API tests + eval suite).
+   - `make web-check` passed (`39` web tests + build).
+
 ### Next Immediate Steps (One By One)
 
-1. Phase 16 follow-up (deferred by request): add `engram-cli mcp-call` smoke command for terminal MCP debugging.
-2. Phase 16 architecture note: evaluate `FastMCP` adapter pilot (non-breaking, optional) before any protocol-layer rewrite.
-3. Phase 18 kickoff: ship memory lifecycle controls for autosave cadence, retention, and consolidation policies.
+1. Phase 18 kickoff: ship memory lifecycle controls for autosave cadence, retention, and consolidation policies.
+2. Add linked-engram lineage support (parent/child references + traversal) so memory origin chains can be traced across sessions.
+3. Expand MCP workflow docs and tool coverage for external clients (for example, LibreChat) using the existing SSE JSON-RPC surface.
 4. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
 5. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
 
