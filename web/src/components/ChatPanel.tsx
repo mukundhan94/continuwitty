@@ -5,7 +5,7 @@ import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import styled from 'styled-components'
 
-import type { ChatMessage, ChatSession, ChatSourceReference } from '../api/types'
+import type { ChatDebugTrace, ChatMessage, ChatSession, ChatSourceReference } from '../api/types'
 import {
   ChatMessageBubble,
   ErrorText,
@@ -44,6 +44,54 @@ const ComposerForm = styled.form`
   padding-top: 0.2rem;
 `
 
+const DebugPanel = styled.details`
+  border: 1px dashed var(--color-line);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+  background: var(--surface-raised);
+  display: grid;
+  gap: 0.35rem;
+  min-height: 0;
+
+  &[open] {
+    max-height: min(46vh, 34rem);
+    overflow: hidden;
+  }
+`
+
+const DebugPanelBody = styled.div`
+  display: grid;
+  gap: 0.35rem;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.2rem;
+`
+
+const DebugGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.35rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--color-ink-muted);
+`
+
+const DebugLabel = styled.strong`
+  color: var(--color-ink);
+  font-weight: 700;
+`
+
+const DebugBlock = styled.pre`
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  background: var(--markdown-code-bg);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  max-height: min(34vh, 24rem);
+  overflow: auto;
+`
+
 interface ChatPanelProps {
   session: ChatSession | null
   messages: ChatMessage[]
@@ -53,6 +101,7 @@ interface ChatPanelProps {
   sending: boolean
   error: string | null
   sourceReferences: ChatSourceReference[]
+  debugTrace: ChatDebugTrace | null
   onComposerChange: (value: string) => void
   onSend: () => Promise<void>
   onRetry: () => Promise<void>
@@ -89,6 +138,7 @@ export function ChatPanel({
   sending,
   error,
   sourceReferences,
+  debugTrace,
   onComposerChange,
   onSend,
   onRetry,
@@ -167,6 +217,44 @@ export function ChatPanel({
             ))}
           </ul>
         </SourceStrip>
+      ) : null}
+
+      {debugTrace ? (
+        <DebugPanel>
+          <summary>Debug Trace</summary>
+          <DebugPanelBody>
+            <DebugGrid>
+              <span>
+                <DebugLabel>Total:</DebugLabel> {debugTrace.total_duration_ms.toFixed(1)} ms
+              </span>
+              <span>
+                <DebugLabel>Context:</DebugLabel> {debugTrace.context_duration_ms.toFixed(1)} ms
+              </span>
+              <span>
+                <DebugLabel>Embeds:</DebugLabel> {debugTrace.embedding_calls.length}
+              </span>
+              <span>
+                <DebugLabel>LLM Call:</DebugLabel> {debugTrace.llm_call_duration_ms.toFixed(1)} ms
+              </span>
+              <span>
+                <DebugLabel>Input Tokens:</DebugLabel> {debugTrace.llm_calls[0]?.token_usage?.input_tokens ?? 0}
+              </span>
+              <span>
+                <DebugLabel>Output Tokens:</DebugLabel> {debugTrace.llm_calls[0]?.token_usage?.output_tokens ?? 0}
+              </span>
+              {debugTrace.llm_calls[0]?.token_usage_is_estimated ? (
+                <span>
+                  <DebugLabel>Token Source:</DebugLabel> estimated
+                </span>
+              ) : (
+                <span>
+                  <DebugLabel>Token Source:</DebugLabel> provider
+                </span>
+              )}
+            </DebugGrid>
+            <DebugBlock>{JSON.stringify(debugTrace, null, 2)}</DebugBlock>
+          </DebugPanelBody>
+        </DebugPanel>
       ) : null}
 
       <ComposerForm onSubmit={handleSubmit}>

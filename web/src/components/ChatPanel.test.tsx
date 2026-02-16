@@ -34,6 +34,7 @@ function renderPanel(overrides: Partial<ComponentProps<typeof ChatPanel>> = {}) 
     sending: false,
     error: null,
     sourceReferences: [] as ChatSourceReference[],
+    debugTrace: null,
     onComposerChange: vi.fn(),
     onSend,
     onRetry: vi.fn(async () => {}),
@@ -98,5 +99,54 @@ describe('ChatPanel markdown rendering', () => {
     const runbookLink = screen.getByRole('link', { name: 'Runbook' })
     expect(runbookLink).toHaveAttribute('href', 'https://example.com/runbook')
     expect(runbookLink).toHaveAttribute('target', '_blank')
+  })
+
+  it('renders debug trace details when provided', () => {
+    renderPanel({
+      debugTrace: {
+        total_duration_ms: 120.5,
+        prepare_duration_ms: 30.1,
+        context_duration_ms: 20.2,
+        history_load_duration_ms: 4.2,
+        llm_call_duration_ms: 70.2,
+        persistence_duration_ms: 2.4,
+        used_engram_count: 1,
+        used_document_chunk_count: 2,
+        source_reference_count: 2,
+        provider: 'openai',
+        model_id: 'gpt-4o-mini',
+        request_input_text: 'hello',
+        response_output_text: 'world',
+        provider_system_prompt_preview: 'be concise',
+        provider_messages: [{ role: 'user', content_preview: 'hello', char_count: 5 }],
+        embedding_calls: [
+          {
+            operation: 'embed',
+            provider_id: 'local',
+            duration_ms: 2.3,
+            item_count: 1,
+            text_chars: 5,
+            dim: 256,
+            used_fallback: false,
+          },
+        ],
+        llm_calls: [
+          {
+            provider: 'openai',
+            model_id: 'gpt-4o-mini',
+            call_type: 'generate',
+            duration_ms: 70.2,
+            input_chars: 10,
+            output_chars: 5,
+            token_usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
+            token_usage_is_estimated: false,
+          },
+        ],
+      },
+    })
+
+    expect(screen.getByText('Debug Trace')).toBeInTheDocument()
+    expect(screen.getByText(/Input Tokens:/)).toBeInTheDocument()
+    expect(screen.getByText(/Output Tokens:/)).toBeInTheDocument()
   })
 })

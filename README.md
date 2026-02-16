@@ -78,6 +78,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add Phase 17 ingestion stack: text/file document ingest APIs, deterministic chunking, embedding abstraction with local fallback, chat-context chunk blending, and upload UI.
 - [x] Add session-level document pinning so uploaded docs can be explicitly carried into chat context and continuation sessions.
 - [x] Guarantee multi-document pin behavior so all pinned docs contribute to context and source metadata.
+- [x] Add chat debug traces with embed/LLM timing, token usage, and input/output inspection (optional Langfuse sink).
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -388,6 +389,7 @@ engram/
 - `api/app/mcp/client.py`: typed Python JSON-RPC/SSE MCP client helper for external integrations.
 - `api/app/mcp/errors.py`: MCP RPC error types and codes.
 - `api/app/mcp/service.py`: MCP tool dispatch, compatibility methods (`initialize`/`tools/*`), and JSON-RPC frame generation.
+- `api/app/observability/chat_debug.py`: chat debug collector hooks and optional Langfuse trace publishing.
 - `api/app/models.py`: Request/response and engram schema models.
 - `api/app/providers/base.py`: provider adapter contract and normalized request/response types.
 - `api/app/providers/errors.py`: provider-layer error taxonomy.
@@ -597,6 +599,35 @@ Backend debug logging knobs (optional in `.env`):
 
 - `APP_ENV` (default `development`)
 - `LOG_CONFIG_IN_DEV` (default `true`, prints a redacted parsed-config snapshot on startup in dev/local envs)
+- `CHAT_DEBUG_ENABLED` (default `true`, attach debug trace payloads to chat responses and stream completion events)
+- `CHAT_DEBUG_LOG_CONSOLE` (default `true`, print chat debug payloads in API logs)
+- `CHAT_DEBUG_INCLUDE_RAW_TEXT` (default `true`, include request/response text in debug payloads)
+- `LANGFUSE_ENABLED` (default `false`, publish traces to Langfuse when configured)
+- `LANGFUSE_HOST` (default `https://cloud.langfuse.com`)
+- `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`
+
+Optional Langfuse dependency (required only for remote trace export):
+
+```bash
+cd api
+uv add langfuse
+```
+
+Langfuse SDK compatibility:
+
+- publisher targets the latest observation API only (`start_as_current_observation`).
+- if an older/incompatible client is installed, tracing is skipped with an explicit warning log.
+
+Expected tracing log signals:
+
+- startup:
+  - `[engram-chat-debug] Langfuse tracing disabled by config` when `LANGFUSE_ENABLED=false`
+  - `[engram-chat-debug] Langfuse tracing enabled` when client initialization succeeds
+  - warning logs for missing dependency or missing keys
+- per message:
+  - `[engram-chat-debug]` JSON payload printed when `CHAT_DEBUG_LOG_CONSOLE=true`
+  - `[engram-chat-debug] Langfuse trace published` on successful remote publish
+  - `[engram-chat-debug] Langfuse trace publish failed` with stack trace on exceptions
 
 Provider configuration knobs (optional in `.env` unless provider enabled):
 
@@ -1733,6 +1764,25 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - documented manual validation sequence for admin login, ingest, multi-pin, continuity, and MCP parity checks.
 5. Validation:
    - `make check` passed (`104` API tests + eval suite).
+
+### 2026-02-16 (Observability pass - debug traces + optional Langfuse)
+
+1. Added structured chat debug trace payloads:
+   - includes embedding timing, LLM call timing, token usage, input/output snapshots, and provider request previews.
+   - debug trace now appears in chat send responses and stream completion payloads.
+2. Added embedding observability hooks:
+   - `embed` and `embed_many` now record provider, duration, text size, batch size, and fallback usage under chat context.
+3. Added optional Langfuse publisher:
+   - configured by `LANGFUSE_ENABLED`, `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`.
+   - failures are non-blocking and never interrupt chat flow.
+4. Added UI debug panel:
+   - displays response-level timing/tokens and full JSON trace for inspection.
+5. Added tests:
+   - embedding observability unit tests.
+   - chat service response test now validates debug trace presence and token data.
+6. Validation:
+   - `make check` passed (`107` API tests + eval suite).
+   - `make web-check` passed (`39` web tests + build).
 
 ### Next Immediate Steps (One By One)
 

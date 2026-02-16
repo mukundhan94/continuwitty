@@ -139,6 +139,10 @@ def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
     assert response.used_engram_ids == [referenced_engram_id]
     assert response.used_document_chunk_ids == []
     assert response.source_references[0].url == "https://example.com/source"
+    assert response.debug_trace is not None
+    assert response.debug_trace.llm_calls[0].provider == "openai"
+    assert response.debug_trace.llm_calls[0].token_usage["total_tokens"] == 13
+    assert response.debug_trace.request_input_text == "How should we proceed?"
 
 
 def test_continue_session_copies_pinned_engrams(monkeypatch) -> None:

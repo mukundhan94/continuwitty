@@ -21,7 +21,11 @@ description: Use this skill when implementing chat sessions, context assembly wi
 3. Call provider adapter through registry.
 4. Save assistant/user messages and metadata.
 5. Expose `used_engram_ids`, `used_document_chunk_ids`, and `source_references` in chat response payloads.
-6. Add save-as-engram endpoint to snapshot useful chat state.
+6. Emit debug trace payloads for developer inspection:
+   - embedding timings
+   - provider call duration and token usage
+   - request/response snapshots
+7. Add save-as-engram endpoint to snapshot useful chat state.
 
 ## Module Layout (Current)
 - `api/app/chat/api.py`: chat route transport layer.
@@ -35,3 +39,4 @@ description: Use this skill when implementing chat sessions, context assembly wi
 
 ## Validation
 - Integration test: create -> message -> pin -> continue -> save-as-engram.
+- Unit test: debug trace contains timings/tokens and remains non-blocking when telemetry sinks fail.

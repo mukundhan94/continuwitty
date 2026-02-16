@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from time import perf_counter
 
 from app.config import Settings, get_settings
+from app.observability import record_embedding_call
 
 from .base import EmbeddingProvider, EmbeddingResult
 from .errors import EmbeddingProviderError
@@ -26,35 +28,61 @@ class EmbeddingService:
     def primary_provider_id(self) -> str:
         return self._primary.provider_id
 
-    def _with_fallback(self, fn):  # noqa: ANN001, ANN201
+    def embed(self, text: str, *, dim: int) -> EmbeddingResult:
+        text = text if text.strip() else " "
+        text_chars = len(text)
+
+        def _run(provider: EmbeddingProvider, *, used_fallback: bool) -> EmbeddingResult:
+            started_at = perf_counter()
+            vector = provider.embed(text, dim=dim)
+            duration_ms = (perf_counter() - started_at) * 1000.0
+            record_embedding_call(
+                operation="embed",
+                provider_id=provider.provider_id,
+                duration_ms=duration_ms,
+                item_count=1,
+                text_chars=text_chars,
+                dim=dim,
+                used_fallback=used_fallback,
+            )
+            return EmbeddingResult(vector=vector, provider_id=provider.provider_id)
+
         try:
-            return fn(self._primary)
+            return _run(self._primary, used_fallback=False)
         except EmbeddingProviderError:
             if self._fallback is None:
                 raise
-            return fn(self._fallback)
-
-    def embed(self, text: str, *, dim: int) -> EmbeddingResult:
-        text = text if text.strip() else " "
-
-        def _run(provider: EmbeddingProvider) -> EmbeddingResult:
-            return EmbeddingResult(
-                vector=provider.embed(text, dim=dim), provider_id=provider.provider_id
-            )
-
-        return self._with_fallback(_run)
+            return _run(self._fallback, used_fallback=True)
 
     def embed_many(self, texts: list[str], *, dim: int) -> list[EmbeddingResult]:
         cleaned = [item if item.strip() else " " for item in texts]
+        text_chars = sum(len(item) for item in cleaned)
+        item_count = len(cleaned)
 
-        def _run(provider: EmbeddingProvider) -> list[EmbeddingResult]:
+        def _run(provider: EmbeddingProvider, *, used_fallback: bool) -> list[EmbeddingResult]:
+            started_at = perf_counter()
             vectors = provider.embed_many(cleaned, dim=dim)
+            duration_ms = (perf_counter() - started_at) * 1000.0
+            record_embedding_call(
+                operation="embed_many",
+                provider_id=provider.provider_id,
+                duration_ms=duration_ms,
+                item_count=item_count,
+                text_chars=text_chars,
+                dim=dim,
+                used_fallback=used_fallback,
+            )
             return [
                 EmbeddingResult(vector=vector, provider_id=provider.provider_id)
                 for vector in vectors
             ]
 
-        return self._with_fallback(_run)
+        try:
+            return _run(self._primary, used_fallback=False)
+        except EmbeddingProviderError:
+            if self._fallback is None:
+                raise
+            return _run(self._fallback, used_fallback=True)
 
 
 def _build_primary_provider(settings: Settings) -> EmbeddingProvider:

@@ -239,6 +239,53 @@ class ChatSourceReference(BaseModel):
     chunk_index: int | None = None
 
 
+class ChatDebugEmbeddingCall(BaseModel):
+    operation: str
+    provider_id: str
+    duration_ms: float
+    item_count: int
+    text_chars: int
+    dim: int
+    used_fallback: bool = False
+
+
+class ChatDebugLLMCall(BaseModel):
+    provider: str
+    model_id: str
+    call_type: str = "generate"
+    duration_ms: float
+    input_chars: int
+    output_chars: int
+    token_usage: dict[str, int] = Field(default_factory=dict)
+    token_usage_is_estimated: bool = False
+
+
+class ChatDebugProviderMessage(BaseModel):
+    role: str
+    content_preview: str
+    char_count: int
+
+
+class ChatDebugTrace(BaseModel):
+    total_duration_ms: float
+    prepare_duration_ms: float
+    context_duration_ms: float
+    history_load_duration_ms: float
+    llm_call_duration_ms: float
+    persistence_duration_ms: float
+    used_engram_count: int
+    used_document_chunk_count: int
+    source_reference_count: int
+    provider: str
+    model_id: str
+    request_input_text: str
+    response_output_text: str
+    provider_system_prompt_preview: str
+    provider_messages: list[ChatDebugProviderMessage] = Field(default_factory=list)
+    embedding_calls: list[ChatDebugEmbeddingCall] = Field(default_factory=list)
+    llm_calls: list[ChatDebugLLMCall] = Field(default_factory=list)
+
+
 class ChatSendResponse(BaseModel):
     session_id: UUID
     message_id: UUID
@@ -247,6 +294,7 @@ class ChatSendResponse(BaseModel):
     used_engram_ids: list[UUID] = Field(default_factory=list)
     used_document_chunk_ids: list[UUID] = Field(default_factory=list)
     source_references: list[ChatSourceReference] = Field(default_factory=list)
+    debug_trace: ChatDebugTrace | None = None
 
 
 class SaveSessionAsEngramRequest(BaseModel):

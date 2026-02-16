@@ -1,5 +1,6 @@
 import { apiJson, apiVoid, parseApiError } from './http'
 import type {
+  ChatDebugTrace,
   ChatMessage,
   ChatSendResponse,
   ChatSession,
@@ -36,6 +37,7 @@ export interface StreamMetaPayload {
   used_engram_ids: string[]
   used_document_chunk_ids: string[]
   source_references: ChatSourceReference[]
+  debug_trace?: ChatDebugTrace | null
 }
 
 export interface StreamChunkPayload {
@@ -50,6 +52,7 @@ export interface StreamDonePayload {
   used_engram_ids: string[]
   used_document_chunk_ids: string[]
   source_references: ChatSourceReference[]
+  debug_trace?: ChatDebugTrace | null
 }
 
 export interface StreamErrorPayload {

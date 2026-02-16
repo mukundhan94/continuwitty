@@ -22,6 +22,7 @@ import { ingestFileDocument, ingestTextDocument, listProjectDocuments } from './
 import type {
   ChatMessage,
   ChatSession,
+  ChatDebugTrace,
   ChatSourceReference,
   DocumentRecord,
   EngramSummary,
@@ -117,6 +118,7 @@ export default function App() {
   const [lastPrompt, setLastPrompt] = useState('')
 
   const [sourceReferences, setSourceReferences] = useState<ChatSourceReference[]>([])
+  const [chatDebugTrace, setChatDebugTrace] = useState<ChatDebugTrace | null>(null)
 
   const [engramLoading, setEngramLoading] = useState(false)
   const [pinnedEngrams, setPinnedEngrams] = useState<EngramSummary[]>([])
@@ -227,6 +229,7 @@ export default function App() {
       setPinnedEngrams([])
       setPinnedDocuments([])
       setSourceReferences([])
+      setChatDebugTrace(null)
       return
     }
     void loadSessionData(selectedSessionId, projectId)
@@ -306,6 +309,7 @@ export default function App() {
     setComposerText('')
     setStreamingAssistantText('')
     setSourceReferences([])
+    setChatDebugTrace(null)
     setChatError(null)
     setChatSending(true)
 
@@ -313,6 +317,9 @@ export default function App() {
       for await (const event of streamChatMessage(selectedSessionId, content)) {
         if (event.event === 'meta') {
           setSourceReferences(event.data.source_references)
+          if (event.data.debug_trace) {
+            setChatDebugTrace(event.data.debug_trace)
+          }
         }
         if (event.event === 'chunk') {
           setStreamingAssistantText((current) => current + event.data.text)
@@ -320,6 +327,7 @@ export default function App() {
         if (event.event === 'done') {
           setStreamingAssistantText(event.data.assistant_text)
           setSourceReferences(event.data.source_references)
+          setChatDebugTrace(event.data.debug_trace ?? null)
         }
         if (event.event === 'error') {
           throw new Error(event.data.detail)
@@ -333,6 +341,7 @@ export default function App() {
       setComposerText(content)
       setPendingUserText(null)
       setStreamingAssistantText('')
+      setChatDebugTrace(null)
     } finally {
       setChatSending(false)
     }
@@ -560,6 +569,7 @@ export default function App() {
           sending={chatSending}
           error={chatError}
           sourceReferences={sourceReferences}
+          debugTrace={chatDebugTrace}
           onComposerChange={setComposerText}
           onSend={handleSend}
           onRetry={handleRetry}

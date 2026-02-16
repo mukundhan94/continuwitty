@@ -12,6 +12,8 @@ _SENSITIVE_SETTING_KEYS = {
     "aws_access_key_id",
     "aws_secret_access_key",
     "aws_session_token",
+    "langfuse_public_key",
+    "langfuse_secret_key",
 }
 
 _DEV_ENV_NAMES = {"dev", "development", "local"}
@@ -41,6 +43,13 @@ class Settings(BaseSettings):
     login_lockout_seconds: int = 900
     default_chat_provider: str = "openai"
     default_chat_model: str = "gpt-4o-mini"
+    chat_debug_enabled: bool = True
+    chat_debug_log_console: bool = True
+    chat_debug_include_raw_text: bool = True
+    langfuse_enabled: bool = False
+    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com"
     anthropic_api_key: str | None = None

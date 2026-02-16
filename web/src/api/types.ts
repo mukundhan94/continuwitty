@@ -75,6 +75,53 @@ export interface ChatSourceReference {
   chunk_index?: number | null
 }
 
+export interface ChatDebugEmbeddingCall {
+  operation: string
+  provider_id: string
+  duration_ms: number
+  item_count: number
+  text_chars: number
+  dim: number
+  used_fallback: boolean
+}
+
+export interface ChatDebugLlmCall {
+  provider: string
+  model_id: string
+  call_type: string
+  duration_ms: number
+  input_chars: number
+  output_chars: number
+  token_usage: Record<string, number>
+  token_usage_is_estimated: boolean
+}
+
+export interface ChatDebugProviderMessage {
+  role: string
+  content_preview: string
+  char_count: number
+}
+
+export interface ChatDebugTrace {
+  total_duration_ms: number
+  prepare_duration_ms: number
+  context_duration_ms: number
+  history_load_duration_ms: number
+  llm_call_duration_ms: number
+  persistence_duration_ms: number
+  used_engram_count: number
+  used_document_chunk_count: number
+  source_reference_count: number
+  provider: string
+  model_id: string
+  request_input_text: string
+  response_output_text: string
+  provider_system_prompt_preview: string
+  provider_messages: ChatDebugProviderMessage[]
+  embedding_calls: ChatDebugEmbeddingCall[]
+  llm_calls: ChatDebugLlmCall[]
+}
+
 export interface ChatSendResponse {
   session_id: string
   message_id: string
@@ -83,6 +130,7 @@ export interface ChatSendResponse {
   used_engram_ids: string[]
   used_document_chunk_ids: string[]
   source_references: ChatSourceReference[]
+  debug_trace?: ChatDebugTrace | null
 }
 
 export interface ContinueSessionResponse {
