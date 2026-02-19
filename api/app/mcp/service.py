@@ -204,6 +204,40 @@ class McpService:
         dotted = _to_dotted_tool_name(tool_name)
         return _TOOL_ALIASES.get(dotted, dotted)
 
+    def _create_engram_from_conversation(
+        self,
+        *,
+        actor_user_id: UUID,
+        params: dict[str, Any],
+        enrichment_origin: str,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Create an engram from raw conversation text (no chat session required)."""
+        request = EngramCreateFromConversationRequest(**params)
+        created, enrichment_report = create_engram_with_report(
+            payload=MemoryEngramCreate(
+                project_id=request.project_id,
+                thread_id=request.thread_id,
+                title=request.title,
+                abstract=request.abstract,
+                detailed_summary_markdown=request.conversation_markdown,
+                tags=request.tags,
+                keywords=request.keywords,
+                visibility_scope=request.visibility_scope.value,
+                retrieval_text=request.retrieval_text,
+                source_session_id=request.source_session_id,
+            ),
+            embedding_dim=self._embedding_dim,
+            owner_user_id=actor_user_id,
+            enrichment_origin=enrichment_origin,
+        )
+        report_payload = {
+            "enrichment_applied": enrichment_report.get("enrichment_applied", False),
+            "auto_tags": enrichment_report.get("auto_tags", []),
+            "auto_keywords": enrichment_report.get("auto_keywords", []),
+            "abstract_derived": enrichment_report.get("abstract_derived", False),
+        }
+        return created.model_dump(mode="json"), report_payload
+
     @staticmethod
     def _tool_catalog() -> list[dict[str, Any]]:
         # Keep this catalog synchronized with dispatcher behavior and tests.
@@ -403,17 +437,24 @@ class McpService:
             },
             {
                 "name": "chat.save_as_engram",
-                "description": "Save a chat session as an engram artifact.",
+                "description": (
+                    "Save as engram. Supports either a chat session snapshot "
+                    "or direct conversation markdown when no session_id exists."
+                ),
                 "inputSchema": {
                     "type": "object",
-                    "required": ["session_id", "title"],
                     "properties": {
                         "session_id": {"type": "string", "format": "uuid"},
+                        "project_id": {"type": "string"},
+                        "conversation_markdown": {"type": "string"},
+                        "thread_id": {"type": "string"},
                         "title": {"type": "string"},
                         "abstract": {"type": "string"},
                         "visibility_scope": {"type": "string", "enum": ["private", "project"]},
                         "tags": {"type": "array", "items": {"type": "string"}},
                         "keywords": {"type": "array", "items": {"type": "string"}},
+                        "retrieval_text": {"type": "string"},
+                        "source_session_id": {"type": "string", "format": "uuid"},
                     },
                 },
             },
@@ -847,18 +888,39 @@ class McpService:
             return {"documents": [item.model_dump(mode="json") for item in documents]}
 
         if method == "chat.save_as_engram":
-            saved = self._chat_service.save_session_as_engram(
+            session_id = params.get("session_id")
+            if session_id:
+                saved = self._chat_service.save_session_as_engram(
+                    actor_user_id=actor_user_id,
+                    session_id=self._parse_uuid(params, "session_id"),
+                    payload=SaveSessionAsEngramRequest(
+                        title=params.get("title", "Session Snapshot"),
+                        abstract=params.get("abstract", ""),
+                        visibility_scope=params.get("visibility_scope", "private"),
+                        tags=params.get("tags", []),
+                        keywords=params.get("keywords", []),
+                    ),
+                )
+                return {"saved_engram": saved.model_dump(mode="json")}
+
+            if not params.get("project_id") or not params.get("conversation_markdown"):
+                raise McpRpcError(
+                    code=-32602,
+                    message="Invalid params",
+                    data={
+                        "missing": "session_id or (project_id + conversation_markdown)",
+                    },
+                )
+
+            fallback_params = dict(params)
+            if not fallback_params.get("title"):
+                fallback_params["title"] = "Conversation Snapshot"
+            created, report = self._create_engram_from_conversation(
                 actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                payload=SaveSessionAsEngramRequest(
-                    title=params.get("title", ""),
-                    abstract=params.get("abstract", ""),
-                    visibility_scope=params.get("visibility_scope", "private"),
-                    tags=params.get("tags", []),
-                    keywords=params.get("keywords", []),
-                ),
+                params=fallback_params,
+                enrichment_origin="mcp.chat.save_as_engram",
             )
-            return {"saved_engram": saved.model_dump(mode="json")}
+            return {"saved_engram": created, "enrichment_report": report}
 
         if method == "chat.continue_session":
             continued = self._chat_service.continue_session(
@@ -878,33 +940,12 @@ class McpService:
             return {"engram": created.model_dump(mode="json")}
 
         if method == "engram.create_from_conversation":
-            request = EngramCreateFromConversationRequest(**params)
-            created, enrichment_report = create_engram_with_report(
-                payload=MemoryEngramCreate(
-                    project_id=request.project_id,
-                    thread_id=request.thread_id,
-                    title=request.title,
-                    abstract=request.abstract,
-                    detailed_summary_markdown=request.conversation_markdown,
-                    tags=request.tags,
-                    keywords=request.keywords,
-                    visibility_scope=request.visibility_scope.value,
-                    retrieval_text=request.retrieval_text,
-                    source_session_id=request.source_session_id,
-                ),
-                embedding_dim=self._embedding_dim,
-                owner_user_id=actor_user_id,
+            created, report = self._create_engram_from_conversation(
+                actor_user_id=actor_user_id,
+                params=params,
                 enrichment_origin="mcp.engram.create_from_conversation",
             )
-            return {
-                "engram": created.model_dump(mode="json"),
-                "enrichment_report": {
-                    "enrichment_applied": enrichment_report.get("enrichment_applied", False),
-                    "auto_tags": enrichment_report.get("auto_tags", []),
-                    "auto_keywords": enrichment_report.get("auto_keywords", []),
-                    "abstract_derived": enrichment_report.get("abstract_derived", False),
-                },
-            }
+            return {"engram": created, "enrichment_report": report}
 
         if method == "engram.query":
             results = query_engrams(

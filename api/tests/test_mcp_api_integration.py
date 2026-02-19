@@ -683,6 +683,99 @@ def test_mcp_create_from_conversation_preserves_explicit_metadata(client, clean_
 
 
 @pytest.mark.integration
+def test_mcp_chat_save_as_engram_without_session_end_to_end(client, clean_db) -> None:
+    _login(client)
+
+    save_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat_save_as_engram",
+            "arguments": {
+                "project_id": "project-mcp-no-session",
+                "conversation_markdown": (
+                    "## USER\nInvestigate payment latency spike.\n\n"
+                    "## ASSISTANT\nLikely cache stampede and queue saturation; "
+                    "rollback + throttling mitigated impact."
+                ),
+                "title": "MCP no-session snapshot",
+                "abstract": "",
+                "tags": [],
+                "keywords": [],
+                "visibility_scope": "project",
+            },
+        },
+        request_id="mcp-save-without-session",
+    )
+    structured = _final_result_frame(save_frames)["result"]["structuredContent"]
+    engram_id = structured["saved_engram"]["engram_id"]
+    report = structured["enrichment_report"]
+    assert report["enrichment_applied"] is True
+    assert report["abstract_derived"] is True
+
+    create_session_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat_create_session",
+            "arguments": {
+                "project_id": "project-mcp-no-session",
+                "title": "Pin from conversation-only engram",
+                "provider": "openai",
+                "model_id": "gpt-4o-mini",
+                "visibility_scope": "private",
+                "autosave_enabled": False,
+            },
+        },
+        request_id="mcp-save-no-session-create-chat",
+    )
+    session_id = _final_result_frame(create_session_frames)["result"]["structuredContent"][
+        "session"
+    ]["session_id"]
+
+    pin_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat_pin_engram",
+            "arguments": {"session_id": session_id, "engram_id": engram_id},
+        },
+        request_id="mcp-save-no-session-pin",
+    )
+    assert _final_result_frame(pin_frames)["result"]["structuredContent"]["pinned"][
+        "engram_id"
+    ] == (engram_id)
+
+    pinned_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat_list_pinned_engrams",
+            "arguments": {"session_id": session_id},
+        },
+        request_id="mcp-save-no-session-list-pins",
+    )
+    pinned = _final_result_frame(pinned_frames)["result"]["structuredContent"]["pinned_engrams"]
+    assert any(item["engram_id"] == engram_id for item in pinned)
+
+    query_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "engram_query",
+            "arguments": {
+                "query": "cache stampede",
+                "project_id": "project-mcp-no-session",
+                "top_k": 5,
+            },
+        },
+        request_id="mcp-save-no-session-query",
+    )
+    results = _final_result_frame(query_frames)["result"]["structuredContent"]["results"]
+    assert any(item["engram_id"] == engram_id for item in results)
+
+
+@pytest.mark.integration
 def test_mcp_lifecycle_policy_and_timeline_tools(client, clean_db, monkeypatch) -> None:
     _login(client)
     _install_fake_provider(monkeypatch)

@@ -2174,6 +2174,9 @@ Transport note:
 - JSON-RPC notifications without `id` (for example `notifications/initialized`) are accepted with `202` and no body.
 - `tools/list` exposes client-safe tool names with underscores (example: `chat_send_message`).
 - For backward compatibility, dotted names (`chat.send_message`) are still accepted in direct calls and `tools/call`.
+- `chat_save_as_engram` supports two modes:
+  - session snapshot mode with `session_id`
+  - conversation-only mode with `project_id` + `conversation_markdown` (no session required)
 
 Revoke token:
 

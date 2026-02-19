@@ -143,6 +143,10 @@ The MCP stream endpoint supports:
 - `GET`/`HEAD` probe responses (`200`) for client capability checks
 - `tools/list` uses underscore tool names (for strict client validation), e.g. `chat_send_message`
 - `tools/call` still accepts both underscore and dotted names for backward compatibility
+- `chat_save_as_engram` can persist without any chat session by sending:
+  - `project_id`
+  - `conversation_markdown`
+  - optional title/abstract/tags/keywords/visibility
 
 ## 5) Codex Integration
 
