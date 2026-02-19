@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -16,6 +17,49 @@ from .models import (
     PinnedEngramRecord,
 )
 
+_CHAT_SESSION_COLUMNS = """
+                session_id,
+                owner_user_id,
+                project_id,
+                title,
+                provider,
+                model_id,
+                system_prompt,
+                visibility_scope,
+                autosave_enabled,
+                autosave_strategy,
+                autosave_interval_minutes,
+                autosave_min_messages,
+                retention_days,
+                retention_max_snapshots,
+                created_at,
+                updated_at
+"""
+
+_PINNED_RESOURCE_CONFIG = {
+    "session_pinned_engrams": (
+        "engrams",
+        """
+                    r.deleted_at IS NULL
+                    AND (r.owner_user_id = %s OR r.visibility_scope = 'project' OR r.owner_user_id IS NULL)
+        """,
+    ),
+    "session_pinned_documents": (
+        "documents",
+        """
+                    (r.owner_user_id = %s OR r.visibility_scope = 'project')
+        """,
+    ),
+}
+
+
+@dataclass(frozen=True)
+class MessageMetadata:
+    provider: str | None = None
+    model_id: str | None = None
+    token_usage_json: dict | None = None
+    used_engram_ids: list[UUID] | None = None
+
 
 def create_chat_session(
     owner_user_id: UUID,
@@ -26,7 +70,7 @@ def create_chat_session(
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             INSERT INTO chat_sessions (
                 session_id,
                 owner_user_id,
@@ -46,22 +90,7 @@ def create_chat_session(
                 updated_at
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING
-                session_id,
-                owner_user_id,
-                project_id,
-                title,
-                provider,
-                model_id,
-                system_prompt,
-                visibility_scope,
-                autosave_enabled,
-                autosave_strategy,
-                autosave_interval_minutes,
-                autosave_min_messages,
-                retention_days,
-                retention_max_snapshots,
-                created_at,
-                updated_at
+                {_CHAT_SESSION_COLUMNS}
             """,
             (
                 session_id,
@@ -92,24 +121,9 @@ def list_chat_sessions(
     limit: int = 50,
     offset: int = 0,
 ) -> list[ChatSessionRecord]:
-    query = """
+    query = f"""
         SELECT
-            session_id,
-            owner_user_id,
-            project_id,
-            title,
-            provider,
-            model_id,
-            system_prompt,
-            visibility_scope,
-            autosave_enabled,
-            autosave_strategy,
-            autosave_interval_minutes,
-            autosave_min_messages,
-            retention_days,
-            retention_max_snapshots,
-            created_at,
-            updated_at
+            {_CHAT_SESSION_COLUMNS}
         FROM chat_sessions
         WHERE
             deleted_at IS NULL
@@ -131,24 +145,9 @@ def list_chat_sessions(
 def get_chat_session(session_id: UUID, actor_user_id: UUID) -> ChatSessionRecord | None:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                session_id,
-                owner_user_id,
-                project_id,
-                title,
-                provider,
-                model_id,
-                system_prompt,
-                visibility_scope,
-                autosave_enabled,
-                autosave_strategy,
-                autosave_interval_minutes,
-                autosave_min_messages,
-                retention_days,
-                retention_max_snapshots,
-                created_at,
-                updated_at
+                {_CHAT_SESSION_COLUMNS}
             FROM chat_sessions
             WHERE
                 session_id = %s
@@ -188,7 +187,7 @@ def update_chat_session(
 ) -> ChatSessionRecord | None:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             UPDATE chat_sessions
             SET
                 title = COALESCE(%s, title),
@@ -208,22 +207,7 @@ def update_chat_session(
                 AND owner_user_id = %s
                 AND deleted_at IS NULL
             RETURNING
-                session_id,
-                owner_user_id,
-                project_id,
-                title,
-                provider,
-                model_id,
-                system_prompt,
-                visibility_scope,
-                autosave_enabled,
-                autosave_strategy,
-                autosave_interval_minutes,
-                autosave_min_messages,
-                retention_days,
-                retention_max_snapshots,
-                created_at,
-                updated_at
+                {_CHAT_SESSION_COLUMNS}
             """,
             (
                 payload.title,
@@ -253,12 +237,10 @@ def create_chat_message(
     actor_user_id: UUID,
     role: str,
     content_text: str,
-    provider: str | None = None,
-    model_id: str | None = None,
-    token_usage_json: dict | None = None,
-    used_engram_ids: list[UUID] | None = None,
+    metadata: MessageMetadata | None = None,
 ) -> ChatMessageRecord | None:
     message_id = uuid4()
+    resolved_metadata = metadata or MessageMetadata()
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -303,10 +285,10 @@ def create_chat_message(
                 message_id,
                 role,
                 content_text,
-                provider,
-                model_id,
-                Jsonb(token_usage_json or {}),
-                used_engram_ids or [],
+                resolved_metadata.provider,
+                resolved_metadata.model_id,
+                Jsonb(resolved_metadata.token_usage_json or {}),
+                resolved_metadata.used_engram_ids or [],
                 datetime.now(UTC),
                 session_id,
                 actor_user_id,
@@ -353,14 +335,19 @@ def list_chat_messages(
     return [ChatMessageRecord(**row) for row in rows]
 
 
-def pin_engram_to_session(
+def _pin_resource_to_session(
+    *,
+    table: str,
+    id_column: str,
+    resource_id: UUID,
     session_id: UUID,
-    engram_id: UUID,
     actor_user_id: UUID,
-) -> PinnedEngramRecord | None:
-    with get_conn() as conn, conn.cursor() as cur:
+    conn,
+):
+    resource_table, resource_access_clause = _PINNED_RESOURCE_CONFIG[table]
+    with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             WITH accessible_session AS (
                 SELECT s.session_id
                 FROM chat_sessions s
@@ -369,45 +356,88 @@ def pin_engram_to_session(
                     AND s.deleted_at IS NULL
                     AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             ),
-            accessible_engram AS (
-                SELECT e.engram_id
-                FROM engrams e
+            accessible_resource AS (
+                SELECT r.{id_column}
+                FROM {resource_table} r
                 WHERE
-                    e.engram_id = %s
-                    AND e.deleted_at IS NULL
-                    AND (e.owner_user_id = %s OR e.visibility_scope = 'project' OR e.owner_user_id IS NULL)
+                    r.{id_column} = %s
+                    AND {resource_access_clause}
             )
-            INSERT INTO session_pinned_engrams (
+            INSERT INTO {table} (
                 session_id,
-                engram_id,
+                {id_column},
                 pinned_by_user_id,
                 created_at
             )
             SELECT
                 s.session_id,
-                e.engram_id,
+                r.{id_column},
                 %s,
                 %s
             FROM accessible_session s
-            CROSS JOIN accessible_engram e
-            ON CONFLICT (session_id, engram_id) DO UPDATE
+            CROSS JOIN accessible_resource r
+            ON CONFLICT (session_id, {id_column}) DO UPDATE
                 SET pinned_by_user_id = EXCLUDED.pinned_by_user_id
             RETURNING
                 session_id,
-                engram_id,
+                {id_column},
                 pinned_by_user_id,
                 created_at
             """,
             (
                 session_id,
                 actor_user_id,
-                engram_id,
+                resource_id,
                 actor_user_id,
                 actor_user_id,
                 datetime.now(UTC),
             ),
         )
+        return cur.fetchone()
+
+
+def _unpin_resource_from_session(
+    *,
+    table: str,
+    id_column: str,
+    resource_id: UUID,
+    session_id: UUID,
+    actor_user_id: UUID,
+    conn,
+) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            DELETE FROM {table} p
+            USING chat_sessions s
+            WHERE
+                p.session_id = s.session_id
+                AND p.session_id = %s
+                AND p.{id_column} = %s
+                AND s.deleted_at IS NULL
+                AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
+            RETURNING p.session_id
+            """,
+            (session_id, resource_id, actor_user_id),
+        )
         row = cur.fetchone()
+    return row is not None
+
+
+def pin_engram_to_session(
+    session_id: UUID,
+    engram_id: UUID,
+    actor_user_id: UUID,
+) -> PinnedEngramRecord | None:
+    with get_conn() as conn:
+        row = _pin_resource_to_session(
+            table="session_pinned_engrams",
+            id_column="engram_id",
+            resource_id=engram_id,
+            session_id=session_id,
+            actor_user_id=actor_user_id,
+            conn=conn,
+        )
     if not row:
         return None
     return PinnedEngramRecord(**row)
@@ -418,23 +448,15 @@ def unpin_engram_from_session(
     engram_id: UUID,
     actor_user_id: UUID,
 ) -> bool:
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            DELETE FROM session_pinned_engrams p
-            USING chat_sessions s
-            WHERE
-                p.session_id = s.session_id
-                AND p.session_id = %s
-                AND p.engram_id = %s
-                AND s.deleted_at IS NULL
-                AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
-            RETURNING p.session_id
-            """,
-            (session_id, engram_id, actor_user_id),
+    with get_conn() as conn:
+        return _unpin_resource_from_session(
+            table="session_pinned_engrams",
+            id_column="engram_id",
+            resource_id=engram_id,
+            session_id=session_id,
+            actor_user_id=actor_user_id,
+            conn=conn,
         )
-        row = cur.fetchone()
-    return row is not None
 
 
 def list_pinned_engrams(session_id: UUID, actor_user_id: UUID) -> list[PinnedEngramRecord]:
@@ -602,55 +624,15 @@ def pin_document_to_session(
     document_id: UUID,
     actor_user_id: UUID,
 ) -> PinnedDocumentRecord | None:
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            WITH accessible_session AS (
-                SELECT s.session_id
-                FROM chat_sessions s
-                WHERE
-                    s.session_id = %s
-                    AND s.deleted_at IS NULL
-                    AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
-            ),
-            accessible_document AS (
-                SELECT d.document_id
-                FROM documents d
-                WHERE
-                    d.document_id = %s
-                    AND (d.owner_user_id = %s OR d.visibility_scope = 'project')
-            )
-            INSERT INTO session_pinned_documents (
-                session_id,
-                document_id,
-                pinned_by_user_id,
-                created_at
-            )
-            SELECT
-                s.session_id,
-                d.document_id,
-                %s,
-                %s
-            FROM accessible_session s
-            CROSS JOIN accessible_document d
-            ON CONFLICT (session_id, document_id) DO UPDATE
-                SET pinned_by_user_id = EXCLUDED.pinned_by_user_id
-            RETURNING
-                session_id,
-                document_id,
-                pinned_by_user_id,
-                created_at
-            """,
-            (
-                session_id,
-                actor_user_id,
-                document_id,
-                actor_user_id,
-                actor_user_id,
-                datetime.now(UTC),
-            ),
+    with get_conn() as conn:
+        row = _pin_resource_to_session(
+            table="session_pinned_documents",
+            id_column="document_id",
+            resource_id=document_id,
+            session_id=session_id,
+            actor_user_id=actor_user_id,
+            conn=conn,
         )
-        row = cur.fetchone()
     if not row:
         return None
     return PinnedDocumentRecord(**row)
@@ -661,23 +643,15 @@ def unpin_document_from_session(
     document_id: UUID,
     actor_user_id: UUID,
 ) -> bool:
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            DELETE FROM session_pinned_documents p
-            USING chat_sessions s
-            WHERE
-                p.session_id = s.session_id
-                AND p.session_id = %s
-                AND p.document_id = %s
-                AND s.deleted_at IS NULL
-                AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
-            RETURNING p.session_id
-            """,
-            (session_id, document_id, actor_user_id),
+    with get_conn() as conn:
+        return _unpin_resource_from_session(
+            table="session_pinned_documents",
+            id_column="document_id",
+            resource_id=document_id,
+            session_id=session_id,
+            actor_user_id=actor_user_id,
+            conn=conn,
         )
-        row = cur.fetchone()
-    return row is not None
 
 
 def list_pinned_documents(session_id: UUID, actor_user_id: UUID) -> list[PinnedDocumentRecord]:

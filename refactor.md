@@ -39,13 +39,30 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-19 (Checkpoint 3 - Chat Repository Phase 3)
+
+- [x] Step 3.1 — Introduced `MessageMetadata` dataclass for `create_chat_message`
+- [x] Reduced `create_chat_message` call shape from 8 args to 5 args (`metadata` payload object)
+- [x] Step 3.2 — Eliminated pin/unpin duplication
+- [x] Added `_pin_resource_to_session(...)` helper for engram/document pin flows
+- [x] Added `_unpin_resource_from_session(...)` helper for engram/document unpin flows
+- [x] Step 3.3 — Extracted `_CHAT_SESSION_COLUMNS` constant and reused across session SELECT/RETURNING queries
+- [x] Test updates: `api/tests/test_chat_repository.py` metadata + round-trip assertions
+- [x] Test updates: `api/tests/test_chat_service.py` metadata-aware create-message assertions
+- [x] Validation run: `api/tests/test_chat_repository.py`, `api/tests/test_chat_service.py` (10 passed, 7 skipped)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene score improvement: `api/app/chat_repository.py` from **6.69** to **7.10**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
 | `api/app/mcp/service.py` | **3.0** | RED |
 | `api/app/memory_admin/repository.py` | 7.42 | YELLOW |
-| `api/app/chat_repository.py` | 6.69 | YELLOW |
+| `api/app/chat_repository.py` | 7.10 | YELLOW |
 | `api/app/chat/service.py` | 6.77 | YELLOW |
 | `api/app/oauth/api.py` | 7.48 | YELLOW |
 | `api/app/main.py` | 7.66 | YELLOW |

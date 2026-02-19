@@ -66,6 +66,34 @@ def _message(
     )
 
 
+def _context_with_source(referenced_engram_id: UUID) -> AssembledChatContext:
+    return AssembledChatContext(
+        context_markdown="ctx",
+        used_engram_ids=[referenced_engram_id],
+        used_document_chunk_ids=[],
+        source_references=[
+            {
+                "engram_id": referenced_engram_id,
+                "engram_title": "Referenced",
+                "url": "https://example.com/source",
+                "title": "Source",
+                "snippet": "Snippet",
+                "captured_at": datetime.now(UTC),
+            }
+        ],
+    )
+
+
+class _FixedReplyAdapter:
+    def generate(self, request):  # noqa: ANN001
+        return ProviderGenerateResult(
+            provider=ChatProvider.openai,
+            model_id=request.model_id,
+            text="Proceed with option A.",
+            token_usage={"input_tokens": 9, "output_tokens": 4, "total_tokens": 13},
+        )
+
+
 def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
     actor_id = uuid4()
     session = _session(actor_id)
@@ -92,42 +120,19 @@ def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "app.chat.service.assemble_chat_context",
-        lambda **kwargs: AssembledChatContext(
-            context_markdown="ctx",
-            used_engram_ids=[referenced_engram_id],
-            used_document_chunk_ids=[],
-            source_references=[
-                {
-                    "engram_id": referenced_engram_id,
-                    "engram_title": "Referenced",
-                    "url": "https://example.com/source",
-                    "title": "Source",
-                    "snippet": "Snippet",
-                    "captured_at": datetime.now(UTC),
-                }
-            ],
-        ),
+        lambda **kwargs: _context_with_source(referenced_engram_id),
     )
     monkeypatch.setattr("app.chat.service.list_chat_messages", lambda **kwargs: [user_message])
 
     def _fake_create_chat_message(**kwargs):
         if kwargs["role"] == "user":
             return user_message
-        assert kwargs["used_engram_ids"] == [referenced_engram_id]
+        assert kwargs["metadata"] and kwargs["metadata"].used_engram_ids == [referenced_engram_id]
         return assistant_message
 
     monkeypatch.setattr("app.chat.service.create_chat_message", _fake_create_chat_message)
 
-    class _FakeAdapter:
-        def generate(self, request):  # noqa: ANN001
-            return ProviderGenerateResult(
-                provider=ChatProvider.openai,
-                model_id=request.model_id,
-                text="Proceed with option A.",
-                token_usage={"input_tokens": 9, "output_tokens": 4, "total_tokens": 13},
-            )
-
-    monkeypatch.setattr("app.chat.service.get_provider_adapter", lambda provider: _FakeAdapter())
+    monkeypatch.setattr("app.chat.service.get_provider_adapter", lambda provider: _FixedReplyAdapter())
 
     response = service.send_message(
         actor_user_id=actor_id,
@@ -135,12 +140,14 @@ def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
         payload=ChatMessageCreateRequest(content_text="How should we proceed?"),
     )
 
-    assert response.session_id == session.session_id
-    assert response.message_id == user_message_id
-    assert response.reply_message_id == reply_message_id
-    assert response.assistant_text == "Proceed with option A."
-    assert response.used_engram_ids == [referenced_engram_id]
-    assert response.used_document_chunk_ids == []
+    assert (
+        response.session_id,
+        response.message_id,
+        response.reply_message_id,
+        response.assistant_text,
+        response.used_engram_ids,
+        response.used_document_chunk_ids,
+    ) == (session.session_id, user_message_id, reply_message_id, "Proceed with option A.", [referenced_engram_id], [])
     assert response.source_references[0].url == "https://example.com/source"
     assert response.debug_trace is not None
     assert response.debug_trace.llm_calls[0].provider == "openai"
