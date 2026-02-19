@@ -14,6 +14,7 @@ def test_build_debug_settings_snapshot_redacts_secrets() -> None:
         aws_access_key_id="aws-access",
         aws_secret_access_key="aws-secret",
         aws_session_token="aws-session",
+        oauth_client_secret_pepper="oauth-secret-pepper",
         default_chat_provider="openai",
     )
 
@@ -28,6 +29,7 @@ def test_build_debug_settings_snapshot_redacts_secrets() -> None:
     assert snapshot["aws_access_key_id"] == "<redacted>"
     assert snapshot["aws_secret_access_key"] == "<redacted>"
     assert snapshot["aws_session_token"] == "<redacted>"
+    assert snapshot["oauth_client_secret_pepper"] == "<redacted>"
     assert snapshot["default_chat_provider"] == "openai"
 
 

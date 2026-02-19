@@ -70,6 +70,8 @@ def clean_db(db_conn, ensure_schema) -> None:
                 chat_sessions,
                 document_chunks,
                 documents,
+                oauth_authorization_codes,
+                oauth_clients,
                 mcp_tokens,
                 engrams
             CASCADE

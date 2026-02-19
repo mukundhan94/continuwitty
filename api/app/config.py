@@ -15,6 +15,7 @@ _SENSITIVE_SETTING_KEYS = {
     "langfuse_public_key",
     "langfuse_secret_key",
     "mcp_token_pepper",
+    "oauth_client_secret_pepper",
 }
 
 _DEV_ENV_NAMES = {"dev", "development", "local"}
@@ -61,6 +62,11 @@ class Settings(BaseSettings):
     aws_secret_access_key: str | None = None
     aws_session_token: str | None = None
     mcp_token_pepper: str = "engram-local-dev-mcp-token-pepper"
+    oauth_enabled: bool = True
+    oauth_issuer_url: str | None = None
+    oauth_access_token_ttl_seconds: int = 3600
+    oauth_authorization_code_ttl_seconds: int = 300
+    oauth_client_secret_pepper: str = "engram-local-dev-oauth-client-pepper"
 
     model_config = SettingsConfigDict(
         env_file=".env",

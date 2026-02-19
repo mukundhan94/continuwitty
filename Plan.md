@@ -454,6 +454,7 @@ Build a local-first memory system where agents and humans can:
 
 - Implemented in current cycle.
 - Delivered: MCP personal access tokens, bearer-token auth for `/api/v1/mcp/stream`, scope/allowlist/project guards, admin token lifecycle UI (server + React), and automated coverage.
+- Extended: OAuth compatibility layer for external MCP clients (authorization-server metadata, dynamic client registration, authorization-code PKCE exchange, and protected-resource metadata for auto-discovery).
 
 ### Goals
 

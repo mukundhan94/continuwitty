@@ -87,7 +87,8 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add Phase 30 MCP personal access tokens (PAT) with scoped read/write, optional tool allowlists, optional project allowlists, bearer auth on MCP stream, and admin token lifecycle UI.
 - [x] Add admin-only React MCP token manager (create/list/revoke) gated by authenticated `admin` role.
 - [x] Add chip-based admin token policy UX: load available MCP tools/projects, select them from dropdowns, and manage applied restrictions as removable chips.
-- [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
+- [x] Add OAuth authorization server compatibility for MCP clients (metadata discovery, dynamic client registration, PKCE authorization code exchange, protected-resource metadata, and OAuth-guided `WWW-Authenticate` challenges).
+- [ ] Add production security hardening (full OIDC, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
 
@@ -425,6 +426,10 @@ engram/
 - `api/app/mcp_tokens/models.py`: MCP token entity and auth-context contracts.
 - `api/app/mcp_tokens/repository.py`: MCP token persistence/read/revoke/last-used operations.
 - `api/app/mcp_tokens/service.py`: token issue/parse/hash/verify helpers and token policy normalization.
+- `api/app/oauth/api.py`: OAuth metadata, dynamic client registration, authorization-code + PKCE endpoints, and protected-resource metadata routes.
+- `api/app/oauth/models.py`: OAuth client and authorization-code persistence record contracts.
+- `api/app/oauth/repository.py`: OAuth client/auth-code CRUD and code-consumption operations.
+- `api/app/oauth/service.py`: OAuth scope normalization, PKCE validation, secret hashing, and issuer URL helpers.
 - `api/app/observability/chat_debug.py`: chat debug collector hooks and optional Langfuse trace publishing.
 - `api/app/models.py`: Request/response and engram schema models.
 - `api/app/providers/base.py`: provider adapter contract and normalized request/response types.
@@ -470,6 +475,8 @@ engram/
 - `api/tests/test_mcp_token_service.py`: token generation/hash/parse/expiry/revocation behavior tests.
 - `api/tests/test_mcp_token_api_integration.py`: MCP token lifecycle REST authz tests (admin vs non-admin).
 - `api/tests/test_admin_mcp_tokens_ui.py`: admin UI MCP token create/revoke workflow coverage.
+- `api/tests/test_mcp_oauth_integration.py`: OAuth metadata, dynamic registration, authorize/token exchange, and OAuth-issued MCP bearer usage coverage.
+- `api/tests/test_oauth_service.py`: OAuth scope + PKCE helper unit tests.
 - `api/tests/test_engram_enrichment.py`: deterministic enrichment behavior and non-overwrite contract tests.
 - `api/tests/test_engram_visibility.py`: integration checks for owner/project scope filtering behavior.
 - `api/tests/test_provider_registry.py`: provider registry construction and adapter selection checks.
@@ -1984,10 +1991,37 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `acceptance-tests/features/admin-mcp-token-ui.feature`
    - `acceptance-tests/src/steps/admin-mcp-token-ui.steps.ts`
 7. Validation:
-   - `make check` passed (`147 passed` + eval pass).
+   - `make check` passed (`157 passed` + eval pass).
    - `make acceptance-bddgen` passed.
    - `make acceptance-typecheck` passed.
    - `make acceptance-test-mock` passed (`8 passed`).
+
+### 2026-02-19 (MCP OAuth compatibility for VS Code dynamic registration)
+
+1. Added OAuth-compatible discovery and registration endpoints:
+   - `/.well-known/oauth-authorization-server`
+   - `/.well-known/openid-configuration`
+   - `/.well-known/oauth-protected-resource` (plus path-scoped variant)
+   - `POST /oauth/register`
+   - `GET /oauth/authorize`
+   - `POST /oauth/token`
+2. Implemented OAuth authorization-code + PKCE flow backed by DB persistence:
+   - added `oauth_clients` and `oauth_authorization_codes` schema in `db/init/001_schema.sql`
+   - added OAuth domain modules under `api/app/oauth/` (api/repository/service/models)
+   - token exchange now issues short-lived MCP bearer tokens that reuse existing MCP authz controls
+3. Added login continuation support for OAuth browser redirects:
+   - `/login` now accepts safe `next` paths and preserves them through sign-in.
+4. Added standards-based MCP auth challenge hints:
+   - `WWW-Authenticate` on MCP 401 responses now includes `resource_metadata` when OAuth is enabled.
+5. Added config surface for OAuth operations:
+   - `.env.example` and `api/app/config.py` now include `OAUTH_ENABLED`, `OAUTH_ISSUER_URL`, `OAUTH_ACCESS_TOKEN_TTL_SECONDS`, `OAUTH_AUTHORIZATION_CODE_TTL_SECONDS`, and `OAUTH_CLIENT_SECRET_PEPPER`.
+6. Added automated coverage:
+   - `api/tests/test_mcp_oauth_integration.py`
+   - `api/tests/test_oauth_service.py`
+   - updated `api/tests/test_config_settings.py` for OAuth secret redaction
+7. Validation:
+   - `make check` passed (`157 passed` + eval pass).
+   - focused OAuth/MCP integration suite passed (`36 passed`).
 
 ### Next Immediate Steps (One By One)
 
@@ -2035,6 +2069,12 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 - `GET /api/v1/mcp/tokens`
 - `POST /api/v1/mcp/tokens/{token_id}/revoke`
 - `POST /api/v1/mcp/stream`
+- `GET /.well-known/oauth-authorization-server`
+- `GET /.well-known/openid-configuration`
+- `GET /.well-known/oauth-protected-resource`
+- `POST /oauth/register`
+- `GET /oauth/authorize`
+- `POST /oauth/token`
 - `POST /api/v1/agent-runs`
 - `GET /api/v1/agent-runs/{thread_id}`
 - `POST /api/v1/agent-runs/{thread_id}/resume`

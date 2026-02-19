@@ -9,11 +9,13 @@ description: Use this skill when implementing or modifying MCP personal access t
 - Adding or changing MCP token APIs, storage, or UI management flows.
 - Debugging bearer-token failures on `/api/v1/mcp/stream`.
 - Updating read/write scope, tool allowlist, or project allowlist authorization behavior.
+- Implementing OAuth compatibility for MCP clients (metadata discovery, dynamic client registration, and token exchange).
 
 ## Core Rules
 - Never store plaintext token secrets at rest.
 - Generate token as `engram_mcp_<token_id_hex>_<secret>` and store only hashed secret + hint.
 - Keep token auth additive: bearer-token preferred, session-cookie fallback retained.
+- Keep OAuth compatibility additive: `.well-known` discovery + `/oauth/*` flows should issue bearer tokens that reuse the same MCP authorization guards.
 - Enforce authorization in MCP service before tool dispatch.
 - Return JSON-RPC `-32003` for scope/allowlist/project policy violations.
 - Keep `initialize` and `tools/list` usable for token-authenticated clients.
@@ -37,6 +39,10 @@ description: Use this skill when implementing or modifying MCP personal access t
 - `api/app/mcp_tokens/service.py`
 - `api/app/mcp/auth.py`
 - `api/app/mcp/service.py`
+- `api/app/oauth/api.py`
+- `api/app/oauth/repository.py`
+- `api/app/oauth/service.py`
+- `api/app/oauth/models.py`
 - `api/app/main.py`
 - `api/app/models.py`
 - `api/app/templates/admin.html`
@@ -49,6 +55,8 @@ description: Use this skill when implementing or modifying MCP personal access t
 - `api/tests/test_mcp_token_service.py`
 - `api/tests/test_mcp_token_api_integration.py`
 - `api/tests/test_mcp_api_integration.py`
+- `api/tests/test_mcp_oauth_integration.py`
+- `api/tests/test_oauth_service.py`
 - `api/tests/test_admin_mcp_tokens_ui.py`
 - `acceptance-tests/features/mcp-token-auth-mock.feature`
 - `web/src/components/AdminMcpTokenPanel.test.tsx`

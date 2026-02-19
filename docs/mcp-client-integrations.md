@@ -69,7 +69,7 @@ Notes:
 docker compose restart
 ```
 
-## 3) VS Code Copilot Integration
+## 3) VS Code Copilot Integration (Bearer Token)
 
 Create `.vscode/mcp.json`:
 
@@ -96,7 +96,43 @@ Alternative CLI registration:
 code --add-mcp "{\"name\":\"engram\",\"type\":\"http\",\"url\":\"http://localhost:8000/api/v1/mcp/stream\",\"headers\":{\"Authorization\":\"Bearer ${ENGRAM_MCP_TOKEN}\"}}"
 ```
 
-## 4) Codex Integration
+## 4) VS Code Copilot Integration (OAuth Auto Registration)
+
+Use this mode when you want VS Code to run OAuth flow automatically (no pre-generated token header).
+
+1. Configure a stable issuer URL for your API host:
+
+```bash
+# Example: public or LAN-reachable API host
+export OAUTH_ISSUER_URL=http://100.67.245.104:8000
+```
+
+2. Ensure these endpoints are reachable from VS Code:
+
+```bash
+curl -s "$OAUTH_ISSUER_URL/.well-known/oauth-authorization-server" | jq
+curl -s "$OAUTH_ISSUER_URL/.well-known/oauth-protected-resource" | jq
+```
+
+3. Configure MCP server without `Authorization` header:
+
+```bash
+mkdir -p .vscode
+cat > .vscode/mcp.json <<EOF_VSCODE_OAUTH
+{
+  "servers": {
+    "engram": {
+      "type": "http",
+      "url": "http://100.67.245.104:8000/api/v1/mcp/stream"
+    }
+  }
+}
+EOF_VSCODE_OAUTH
+```
+
+When VS Code prompts for OAuth consent, continue in browser and sign in with your Engram user.
+
+## 5) Codex Integration
 
 Append MCP server config to `~/.codex/config.toml`:
 
@@ -119,7 +155,7 @@ Verify Codex sees the server:
 codex mcp list
 ```
 
-## 5) MCP Connectivity Smoke Test
+## 6) MCP Connectivity Smoke Test
 
 ```bash
 BASE_URL=http://localhost:8000

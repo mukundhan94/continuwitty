@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request
@@ -46,6 +47,7 @@ from .models import (
     UserRole,
     UserUpdateRequest,
 )
+from .oauth import create_oauth_router
 from .repository import (
     create_engram,
     get_engram_sources,
@@ -147,6 +149,17 @@ def _is_authenticated(request: Request) -> bool:
 
 def _login_redirect() -> RedirectResponse:
     return RedirectResponse(url="/login", status_code=303)
+
+
+def _safe_next_path(raw_path: str | None) -> str | None:
+    candidate = unquote((raw_path or "").strip())
+    if not candidate:
+        return None
+    if not candidate.startswith("/"):
+        return None
+    if candidate.startswith("//"):
+        return None
+    return candidate
 
 
 def _csrf_token_for_request(request: Request) -> str:
@@ -277,6 +290,12 @@ app.include_router(
         require_api_actor=_require_authenticated_api_user,
     )
 )
+app.include_router(
+    create_oauth_router(
+        settings=settings,
+        resolve_session_user=_resolve_session_user,
+    )
+)
 
 
 @app.get("/", include_in_schema=False)
@@ -287,13 +306,19 @@ def home_redirect(request: Request) -> Response:
 
 
 @app.get("/login", response_class=HTMLResponse, include_in_schema=False)
-def login_page(request: Request) -> Response:
+def login_page(request: Request, next: str | None = Query(default=None)) -> Response:  # noqa: A002
+    next_path = _safe_next_path(next)
     if _is_authenticated(request):
-        return RedirectResponse(url="/ui", status_code=303)
+        return RedirectResponse(url=next_path or "/ui", status_code=303)
     return templates.TemplateResponse(
         request,
         "login.html",
-        {"request": request, "error": None, "csrf_token": _csrf_token_for_request(request)},
+        {
+            "request": request,
+            "error": None,
+            "csrf_token": _csrf_token_for_request(request),
+            "next_path": next_path or "",
+        },
     )
 
 
@@ -303,6 +328,7 @@ def login_submit(
     username: str = Form(...),
     password: str = Form(...),
     csrf_token: str = Form(...),
+    next_path: str = Form(default=""),
 ) -> Response:
     if not _verify_csrf_token(request, csrf_token):
         log_audit_event(
@@ -339,7 +365,7 @@ def login_submit(
             success=True,
             username=authenticated_user["username"],
         )
-        return RedirectResponse(url="/ui", status_code=303)
+        return RedirectResponse(url=_safe_next_path(next_path) or "/ui", status_code=303)
 
     login_attempt_guard.register_failure(attempt_key)
     log_audit_event(
@@ -355,6 +381,7 @@ def login_submit(
             "request": request,
             "error": "Invalid username or password.",
             "csrf_token": _csrf_token_for_request(request),
+            "next_path": _safe_next_path(next_path) or "",
         },
         status_code=401,
     )

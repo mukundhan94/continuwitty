@@ -131,6 +131,44 @@ CREATE INDEX IF NOT EXISTS mcp_tokens_active_idx
   ON mcp_tokens (owner_user_id, expires_at)
   WHERE revoked_at IS NULL;
 
+CREATE TABLE IF NOT EXISTS oauth_clients (
+  client_id TEXT PRIMARY KEY,
+  client_name TEXT NOT NULL,
+  redirect_uris TEXT[] NOT NULL,
+  grant_types TEXT[] NOT NULL DEFAULT ARRAY['authorization_code'],
+  response_types TEXT[] NOT NULL DEFAULT ARRAY['code'],
+  token_endpoint_auth_method TEXT NOT NULL DEFAULT 'none'
+    CHECK (token_endpoint_auth_method IN ('none', 'client_secret_post')),
+  client_secret_hash TEXT,
+  metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS oauth_clients_created_idx
+  ON oauth_clients (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
+  code_id UUID PRIMARY KEY,
+  code_hash TEXT NOT NULL UNIQUE,
+  client_id TEXT NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  redirect_uri TEXT NOT NULL,
+  code_challenge TEXT NOT NULL,
+  code_challenge_method TEXT NOT NULL DEFAULT 'S256'
+    CHECK (code_challenge_method IN ('S256', 'plain')),
+  requested_scope TEXT NOT NULL DEFAULT '',
+  resource TEXT,
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS oauth_authorization_codes_client_expires_idx
+  ON oauth_authorization_codes (client_id, expires_at DESC);
+
+CREATE INDEX IF NOT EXISTS oauth_authorization_codes_user_created_idx
+  ON oauth_authorization_codes (user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS chat_sessions (
   session_id UUID PRIMARY KEY,
   owner_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

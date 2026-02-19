@@ -78,10 +78,24 @@ def issue_new_token(
     pepper: str,
 ) -> tuple[str, str, str, datetime]:
     """Return plaintext token + persisted hash/hint metadata."""
+    expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
+    return issue_token_with_expiry(
+        token_id=token_id,
+        expires_at=expires_at,
+        pepper=pepper,
+    )
+
+
+def issue_token_with_expiry(
+    *,
+    token_id: UUID,
+    expires_at: datetime,
+    pepper: str,
+) -> tuple[str, str, str, datetime]:
+    """Return plaintext token + persisted hash/hint metadata for a fixed expiry."""
     token_secret = secrets.token_urlsafe(32)
     hashed = token_hash(token_id=token_id, token_secret=token_secret, pepper=pepper)
     hint = token_secret_hint(token_secret)
-    expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
     plaintext = build_plaintext_token(token_id=token_id, token_secret=token_secret)
     return plaintext, hashed, hint, expires_at
 
