@@ -139,6 +139,34 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-19 (Checkpoint 8 - Repository Phase 7.1/7.2)
+
+- [x] Step 7.1 — Decomposed `get_rehydration_bundle(...)`:
+  - Added `_fetch_engram_row(...)` for scoped engram lookup
+  - Added `_fetch_source_rows(...)` for citations source retrieval
+  - Added `_format_citations(...)` for citation markdown rendering
+  - Added `_format_decisions(...)` for key-decision markdown rendering
+- [x] Step 7.2 — Decomposed `query_engrams(...)`:
+  - Added `_build_engram_query_where(...)` to isolate WHERE clause + params assembly
+  - Added `_rerank_by_combined_score(...)` to isolate lexical/dense reranking logic
+- [x] New unit test file: `api/tests/test_repository_unit.py`
+- [x] Validation run:
+  - `api/tests/test_repository_helpers.py`
+  - `api/tests/test_repository_unit.py`
+  - `api/tests/test_engram_visibility.py`
+  - `api/tests/test_api_integration.py::test_roundtrip_create_list_query_rehydrate`
+  - `api/tests/test_api_integration.py::test_rehydrate_packs_unique_citations`
+  - `api/tests/test_api_integration.py::test_rehydrate_uses_detailed_summary_when_abstract_is_generic`
+  - Aggregate: `13 passed, 4 skipped`
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/repository.py` score improved from **7.88** to **9.05**
+  - remaining primary smell in file is `create_engram_with_report` method size
+  - pre-commit quality gate passed
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -149,7 +177,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/chat/service.py` | 7.90 | YELLOW |
 | `api/app/oauth/api.py` | 7.54 | YELLOW |
 | `api/app/main.py` | 7.66 | YELLOW |
-| `api/app/repository.py` | 7.88 | YELLOW |
+| `api/app/repository.py` | 9.05 | GREEN |
 | `api/app/providers/bedrock_provider.py` | 8.17 | YELLOW |
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 8.38 | YELLOW |

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from psycopg.types.json import Jsonb
@@ -140,6 +141,138 @@ def _pack_citations(
         if len(packed) >= limit:
             break
     return packed
+
+
+def _build_engram_query_where(
+    *,
+    request: EngramQueryRequest,
+    actor_user_id: UUID | None,
+    query_literal: str,
+) -> tuple[str, list[Any]]:
+    where_clauses: list[str] = ["deleted_at IS NULL"]
+    params: list[Any] = [query_literal]
+
+    if request.project_id:
+        where_clauses.append("project_id = %s")
+        params.append(request.project_id)
+    if actor_user_id:
+        where_clauses.append(
+            "(owner_user_id = %s OR visibility_scope = 'project' OR owner_user_id IS NULL)"
+        )
+        params.append(actor_user_id)
+    if request.tags:
+        where_clauses.append("tags && %s")
+        params.append(request.tags)
+    if request.keywords:
+        where_clauses.append("keywords && %s")
+        params.append(request.keywords)
+    if request.created_after:
+        where_clauses.append("created_at >= %s")
+        params.append(request.created_after)
+    if request.created_before:
+        where_clauses.append("created_at <= %s")
+        params.append(request.created_before)
+
+    where_sql = "WHERE " + " AND ".join(where_clauses)
+    return where_sql, params
+
+
+def _rerank_by_combined_score(
+    *,
+    rows: list[dict[str, Any]],
+    query: str,
+    top_k: int,
+) -> list[dict[str, Any]]:
+    reranked_rows: list[tuple[float, dict[str, Any]]] = []
+    for row in rows:
+        lexical_overlap = _lexical_overlap_score(
+            query,
+            [
+                row.get("title") or "",
+                row.get("abstract") or "",
+                row.get("retrieval_text") or "",
+                " ".join(row.get("tags") or []),
+                " ".join(row.get("keywords") or []),
+            ],
+        )
+        combined_score = _combined_rank_score(float(row["distance"]), lexical_overlap)
+        reranked_rows.append((combined_score, row))
+
+    reranked_rows.sort(
+        key=lambda item: (
+            item[0],
+            item[1]["created_at"],
+        ),
+        reverse=True,
+    )
+    return [row for _, row in reranked_rows[:top_k]]
+
+
+def _fetch_engram_row(
+    *,
+    cur: Any,
+    engram_id: UUID,
+    actor_user_id: UUID | None,
+) -> dict[str, Any] | None:
+    where_clause = "WHERE engram_id = %s AND deleted_at IS NULL"
+    where_params: list[Any] = [engram_id]
+    if actor_user_id:
+        where_clause += (
+            " AND (owner_user_id = %s OR visibility_scope = 'project' OR owner_user_id IS NULL)"
+        )
+        where_params.append(actor_user_id)
+
+    cur.execute(
+        f"""
+            SELECT
+                engram_id, project_id, title, abstract, engram_json, engram_markdown,
+                owner_user_id, visibility_scope
+            FROM engrams
+            {where_clause}
+            """,
+        where_params,
+    )
+    return cur.fetchone()
+
+
+def _fetch_source_rows(
+    *,
+    cur: Any,
+    engram_id: UUID,
+    limit: int = 25,
+) -> list[dict[str, Any]]:
+    cur.execute(
+        """
+        SELECT url, title, snippet, captured_at
+        FROM sources
+        WHERE engram_id = %s
+        ORDER BY captured_at DESC
+        LIMIT %s
+        """,
+        (engram_id, limit),
+    )
+    return cur.fetchall()
+
+
+def _format_citations(citations: list[RehydrationCitation]) -> str:
+    citation_lines = []
+    for citation in citations:
+        label = citation.title or citation.url
+        snippet = (citation.snippet or "").replace("\n", " ").strip()
+        if len(snippet) > 140:
+            snippet = snippet[:137] + "..."
+        line = f"- {label} ({citation.url})"
+        if snippet:
+            line += f": {snippet}"
+        citation_lines.append(line)
+    return "\n".join(citation_lines) if citation_lines else "- No citations available"
+
+
+def _format_decisions(decisions: list[dict[str, Any]]) -> str:
+    formatted = "\n".join(
+        f"- {item.get('decision', '')}: {item.get('rationale', '')}" for item in decisions
+    )
+    return formatted or "- None"
 
 
 def create_engram_with_report(
@@ -330,35 +463,11 @@ def query_engrams(
 ) -> list[EngramQueryResult]:
     query_embedding = embed_text(request.query, dim=embedding_dim)
     query_literal = _vector_literal(query_embedding.vector)
-
-    where_clauses: list[str] = []
-    where_clauses.append("deleted_at IS NULL")
-    params: list = [query_literal]
-
-    if request.project_id:
-        where_clauses.append("project_id = %s")
-        params.append(request.project_id)
-    if actor_user_id:
-        where_clauses.append(
-            "(owner_user_id = %s OR visibility_scope = 'project' OR owner_user_id IS NULL)"
-        )
-        params.append(actor_user_id)
-    if request.tags:
-        where_clauses.append("tags && %s")
-        params.append(request.tags)
-    if request.keywords:
-        where_clauses.append("keywords && %s")
-        params.append(request.keywords)
-    if request.created_after:
-        where_clauses.append("created_at >= %s")
-        params.append(request.created_after)
-    if request.created_before:
-        where_clauses.append("created_at <= %s")
-        params.append(request.created_before)
-
-    where_sql = ""
-    if where_clauses:
-        where_sql = "WHERE " + " AND ".join(where_clauses)
+    where_sql, params = _build_engram_query_where(
+        request=request,
+        actor_user_id=actor_user_id,
+        query_literal=query_literal,
+    )
 
     candidate_limit = min(max(request.top_k * 4, request.top_k), 200)
 
@@ -386,29 +495,11 @@ def query_engrams(
         cur.execute(sql, params)
         rows = cur.fetchall()
 
-    reranked_rows = []
-    for row in rows:
-        lexical_overlap = _lexical_overlap_score(
-            request.query,
-            [
-                row.get("title") or "",
-                row.get("abstract") or "",
-                row.get("retrieval_text") or "",
-                " ".join(row.get("tags") or []),
-                " ".join(row.get("keywords") or []),
-            ],
-        )
-        combined_score = _combined_rank_score(float(row["distance"]), lexical_overlap)
-        reranked_rows.append((combined_score, row))
-
-    reranked_rows.sort(
-        key=lambda item: (
-            item[0],
-            item[1]["created_at"],
-        ),
-        reverse=True,
+    trimmed = _rerank_by_combined_score(
+        rows=rows,
+        query=request.query,
+        top_k=request.top_k,
     )
-    trimmed = [row for _, row in reranked_rows[: request.top_k]]
     return [
         EngramQueryResult(
             engram_id=row["engram_id"],
@@ -430,40 +521,19 @@ def get_rehydration_bundle(
     engram_id: UUID,
     actor_user_id: UUID | None = None,
 ) -> RehydrationBundle | None:
-    where_clause = "WHERE engram_id = %s AND deleted_at IS NULL"
-    where_params: list = [engram_id]
-    if actor_user_id:
-        where_clause += (
-            " AND (owner_user_id = %s OR visibility_scope = 'project' OR owner_user_id IS NULL)"
-        )
-        where_params.append(actor_user_id)
-
     with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            f"""
-                SELECT
-                    engram_id, project_id, title, abstract, engram_json, engram_markdown,
-                    owner_user_id, visibility_scope
-                FROM engrams
-                {where_clause}
-                """,
-            where_params,
+        row = _fetch_engram_row(
+            cur=cur,
+            engram_id=engram_id,
+            actor_user_id=actor_user_id,
         )
-        row = cur.fetchone()
         if not row:
             return None
-
-        cur.execute(
-            """
-            SELECT url, title, snippet, captured_at
-            FROM sources
-            WHERE engram_id = %s
-            ORDER BY captured_at DESC
-            LIMIT 25
-            """,
-            (engram_id,),
+        source_rows = _fetch_source_rows(
+            cur=cur,
+            engram_id=engram_id,
+            limit=25,
         )
-        source_rows = cur.fetchall()
 
     engram_json = row["engram_json"] or {}
     decisions = engram_json.get("decisions", [])
@@ -479,25 +549,8 @@ def get_rehydration_bundle(
         detailed_summary_markdown=detailed_summary_markdown,
     )
     detailed_excerpt = _extract_detailed_excerpt(detailed_summary_markdown, max_chars=2400)
-
-    citation_lines = []
-    for citation in packed_citations:
-        label = citation.title or citation.url
-        snippet = (citation.snippet or "").replace("\n", " ").strip()
-        if len(snippet) > 140:
-            snippet = snippet[:137] + "..."
-        line = f"- {label} ({citation.url})"
-        if snippet:
-            line += f": {snippet}"
-        citation_lines.append(line)
-
-    citation_text = "\n".join(citation_lines) if citation_lines else "- No citations available"
-    decisions_text = (
-        "\n".join(
-            f"- {item.get('decision', '')}: {item.get('rationale', '')}" for item in decisions
-        )
-        or "- None"
-    )
+    citation_text = _format_citations(packed_citations)
+    decisions_text = _format_decisions(decisions)
     questions_text = "\n".join(f"- {question}" for question in open_questions) or "- None"
     sections = [
         f"# Rehydration Context: {row['title']}",
