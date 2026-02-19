@@ -283,6 +283,76 @@ def test_mcp_tools_call_requires_name_param(client, clean_db) -> None:
 
 
 @pytest.mark.integration
+def test_mcp_tools_call_project_and_engram_round_trip_plus_unknown_tool(client, clean_db) -> None:
+    _login(client)
+
+    create_project = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "project.create",
+            "arguments": {
+                "project_id": "project-mcp-roundtrip",
+                "name": "project-mcp-roundtrip",
+            },
+        },
+        request_id="tools-call-project-create",
+    )
+    create_project_result = _final_result_frame(create_project)["result"]["structuredContent"]
+    assert create_project_result["project"]["project_id"] == "project-mcp-roundtrip"
+
+    create_engram = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "engram.create",
+            "arguments": {
+                "project_id": "project-mcp-roundtrip",
+                "title": "roundtrip seed",
+                "detailed_summary_markdown": "roundtrip body",
+                "visibility_scope": "private",
+            },
+        },
+        request_id="tools-call-engram-create",
+    )
+    engram_id = _final_result_frame(create_engram)["result"]["structuredContent"]["engram"][
+        "engram_id"
+    ]
+
+    list_engrams = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "engram.list",
+            "arguments": {"project_id": "project-mcp-roundtrip"},
+        },
+        request_id="tools-call-engram-list",
+    )
+    listed_engrams = _final_result_frame(list_engrams)["result"]["structuredContent"]["engrams"]
+    assert any(item["engram_id"] == engram_id for item in listed_engrams)
+
+    list_projects = _mcp_frames(
+        client,
+        method="tools/call",
+        params={"name": "project.list", "arguments": {}},
+        request_id="tools-call-project-list",
+    )
+    listed_projects = _final_result_frame(list_projects)["result"]["structuredContent"]["projects"]
+    assert any(item["project_id"] == "project-mcp-roundtrip" for item in listed_projects)
+
+    unknown_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={"name": "unknown.tool", "arguments": {}},
+        request_id="tools-call-unknown",
+    )
+    error_frame = [item for item in unknown_frames if "error" in item][0]
+    assert error_frame["id"] == "tools-call-unknown"
+    assert error_frame["error"]["code"] == -32601
+    assert error_frame["error"]["data"]["method"] == "unknown.tool"
+
+
+@pytest.mark.integration
 def test_mcp_chat_send_message_stream_flow(client, clean_db, monkeypatch) -> None:
     _login(client)
     _install_fake_provider(monkeypatch)

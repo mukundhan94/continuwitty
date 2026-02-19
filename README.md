@@ -2202,6 +2202,39 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make -C /Users/mukundhan/Projects/engram acceptance-typecheck` passed.
    - `make -C /Users/mukundhan/Projects/engram acceptance-test-mock` passed (`10` scenarios).
 
+### 2026-02-19 (Refactor checkpoint - MCP service phase 1)
+
+1. Refactored MCP catalog boundaries:
+   - extracted MCP tool catalog/constants/helpers from `api/app/mcp/service.py` to `api/app/mcp/catalog.py`.
+   - `McpService` now reads catalog data via `build_tool_catalog()`.
+2. Refactored MCP dispatch architecture:
+   - split monolithic `_dispatch_tool` into domain dispatchers:
+     - `_dispatch_chat_tool`
+     - `_dispatch_engram_tool`
+     - `_dispatch_project_tool`
+     - `_dispatch_user_tool`
+   - `_dispatch_tool` is now a thin router.
+3. Added shared authorization/access helpers:
+   - `_require_session_access`
+   - `_require_engram_access`
+   - `_require_collection_access`
+   - extracted `_resolve_project_from_session` / `_resolve_project_from_engram` for `_project_id_for_tool`.
+4. Reduced stream authorization duplication:
+   - extracted `_authorize_tool_call` and used it in `stream_call` direct and `tools/call` streaming paths.
+5. Added backend tests for refactor safety:
+   - new `api/tests/test_mcp_tool_catalog.py`
+   - new `api/tests/test_mcp_service_unit.py`
+   - expanded `api/tests/test_mcp_api_integration.py` with `tools/call` round-trip checks for `project.list`, `engram.list`, and unknown tool handling.
+6. Validation:
+   - `uv run --project api pytest api/tests/test_mcp_tool_catalog.py api/tests/test_mcp_service_unit.py -q` passed (`9 passed`).
+   - `uv run --project api pytest api/tests/test_mcp_api_integration.py::test_mcp_tools_call_project_and_engram_round_trip_plus_unknown_tool -q` passed.
+   - `uv run --project api pytest api/tests/test_mcp_api_integration.py -q` passed (`27 passed`).
+   - `make -C /Users/mukundhan/Projects/engram test` passed (`189 passed`).
+   - `make -C /Users/mukundhan/Projects/engram check` passed (lint + format + tests + eval).
+7. CodeScene MCP health checks:
+   - `code_health_review` on `api/app/mcp/service.py`: score `4.54`.
+   - `pre_commit_code_health_safeguard` on repo: `quality_gates=passed`, `api/app/mcp/service.py` verdict `improved`.
+
 ### Next Immediate Steps (One By One)
 
 1. Phase 31 closeout: update `AGENT.md` + skills with final project-default/soft-delete/collection invariants and MCP organization contracts.

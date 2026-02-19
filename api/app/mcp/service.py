@@ -44,96 +44,19 @@ from app.repository import (
     query_engrams,
 )
 
+from .catalog import (
+    _ENGRAM_SCOPED_TOOLS,
+    _OPTIONAL_PROJECT_TOOLS,
+    _PROJECT_FALLBACK_TOOLS,
+    _READ_TOOL_NAMES,
+    _SESSION_SCOPED_TOOLS,
+    _TOOL_ALIASES,
+    _WRITE_TOOL_NAMES,
+    _to_dotted_tool_name,
+    _to_public_tool_name,
+    build_tool_catalog,
+)
 from .errors import McpRpcError
-
-_READ_TOOL_NAMES = {
-    "chat.list_sessions",
-    "chat.get_session",
-    "chat.get_lifecycle_policy",
-    "chat.list_messages",
-    "chat.list_timeline",
-    "chat.list_pinned_engrams",
-    "chat.list_pinned_documents",
-    "chat.list_project_documents",
-    "project.list",
-    "project.get_default",
-    "engram.list",
-    "engram.get",
-    "engram.collection_list",
-    "engram.query",
-    "engram.rehydrate",
-    "user.get_profile",
-    "user.list_projects",
-}
-
-_WRITE_TOOL_NAMES = {
-    "chat.create_session",
-    "chat.update_lifecycle_policy",
-    "chat.send_message",
-    "chat.pin_engram",
-    "chat.unpin_engram",
-    "chat.pin_document",
-    "chat.unpin_document",
-    "chat.save_as_engram",
-    "chat.continue_session",
-    "chat.delete_session",
-    "chat.restore_session",
-    "project.create",
-    "project.set_default",
-    "engram.create",
-    "engram.create_from_conversation",
-    "engram.pin_to_session",
-    "engram.update",
-    "engram.move_project",
-    "engram.delete",
-    "engram.restore",
-    "engram.collection_create",
-    "engram.collection_update",
-    "engram.collection_delete",
-    "engram.collection_add_items",
-    "engram.collection_remove_items",
-}
-
-# Alias maps to existing implementation branch but should obey the same scope semantics.
-_TOOL_ALIASES = {"engram.pin_to_session": "chat.pin_engram"}
-
-_OPTIONAL_PROJECT_TOOLS = {
-    "engram.query",
-    "chat.list_sessions",
-    "chat.list_project_documents",
-    "engram.list",
-    "engram.collection_list",
-}
-
-_PROJECT_FALLBACK_TOOLS = {
-    "chat.save_as_engram",
-    "engram.create",
-    "engram.create_from_conversation",
-    "engram.collection_create",
-}
-
-_TOOL_NAMESPACE_PREFIXES = ("chat", "engram", "project", "user")
-
-
-def _to_public_tool_name(canonical_name: str) -> str:
-    """Expose VS Code-compatible tool names (no dots)."""
-    return canonical_name.replace(".", "_")
-
-
-def _to_dotted_tool_name(tool_name: str) -> str:
-    """Convert external tool names back to dotted canonical method names.
-
-    We intentionally support both forms:
-    - dotted (`chat.send_message`) for backward compatibility
-    - underscore (`chat_send_message`) for strict MCP clients.
-    """
-    if "." in tool_name:
-        return tool_name
-    for namespace in _TOOL_NAMESPACE_PREFIXES:
-        prefix = f"{namespace}_"
-        if tool_name.startswith(prefix):
-            return f"{namespace}.{tool_name[len(prefix) :]}"
-    return tool_name
 
 
 class McpService:
@@ -409,562 +332,7 @@ class McpService:
 
     @staticmethod
     def _tool_catalog() -> list[dict[str, Any]]:
-        # Keep this catalog synchronized with dispatcher behavior and tests.
-        # External MCP clients depend on stable tool names and input schemas.
-        return [
-            {
-                "name": "chat.create_session",
-                "description": "Create a chat session in a project.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["project_id", "title"],
-                    "properties": {
-                        "project_id": {"type": "string"},
-                        "title": {"type": "string"},
-                        "provider": {"type": "string"},
-                        "model_id": {"type": "string"},
-                        "system_prompt": {"type": "string"},
-                        "visibility_scope": {"type": "string", "enum": ["private", "project"]},
-                        "autosave_enabled": {"type": "boolean"},
-                        "autosave_strategy": {
-                            "type": "string",
-                            "enum": ["off", "interval", "message_count"],
-                        },
-                        "autosave_interval_minutes": {"type": "integer", "minimum": 1},
-                        "autosave_min_messages": {"type": "integer", "minimum": 1},
-                        "retention_days": {"type": "integer", "minimum": 1},
-                        "retention_max_snapshots": {"type": "integer", "minimum": 1},
-                    },
-                },
-            },
-            {
-                "name": "chat.list_sessions",
-                "description": "List chat sessions for the authenticated user.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "project_id": {"type": "string"},
-                        "limit": {"type": "integer", "minimum": 1},
-                        "offset": {"type": "integer", "minimum": 0},
-                    },
-                },
-            },
-            {
-                "name": "chat.get_session",
-                "description": "Get chat session metadata by session_id.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id"],
-                    "properties": {"session_id": {"type": "string", "format": "uuid"}},
-                },
-            },
-            {
-                "name": "chat.get_lifecycle_policy",
-                "description": "Get autosave/retention lifecycle policy for a session.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id"],
-                    "properties": {"session_id": {"type": "string", "format": "uuid"}},
-                },
-            },
-            {
-                "name": "chat.update_lifecycle_policy",
-                "description": "Update autosave/retention lifecycle policy for a session.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "autosave_enabled": {"type": "boolean"},
-                        "autosave_strategy": {
-                            "type": "string",
-                            "enum": ["off", "interval", "message_count"],
-                        },
-                        "autosave_interval_minutes": {"type": "integer", "minimum": 1},
-                        "autosave_min_messages": {"type": "integer", "minimum": 1},
-                        "retention_days": {"type": "integer", "minimum": 1},
-                        "retention_max_snapshots": {"type": "integer", "minimum": 1},
-                    },
-                },
-            },
-            {
-                "name": "chat.list_messages",
-                "description": "List persisted messages for a chat session.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "limit": {"type": "integer", "minimum": 1},
-                        "offset": {"type": "integer", "minimum": 0},
-                    },
-                },
-            },
-            {
-                "name": "chat.list_timeline",
-                "description": "List timeline events (manual saves, autosaves, consolidation) for a session.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "limit": {"type": "integer", "minimum": 1},
-                        "offset": {"type": "integer", "minimum": 0},
-                    },
-                },
-            },
-            {
-                "name": "chat.send_message",
-                "description": "Send a user message in a chat session (streaming supported).",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id", "content_text"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "content_text": {"type": "string"},
-                        "stream": {"type": "boolean"},
-                    },
-                },
-            },
-            {
-                "name": "chat.list_pinned_engrams",
-                "description": "List engrams pinned to a chat session.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id"],
-                    "properties": {"session_id": {"type": "string", "format": "uuid"}},
-                },
-            },
-            {
-                "name": "chat.pin_engram",
-                "description": "Pin an engram to a chat session context chain.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id", "engram_id"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "engram_id": {"type": "string", "format": "uuid"},
-                    },
-                },
-            },
-            {
-                "name": "chat.unpin_engram",
-                "description": "Remove a pinned engram from a chat session.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id", "engram_id"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "engram_id": {"type": "string", "format": "uuid"},
-                    },
-                },
-            },
-            {
-                "name": "chat.list_pinned_documents",
-                "description": "List uploaded documents pinned to a chat session.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id"],
-                    "properties": {"session_id": {"type": "string", "format": "uuid"}},
-                },
-            },
-            {
-                "name": "chat.pin_document",
-                "description": "Pin an uploaded document into chat context.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id", "document_id"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "document_id": {"type": "string", "format": "uuid"},
-                    },
-                },
-            },
-            {
-                "name": "chat.unpin_document",
-                "description": "Remove a pinned document from chat context.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id", "document_id"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "document_id": {"type": "string", "format": "uuid"},
-                    },
-                },
-            },
-            {
-                "name": "chat.list_project_documents",
-                "description": "List ingested documents visible in a project scope.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "project_id": {"type": "string"},
-                        "limit": {"type": "integer", "minimum": 1},
-                        "offset": {"type": "integer", "minimum": 0},
-                    },
-                },
-            },
-            {
-                "name": "chat.save_as_engram",
-                "description": (
-                    "Save as engram. Supports either a chat session snapshot "
-                    "or direct conversation markdown when no session_id exists."
-                ),
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "project_id": {"type": "string"},
-                        "conversation_markdown": {"type": "string"},
-                        "thread_id": {"type": "string"},
-                        "title": {"type": "string"},
-                        "abstract": {"type": "string"},
-                        "visibility_scope": {"type": "string", "enum": ["private", "project"]},
-                        "tags": {"type": "array", "items": {"type": "string"}},
-                        "keywords": {"type": "array", "items": {"type": "string"}},
-                        "retrieval_text": {"type": "string"},
-                        "source_session_id": {"type": "string", "format": "uuid"},
-                    },
-                },
-            },
-            {
-                "name": "chat.continue_session",
-                "description": "Create a continued session carrying pinned engram context.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "title": {"type": "string"},
-                    },
-                },
-            },
-            {
-                "name": "engram.create",
-                "description": "Create a new memory engram with summary metadata.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["title", "detailed_summary_markdown"],
-                    "properties": {
-                        "project_id": {"type": "string"},
-                        "thread_id": {"type": "string"},
-                        "title": {"type": "string"},
-                        "abstract": {"type": "string"},
-                        "detailed_summary_markdown": {"type": "string"},
-                        "visibility_scope": {"type": "string", "enum": ["private", "project"]},
-                        "tags": {"type": "array", "items": {"type": "string"}},
-                        "keywords": {"type": "array", "items": {"type": "string"}},
-                    },
-                },
-            },
-            {
-                "name": "engram.create_from_conversation",
-                "description": (
-                    "Create an engram from conversation markdown with optional "
-                    "fill-empty metadata enrichment."
-                ),
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["conversation_markdown"],
-                    "properties": {
-                        "project_id": {"type": "string"},
-                        "conversation_markdown": {"type": "string"},
-                        "thread_id": {"type": "string"},
-                        "title": {"type": "string"},
-                        "abstract": {"type": "string"},
-                        "visibility_scope": {"type": "string", "enum": ["private", "project"]},
-                        "tags": {"type": "array", "items": {"type": "string"}},
-                        "keywords": {"type": "array", "items": {"type": "string"}},
-                        "retrieval_text": {"type": "string"},
-                        "source_session_id": {"type": "string", "format": "uuid"},
-                    },
-                },
-            },
-            {
-                "name": "engram.query",
-                "description": "Query engrams by semantic text plus metadata filters.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["query"],
-                    "properties": {
-                        "query": {"type": "string"},
-                        "top_k": {"type": "integer", "minimum": 1, "maximum": 50},
-                        "project_id": {"type": "string"},
-                        "tags": {"type": "array", "items": {"type": "string"}},
-                        "keywords": {"type": "array", "items": {"type": "string"}},
-                        "created_after": {"type": "string", "format": "date-time"},
-                        "created_before": {"type": "string", "format": "date-time"},
-                    },
-                },
-            },
-            {
-                "name": "engram.rehydrate",
-                "description": "Return a compact and citation-packed rehydration bundle.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["engram_id"],
-                    "properties": {"engram_id": {"type": "string", "format": "uuid"}},
-                },
-            },
-            {
-                "name": "engram.pin_to_session",
-                "description": "Pin an engram to a chat session context chain.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id", "engram_id"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "engram_id": {"type": "string", "format": "uuid"},
-                    },
-                },
-            },
-            {
-                "name": "chat.delete_session",
-                "description": "Soft-delete a chat session with optional linked-engram deletion.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id"],
-                    "properties": {
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "delete_linked_engrams": {"type": "boolean"},
-                        "reason": {"type": "string"},
-                    },
-                },
-            },
-            {
-                "name": "chat.restore_session",
-                "description": "Restore a previously soft-deleted chat session.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["session_id"],
-                    "properties": {"session_id": {"type": "string", "format": "uuid"}},
-                },
-            },
-            {
-                "name": "project.list",
-                "description": "List visible projects for the authenticated actor.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "include_archived": {"type": "boolean"},
-                        "limit": {"type": "integer", "minimum": 1},
-                        "offset": {"type": "integer", "minimum": 0},
-                    },
-                },
-            },
-            {
-                "name": "project.create",
-                "description": "Create a project; admins can optionally set owner_user_id.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["project_id", "name"],
-                    "properties": {
-                        "project_id": {"type": "string"},
-                        "name": {"type": "string"},
-                        "description": {"type": "string"},
-                        "owner_user_id": {"type": "string", "format": "uuid"},
-                    },
-                },
-            },
-            {
-                "name": "project.get_default",
-                "description": "Get the authenticated actor's default project id.",
-                "inputSchema": {"type": "object", "properties": {}},
-            },
-            {
-                "name": "project.set_default",
-                "description": "Set the authenticated actor's default project id.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["project_id"],
-                    "properties": {"project_id": {"type": "string"}},
-                },
-            },
-            {
-                "name": "engram.list",
-                "description": "List engrams with project/session/query filters.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "project_id": {"type": "string"},
-                        "session_id": {"type": "string", "format": "uuid"},
-                        "q": {"type": "string"},
-                        "include_deleted": {"type": "boolean"},
-                        "limit": {"type": "integer", "minimum": 1},
-                        "offset": {"type": "integer", "minimum": 0},
-                    },
-                },
-            },
-            {
-                "name": "engram.get",
-                "description": "Get an engram in management format with editable source payload.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["engram_id"],
-                    "properties": {
-                        "engram_id": {"type": "string", "format": "uuid"},
-                        "include_deleted": {"type": "boolean"},
-                    },
-                },
-            },
-            {
-                "name": "engram.update",
-                "description": "Update engram metadata/markdown/sources with optimistic concurrency.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["engram_id"],
-                    "properties": {
-                        "engram_id": {"type": "string", "format": "uuid"},
-                        "title": {"type": "string"},
-                        "abstract": {"type": "string"},
-                        "detailed_summary_markdown": {"type": "string"},
-                        "tags": {"type": "array", "items": {"type": "string"}},
-                        "keywords": {"type": "array", "items": {"type": "string"}},
-                        "visibility_scope": {"type": "string", "enum": ["private", "project"]},
-                        "expected_updated_at": {"type": "string", "format": "date-time"},
-                        "sources": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "required": ["captured_at", "url", "title", "snippet"],
-                                "properties": {
-                                    "captured_at": {"type": "string", "format": "date-time"},
-                                    "url": {"type": "string"},
-                                    "title": {"type": "string"},
-                                    "snippet": {"type": "string"},
-                                    "content_text": {"type": "string"},
-                                    "content_hash": {"type": "string"},
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            {
-                "name": "engram.move_project",
-                "description": "Move an engram to another project and auto-detach invalid collections.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["engram_id", "target_project_id"],
-                    "properties": {
-                        "engram_id": {"type": "string", "format": "uuid"},
-                        "target_project_id": {"type": "string"},
-                        "reason": {"type": "string"},
-                        "expected_updated_at": {"type": "string", "format": "date-time"},
-                    },
-                },
-            },
-            {
-                "name": "engram.delete",
-                "description": "Soft-delete an engram.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["engram_id"],
-                    "properties": {
-                        "engram_id": {"type": "string", "format": "uuid"},
-                        "reason": {"type": "string"},
-                    },
-                },
-            },
-            {
-                "name": "engram.restore",
-                "description": "Restore a soft-deleted engram.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["engram_id"],
-                    "properties": {"engram_id": {"type": "string", "format": "uuid"}},
-                },
-            },
-            {
-                "name": "engram.collection_list",
-                "description": "List engram collections (project-bounded groups).",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "project_id": {"type": "string"},
-                        "include_deleted": {"type": "boolean"},
-                        "limit": {"type": "integer", "minimum": 1},
-                        "offset": {"type": "integer", "minimum": 0},
-                    },
-                },
-            },
-            {
-                "name": "engram.collection_create",
-                "description": "Create an engram collection for a project.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["name"],
-                    "properties": {
-                        "project_id": {"type": "string"},
-                        "name": {"type": "string"},
-                        "description": {"type": "string"},
-                    },
-                },
-            },
-            {
-                "name": "engram.collection_update",
-                "description": "Update collection metadata with optimistic concurrency.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["collection_id"],
-                    "properties": {
-                        "collection_id": {"type": "string", "format": "uuid"},
-                        "name": {"type": "string"},
-                        "description": {"type": "string"},
-                        "expected_updated_at": {"type": "string", "format": "date-time"},
-                    },
-                },
-            },
-            {
-                "name": "engram.collection_delete",
-                "description": "Soft-delete a collection.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["collection_id"],
-                    "properties": {
-                        "collection_id": {"type": "string", "format": "uuid"},
-                        "reason": {"type": "string"},
-                    },
-                },
-            },
-            {
-                "name": "engram.collection_add_items",
-                "description": "Add one or more engrams to a collection.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["collection_id", "engram_ids"],
-                    "properties": {
-                        "collection_id": {"type": "string", "format": "uuid"},
-                        "engram_ids": {
-                            "type": "array",
-                            "items": {"type": "string", "format": "uuid"},
-                        },
-                    },
-                },
-            },
-            {
-                "name": "engram.collection_remove_items",
-                "description": "Remove one engram from a collection.",
-                "inputSchema": {
-                    "type": "object",
-                    "required": ["collection_id", "engram_id"],
-                    "properties": {
-                        "collection_id": {"type": "string", "format": "uuid"},
-                        "engram_id": {"type": "string", "format": "uuid"},
-                    },
-                },
-            },
-            {
-                "name": "user.get_profile",
-                "description": "Get the authenticated user profile.",
-                "inputSchema": {"type": "object", "properties": {}},
-            },
-            {
-                "name": "user.list_projects",
-                "description": "List project IDs visible to the authenticated user.",
-                "inputSchema": {"type": "object", "properties": {}},
-            },
-        ]
+        return build_tool_catalog()
 
     def _required_scope_for_tool(self, tool_name: str) -> str:
         canonical = self._canonical_tool_name(tool_name)
@@ -1002,6 +370,21 @@ class McpService:
             visible.append({**item, "name": public_name})
         return visible
 
+    def _resolve_project_from_session(self, *, session_id: UUID) -> str | None:
+        session = self._memory_admin_service.get_session(
+            session_id=session_id, include_deleted=True
+        )
+        return session.project_id if session else None
+
+    def _resolve_project_from_engram(
+        self, *, engram_id: UUID, target_project_id: str | None = None
+    ) -> str | None:
+        normalized_target = self._normalize_project_id(target_project_id)
+        if normalized_target:
+            return normalized_target
+        engram = self._memory_admin_service.find_engram(engram_id=engram_id, include_deleted=True)
+        return engram.project_id if engram else None
+
     def _project_id_for_tool(
         self,
         *,
@@ -1010,41 +393,29 @@ class McpService:
         params: dict[str, Any],
     ) -> str | None:
         canonical_tool = self._canonical_tool_name(tool_name)
-
-        if canonical_tool in {
+        project_input_tools = {
             "chat.create_session",
             "engram.create",
             "engram.create_from_conversation",
             "project.create",
             "project.set_default",
             "engram.collection_create",
-        }:
+        }
+        collection_scoped_tools = {
+            "engram.collection_update",
+            "engram.collection_delete",
+            "engram.collection_add_items",
+            "engram.collection_remove_items",
+        }
+
+        if canonical_tool in project_input_tools:
             raw_project = params.get("project_id")
             return self._normalize_project_id(str(raw_project) if raw_project else None)
 
-        if canonical_tool in {
-            "chat.get_session",
-            "chat.get_lifecycle_policy",
-            "chat.update_lifecycle_policy",
-            "chat.list_messages",
-            "chat.list_timeline",
-            "chat.send_message",
-            "chat.list_pinned_engrams",
-            "chat.pin_engram",
-            "chat.unpin_engram",
-            "chat.list_pinned_documents",
-            "chat.pin_document",
-            "chat.unpin_document",
-            "chat.continue_session",
-            "engram.pin_to_session",
-            "chat.delete_session",
-            "chat.restore_session",
-        }:
-            session = self._memory_admin_service.get_session(
+        if canonical_tool in _SESSION_SCOPED_TOOLS:
+            return self._resolve_project_from_session(
                 session_id=self._parse_uuid(params, "session_id"),
-                include_deleted=True,
             )
-            return session.project_id if session else None
 
         if canonical_tool == "chat.save_as_engram":
             raw_session_id = params.get("session_id")
@@ -1057,32 +428,17 @@ class McpService:
             raw_project = params.get("project_id")
             return self._normalize_project_id(str(raw_project) if raw_project else None)
 
-        if canonical_tool in {
-            "engram.get",
-            "engram.update",
-            "engram.move_project",
-            "engram.delete",
-            "engram.restore",
-        }:
-            engram = self._memory_admin_service.find_engram(
-                engram_id=self._parse_uuid(params, "engram_id"),
-                include_deleted=True,
-            )
-            if not engram:
-                return None
+        if canonical_tool in _ENGRAM_SCOPED_TOOLS:
+            target_project_id: str | None = None
             if canonical_tool == "engram.move_project":
                 raw_target = params.get("target_project_id")
-                target_project = self._normalize_project_id(str(raw_target) if raw_target else None)
-                if target_project:
-                    return target_project
-            return engram.project_id
+                target_project_id = str(raw_target) if raw_target is not None else None
+            return self._resolve_project_from_engram(
+                engram_id=self._parse_uuid(params, "engram_id"),
+                target_project_id=target_project_id,
+            )
 
-        if canonical_tool in {
-            "engram.collection_update",
-            "engram.collection_delete",
-            "engram.collection_add_items",
-            "engram.collection_remove_items",
-        }:
+        if canonical_tool in collection_scoped_tools:
             collection = self._memory_admin_service.find_collection(
                 collection_id=self._parse_uuid(params, "collection_id"),
                 include_deleted=True,
@@ -1229,7 +585,69 @@ class McpService:
             raise McpRpcError(code=-32602, message="Invalid params", data={"invalid": "arguments"})
         return tool_name, tool_params
 
-    def _dispatch_tool(
+    def _require_session_access(self, *, actor: dict[str, Any], session_id: UUID) -> Any:
+        session = self._memory_admin_service.get_session(
+            session_id=session_id, include_deleted=True
+        )
+        if not session:
+            raise McpRpcError(
+                code=-32004,
+                message="Session not found",
+                data={"session_id": str(session_id)},
+            )
+        self._require_owner_or_admin(
+            actor=actor,
+            owner_user_id=session.owner_user_id,
+            resource="session",
+            resource_id=str(session_id),
+        )
+        return session
+
+    def _require_engram_access(
+        self,
+        *,
+        actor: dict[str, Any],
+        engram_id: UUID,
+        include_deleted: bool = True,
+    ) -> Any:
+        engram = self._memory_admin_service.find_engram(
+            engram_id=engram_id,
+            include_deleted=include_deleted,
+        )
+        if not engram:
+            raise McpRpcError(
+                code=-32004,
+                message="Engram not found",
+                data={"engram_id": str(engram_id)},
+            )
+        self._require_owner_or_admin(
+            actor=actor,
+            owner_user_id=engram.owner_user_id,
+            resource="engram",
+            resource_id=str(engram_id),
+        )
+        return engram
+
+    def _require_collection_access(self, *, actor: dict[str, Any], collection_id: UUID) -> Any:
+        collection = self._memory_admin_service.find_collection(
+            collection_id=collection_id,
+            include_deleted=True,
+        )
+        if not collection:
+            raise McpRpcError(
+                code=-32004,
+                message="Collection not found",
+                data={"collection_id": str(collection_id)},
+            )
+        self._require_owner_or_admin(
+            actor=actor,
+            owner_user_id=collection.owner_user_id,
+            resource="collection",
+            resource_id=str(collection_id),
+        )
+        return collection
+
+    def _dispatch_chat_tool(
         self,
         *,
         actor: dict[str, Any],
@@ -1237,8 +655,7 @@ class McpService:
         method: str,
         params: dict[str, Any],
         token_auth: McpTokenAuthContext | None,
-    ) -> dict[str, Any]:
-        method = self._canonical_tool_name(method)
+    ) -> dict[str, Any] | None:
         actor_role = str(actor.get("role", ""))
 
         if method == "chat.create_session":
@@ -1393,9 +810,7 @@ class McpService:
                 raise McpRpcError(
                     code=-32602,
                     message="Invalid params",
-                    data={
-                        "missing": "conversation_markdown",
-                    },
+                    data={"missing": "conversation_markdown"},
                 )
 
             fallback_params = dict(params)
@@ -1417,6 +832,38 @@ class McpService:
                 payload=ContinueSessionRequest(title=params.get("title")),
             )
             return {"continuation": continued.model_dump(mode="json")}
+
+        if method == "chat.delete_session":
+            session_id = self._parse_uuid(params, "session_id")
+            self._require_session_access(actor=actor, session_id=session_id)
+            deleted = self._memory_admin_service.delete_session(
+                session_id=session_id,
+                actor_user_id=actor_user_id,
+                payload=AdminSessionDeleteRequest(
+                    delete_linked_engrams=bool(params.get("delete_linked_engrams", False)),
+                    reason=params.get("reason"),
+                ),
+            )
+            return {"result": deleted.model_dump(mode="json")}
+
+        if method == "chat.restore_session":
+            session_id = self._parse_uuid(params, "session_id")
+            self._require_session_access(actor=actor, session_id=session_id)
+            restored = self._memory_admin_service.restore_session(session_id=session_id)
+            return {"result": restored.model_dump(mode="json")}
+
+        return None
+
+    def _dispatch_engram_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> dict[str, Any] | None:
+        actor_role = str(actor.get("role", ""))
 
         if method == "engram.create":
             resolved_payload, resolved_project_id, used_default_project = (
@@ -1466,6 +913,188 @@ class McpService:
                     data={"engram_id": str(engram_id)},
                 )
             return {"bundle": bundle.model_dump(mode="json")}
+
+        if method == "engram.list":
+            session_id_value = params.get("session_id")
+            session_id = (
+                self._parse_uuid({"session_id": session_id_value}, "session_id")
+                if session_id_value is not None
+                else None
+            )
+            listed = self._memory_admin_service.list_engrams(
+                project_id=params.get("project_id"),
+                session_id=session_id,
+                owner_user_id=None if self._is_admin(actor) else actor_user_id,
+                query_text=params.get("q"),
+                include_deleted=bool(params.get("include_deleted", False)),
+                limit=int(params.get("limit", 200)),
+                offset=int(params.get("offset", 0)),
+            )
+            return {"engrams": [item.model_dump(mode="json") for item in listed]}
+
+        if method == "engram.get":
+            engram_id = self._parse_uuid(params, "engram_id")
+            include_deleted = bool(params.get("include_deleted", True))
+            engram = self._require_engram_access(
+                actor=actor,
+                engram_id=engram_id,
+                include_deleted=include_deleted,
+            )
+            return {"engram": engram.model_dump(mode="json")}
+
+        if method == "engram.update":
+            engram_id = self._parse_uuid(params, "engram_id")
+            self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
+            updated = self._memory_admin_service.update_engram(
+                engram_id=engram_id,
+                actor_user_id=actor_user_id,
+                payload=AdminEngramUpdateRequest(
+                    title=params.get("title"),
+                    abstract=params.get("abstract"),
+                    detailed_summary_markdown=params.get("detailed_summary_markdown"),
+                    tags=params.get("tags"),
+                    keywords=params.get("keywords"),
+                    visibility_scope=params.get("visibility_scope"),
+                    expected_updated_at=params.get("expected_updated_at"),
+                    sources=params.get("sources"),
+                ),
+            )
+            return {"engram": updated.model_dump(mode="json")}
+
+        if method == "engram.move_project":
+            engram_id = self._parse_uuid(params, "engram_id")
+            current = self._require_engram_access(
+                actor=actor, engram_id=engram_id, include_deleted=True
+            )
+            if (
+                token_auth
+                and token_auth.allowed_project_ids
+                and current.project_id not in token_auth.allowed_project_ids
+            ):
+                raise McpRpcError(
+                    code=-32003,
+                    message="Project not allowed by token policy",
+                    data={
+                        "tool": method,
+                        "project_id": current.project_id,
+                        "token_scope": token_auth.scope,
+                    },
+                )
+            moved = self._memory_admin_service.move_engram(
+                engram_id=engram_id,
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                payload=AdminEngramMoveRequest(
+                    target_project_id=str(params.get("target_project_id", "")),
+                    expected_updated_at=params.get("expected_updated_at"),
+                    reason=params.get("reason"),
+                ),
+            )
+            return {"engram": moved.model_dump(mode="json")}
+
+        if method == "engram.delete":
+            engram_id = self._parse_uuid(params, "engram_id")
+            self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
+            deleted = self._memory_admin_service.delete_engram(
+                engram_id=engram_id,
+                actor_user_id=actor_user_id,
+                payload=AdminEngramDeleteRequest(reason=params.get("reason")),
+            )
+            return {"result": deleted.model_dump(mode="json")}
+
+        if method == "engram.restore":
+            engram_id = self._parse_uuid(params, "engram_id")
+            self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
+            restored = self._memory_admin_service.restore_engram(engram_id=engram_id)
+            return {"result": restored.model_dump(mode="json")}
+
+        if method == "engram.collection_list":
+            collections = self._memory_admin_service.list_collections(
+                project_id=params.get("project_id"),
+                owner_user_id=None if self._is_admin(actor) else actor_user_id,
+                include_deleted=bool(params.get("include_deleted", False)),
+                limit=int(params.get("limit", 200)),
+                offset=int(params.get("offset", 0)),
+            )
+            return {"collections": [item.model_dump(mode="json") for item in collections]}
+
+        if method == "engram.collection_create":
+            resolved_project_id, used_default_project = self._resolve_project_for_write(
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                requested_project_id=params.get("project_id"),
+                token_auth=token_auth,
+            )
+            created = self._memory_admin_service.create_collection(
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                payload=EngramCollectionCreateRequest(
+                    project_id=resolved_project_id,
+                    name=str(params.get("name", "")),
+                    description=str(params.get("description", "")),
+                ),
+            )
+            return {
+                "collection": created.model_dump(mode="json"),
+                "resolved_project_id": resolved_project_id,
+                "used_default_project": used_default_project,
+            }
+
+        if method == "engram.collection_update":
+            collection_id = self._parse_uuid(params, "collection_id")
+            self._require_collection_access(actor=actor, collection_id=collection_id)
+            updated_collection = self._memory_admin_service.update_collection(
+                collection_id=collection_id,
+                payload=EngramCollectionUpdateRequest(
+                    name=params.get("name"),
+                    description=params.get("description"),
+                    expected_updated_at=params.get("expected_updated_at"),
+                ),
+            )
+            return {"collection": updated_collection.model_dump(mode="json")}
+
+        if method == "engram.collection_delete":
+            collection_id = self._parse_uuid(params, "collection_id")
+            self._require_collection_access(actor=actor, collection_id=collection_id)
+            result = self._memory_admin_service.delete_collection(
+                collection_id=collection_id,
+                actor_user_id=actor_user_id,
+                payload=EngramCollectionDeleteRequest(reason=params.get("reason")),
+            )
+            return {"result": result}
+
+        if method == "engram.collection_add_items":
+            collection_id = self._parse_uuid(params, "collection_id")
+            self._require_collection_access(actor=actor, collection_id=collection_id)
+            result = self._memory_admin_service.add_collection_items(
+                collection_id=collection_id,
+                actor_user_id=actor_user_id,
+                payload=EngramCollectionItemsUpdateRequest(
+                    engram_ids=self._parse_uuid_list(params, "engram_ids")
+                ),
+            )
+            return {"result": result}
+
+        if method == "engram.collection_remove_items":
+            collection_id = self._parse_uuid(params, "collection_id")
+            self._require_collection_access(actor=actor, collection_id=collection_id)
+            result = self._memory_admin_service.remove_collection_item(
+                collection_id=collection_id,
+                engram_id=self._parse_uuid(params, "engram_id"),
+            )
+            return {"result": result}
+
+        return None
+
+    def _dispatch_project_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        actor_role = str(actor.get("role", ""))
 
         if method == "project.list":
             projects = self._project_service.list_projects(
@@ -1517,334 +1146,72 @@ class McpService:
             )
             return {"default_project_id": project_id}
 
-        if method == "engram.list":
-            session_id_value = params.get("session_id")
-            session_id = (
-                self._parse_uuid({"session_id": session_id_value}, "session_id")
-                if session_id_value is not None
-                else None
-            )
-            listed = self._memory_admin_service.list_engrams(
-                project_id=params.get("project_id"),
-                session_id=session_id,
-                owner_user_id=None if self._is_admin(actor) else actor_user_id,
-                query_text=params.get("q"),
-                include_deleted=bool(params.get("include_deleted", False)),
-                limit=int(params.get("limit", 200)),
-                offset=int(params.get("offset", 0)),
-            )
-            return {"engrams": [item.model_dump(mode="json") for item in listed]}
+        return None
 
-        if method == "engram.get":
-            engram_id = self._parse_uuid(params, "engram_id")
-            include_deleted = bool(params.get("include_deleted", True))
-            engram = self._memory_admin_service.get_engram(
-                engram_id=engram_id,
-                include_deleted=include_deleted,
-            )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=engram.owner_user_id,
-                resource="engram",
-                resource_id=str(engram_id),
-            )
-            return {"engram": engram.model_dump(mode="json")}
-
-        if method == "engram.update":
-            engram_id = self._parse_uuid(params, "engram_id")
-            current = self._memory_admin_service.get_engram(
-                engram_id=engram_id,
-                include_deleted=True,
-            )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=current.owner_user_id,
-                resource="engram",
-                resource_id=str(engram_id),
-            )
-            updated = self._memory_admin_service.update_engram(
-                engram_id=engram_id,
-                actor_user_id=actor_user_id,
-                payload=AdminEngramUpdateRequest(
-                    title=params.get("title"),
-                    abstract=params.get("abstract"),
-                    detailed_summary_markdown=params.get("detailed_summary_markdown"),
-                    tags=params.get("tags"),
-                    keywords=params.get("keywords"),
-                    visibility_scope=params.get("visibility_scope"),
-                    expected_updated_at=params.get("expected_updated_at"),
-                    sources=params.get("sources"),
-                ),
-            )
-            return {"engram": updated.model_dump(mode="json")}
-
-        if method == "engram.move_project":
-            engram_id = self._parse_uuid(params, "engram_id")
-            current = self._memory_admin_service.get_engram(
-                engram_id=engram_id,
-                include_deleted=True,
-            )
-            if (
-                token_auth
-                and token_auth.allowed_project_ids
-                and current.project_id not in token_auth.allowed_project_ids
-            ):
-                raise McpRpcError(
-                    code=-32003,
-                    message="Project not allowed by token policy",
-                    data={
-                        "tool": method,
-                        "project_id": current.project_id,
-                        "token_scope": token_auth.scope,
-                    },
-                )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=current.owner_user_id,
-                resource="engram",
-                resource_id=str(engram_id),
-            )
-            moved = self._memory_admin_service.move_engram(
-                engram_id=engram_id,
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                payload=AdminEngramMoveRequest(
-                    target_project_id=str(params.get("target_project_id", "")),
-                    expected_updated_at=params.get("expected_updated_at"),
-                    reason=params.get("reason"),
-                ),
-            )
-            return {"engram": moved.model_dump(mode="json")}
-
-        if method == "engram.delete":
-            engram_id = self._parse_uuid(params, "engram_id")
-            current = self._memory_admin_service.get_engram(
-                engram_id=engram_id,
-                include_deleted=True,
-            )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=current.owner_user_id,
-                resource="engram",
-                resource_id=str(engram_id),
-            )
-            deleted = self._memory_admin_service.delete_engram(
-                engram_id=engram_id,
-                actor_user_id=actor_user_id,
-                payload=AdminEngramDeleteRequest(reason=params.get("reason")),
-            )
-            return {"result": deleted.model_dump(mode="json")}
-
-        if method == "engram.restore":
-            engram_id = self._parse_uuid(params, "engram_id")
-            current = self._memory_admin_service.get_engram(
-                engram_id=engram_id,
-                include_deleted=True,
-            )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=current.owner_user_id,
-                resource="engram",
-                resource_id=str(engram_id),
-            )
-            restored = self._memory_admin_service.restore_engram(engram_id=engram_id)
-            return {"result": restored.model_dump(mode="json")}
-
-        if method == "engram.collection_list":
-            collections = self._memory_admin_service.list_collections(
-                project_id=params.get("project_id"),
-                owner_user_id=None if self._is_admin(actor) else actor_user_id,
-                include_deleted=bool(params.get("include_deleted", False)),
-                limit=int(params.get("limit", 200)),
-                offset=int(params.get("offset", 0)),
-            )
-            return {"collections": [item.model_dump(mode="json") for item in collections]}
-
-        if method == "engram.collection_create":
-            resolved_project_id, used_default_project = self._resolve_project_for_write(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                requested_project_id=params.get("project_id"),
-                token_auth=token_auth,
-            )
-            created = self._memory_admin_service.create_collection(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                payload=EngramCollectionCreateRequest(
-                    project_id=resolved_project_id,
-                    name=str(params.get("name", "")),
-                    description=str(params.get("description", "")),
-                ),
-            )
-            return {
-                "collection": created.model_dump(mode="json"),
-                "resolved_project_id": resolved_project_id,
-                "used_default_project": used_default_project,
-            }
-
-        if method == "engram.collection_update":
-            collection_id = self._parse_uuid(params, "collection_id")
-            collection = self._memory_admin_service.find_collection(
-                collection_id=collection_id,
-                include_deleted=True,
-            )
-            if not collection:
-                raise McpRpcError(
-                    code=-32004,
-                    message="Collection not found",
-                    data={"collection_id": str(collection_id)},
-                )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=collection.owner_user_id,
-                resource="collection",
-                resource_id=str(collection_id),
-            )
-            updated_collection = self._memory_admin_service.update_collection(
-                collection_id=collection_id,
-                payload=EngramCollectionUpdateRequest(
-                    name=params.get("name"),
-                    description=params.get("description"),
-                    expected_updated_at=params.get("expected_updated_at"),
-                ),
-            )
-            return {"collection": updated_collection.model_dump(mode="json")}
-
-        if method == "engram.collection_delete":
-            collection_id = self._parse_uuid(params, "collection_id")
-            collection = self._memory_admin_service.find_collection(
-                collection_id=collection_id,
-                include_deleted=True,
-            )
-            if not collection:
-                raise McpRpcError(
-                    code=-32004,
-                    message="Collection not found",
-                    data={"collection_id": str(collection_id)},
-                )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=collection.owner_user_id,
-                resource="collection",
-                resource_id=str(collection_id),
-            )
-            result = self._memory_admin_service.delete_collection(
-                collection_id=collection_id,
-                actor_user_id=actor_user_id,
-                payload=EngramCollectionDeleteRequest(reason=params.get("reason")),
-            )
-            return {"result": result}
-
-        if method == "engram.collection_add_items":
-            collection_id = self._parse_uuid(params, "collection_id")
-            collection = self._memory_admin_service.find_collection(
-                collection_id=collection_id,
-                include_deleted=True,
-            )
-            if not collection:
-                raise McpRpcError(
-                    code=-32004,
-                    message="Collection not found",
-                    data={"collection_id": str(collection_id)},
-                )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=collection.owner_user_id,
-                resource="collection",
-                resource_id=str(collection_id),
-            )
-            result = self._memory_admin_service.add_collection_items(
-                collection_id=collection_id,
-                actor_user_id=actor_user_id,
-                payload=EngramCollectionItemsUpdateRequest(
-                    engram_ids=self._parse_uuid_list(params, "engram_ids")
-                ),
-            )
-            return {"result": result}
-
-        if method == "engram.collection_remove_items":
-            collection_id = self._parse_uuid(params, "collection_id")
-            collection = self._memory_admin_service.find_collection(
-                collection_id=collection_id,
-                include_deleted=True,
-            )
-            if not collection:
-                raise McpRpcError(
-                    code=-32004,
-                    message="Collection not found",
-                    data={"collection_id": str(collection_id)},
-                )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=collection.owner_user_id,
-                resource="collection",
-                resource_id=str(collection_id),
-            )
-            result = self._memory_admin_service.remove_collection_item(
-                collection_id=collection_id,
-                engram_id=self._parse_uuid(params, "engram_id"),
-            )
-            return {"result": result}
-
-        if method == "chat.delete_session":
-            session_id = self._parse_uuid(params, "session_id")
-            session = self._memory_admin_service.get_session(
-                session_id=session_id,
-                include_deleted=True,
-            )
-            if not session:
-                raise McpRpcError(
-                    code=-32004,
-                    message="Session not found",
-                    data={"session_id": str(session_id)},
-                )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=session.owner_user_id,
-                resource="session",
-                resource_id=str(session_id),
-            )
-            deleted = self._memory_admin_service.delete_session(
-                session_id=session_id,
-                actor_user_id=actor_user_id,
-                payload=AdminSessionDeleteRequest(
-                    delete_linked_engrams=bool(params.get("delete_linked_engrams", False)),
-                    reason=params.get("reason"),
-                ),
-            )
-            return {"result": deleted.model_dump(mode="json")}
-
-        if method == "chat.restore_session":
-            session_id = self._parse_uuid(params, "session_id")
-            session = self._memory_admin_service.get_session(
-                session_id=session_id,
-                include_deleted=True,
-            )
-            if not session:
-                raise McpRpcError(
-                    code=-32004,
-                    message="Session not found",
-                    data={"session_id": str(session_id)},
-                )
-            self._require_owner_or_admin(
-                actor=actor,
-                owner_user_id=session.owner_user_id,
-                resource="session",
-                resource_id=str(session_id),
-            )
-            restored = self._memory_admin_service.restore_session(session_id=session_id)
-            return {"result": restored.model_dump(mode="json")}
-
+    def _dispatch_user_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+    ) -> dict[str, Any] | None:
         if method == "user.get_profile":
             return {"profile": actor}
-
         if method == "user.list_projects":
             return {"project_ids": self._projects_for_user(actor_user_id, self._chat_service)}
+        return None
+
+    def _dispatch_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> dict[str, Any]:
+        canonical_method = self._canonical_tool_name(method)
+        chat_result = self._dispatch_chat_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=canonical_method,
+            params=params,
+            token_auth=token_auth,
+        )
+        if chat_result is not None:
+            return chat_result
+
+        engram_result = self._dispatch_engram_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=canonical_method,
+            params=params,
+            token_auth=token_auth,
+        )
+        if engram_result is not None:
+            return engram_result
+
+        project_result = self._dispatch_project_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=canonical_method,
+            params=params,
+        )
+        if project_result is not None:
+            return project_result
+
+        user_result = self._dispatch_user_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=canonical_method,
+        )
+        if user_result is not None:
+            return user_result
 
         raise McpRpcError(
             code=-32601,
             message="Method not found",
-            data={"method": method},
+            data={"method": canonical_method},
         )
 
     def _dispatch_non_stream(
@@ -1903,6 +1270,26 @@ class McpService:
             token_auth=token_auth,
         )
 
+    def _authorize_tool_call(
+        self,
+        *,
+        actor_user_id: UUID,
+        request_id: str | int | None,
+        token_auth: McpTokenAuthContext | None,
+        tool_name: str,
+        params: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        try:
+            authorized_params = self._enforce_token_authorization(
+                actor_user_id=actor_user_id,
+                token_auth=token_auth,
+                tool_name=tool_name,
+                params=params,
+            )
+        except McpRpcError as exc:
+            return None, self._error(request_id, code=exc.code, message=exc.message, data=exc.data)
+        return authorized_params, None
+
     def stream_call(
         self,
         *,
@@ -1934,16 +1321,17 @@ class McpService:
 
         # Direct streaming path retained for backward compatibility.
         if canonical_method == "chat.send_message":
-            try:
-                authorized_params = self._enforce_token_authorization(
-                    actor_user_id=actor_user_id,
-                    token_auth=token_auth,
-                    tool_name=request.method,
-                    params=request.params,
-                )
-            except McpRpcError as exc:
-                yield self._error(request.id, code=exc.code, message=exc.message, data=exc.data)
+            authorized_params, error_frame = self._authorize_tool_call(
+                actor_user_id=actor_user_id,
+                request_id=request.id,
+                token_auth=token_auth,
+                tool_name=request.method,
+                params=request.params,
+            )
+            if error_frame:
+                yield error_frame
                 return
+            assert authorized_params is not None
             yield from self._stream_chat_send_message(
                 actor_user_id=actor_user_id,
                 request_id=request.id,
@@ -1957,23 +1345,31 @@ class McpService:
             try:
                 tool_name, tool_params = self._tool_name_and_params_for_tools_call(request.params)
                 canonical_tool_name = self._canonical_tool_name(tool_name)
-                tool_params = self._enforce_token_authorization(
-                    actor_user_id=actor_user_id,
-                    token_auth=token_auth,
-                    tool_name=tool_name,
-                    params=tool_params,
-                )
             except McpRpcError as exc:
                 yield self._error(request.id, code=exc.code, message=exc.message, data=exc.data)
                 return
 
+            authorized_tool_params, error_frame = self._authorize_tool_call(
+                actor_user_id=actor_user_id,
+                request_id=request.id,
+                token_auth=token_auth,
+                tool_name=tool_name,
+                params=tool_params,
+            )
+            if error_frame:
+                yield error_frame
+                return
+            assert authorized_tool_params is not None
+
             # Streaming is currently only meaningful for chat message generation.
-            if canonical_tool_name == "chat.send_message" and bool(tool_params.get("stream", True)):
+            if canonical_tool_name == "chat.send_message" and bool(
+                authorized_tool_params.get("stream", True)
+            ):
                 yield from self._stream_chat_send_message(
                     actor_user_id=actor_user_id,
                     request_id=request.id,
                     tool_name=tool_name,
-                    params=tool_params,
+                    params=authorized_tool_params,
                     as_tool_call=True,
                 )
                 return

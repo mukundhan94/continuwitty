@@ -705,6 +705,42 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+## 2026-02-19 Refactor Checkpoint (MCP Service Phase 1)
+
+### Scope Completed
+
+1. Extracted MCP catalog/constants/helpers from `api/app/mcp/service.py` into `api/app/mcp/catalog.py`.
+2. Split monolithic `_dispatch_tool` into:
+   - `_dispatch_chat_tool`
+   - `_dispatch_engram_tool`
+   - `_dispatch_project_tool`
+   - `_dispatch_user_tool`
+3. Added shared ownership/access guards:
+   - `_require_session_access`
+   - `_require_engram_access`
+   - `_require_collection_access`
+4. Reduced `_project_id_for_tool` complexity via:
+   - `_resolve_project_from_session`
+   - `_resolve_project_from_engram`
+   - catalog constants (`_SESSION_SCOPED_TOOLS`, `_ENGRAM_SCOPED_TOOLS`)
+5. Reduced stream auth duplication by extracting `_authorize_tool_call`.
+
+### Tests Added / Expanded
+
+1. Added `api/tests/test_mcp_tool_catalog.py`.
+2. Added `api/tests/test_mcp_service_unit.py`.
+3. Expanded `api/tests/test_mcp_api_integration.py` with `tools/call` round-trip assertions for `project.list`, `engram.list`, and unknown tool handling.
+
+### Validation + Health Checks
+
+1. `make -C /Users/mukundhan/Projects/engram test` passed (`189 passed`).
+2. `make -C /Users/mukundhan/Projects/engram check` passed (lint + format + tests + eval).
+3. CodeScene MCP:
+   - `code_health_review` for `api/app/mcp/service.py`: score `4.54`.
+   - `pre_commit_code_health_safeguard`: `quality_gates=passed`, `api/app/mcp/service.py` marked `improved`.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
