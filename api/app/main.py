@@ -485,7 +485,11 @@ def resume_agent_workflow(thread_id: str, payload: AgentResumeRequest) -> AgentR
 @app.post("/api/v1/engrams", response_model=EngramCreateResponse)
 def create_engram_endpoint(payload: MemoryEngramCreate) -> EngramCreateResponse:
     current_settings = get_settings()
-    return create_engram(payload, embedding_dim=current_settings.embedding_dim)
+    return create_engram(
+        payload,
+        embedding_dim=current_settings.embedding_dim,
+        enrichment_origin="api.engrams.create",
+    )
 
 
 @app.get("/api/v1/engrams", response_model=list[EngramSummary])

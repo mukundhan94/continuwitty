@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -8,6 +9,7 @@ from psycopg.types.json import Jsonb
 
 from .db import get_conn
 from .embeddings import embed_text
+from .engram_enrichment import enrich_if_missing
 from .models import (
     EngramCreateResponse,
     EngramQueryRequest,
@@ -18,6 +20,8 @@ from .models import (
     RehydrationBundle,
     RehydrationCitation,
 )
+
+logger = logging.getLogger(__name__)
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]{2,}")
 _ASSISTANT_SECTION_PATTERN = re.compile(
@@ -138,33 +142,63 @@ def _pack_citations(
     return packed
 
 
-def create_engram(
+def create_engram_with_report(
     payload: MemoryEngramCreate,
     embedding_dim: int,
     owner_user_id: UUID | None = None,
-) -> EngramCreateResponse:
+    enrichment_origin: str = "unknown",
+) -> tuple[EngramCreateResponse, dict]:
+    # Fill-empty-only enrichment keeps explicit caller metadata untouched while
+    # enabling low-friction persistence workflows (for example MCP conversation
+    # snapshots that omit tags/keywords/abstract).
+    resolved_payload = payload
+    enrichment_report: dict = {
+        "schema_version": "1.0",
+        "origin": enrichment_origin,
+        "enrichment_applied": False,
+        "abstract_derived": False,
+        "tags_derived": False,
+        "keywords_derived": False,
+        "auto_tags": [],
+        "auto_keywords": [],
+        "abstract_source": None,
+    }
+    try:
+        enrichment_result = enrich_if_missing(payload=payload, origin=enrichment_origin)
+        resolved_payload = enrichment_result.payload
+        enrichment_report = enrichment_result.report.model_dump(mode="json")
+    except Exception:
+        # Enrichment must remain best-effort and never block writes.
+        logger.warning(
+            "engram auto metadata enrichment failed; persisting original caller payload",
+            exc_info=True,
+        )
+
     engram_id = uuid4()
     now = datetime.now(UTC)
-    retrieval_text = _build_retrieval_text(payload)
+    retrieval_text = _build_retrieval_text(resolved_payload)
     embedding_result = embed_text(retrieval_text, dim=embedding_dim)
     embedding_literal = _vector_literal(embedding_result.vector)
 
     engram_json = {
         "schema_version": "1.0",
-        "project_id": payload.project_id,
-        "thread_id": payload.thread_id,
-        "title": payload.title,
-        "abstract": payload.abstract,
-        "detailed_summary_markdown": payload.detailed_summary_markdown,
-        "decisions": [item.model_dump(mode="json") for item in payload.decisions],
-        "assumptions": payload.assumptions,
-        "open_questions": payload.open_questions,
-        "claims": [item.model_dump(mode="json") for item in payload.claims],
-        "tags": payload.tags,
-        "keywords": payload.keywords,
-        "artifacts": [item.model_dump(mode="json") for item in payload.artifacts],
-        "visibility_scope": payload.visibility_scope,
-        "source_session_id": str(payload.source_session_id) if payload.source_session_id else None,
+        "project_id": resolved_payload.project_id,
+        "thread_id": resolved_payload.thread_id,
+        "title": resolved_payload.title,
+        "abstract": resolved_payload.abstract,
+        "detailed_summary_markdown": resolved_payload.detailed_summary_markdown,
+        "decisions": [item.model_dump(mode="json") for item in resolved_payload.decisions],
+        "assumptions": resolved_payload.assumptions,
+        "open_questions": resolved_payload.open_questions,
+        "claims": [item.model_dump(mode="json") for item in resolved_payload.claims],
+        "tags": resolved_payload.tags,
+        "keywords": resolved_payload.keywords,
+        "artifacts": [item.model_dump(mode="json") for item in resolved_payload.artifacts],
+        "visibility_scope": resolved_payload.visibility_scope,
+        "source_session_id": (
+            str(resolved_payload.source_session_id) if resolved_payload.source_session_id else None
+        ),
+        "auto_metadata": enrichment_report,
         "created_at": now.isoformat(),
     }
 
@@ -184,26 +218,26 @@ def create_engram(
                 """,
             {
                 "engram_id": engram_id,
-                "project_id": payload.project_id,
-                "thread_id": payload.thread_id,
+                "project_id": resolved_payload.project_id,
+                "thread_id": resolved_payload.thread_id,
                 "created_at": now,
                 "updated_at": now,
-                "title": payload.title,
-                "abstract": payload.abstract,
+                "title": resolved_payload.title,
+                "abstract": resolved_payload.abstract,
                 "engram_json": Jsonb(engram_json),
-                "engram_markdown": payload.detailed_summary_markdown,
-                "tags": payload.tags,
-                "keywords": payload.keywords,
+                "engram_markdown": resolved_payload.detailed_summary_markdown,
+                "tags": resolved_payload.tags,
+                "keywords": resolved_payload.keywords,
                 "owner_user_id": owner_user_id,
-                "visibility_scope": payload.visibility_scope,
-                "source_session_id": payload.source_session_id,
+                "visibility_scope": resolved_payload.visibility_scope,
+                "source_session_id": resolved_payload.source_session_id,
                 "retrieval_text": retrieval_text,
                 "embedding_model": embedding_result.provider_id,
                 "embed": embedding_literal,
             },
         )
 
-        for claim in payload.claims:
+        for claim in resolved_payload.claims:
             for source in claim.supporting_sources:
                 cur.execute(
                     """
@@ -222,7 +256,7 @@ def create_engram(
                     ),
                 )
 
-        for artifact in payload.artifacts:
+        for artifact in resolved_payload.artifacts:
             cur.execute(
                 """
                     INSERT INTO artifacts (artifact_id, engram_id, artifact_type, storage_uri, metadata)
@@ -237,7 +271,22 @@ def create_engram(
                 ),
             )
 
-    return EngramCreateResponse(engram_id=engram_id, created_at=now)
+    return EngramCreateResponse(engram_id=engram_id, created_at=now), enrichment_report
+
+
+def create_engram(
+    payload: MemoryEngramCreate,
+    embedding_dim: int,
+    owner_user_id: UUID | None = None,
+    enrichment_origin: str = "unknown",
+) -> EngramCreateResponse:
+    created, _ = create_engram_with_report(
+        payload=payload,
+        embedding_dim=embedding_dim,
+        owner_user_id=owner_user_id,
+        enrichment_origin=enrichment_origin,
+    )
+    return created
 
 
 def list_engrams(

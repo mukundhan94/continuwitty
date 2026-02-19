@@ -15,6 +15,7 @@ from app.models import (
     ChatMessageCreateRequest,
     ChatSessionCreateRequest,
     ContinueSessionRequest,
+    EngramCreateFromConversationRequest,
     EngramQueryRequest,
     McpJsonRpcRequest,
     MemoryEngramCreate,
@@ -22,7 +23,13 @@ from app.models import (
     PinEngramRequest,
     SaveSessionAsEngramRequest,
 )
-from app.repository import create_engram, get_rehydration_bundle, list_engrams, query_engrams
+from app.repository import (
+    create_engram,
+    create_engram_with_report,
+    get_rehydration_bundle,
+    list_engrams,
+    query_engrams,
+)
 
 from .errors import McpRpcError
 
@@ -357,7 +364,7 @@ class McpService:
                 "description": "Create a new memory engram with summary metadata.",
                 "inputSchema": {
                     "type": "object",
-                    "required": ["project_id", "title", "abstract", "detailed_summary_markdown"],
+                    "required": ["project_id", "title", "detailed_summary_markdown"],
                     "properties": {
                         "project_id": {"type": "string"},
                         "thread_id": {"type": "string"},
@@ -367,6 +374,29 @@ class McpService:
                         "visibility_scope": {"type": "string", "enum": ["private", "project"]},
                         "tags": {"type": "array", "items": {"type": "string"}},
                         "keywords": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+            },
+            {
+                "name": "engram.create_from_conversation",
+                "description": (
+                    "Create an engram from conversation markdown with optional "
+                    "fill-empty metadata enrichment."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["project_id", "conversation_markdown"],
+                    "properties": {
+                        "project_id": {"type": "string"},
+                        "conversation_markdown": {"type": "string"},
+                        "thread_id": {"type": "string"},
+                        "title": {"type": "string"},
+                        "abstract": {"type": "string"},
+                        "visibility_scope": {"type": "string", "enum": ["private", "project"]},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "keywords": {"type": "array", "items": {"type": "string"}},
+                        "retrieval_text": {"type": "string"},
+                        "source_session_id": {"type": "string", "format": "uuid"},
                     },
                 },
             },
@@ -602,8 +632,38 @@ class McpService:
                 payload=MemoryEngramCreate(**params),
                 embedding_dim=self._embedding_dim,
                 owner_user_id=actor_user_id,
+                enrichment_origin="mcp.engram.create",
             )
             return {"engram": created.model_dump(mode="json")}
+
+        if method == "engram.create_from_conversation":
+            request = EngramCreateFromConversationRequest(**params)
+            created, enrichment_report = create_engram_with_report(
+                payload=MemoryEngramCreate(
+                    project_id=request.project_id,
+                    thread_id=request.thread_id,
+                    title=request.title,
+                    abstract=request.abstract,
+                    detailed_summary_markdown=request.conversation_markdown,
+                    tags=request.tags,
+                    keywords=request.keywords,
+                    visibility_scope=request.visibility_scope.value,
+                    retrieval_text=request.retrieval_text,
+                    source_session_id=request.source_session_id,
+                ),
+                embedding_dim=self._embedding_dim,
+                owner_user_id=actor_user_id,
+                enrichment_origin="mcp.engram.create_from_conversation",
+            )
+            return {
+                "engram": created.model_dump(mode="json"),
+                "enrichment_report": {
+                    "enrichment_applied": enrichment_report.get("enrichment_applied", False),
+                    "auto_tags": enrichment_report.get("auto_tags", []),
+                    "auto_keywords": enrichment_report.get("auto_keywords", []),
+                    "abstract_derived": enrichment_report.get("abstract_derived", False),
+                },
+            }
 
         if method == "engram.query":
             results = query_engrams(

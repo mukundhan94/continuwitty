@@ -32,7 +32,7 @@ class MemoryEngramCreate(BaseModel):
     project_id: str
     thread_id: str | None = None
     title: str
-    abstract: str
+    abstract: str = ""
     detailed_summary_markdown: str
     decisions: list[Decision] = Field(default_factory=list)
     assumptions: list[str] = Field(default_factory=list)
@@ -348,10 +348,23 @@ class ChatSendResponse(BaseModel):
 
 class SaveSessionAsEngramRequest(BaseModel):
     title: str
-    abstract: str
+    abstract: str = ""
     visibility_scope: VisibilityScope = VisibilityScope.private
     tags: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+
+
+class EngramCreateFromConversationRequest(BaseModel):
+    project_id: str
+    conversation_markdown: str
+    thread_id: str | None = None
+    title: str = "Conversation Snapshot"
+    abstract: str = ""
+    visibility_scope: VisibilityScope = VisibilityScope.private
+    tags: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    retrieval_text: str | None = None
+    source_session_id: UUID | None = None
 
 
 class SaveSessionAsEngramResponse(BaseModel):

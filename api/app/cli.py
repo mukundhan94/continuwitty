@@ -42,7 +42,11 @@ def _upload(args: argparse.Namespace) -> int:
     results: list[dict[str, Any]] = []
     for item in payloads:
         payload = MemoryEngramCreate.model_validate(item)
-        created = create_engram(payload, settings.embedding_dim)
+        created = create_engram(
+            payload,
+            settings.embedding_dim,
+            enrichment_origin="cli.upload",
+        )
         results.append(created.model_dump(mode="json"))
 
     _print_json({"created": len(results), "items": results})

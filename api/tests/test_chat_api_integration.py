@@ -288,6 +288,51 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
 
 
 @pytest.mark.integration
+def test_chat_save_engram_auto_enriches_when_metadata_is_empty(
+    client,
+    clean_db,
+    monkeypatch,
+) -> None:
+    _login(client)
+    _install_fake_provider(monkeypatch)
+    session = _create_session(client, project_id="project-chat-auto-meta")
+    session_id = session["session_id"]
+
+    sent = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={
+            "content_text": (
+                "Prepare a detailed incident update with outage impact, mitigation status, "
+                "rollback outcome, and support handoff actions."
+            )
+        },
+    )
+    assert sent.status_code == 201
+
+    title = f"Auto metadata save {uuid.uuid4()}"
+    saved = client.post(
+        f"/api/v1/chat/sessions/{session_id}/save-engram",
+        json={
+            "title": title,
+            "abstract": "",
+            "visibility_scope": "project",
+            "tags": [],
+            "keywords": [],
+        },
+    )
+    assert saved.status_code == 201
+    engram_id = saved.json()["engram_id"]
+
+    listed = client.get("/api/v1/engrams", params={"project_id": "project-chat-auto-meta"})
+    assert listed.status_code == 200
+    created = next(item for item in listed.json() if item["engram_id"] == engram_id)
+    assert created["title"] == title
+    assert created["abstract"].strip() != ""
+    assert len(created["tags"]) > 0
+    assert len(created["keywords"]) > 0
+
+
+@pytest.mark.integration
 def test_chat_api_reconciles_stale_session_user_id_after_db_reset(
     client,
     clean_db,

@@ -54,9 +54,10 @@ def test_consolidation_persists_engram(monkeypatch) -> None:
 
     captured: dict[str, object] = {}
 
-    def fake_create(payload, embedding_dim):  # noqa: ANN001
+    def fake_create(payload, embedding_dim, enrichment_origin="unknown"):  # noqa: ANN001
         captured["payload"] = payload
         captured["embedding_dim"] = embedding_dim
+        captured["enrichment_origin"] = enrichment_origin
         return EngramCreateResponse(
             engram_id=UUID("77777777-7777-7777-7777-777777777777"),
             created_at=now,
@@ -71,6 +72,7 @@ def test_consolidation_persists_engram(monkeypatch) -> None:
     assert result["created"] is True
     assert result["engram_id"] == "77777777-7777-7777-7777-777777777777"
     assert captured["embedding_dim"] == 12
+    assert captured["enrichment_origin"] == "consolidation.auto"
     assert "consolidated" in captured["payload"].tags
 
 

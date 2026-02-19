@@ -101,7 +101,7 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
-## Next Phases (Planned)
+## Next Phases (Active/Planned)
 
 ### Phase 16 - MCP Developer Experience and Tooling
 
@@ -412,6 +412,42 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 29 - Auto Metadata Enrichment for Conversation Persistence (MCP-First)
+
+### Status
+
+- Implemented in current cycle.
+- Delivered across REST, chat save/autosave paths, MCP tools, and repository create centralization.
+
+### Goals
+
+- Allow agents to persist conversation memory without manually crafting tags and metadata.
+- Keep metadata generation deterministic and local-first while preserving caller intent.
+
+### Deliverables
+
+1. Add fill-empty-only enrichment for engram metadata (`abstract`, `tags`, `keywords`):
+   - only derive values when incoming fields are empty.
+   - never overwrite non-empty caller-provided values.
+2. Centralize enrichment in repository create flow so all create paths share behavior:
+   - REST `/api/v1/engrams`
+   - chat save/autosave flows
+   - MCP `engram.create`
+   - agent/consolidation/CLI creates
+3. Add MCP tool:
+   - `engram.create_from_conversation`
+   - accepts conversation markdown and returns an enrichment report.
+4. Persist enrichment trace in `engram_json.auto_metadata` for debugging and auditability.
+5. Add deterministic/acceptance test coverage for enrichment + no-overwrite contract.
+
+### Exit Criteria
+
+- Empty metadata is auto-derived consistently across create paths.
+- Explicit metadata remains untouched.
+- MCP clients can persist conversation-only payloads and receive enrichment report details.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -425,9 +461,9 @@ Build a local-first memory system where agents and humans can:
 
 ## Near-Term Execution Order
 
-1. Phase 16 (MCP developer tooling)
-2. Phase 18 (memory lifecycle policies)
-3. Phase 19 (sharing model) and Phase 20 (security hardening) parallel planning
+1. Phase 18 remaining timeline semantics
+2. Phase 19 (sharing model) and Phase 20 (security hardening) parallel planning
+3. Phase 16 deferred CLI smoke utility (`engram-cli mcp-call`) after Phase 18 semantics close
 4. Phase 21 onward after security and data-sharing model stabilize
 5. After Phase 23, execute link-graph roadmap in order:
    - Phase 24 (graph foundations)

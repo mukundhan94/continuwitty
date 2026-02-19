@@ -56,9 +56,10 @@ def test_create_engram_uses_repository(monkeypatch) -> None:
     def fake_get_settings():
         return FakeSettings()
 
-    def fake_create_engram(payload, embedding_dim: int):
+    def fake_create_engram(payload, embedding_dim: int, enrichment_origin: str = "unknown"):
         assert embedding_dim == 256
         assert payload.project_id == "proj-1"
+        assert enrichment_origin == "api.engrams.create"
         return {"engram_id": engram_id, "created_at": now}
 
     monkeypatch.setattr("app.main.get_settings", fake_get_settings)

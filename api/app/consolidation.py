@@ -114,7 +114,11 @@ def run_project_consolidation(
             "proposed_title": payload.title,
         }
 
-    created = create_engram(payload, get_settings().embedding_dim)
+    created = create_engram(
+        payload,
+        get_settings().embedding_dim,
+        enrichment_origin="consolidation.auto",
+    )
     return {
         "project_id": project_id,
         "created": True,

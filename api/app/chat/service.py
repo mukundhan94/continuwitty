@@ -717,6 +717,7 @@ class ChatService:
             ),
             embedding_dim=self._embedding_dim,
             owner_user_id=actor_user_id,
+            enrichment_origin="chat.autosave_snapshot",
         )
         return created.engram_id
 
@@ -988,6 +989,7 @@ class ChatService:
             ),
             embedding_dim=self._embedding_dim,
             owner_user_id=actor_user_id,
+            enrichment_origin="chat.save_as_engram",
         )
         return SaveSessionAsEngramResponse(
             engram_id=created.engram_id,

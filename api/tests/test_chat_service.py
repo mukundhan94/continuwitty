@@ -264,10 +264,16 @@ def test_save_session_as_engram_sets_source_session_id(monkeypatch) -> None:
         lambda session_id, actor_user_id, limit, offset: [message_a, message_b],
     )
 
-    def _fake_create_engram(payload, embedding_dim: int, owner_user_id):  # noqa: ANN001
+    def _fake_create_engram(  # noqa: ANN001
+        payload,
+        embedding_dim: int,
+        owner_user_id,
+        enrichment_origin: str = "unknown",
+    ):
         captured["payload"] = payload
         captured["embedding_dim"] = embedding_dim
         captured["owner_user_id"] = owner_user_id
+        captured["enrichment_origin"] = enrichment_origin
         return EngramCreateResponse(engram_id=uuid4(), created_at=datetime.now(UTC))
 
     monkeypatch.setattr("app.chat.service.create_engram", _fake_create_engram)
@@ -287,6 +293,7 @@ def test_save_session_as_engram_sets_source_session_id(monkeypatch) -> None:
     assert response.session_id == session.session_id
     assert captured["embedding_dim"] == 256
     assert captured["owner_user_id"] == actor_id
+    assert captured["enrichment_origin"] == "chat.save_as_engram"
     assert captured["payload"].source_session_id == session.session_id
     assert captured["payload"].visibility_scope == VisibilityScope.project.value
     assert captured["payload"].thread_id == f"chat-session:{session.session_id}"
@@ -318,10 +325,16 @@ def test_save_session_as_engram_derives_abstract_from_latest_assistant(monkeypat
         lambda session_id, actor_user_id, limit, offset: [message_a, message_b],
     )
 
-    def _fake_create_engram(payload, embedding_dim: int, owner_user_id):  # noqa: ANN001
+    def _fake_create_engram(  # noqa: ANN001
+        payload,
+        embedding_dim: int,
+        owner_user_id,
+        enrichment_origin: str = "unknown",
+    ):
         captured["payload"] = payload
         captured["embedding_dim"] = embedding_dim
         captured["owner_user_id"] = owner_user_id
+        captured["enrichment_origin"] = enrichment_origin
         return EngramCreateResponse(engram_id=uuid4(), created_at=datetime.now(UTC))
 
     monkeypatch.setattr("app.chat.service.create_engram", _fake_create_engram)
@@ -339,6 +352,7 @@ def test_save_session_as_engram_derives_abstract_from_latest_assistant(monkeypat
     )
 
     assert captured["payload"].abstract.startswith("Payment outage caused by DB saturation")
+    assert captured["enrichment_origin"] == "chat.save_as_engram"
 
 
 def test_pin_engram_raises_for_inaccessible_resources(monkeypatch) -> None:
@@ -452,10 +466,16 @@ def test_run_session_lifecycle_creates_autosave_snapshot(monkeypatch) -> None:
         ],
     )
 
-    def _fake_create_engram(payload, embedding_dim: int, owner_user_id):  # noqa: ANN001
+    def _fake_create_engram(  # noqa: ANN001
+        payload,
+        embedding_dim: int,
+        owner_user_id,
+        enrichment_origin: str = "unknown",
+    ):
         captured["payload"] = payload
         captured["embedding_dim"] = embedding_dim
         captured["owner_user_id"] = owner_user_id
+        captured["enrichment_origin"] = enrichment_origin
         return EngramCreateResponse(engram_id=uuid4(), created_at=datetime.now(UTC))
 
     monkeypatch.setattr("app.chat.service.create_engram", _fake_create_engram)
@@ -473,6 +493,7 @@ def test_run_session_lifecycle_creates_autosave_snapshot(monkeypatch) -> None:
     assert result.pruned_engram_ids == []
     assert "autosave_snapshot" in captured["payload"].tags
     assert captured["payload"].source_session_id == session.session_id
+    assert captured["enrichment_origin"] == "chat.autosave_snapshot"
 
 
 def test_run_session_lifecycle_prunes_retention_excess(monkeypatch) -> None:

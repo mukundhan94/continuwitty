@@ -169,7 +169,11 @@ def _create_snapshot_engram(state: AgentState, snapshot_index: int) -> str:
         tags=sorted(set(state.get("tags", []) + ["snapshot"])),
         keywords=sorted(set(state.get("keywords", []) + ["snapshot"])),
     )
-    snapshot_engram = create_engram(snapshot_payload, embedding_dim=get_settings().embedding_dim)
+    snapshot_engram = create_engram(
+        snapshot_payload,
+        embedding_dim=get_settings().embedding_dim,
+        enrichment_origin="agent.snapshot",
+    )
     return str(snapshot_engram.engram_id)
 
 
@@ -229,7 +233,11 @@ def _persist_node(state: AgentState) -> AgentState:
         tags=state.get("tags", []),
         keywords=state.get("keywords", []),
     )
-    engram = create_engram(payload, embedding_dim=get_settings().embedding_dim)
+    engram = create_engram(
+        payload,
+        embedding_dim=get_settings().embedding_dim,
+        enrichment_origin="agent.persist",
+    )
     return {
         "status": "completed",
         "engram_id": str(engram.engram_id),

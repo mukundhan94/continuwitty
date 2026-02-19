@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 
 
@@ -67,6 +69,95 @@ def test_roundtrip_create_list_query_rehydrate(client, clean_db) -> None:
     assert "LangGraph selected for durable checkpointing" in body["compact_summary"]
     assert len(body["top_citations"]) == 1
     assert "Rehydration Context" in body["context_markdown"]
+
+
+@pytest.mark.integration
+def test_create_engram_auto_enriches_empty_metadata(client, clean_db, db_conn) -> None:
+    create_payload = {
+        "project_id": "project-auto-meta",
+        "thread_id": "conversation-1",
+        "title": "P1 outage continuity handoff",
+        "detailed_summary_markdown": (
+            "## USER\nSummarize incident status.\n\n"
+            "## ASSISTANT\nIncident triage confirms outage blast radius in checkout. "
+            "Rollback and queue drain mitigated impact while support prepared updates."
+        ),
+        "abstract": "",
+        "tags": [],
+        "keywords": [],
+    }
+
+    create_response = client.post("/api/v1/engrams", json=create_payload)
+    assert create_response.status_code == 200
+    engram_id = UUID(create_response.json()["engram_id"])
+
+    list_response = client.get("/api/v1/engrams", params={"project_id": "project-auto-meta"})
+    assert list_response.status_code == 200
+    created = next(item for item in list_response.json() if item["engram_id"] == str(engram_id))
+    assert created["abstract"].strip() != ""
+    assert len(created["tags"]) > 0
+    assert len(created["keywords"]) > 0
+
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT abstract, tags, keywords, engram_json
+            FROM engrams
+            WHERE engram_id = %s
+            """,
+            (engram_id,),
+        )
+        row = cur.fetchone()
+
+    assert row is not None
+    row_abstract, row_tags, row_keywords, row_engram_json = row
+    auto_metadata = row_engram_json["auto_metadata"]
+    assert auto_metadata["enrichment_applied"] is True
+    assert auto_metadata["abstract_derived"] is True
+    assert auto_metadata["tags_derived"] is True
+    assert auto_metadata["keywords_derived"] is True
+    assert row_tags == auto_metadata["auto_tags"]
+    assert row_keywords == auto_metadata["auto_keywords"]
+    assert row_abstract.strip() != ""
+
+
+@pytest.mark.integration
+def test_create_engram_preserves_explicit_metadata(client, clean_db, db_conn) -> None:
+    create_payload = {
+        "project_id": "project-explicit-meta",
+        "thread_id": "conversation-2",
+        "title": "Release readiness review",
+        "abstract": "Manual abstract from operator.",
+        "detailed_summary_markdown": "Operator-provided summary markdown.",
+        "tags": ["manual-tag"],
+        "keywords": ["manual-keyword"],
+    }
+
+    create_response = client.post("/api/v1/engrams", json=create_payload)
+    assert create_response.status_code == 200
+    engram_id = UUID(create_response.json()["engram_id"])
+
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT abstract, tags, keywords, engram_json
+            FROM engrams
+            WHERE engram_id = %s
+            """,
+            (engram_id,),
+        )
+        row = cur.fetchone()
+
+    assert row is not None
+    row_abstract, row_tags, row_keywords, row_engram_json = row
+    assert row_abstract == "Manual abstract from operator."
+    assert row_tags == ["manual-tag"]
+    assert row_keywords == ["manual-keyword"]
+    auto_metadata = row_engram_json["auto_metadata"]
+    assert auto_metadata["enrichment_applied"] is False
+    assert auto_metadata["abstract_derived"] is False
+    assert auto_metadata["tags_derived"] is False
+    assert auto_metadata["keywords_derived"] is False
 
 
 @pytest.mark.integration

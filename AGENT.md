@@ -28,6 +28,7 @@ Use it as the default workflow when adding or refactoring features.
 - Preserve backward compatibility for existing endpoints unless intentionally versioned.
 - Add tests for every non-trivial behavior change.
 - Keep all frontend colors/typography/shadows in `web/src/styles/theme.ts` and consume via shared primitives/utilities.
+- Keep engram auto-metadata enrichment fill-empty-only: derive `abstract/tags/keywords` only when empty and never overwrite non-empty caller values.
 
 ## 3. Daily Workflow
 1. Pull latest and inspect `git status`.

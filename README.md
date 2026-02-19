@@ -82,6 +82,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Harden observability with latest Langfuse API-only tracing, explicit publish/error logs, and scrollable in-UI debug trace inspection.
 - [x] Add Phase 18 memory lifecycle controls (autosave strategies, retention pruning, consolidation-aware timeline events, and UI/MCP policy management).
 - [x] Add deterministic mocked acceptance coverage for autosave lifecycle policies.
+- [x] Add Phase 29 optional auto-metadata enrichment (fill-empty-only) across all engram create paths plus MCP conversation-only persistence tooling.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -89,6 +90,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - `Plan.md`: canonical roadmap (historical baseline + chat/MCP expansion + future phases).
 - Completed scope:
   - phases 0-15 completed (foundation, schema/storage, retrieval/rehydration, durability, chat continuity, providers, MCP, UI, acceptance, theme/UX hardening).
+  - phase 29 completed (optional deterministic auto-metadata enrichment and MCP conversation-only persistence path).
 - Next implementation scope:
   - phase 16: MCP developer tooling and typed clients (in progress: compatibility + typed clients complete, CLI smoke command deferred).
   - phase 17: document ingestion and RAG-ready retrieval (implemented and verified, including session-level document pinning support).
@@ -121,6 +123,7 @@ Agent workflow skills are under `skills/`:
 - `dockerized-acceptance-testing`: Playwright-BDD (`bddgen`) dockerized quality-gate workflow.
 - `document-ingestion-rag`: deterministic document chunking, ingestion APIs, and blended retrieval workflow.
 - `memory-lifecycle-policies`: autosave cadence, retention bounds, consolidation guards, and timeline event workflow.
+- `engram-auto-metadata-enrichment`: deterministic fill-empty metadata derivation rules and integration points.
 
 ## Why This Exists
 
@@ -221,6 +224,8 @@ engram/
       SKILL.md
     memory-lifecycle-policies/
       SKILL.md
+    engram-auto-metadata-enrichment/
+      SKILL.md
   db/
     init/
       001_schema.sql
@@ -257,6 +262,10 @@ engram/
         errors.py
         local_provider.py
         openai_provider.py
+        service.py
+      engram_enrichment/
+        __init__.py
+        models.py
         service.py
       ingestion/
         __init__.py
@@ -347,6 +356,7 @@ engram/
     features/
       authentication.feature
       bedrock-live.feature
+      engram-auto-metadata-mock.feature
       lifecycle-autosave-mock.feature
       session-layout.feature
       triage-live.feature
@@ -358,6 +368,7 @@ engram/
       steps/
         auth.steps.ts
         bedrock.steps.ts
+        engram-auto-metadata-mock.steps.ts
         lifecycle-mock.steps.ts
         session.steps.ts
         triage.steps.ts
@@ -411,6 +422,8 @@ engram/
 - `api/app/embeddings/local_provider.py`: deterministic local embedding provider implementation.
 - `api/app/embeddings/openai_provider.py`: optional OpenAI embeddings adapter (with size coercion guards).
 - `api/app/embeddings/service.py`: embedding provider resolver + local fallback strategy.
+- `api/app/engram_enrichment/models.py`: deterministic enrichment payload/report contracts and normalization helpers.
+- `api/app/engram_enrichment/service.py`: fill-empty-only abstract/keyword/tag derivation logic for engram persistence.
 - `api/app/repository.py`: SQL persistence, reranked semantic query, and citation-packed rehydration builder.
 - `api/app/user_repository.py`: user persistence, lookup, and role-aware updates.
 - `api/app/embedding.py`: Deterministic local embedding helper.
@@ -439,6 +452,7 @@ engram/
 - `api/tests/test_chat_service.py`: chat service orchestration and save/continue behavior tests.
 - `api/tests/test_mcp_api_integration.py`: MCP SSE transport and tool success/error/auth coverage.
 - `api/tests/test_mcp_client.py`: typed Python MCP client parsing/auth/transport contract tests.
+- `api/tests/test_engram_enrichment.py`: deterministic enrichment behavior and non-overwrite contract tests.
 - `api/tests/test_engram_visibility.py`: integration checks for owner/project scope filtering behavior.
 - `api/tests/test_provider_registry.py`: provider registry construction and adapter selection checks.
 - `api/tests/test_provider_adapters.py`: adapter normalization and error-path tests.
@@ -478,7 +492,9 @@ engram/
 - `web/Dockerfile`: containerized web runtime (Vite dev server for API proxy parity).
 - `acceptance-tests/README.md`: acceptance framework guide and commands.
 - `acceptance-tests/features/*.feature`: Gherkin acceptance scenarios.
+- `acceptance-tests/features/engram-auto-metadata-mock.feature`: deterministic MCP conversation-only enrichment behavior.
 - `acceptance-tests/src/steps/*.ts`: Playwright-backed step definitions.
+- `acceptance-tests/src/steps/engram-auto-metadata-mock.steps.ts`: step bindings for MCP conversation-only metadata enrichment checks.
 - `acceptance-tests/src/support/*.ts`: shared fixtures, env parsing, chat helpers, login helpers, and failure artifacts.
 - `acceptance-tests/playwright.config.ts`: `playwright-bdd` + `defineBddConfig` + runtime fixture wiring.
 - `acceptance-tests/Dockerfile`: Playwright runtime image for dockerized acceptance runs.
@@ -1878,13 +1894,43 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make acceptance-typecheck` passed
    - `make acceptance-test-mock` passed
 
+### 2026-02-19 (Phase 29 - optional auto-metadata enrichment for engram persistence)
+
+1. Added deterministic fill-empty-only metadata enrichment domain:
+   - `api/app/engram_enrichment/models.py`
+   - `api/app/engram_enrichment/service.py`
+   - derives `abstract`, `keywords`, and `tags` only when caller values are empty.
+2. Centralized enrichment in repository create flow so all create paths share behavior:
+   - REST `POST /api/v1/engrams`
+   - chat save/autosave persistence
+   - MCP `engram.create`
+   - CLI/agent/consolidation create paths
+3. Added MCP conversation-first tool:
+   - `engram.create_from_conversation`
+   - returns created engram plus enrichment report metadata.
+4. Added traceability metadata:
+   - `engram_json.auto_metadata` now stores derivation report and origin/source details.
+5. Added/updated tests:
+   - `api/tests/test_engram_enrichment.py`
+   - `api/tests/test_api_integration.py`
+   - `api/tests/test_chat_api_integration.py`
+   - `api/tests/test_mcp_api_integration.py`
+   - `acceptance-tests/features/engram-auto-metadata-mock.feature`
+   - `acceptance-tests/src/steps/engram-auto-metadata-mock.steps.ts`
+6. Validation:
+   - `cd api && uv run ruff check app tests/test_api_integration.py tests/test_engram_enrichment.py` passed.
+   - `cd api && uv run pytest -q tests/test_engram_enrichment.py tests/test_api_integration.py tests/test_chat_api_integration.py tests/test_mcp_api_integration.py tests/test_api_unit.py tests/test_chat_service.py tests/test_cli.py tests/test_consolidation.py` passed (`57 passed`).
+   - `cd acceptance-tests && npm run bdd:gen` passed.
+   - `cd acceptance-tests && npm run typecheck` passed.
+   - `cd acceptance-tests && npm run test:mock` passed (`4 passed`).
+
 ### Next Immediate Steps (One By One)
 
 1. Phase 18 follow-up: add explicit consolidation merge/grouping event semantics in timeline rendering.
-2. Add linked-engram lineage support (parent/child references + traversal) so memory origin chains can be traced across sessions.
-3. Expand MCP workflow docs and tool coverage for external clients (for example, LibreChat) using the existing SSE JSON-RPC surface.
-4. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
-5. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
+2. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
+3. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
+4. Add linked-engram lineage support (parent/child references + traversal) so memory origin chains can be traced across sessions.
+5. Add graph-aware continuity roadmap phases (24-28) after phase 23 stabilization gates.
 
 ## MVP API Surface
 
@@ -1931,6 +1977,147 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 Endpoint:
 
 - `POST /api/v1/mcp/stream`
+
+Auth/session requirement:
+
+- MCP uses the same authenticated session-cookie model as `/ui`.
+- For local/dev usage, login once and reuse cookies for all MCP calls.
+
+Quick start (curl, local):
+
+```bash
+# 1) Login and persist session cookie
+COOKIE_JAR=/tmp/engram-mcp.cookies
+BASE_URL=http://localhost:8000
+USERNAME=admin
+PASSWORD=admin123
+
+CSRF_TOKEN=$(
+  curl -s -c "$COOKIE_JAR" "$BASE_URL/login" \
+  | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' \
+  | head -n 1
+)
+
+curl -s -i -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  -X POST "$BASE_URL/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "username=$USERNAME" \
+  --data-urlencode "password=$PASSWORD" \
+  --data-urlencode "csrf_token=$CSRF_TOKEN" \
+  | head -n 1
+
+# Expect: HTTP/1.1 303 See Other
+```
+
+```bash
+# 2) Verify session auth is active
+curl -s -b "$COOKIE_JAR" "$BASE_URL/api/v1/me" | jq
+```
+
+```bash
+# 3) MCP initialize
+curl -sN -b "$COOKIE_JAR" \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/v1/mcp/stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "init-1",
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "clientInfo": {"name": "curl-client", "version": "0.1.0"}
+    }
+  }' \
+  | sed -n 's/^data: //p' \
+  | jq
+```
+
+```bash
+# 4) Discover tools via MCP-compatible method
+curl -sN -b "$COOKIE_JAR" \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/v1/mcp/stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "tools-list-1",
+    "method": "tools/list",
+    "params": {}
+  }' \
+  | sed -n 's/^data: //p' \
+  | jq
+```
+
+```bash
+# 5) Persist conversation-only memory with backend auto-metadata enrichment
+curl -sN -b "$COOKIE_JAR" \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/v1/mcp/stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "engram-from-conv-1",
+    "method": "tools/call",
+    "params": {
+      "name": "engram.create_from_conversation",
+      "arguments": {
+        "project_id": "engram-vault",
+        "conversation_markdown": "## User\nCheckout latency spiked after deploy.\n## Assistant\nLikely cache miss storm and connection pool saturation."
+      }
+    }
+  }' \
+  | sed -n 's/^data: //p' \
+  | jq
+```
+
+```bash
+# 6) Streaming chat tool call (observe `mcp.event` chunk/meta/done frames)
+curl -sN -b "$COOKIE_JAR" \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/v1/mcp/stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "chat-stream-1",
+    "method": "tools/call",
+    "params": {
+      "name": "chat.send_message",
+      "arguments": {
+        "session_id": "00000000-0000-0000-0000-000000000000",
+        "content_text": "Summarize pinned engrams and list action items.",
+        "stream": true
+      }
+    }
+  }'
+```
+
+Quick start (typed Python MCP client):
+
+```python
+from app.mcp.client import McpSseClient
+
+with McpSseClient(base_url="http://localhost:8000") as client:
+    client.login_with_password(username="admin", password="admin123")
+
+    init_result = client.call_tool(method="initialize", params={}).require_result()
+    print("initialized:", init_result)
+
+    tools_result = client.call_tool(method="tools/list", params={}).require_result()
+    print("tool count:", len(tools_result["tools"]))
+
+    save_result = client.call_tool(
+        method="tools/call",
+        params={
+            "name": "engram.create_from_conversation",
+            "arguments": {
+                "project_id": "engram-vault",
+                "conversation_markdown": "## User\\nNeed handoff summary\\n## Assistant\\nCaptured timeline and risks.",
+            },
+        },
+    ).require_result()
+    print("engram id:", save_result["structuredContent"]["engram"]["engram_id"])
+```
 
 Two interoperable invocation styles are supported:
 
@@ -2004,6 +2191,7 @@ Core tools:
 - `chat.save_as_engram`
 - `chat.continue_session`
 - `engram.create`
+- `engram.create_from_conversation`
 - `engram.query`
 - `engram.rehydrate`
 - `engram.pin_to_session`
@@ -2086,6 +2274,27 @@ Document continuity helpers:
 }
 ```
 
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "engram-create-conversation-1",
+  "method": "tools/call",
+  "params": {
+    "name": "engram.create_from_conversation",
+    "arguments": {
+      "project_id": "engram-vault",
+      "conversation_markdown": "## User\nDatabase latency spiked.\n## Assistant\nLikely cache miss storm after deploy."
+    }
+  }
+}
+```
+
+Expected response highlights:
+
+- `result.engram`: persisted engram payload.
+- `result.enrichment_report.enrichment_applied`: whether empty metadata fields were auto-filled.
+- `result.enrichment_report.auto_tags` / `auto_keywords`: deterministic derived values.
+
 3. `user.*`
 
 ```json
@@ -2096,6 +2305,15 @@ Document continuity helpers:
   "params": {}
 }
 ```
+
+## Auto Metadata Enrichment (Phase 29)
+
+- Scope: applies to all engram create paths through centralized repository logic (`api/app/repository.py`).
+- Behavior: fill-empty-only for `abstract`, `tags`, and `keywords`; non-empty caller values are never overwritten.
+- Strategy: deterministic local parsing in v1 (no provider call required).
+- Traceability: enrichment details are stored in `engram_json.auto_metadata` with schema version and origin.
+- MCP-first path: `engram.create_from_conversation` accepts transcript markdown and returns enrichment report fields.
+- API compatibility: runtime endpoints remain unchanged (`POST /api/v1/engrams` keeps backward-compatible payload support).
 
 ## CLI Workflow (Local)
 
@@ -2160,8 +2378,9 @@ Backend tests live under `api/tests`:
 - `test_chat_repository.py`: chat session/message, pinning, and lifecycle policy persistence checks.
 - `test_chat_api_integration.py`: end-to-end chat API lifecycle/continuity including policy and timeline routes.
 - `test_chat_service.py`: chat orchestration with autosave execution and retention pruning behavior.
-- `test_mcp_api_integration.py`: MCP tool contract coverage including lifecycle policy/timeline tools.
+- `test_mcp_api_integration.py`: MCP tool contract coverage including lifecycle policy/timeline tools and `engram.create_from_conversation`.
 - `conftest.py`: DB fixture, schema bootstrap, and cleanup.
+- `test_engram_enrichment.py`: deterministic metadata derivation and fill-empty-only/non-overwrite contract checks.
 
 Frontend unit/component tests live under `web/src/**/*.test.ts(x)`:
 
@@ -2181,6 +2400,7 @@ Acceptance tests live under `acceptance-tests`:
 - `features/bedrock-live.feature`: tagged non-deterministic Bedrock live-provider flow.
 - `features/triage-live.feature`: tagged non-deterministic triage continuity flow (save/pin/continue/handoff).
 - `features/lifecycle-autosave-mock.feature`: deterministic mocked lifecycle autosave policy behavior coverage.
+- `features/engram-auto-metadata-mock.feature`: deterministic mocked MCP conversation-only persistence + auto-metadata behavior.
 - `src/steps/*.ts`: Playwright step bindings.
 - `src/support/*.ts`: shared world/env/hooks.
 
@@ -2367,6 +2587,14 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
   - lifecycle timeline surfaced in chat UI
 - Remaining in milestone:
   - richer consolidation merge/group timeline semantics
+
+### Milestone 29 (Completed)
+
+- Optional auto-metadata enrichment for engram persistence:
+  - deterministic fill-empty-only derivation for `abstract`, `tags`, and `keywords`
+  - repository-level centralization so all create paths share the same behavior
+  - MCP `engram.create_from_conversation` for conversation-only persistence requests
+  - enrichment trace persisted under `engram_json.auto_metadata`
 
 ### Milestone 19 (Planned)
 

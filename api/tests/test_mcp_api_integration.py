@@ -137,6 +137,7 @@ def test_mcp_initialize_and_tools_list_contract(client, clean_db) -> None:
     assert "chat.unpin_document" in tool_names
     assert "chat.list_project_documents" in tool_names
     assert "chat.send_message" in tool_names
+    assert "engram.create_from_conversation" in tool_names
     assert "engram.query" in tool_names
     assert "user.get_profile" in tool_names
 
@@ -450,6 +451,87 @@ def test_mcp_engram_and_user_tools(client, clean_db, monkeypatch) -> None:
     )
     project_ids = _final_result_frame(projects_frames)["result"]["project_ids"]
     assert "project-mcp-tools" in project_ids
+
+
+@pytest.mark.integration
+def test_mcp_create_from_conversation_auto_enriches_metadata(client, clean_db) -> None:
+    _login(client)
+
+    create_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "engram.create_from_conversation",
+            "arguments": {
+                "project_id": "project-mcp-conversation",
+                "conversation_markdown": (
+                    "## USER\nSummarize incident handoff.\n\n"
+                    "## ASSISTANT\nOutage impact reduced after rollback and queue drain; "
+                    "support team prepared customer communication."
+                ),
+                "title": "MCP conversation seed",
+                "abstract": "",
+                "tags": [],
+                "keywords": [],
+                "visibility_scope": "project",
+            },
+        },
+        request_id="mcp-create-conversation",
+    )
+    structured = _final_result_frame(create_frames)["result"]["structuredContent"]
+    engram_id = structured["engram"]["engram_id"]
+    report = structured["enrichment_report"]
+    assert report["enrichment_applied"] is True
+    assert report["abstract_derived"] is True
+    assert len(report["auto_tags"]) > 0
+    assert len(report["auto_keywords"]) > 0
+
+    listed = client.get("/api/v1/engrams", params={"project_id": "project-mcp-conversation"})
+    assert listed.status_code == 200
+    created = next(item for item in listed.json() if item["engram_id"] == engram_id)
+    assert created["abstract"].strip() != ""
+    assert len(created["tags"]) > 0
+    assert len(created["keywords"]) > 0
+
+
+@pytest.mark.integration
+def test_mcp_create_from_conversation_preserves_explicit_metadata(client, clean_db) -> None:
+    _login(client)
+
+    create_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "engram.create_from_conversation",
+            "arguments": {
+                "project_id": "project-mcp-conversation-explicit",
+                "conversation_markdown": "## ASSISTANT\nRelease note draft.",
+                "title": "Explicit metadata preserve",
+                "abstract": "Manual abstract",
+                "tags": ["manual-tag"],
+                "keywords": ["manual-keyword"],
+                "visibility_scope": "private",
+            },
+        },
+        request_id="mcp-create-conversation-explicit",
+    )
+    structured = _final_result_frame(create_frames)["result"]["structuredContent"]
+    engram_id = structured["engram"]["engram_id"]
+    report = structured["enrichment_report"]
+    assert report["enrichment_applied"] is False
+    assert report["abstract_derived"] is False
+    assert report["auto_tags"] == []
+    assert report["auto_keywords"] == []
+
+    listed = client.get(
+        "/api/v1/engrams",
+        params={"project_id": "project-mcp-conversation-explicit"},
+    )
+    assert listed.status_code == 200
+    created = next(item for item in listed.json() if item["engram_id"] == engram_id)
+    assert created["abstract"] == "Manual abstract"
+    assert created["tags"] == ["manual-tag"]
+    assert created["keywords"] == ["manual-keyword"]
 
 
 @pytest.mark.integration

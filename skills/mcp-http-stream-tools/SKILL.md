@@ -56,6 +56,7 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 - `chat.save_as_engram`
 - `chat.continue_session`
 - `engram.create`
+- `engram.create_from_conversation`
 - `engram.query`
 - `engram.rehydrate`
 - `engram.pin_to_session`

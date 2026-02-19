@@ -25,9 +25,10 @@ def test_cli_upload_single_file(monkeypatch, tmp_path, capsys) -> None:
 
     captured: dict[str, object] = {}
 
-    def fake_create_engram(payload, embedding_dim):  # noqa: ANN001
+    def fake_create_engram(payload, embedding_dim, enrichment_origin="unknown"):  # noqa: ANN001
         captured["payload"] = payload
         captured["embedding_dim"] = embedding_dim
+        captured["enrichment_origin"] = enrichment_origin
         return EngramCreateResponse(
             engram_id=UUID("11111111-1111-1111-1111-111111111111"),
             created_at=datetime(2026, 2, 15, tzinfo=UTC),
@@ -44,6 +45,7 @@ def test_cli_upload_single_file(monkeypatch, tmp_path, capsys) -> None:
     assert body["created"] == 1
     assert body["items"][0]["engram_id"] == "11111111-1111-1111-1111-111111111111"
     assert captured["embedding_dim"] == 16
+    assert captured["enrichment_origin"] == "cli.upload"
 
 
 def test_cli_search_filters(monkeypatch, capsys) -> None:
