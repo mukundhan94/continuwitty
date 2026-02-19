@@ -29,6 +29,7 @@ from .mcp_tokens import (
     revoke_mcp_token,
     token_summary_dict,
 )
+from .memory_admin import MemoryAdminService, create_memory_admin_router
 from .models import (
     AppVersionResponse,
     EngramCreateResponse,
@@ -49,6 +50,7 @@ from .models import (
     UserUpdateRequest,
 )
 from .oauth import create_oauth_router
+from .projects import ProjectService, create_projects_router
 from .repository import (
     create_engram,
     get_engram_sources,
@@ -99,6 +101,11 @@ login_attempt_guard = LoginAttemptGuard(
     lockout_seconds=settings.login_lockout_seconds,
 )
 chat_service = ChatService(embedding_dim=settings.embedding_dim)
+project_service = ProjectService()
+memory_admin_service = MemoryAdminService(
+    embedding_dim=settings.embedding_dim,
+    project_service=project_service,
+)
 ingestion_service = DocumentIngestionService(
     embedding_dim=settings.embedding_dim,
     max_file_bytes=settings.ingestion_max_file_bytes,
@@ -106,6 +113,8 @@ ingestion_service = DocumentIngestionService(
 )
 mcp_service = McpService(
     chat_service=chat_service,
+    project_service=project_service,
+    memory_admin_service=memory_admin_service,
     embedding_dim=settings.embedding_dim,
     ingestion_service=ingestion_service,
     server_version=settings.app_semantic_version,
@@ -217,6 +226,10 @@ def _require_authenticated_api_user(request: Request) -> dict[str, Any]:
     )
 
 
+def _require_admin_api_user(request: Request) -> dict[str, Any]:
+    return _require_roles_api(request, {UserRole.admin.value})
+
+
 def _resolve_mcp_actor(request: Request) -> McpResolvedActor:
     return resolve_mcp_actor(
         request=request,
@@ -296,6 +309,18 @@ app.include_router(
     create_oauth_router(
         settings=settings,
         resolve_session_user=_resolve_session_user,
+    )
+)
+app.include_router(
+    create_projects_router(
+        project_service=project_service,
+        require_api_actor=_require_authenticated_api_user,
+    )
+)
+app.include_router(
+    create_memory_admin_router(
+        memory_admin_service=memory_admin_service,
+        require_admin_actor=_require_admin_api_user,
     )
 )
 
@@ -734,44 +759,77 @@ def resume_agent_workflow(thread_id: str, payload: AgentResumeRequest) -> AgentR
 
 
 @app.post("/api/v1/engrams", response_model=EngramCreateResponse)
-def create_engram_endpoint(payload: MemoryEngramCreate) -> EngramCreateResponse:
+def create_engram_endpoint(request: Request, payload: MemoryEngramCreate) -> EngramCreateResponse:
+    actor = _require_authenticated_api_user(request)
+    actor_user_id = UUID(actor["user_id"])
+    resolution = project_service.resolve_project_id_for_write(
+        actor_user_id=actor_user_id,
+        actor_role=actor["role"],
+        project_id=payload.project_id,
+    )
+    resolved_payload = payload.model_copy(update={"project_id": resolution.project_id})
     current_settings = get_settings()
-    return create_engram(
-        payload,
+    created = create_engram(
+        resolved_payload,
         embedding_dim=current_settings.embedding_dim,
+        owner_user_id=actor_user_id,
         enrichment_origin="api.engrams.create",
+    )
+    return created.model_copy(
+        update={
+            "resolved_project_id": resolution.project_id,
+            "used_default_project": resolution.used_default_project,
+        }
     )
 
 
 @app.get("/api/v1/engrams", response_model=list[EngramSummary])
 def list_engrams_endpoint(
+    request: Request,
     project_id: str | None = Query(default=None),
     limit: int = Query(default=25, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> list[EngramSummary]:
-    return list_engrams(project_id=project_id, limit=limit, offset=offset)
+    actor = _require_authenticated_api_user(request)
+    return list_engrams(
+        project_id=project_id,
+        limit=limit,
+        offset=offset,
+        actor_user_id=UUID(actor["user_id"]),
+    )
 
 
 @app.post("/api/v1/engrams/query", response_model=list[EngramQueryResult])
-def query_engrams_endpoint(payload: EngramQueryRequest) -> list[EngramQueryResult]:
+def query_engrams_endpoint(
+    request: Request, payload: EngramQueryRequest
+) -> list[EngramQueryResult]:
+    actor = _require_authenticated_api_user(request)
     current_settings = get_settings()
-    return query_engrams(payload, embedding_dim=current_settings.embedding_dim)
+    return query_engrams(
+        payload,
+        embedding_dim=current_settings.embedding_dim,
+        actor_user_id=UUID(actor["user_id"]),
+    )
 
 
 @app.get("/api/v1/engrams/{engram_id}/sources", response_model=list[EngramSourceRecord])
 def list_engram_sources_endpoint(
+    request: Request,
     engram_id: UUID,
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[EngramSourceRecord]:
-    bundle = get_rehydration_bundle(engram_id)
+    actor = _require_authenticated_api_user(request)
+    actor_user_id = UUID(actor["user_id"])
+    bundle = get_rehydration_bundle(engram_id, actor_user_id=actor_user_id)
     if not bundle:
         raise HTTPException(status_code=404, detail="Engram not found")
-    return get_engram_sources(engram_id, limit=limit)
+    return get_engram_sources(engram_id, limit=limit, actor_user_id=actor_user_id)
 
 
 @app.get("/api/v1/engrams/{engram_id}/rehydrate", response_model=RehydrationBundle)
-def rehydrate_engram_endpoint(engram_id: UUID) -> RehydrationBundle:
-    result = get_rehydration_bundle(engram_id)
+def rehydrate_engram_endpoint(request: Request, engram_id: UUID) -> RehydrationBundle:
+    actor = _require_authenticated_api_user(request)
+    result = get_rehydration_bundle(engram_id, actor_user_id=UUID(actor["user_id"]))
     if not result:
         raise HTTPException(status_code=404, detail="Engram not found")
     return result

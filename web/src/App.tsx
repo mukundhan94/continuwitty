@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { getSessionProfile, loginWithPassword, logoutCurrentUser } from './api/auth'
+import {
+  getDefaultProject,
+  setDefaultProject,
+} from './api/projects'
 import {
   createMcpToken,
   listAvailableMcpProjects,
@@ -41,6 +46,7 @@ import type {
   PinnedDocumentRecord,
   UserProfile,
 } from './api/types'
+import { AdminMemoryPage } from './components/AdminMemoryPage'
 import { AdminMcpTokenPanel } from './components/AdminMcpTokenPanel'
 import { ChatPanel } from './components/ChatPanel'
 import { DocumentIngestionPanel } from './components/DocumentIngestionPanel'
@@ -108,7 +114,10 @@ function pickSession(sessions: ChatSession[], previousId: string | null): string
   return sessions.length > 0 ? sessions[0].session_id : null
 }
 
-export default function App() {
+function AppScreen() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const isAdminMemoryRoute = location.pathname === '/admin/memory'
   const { mode, toggleMode } = useThemeMode()
   const [authChecking, setAuthChecking] = useState(true)
   const [authSubmitting, setAuthSubmitting] = useState(false)
@@ -116,6 +125,8 @@ export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null)
 
   const [projectId, setProjectId] = useState(initialProjectId)
+  const [defaultProjectId, setDefaultProjectId] = useState<string | null>(null)
+  const [settingDefaultProject, setSettingDefaultProject] = useState(false)
 
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [creatingSession, setCreatingSession] = useState(false)
@@ -164,6 +175,14 @@ export default function App() {
   )
   const defaultSaveAbstract = useMemo(() => buildDefaultSaveAbstract(messages), [messages])
   const isAdmin = user?.role === 'admin'
+
+  const loadDefaultProject = async () => {
+    const response = await getDefaultProject()
+    setDefaultProjectId(response.default_project_id)
+    if (response.default_project_id && !projectId.trim()) {
+      setProjectId(response.default_project_id)
+    }
+  }
 
   const loadSessions = async (nextProjectId: string, preferredSessionId: string | null) => {
     setSessionsLoading(true)
@@ -228,7 +247,11 @@ export default function App() {
         const profile = await getSessionProfile()
         setUser(profile)
         setAuthError(null)
-        await Promise.all([loadSessions(projectId, null), loadProjectDocuments(projectId)])
+        await Promise.all([
+          loadDefaultProject(),
+          loadSessions(projectId, null),
+          loadProjectDocuments(projectId),
+        ])
       } catch (error) {
         if (!isUnauthorized(error)) {
           setAuthError(describeError(error))
@@ -270,7 +293,11 @@ export default function App() {
       await loginWithPassword(username, password)
       const profile = await getSessionProfile()
       setUser(profile)
-      await Promise.all([loadSessions(projectId, null), loadProjectDocuments(projectId)])
+      await Promise.all([
+        loadDefaultProject(),
+        loadSessions(projectId, null),
+        loadProjectDocuments(projectId),
+      ])
     } catch (error) {
       setAuthError(describeError(error))
     } finally {
@@ -287,6 +314,7 @@ export default function App() {
     setUser(null)
     setSessions([])
     setSelectedSessionId(null)
+    setDefaultProjectId(null)
     setMessages([])
     setPinnedEngrams([])
     setPinnedDocuments([])
@@ -331,6 +359,21 @@ export default function App() {
       setChatError(describeError(error))
     } finally {
       setCreatingSession(false)
+    }
+  }
+
+  const handleSetDefaultProject = async () => {
+    const normalized = normalizeProjectId(projectId)
+    setSettingDefaultProject(true)
+    setChatError(null)
+    try {
+      const updated = await setDefaultProject(normalized)
+      setDefaultProjectId(updated.default_project_id)
+      setNotice(`Default project set to ${updated.default_project_id}`)
+    } catch (error) {
+      setChatError(describeError(error))
+    } finally {
+      setSettingDefaultProject(false)
     }
   }
 
@@ -645,6 +688,10 @@ export default function App() {
     return <LoginView isSubmitting={authSubmitting} error={authError} onSubmit={handleLogin} />
   }
 
+  if (isAdminMemoryRoute && !isAdmin) {
+    return <Navigate to="/" replace />
+  }
+
   return (
     <AppShell>
       <TopNavShell>
@@ -661,6 +708,14 @@ export default function App() {
               MCP Tokens
             </button>
           ) : null}
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={() => navigate(isAdminMemoryRoute ? '/' : '/admin/memory')}
+            >
+              {isAdminMemoryRoute ? 'Chat Workspace' : 'Memory Admin'}
+            </button>
+          ) : null}
           <button type="button" onClick={toggleMode}>
             {mode === 'dark' ? 'Light Theme' : 'Dark Theme'}
           </button>
@@ -672,71 +727,82 @@ export default function App() {
 
       {notice ? <NoticeBanner>{notice}</NoticeBanner> : null}
 
-      <WorkspaceGrid>
-        <SessionSidebar
-          sessions={sessions}
-          selectedSessionId={selectedSessionId}
+      {isAdminMemoryRoute ? (
+        <AdminMemoryPage
           projectId={projectId}
-          defaultProvider={WEB_CONFIG.defaultProvider}
-          defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
-          modelDefaults={WEB_CONFIG.defaultModelByProvider}
-          loading={sessionsLoading}
-          creating={creatingSession}
           onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
-          onSelectSession={setSelectedSessionId}
-          onCreateSession={handleCreateSession}
+          onNotice={(message) => setNotice(message)}
         />
-
-        <ChatPanel
-          session={selectedSession}
-          messages={messages}
-          pendingUserText={pendingUserText}
-          streamingAssistantText={streamingAssistantText}
-          composerText={composerText}
-          sending={chatSending}
-          error={chatError}
-          sourceReferences={sourceReferences}
-          debugTrace={chatDebugTrace}
-          timelineEvents={timelineEvents}
-          onComposerChange={setComposerText}
-          onSend={handleSend}
-          onRetry={handleRetry}
-          onOpenSaveModal={() => setSaveModalOpen(true)}
-          onContinueSession={handleContinueSession}
-        />
-
-        <RightRail>
-          <DocumentIngestionPanel
+      ) : (
+        <WorkspaceGrid>
+          <SessionSidebar
+            sessions={sessions}
+            selectedSessionId={selectedSessionId}
             projectId={projectId}
-            selectedSessionId={selectedSessionId}
-            documents={documents}
-            pinnedDocumentIds={pinnedDocuments.map((item) => item.document_id)}
-            loading={documentsLoading}
-            submitting={documentsSubmitting}
-            error={documentsError}
-            onRefresh={handleRefreshDocuments}
-            onIngestText={handleIngestText}
-            onIngestFile={handleIngestFile}
-            onPinDocument={handlePinDocument}
-            onUnpinDocument={handleUnpinDocument}
+            defaultProjectId={defaultProjectId}
+            settingDefaultProject={settingDefaultProject}
+            defaultProvider={WEB_CONFIG.defaultProvider}
+            defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
+            modelDefaults={WEB_CONFIG.defaultModelByProvider}
+            loading={sessionsLoading}
+            creating={creatingSession}
+            onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
+            onSetDefaultProject={handleSetDefaultProject}
+            onSelectSession={setSelectedSessionId}
+            onCreateSession={handleCreateSession}
           />
 
-          <PinnedEngramPanel
-            selectedSessionId={selectedSessionId}
-            pinnedEngrams={pinnedEngrams}
-            availableEngrams={availableEngrams}
-            search={engramSearch}
-            loading={engramLoading}
-            onSearchChange={setEngramSearch}
-            onRefresh={handleRefreshEngrams}
-            onPin={handlePin}
-            onUnpin={handleUnpin}
-            onCopyId={handleCopyEngramId}
+          <ChatPanel
+            session={selectedSession}
+            messages={messages}
+            pendingUserText={pendingUserText}
+            streamingAssistantText={streamingAssistantText}
+            composerText={composerText}
+            sending={chatSending}
+            error={chatError}
+            sourceReferences={sourceReferences}
+            debugTrace={chatDebugTrace}
+            timelineEvents={timelineEvents}
+            onComposerChange={setComposerText}
+            onSend={handleSend}
+            onRetry={handleRetry}
+            onOpenSaveModal={() => setSaveModalOpen(true)}
+            onContinueSession={handleContinueSession}
           />
-        </RightRail>
-      </WorkspaceGrid>
 
-      {saveModalOpen ? (
+          <RightRail>
+            <DocumentIngestionPanel
+              projectId={projectId}
+              selectedSessionId={selectedSessionId}
+              documents={documents}
+              pinnedDocumentIds={pinnedDocuments.map((item) => item.document_id)}
+              loading={documentsLoading}
+              submitting={documentsSubmitting}
+              error={documentsError}
+              onRefresh={handleRefreshDocuments}
+              onIngestText={handleIngestText}
+              onIngestFile={handleIngestFile}
+              onPinDocument={handlePinDocument}
+              onUnpinDocument={handleUnpinDocument}
+            />
+
+            <PinnedEngramPanel
+              selectedSessionId={selectedSessionId}
+              pinnedEngrams={pinnedEngrams}
+              availableEngrams={availableEngrams}
+              search={engramSearch}
+              loading={engramLoading}
+              onSearchChange={setEngramSearch}
+              onRefresh={handleRefreshEngrams}
+              onPin={handlePin}
+              onUnpin={handleUnpin}
+              onCopyId={handleCopyEngramId}
+            />
+          </RightRail>
+        </WorkspaceGrid>
+      )}
+
+      {!isAdminMemoryRoute && saveModalOpen ? (
         <SaveEngramModal
           defaultTitle={selectedSession ? `${selectedSession.title} Snapshot` : 'Chat Snapshot'}
           defaultAbstract={defaultSaveAbstract}
@@ -764,5 +830,15 @@ export default function App() {
         />
       ) : null}
     </AppShell>
+  )
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<AppScreen />} />
+      <Route path="/admin/memory" element={<AppScreen />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,15 +19,17 @@ def _extract_csrf_token(html: str) -> str:
     return match.group(1)
 
 
-def _login(client) -> None:  # noqa: ANN001
+def _login(client, username: str | None = None, password: str | None = None) -> None:  # noqa: ANN001
     settings = get_settings()
+    login_username = username or settings.ui_demo_username
+    login_password = password or settings.ui_demo_password
     login_page = client.get("/login")
     csrf_token = _extract_csrf_token(login_page.text)
     response = client.post(
         "/login",
         data={
-            "username": settings.ui_demo_username,
-            "password": settings.ui_demo_password,
+            "username": login_username,
+            "password": login_password,
             "csrf_token": csrf_token,
         },
         follow_redirects=False,
@@ -219,7 +221,25 @@ def test_mcp_initialize_and_tools_list_contract(client, clean_db) -> None:
     assert "chat_pin_document" in tool_names
     assert "chat_unpin_document" in tool_names
     assert "chat_list_project_documents" in tool_names
+    assert "chat_delete_session" in tool_names
+    assert "chat_restore_session" in tool_names
+    assert "project_list" in tool_names
+    assert "project_create" in tool_names
+    assert "project_get_default" in tool_names
+    assert "project_set_default" in tool_names
     assert "chat_send_message" in tool_names
+    assert "engram_list" in tool_names
+    assert "engram_get" in tool_names
+    assert "engram_update" in tool_names
+    assert "engram_move_project" in tool_names
+    assert "engram_delete" in tool_names
+    assert "engram_restore" in tool_names
+    assert "engram_collection_list" in tool_names
+    assert "engram_collection_create" in tool_names
+    assert "engram_collection_update" in tool_names
+    assert "engram_collection_delete" in tool_names
+    assert "engram_collection_add_items" in tool_names
+    assert "engram_collection_remove_items" in tool_names
     assert "engram_create_from_conversation" in tool_names
     assert "engram_query" in tool_names
     assert "user_get_profile" in tool_names
@@ -849,6 +869,183 @@ def test_mcp_lifecycle_policy_and_timeline_tools(client, clean_db, monkeypatch) 
     )
     events = _final_result_frame(timeline_frames)["result"]["structuredContent"]["events"]
     assert any(item["event_type"] == "autosave_snapshot" for item in events)
+
+
+@pytest.mark.integration
+def test_mcp_engram_create_uses_default_project_when_project_id_omitted(client, clean_db) -> None:
+    _login(client)
+
+    create_project = client.post(
+        "/api/v1/projects",
+        json={
+            "project_id": "project-mcp-default-fallback",
+            "name": "project-mcp-default-fallback",
+            "description": "Default project fallback test",
+        },
+    )
+    assert create_project.status_code == 201
+
+    set_default = client.patch(
+        "/api/v1/projects/default",
+        json={"project_id": "project-mcp-default-fallback"},
+    )
+    assert set_default.status_code == 200
+
+    create_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "engram.create",
+            "arguments": {
+                "title": "Fallback project create",
+                "abstract": "Project id omitted intentionally.",
+                "detailed_summary_markdown": "MCP should resolve the actor default project.",
+            },
+        },
+        request_id="mcp-default-project-create",
+    )
+    engram = _final_result_frame(create_frames)["result"]["structuredContent"]["engram"]
+    assert engram["resolved_project_id"] == "project-mcp-default-fallback"
+    assert engram["used_default_project"] is True
+
+    save_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.save_as_engram",
+            "arguments": {
+                "conversation_markdown": "## USER\nCapture a default-project fallback test snapshot.",
+                "title": "Fallback save snapshot",
+            },
+        },
+        request_id="mcp-default-project-save",
+    )
+    saved = _final_result_frame(save_frames)["result"]["structuredContent"]["saved_engram"]
+    assert saved["resolved_project_id"] == "project-mcp-default-fallback"
+    assert saved["used_default_project"] is True
+
+
+@pytest.mark.integration
+def test_mcp_token_project_fallback_for_engram_create_paths(client, clean_db) -> None:
+    _login(client)
+    bearer_client = TestClient(app)
+
+    single = _create_mcp_token(
+        client,
+        name="single-project-fallback",
+        scope="write",
+        allowed_project_ids=["project-mcp-single-fallback"],
+    )
+    single_headers = {"Authorization": f"Bearer {single['token']}"}
+
+    create_frames = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={
+            "name": "engram.create",
+            "arguments": {
+                "title": "Token fallback engram",
+                "abstract": "No project in args.",
+                "detailed_summary_markdown": "Bearer token should inject single allowed project.",
+            },
+        },
+        request_id="mcp-token-single-create",
+        headers=single_headers,
+    )
+    created_engram = _final_result_frame(create_frames)["result"]["structuredContent"]["engram"]
+    assert created_engram["resolved_project_id"] == "project-mcp-single-fallback"
+    assert created_engram["used_default_project"] is False
+
+    from_conversation_frames = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={
+            "name": "engram.create_from_conversation",
+            "arguments": {
+                "conversation_markdown": "## ASSISTANT\nToken fallback path works.",
+                "title": "Token fallback conversation",
+            },
+        },
+        request_id="mcp-token-single-conversation",
+        headers=single_headers,
+    )
+    structured = _final_result_frame(from_conversation_frames)["result"]["structuredContent"]
+    assert structured["engram"]["resolved_project_id"] == "project-mcp-single-fallback"
+    assert structured["enrichment_report"]["resolved_project_id"] == "project-mcp-single-fallback"
+
+    multi = _create_mcp_token(
+        client,
+        name="multi-project-fallback-denied",
+        scope="write",
+        allowed_project_ids=["project-a", "project-b"],
+    )
+    multi_headers = {"Authorization": f"Bearer {multi['token']}"}
+    denied_frames = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={
+            "name": "engram.create",
+            "arguments": {
+                "title": "Should fail",
+                "detailed_summary_markdown": "Multiple allowed projects require explicit project_id.",
+            },
+        },
+        request_id="mcp-token-multi-denied",
+        headers=multi_headers,
+    )
+    denied_error = [item for item in denied_frames if "error" in item][0]
+    assert denied_error["error"]["code"] == -32602
+    assert denied_error["error"]["data"]["missing"] == "project_id"
+
+
+@pytest.mark.integration
+def test_mcp_engram_management_write_requires_owner_or_admin(client, clean_db) -> None:
+    _login(client)
+
+    created = client.post(
+        "/api/v1/engrams",
+        json={
+            "project_id": "engram-vault",
+            "thread_id": "owner-admin-policy",
+            "title": "Owner/Admin policy seed",
+            "abstract": "admin-owned engram",
+            "detailed_summary_markdown": "Only owner or admin should edit this.",
+            "tags": ["policy"],
+            "keywords": ["ownership"],
+        },
+    )
+    assert created.status_code == 200
+    engram_id = created.json()["engram_id"]
+
+    viewer_username = f"viewer_{uuid4().hex[:8]}"
+    create_user = client.post(
+        "/api/v1/users",
+        json={
+            "username": viewer_username,
+            "password": "viewerpass123",
+            "role": "viewer",
+            "is_active": True,
+        },
+    )
+    assert create_user.status_code == 201
+
+    viewer_client = TestClient(app)
+    _login(viewer_client, viewer_username, "viewerpass123")
+    denied_frames = _mcp_frames(
+        viewer_client,
+        method="tools/call",
+        params={
+            "name": "engram.update",
+            "arguments": {
+                "engram_id": engram_id,
+                "title": "viewer attempt",
+            },
+        },
+        request_id="mcp-owner-admin-denied",
+    )
+    denied_error = [item for item in denied_frames if "error" in item][0]
+    assert denied_error["error"]["code"] == -32003
+    assert denied_error["error"]["data"]["resource"] == "engram"
 
 
 @pytest.mark.integration

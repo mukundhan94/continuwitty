@@ -39,6 +39,7 @@ function renderSidebar() {
         ]}
         selectedSessionId="session-active"
         projectId="engram-vault"
+        defaultProjectId="engram-vault"
         defaultProvider="openai"
         defaultVisibilityScope="private"
         modelDefaults={{
@@ -49,6 +50,7 @@ function renderSidebar() {
         loading={false}
         creating={false}
         onProjectChange={vi.fn()}
+        onSetDefaultProject={vi.fn(async () => {})}
         onSelectSession={vi.fn()}
         onCreateSession={vi.fn(async () => {})}
       />

@@ -29,7 +29,7 @@ class ArtifactIn(BaseModel):
 
 
 class MemoryEngramCreate(BaseModel):
-    project_id: str
+    project_id: str = ""
     thread_id: str | None = None
     title: str
     abstract: str = ""
@@ -62,6 +62,8 @@ class EngramSummary(BaseModel):
 class EngramCreateResponse(BaseModel):
     engram_id: UUID
     created_at: datetime
+    resolved_project_id: str | None = None
+    used_default_project: bool = False
 
 
 class EngramQueryRequest(BaseModel):
@@ -142,7 +144,33 @@ class UserRecord(BaseModel):
     username: str
     role: UserRole
     is_active: bool
+    default_project_id: str | None = None
     created_at: datetime
+
+
+class ProjectRecord(BaseModel):
+    project_id: str
+    name: str
+    description: str = ""
+    owner_user_id: UUID
+    is_archived: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectCreateRequest(BaseModel):
+    project_id: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=2_000)
+    owner_user_id: UUID | None = None
+
+
+class ProjectDefaultResponse(BaseModel):
+    default_project_id: str | None = None
+
+
+class ProjectDefaultUpdateRequest(BaseModel):
+    project_id: str = Field(min_length=1, max_length=120)
 
 
 class UserCreateRequest(BaseModel):
@@ -404,7 +432,7 @@ class SaveSessionAsEngramRequest(BaseModel):
 
 
 class EngramCreateFromConversationRequest(BaseModel):
-    project_id: str
+    project_id: str = ""
     conversation_markdown: str
     thread_id: str | None = None
     title: str = "Conversation Snapshot"
@@ -429,6 +457,141 @@ class ContinueSessionRequest(BaseModel):
 class ContinueSessionResponse(BaseModel):
     session: ChatSessionRecord
     carried_engram_ids: list[UUID] = Field(default_factory=list)
+
+
+class AdminChatSessionRecord(BaseModel):
+    session_id: UUID
+    owner_user_id: UUID
+    project_id: str
+    title: str
+    provider: ChatProvider
+    model_id: str
+    system_prompt: str
+    visibility_scope: VisibilityScope
+    autosave_enabled: bool
+    autosave_strategy: ChatAutosaveStrategy = ChatAutosaveStrategy.off
+    autosave_interval_minutes: int = 30
+    autosave_min_messages: int = 6
+    retention_days: int = 30
+    retention_max_snapshots: int = 60
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None = None
+    deleted_by_user_id: UUID | None = None
+    delete_reason: str | None = None
+
+
+class AdminSessionDeleteRequest(BaseModel):
+    delete_linked_engrams: bool = False
+    reason: str | None = Field(default=None, max_length=240)
+
+
+class AdminSessionDeleteResponse(BaseModel):
+    session_id: UUID
+    deleted: bool
+    linked_engrams_deleted: int = 0
+
+
+class AdminSessionRestoreResponse(BaseModel):
+    session_id: UUID
+    restored: bool
+
+
+class AdminEngramSourceInput(BaseModel):
+    captured_at: datetime
+    url: str
+    title: str | None = None
+    snippet: str | None = None
+    content_text: str | None = None
+    content_hash: str | None = None
+
+
+class AdminEngramSourceRecord(AdminEngramSourceInput):
+    source_id: UUID
+
+
+class AdminEngramRecord(BaseModel):
+    engram_id: UUID
+    project_id: str
+    thread_id: str | None = None
+    title: str
+    abstract: str
+    detailed_summary_markdown: str
+    tags: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    owner_user_id: UUID | None = None
+    visibility_scope: str = "private"
+    source_session_id: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None = None
+    deleted_by_user_id: UUID | None = None
+    delete_reason: str | None = None
+    sources: list[AdminEngramSourceRecord] = Field(default_factory=list)
+
+
+class AdminEngramUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    abstract: str | None = Field(default=None, max_length=5_000)
+    detailed_summary_markdown: str | None = None
+    tags: list[str] | None = None
+    keywords: list[str] | None = None
+    visibility_scope: VisibilityScope | None = None
+    sources: list[AdminEngramSourceInput] | None = None
+    expected_updated_at: datetime | None = None
+
+
+class AdminEngramMoveRequest(BaseModel):
+    target_project_id: str = Field(min_length=1, max_length=120)
+    reason: str | None = Field(default=None, max_length=240)
+    expected_updated_at: datetime | None = None
+
+
+class AdminEngramDeleteRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=240)
+
+
+class AdminEngramDeleteResponse(BaseModel):
+    engram_id: UUID
+    deleted: bool
+
+
+class AdminEngramRestoreResponse(BaseModel):
+    engram_id: UUID
+    restored: bool
+
+
+class EngramCollectionRecord(BaseModel):
+    collection_id: UUID
+    project_id: str
+    owner_user_id: UUID
+    name: str
+    description: str = ""
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None = None
+    deleted_by_user_id: UUID | None = None
+    delete_reason: str | None = None
+
+
+class EngramCollectionCreateRequest(BaseModel):
+    project_id: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=240)
+    description: str = Field(default="", max_length=2_000)
+
+
+class EngramCollectionUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=240)
+    description: str | None = Field(default=None, max_length=2_000)
+    expected_updated_at: datetime | None = None
+
+
+class EngramCollectionDeleteRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=240)
+
+
+class EngramCollectionItemsUpdateRequest(BaseModel):
+    engram_ids: list[UUID] = Field(default_factory=list)
 
 
 class McpJsonRpcRequest(BaseModel):

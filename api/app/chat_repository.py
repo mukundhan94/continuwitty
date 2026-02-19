@@ -111,7 +111,9 @@ def list_chat_sessions(
             created_at,
             updated_at
         FROM chat_sessions
-        WHERE (owner_user_id = %s OR visibility_scope = 'project')
+        WHERE
+            deleted_at IS NULL
+            AND (owner_user_id = %s OR visibility_scope = 'project')
     """
     params: list = [actor_user_id]
     if project_id:
@@ -150,6 +152,7 @@ def get_chat_session(session_id: UUID, actor_user_id: UUID) -> ChatSessionRecord
             FROM chat_sessions
             WHERE
                 session_id = %s
+                AND deleted_at IS NULL
                 AND (owner_user_id = %s OR visibility_scope = 'project')
             """,
             (session_id, actor_user_id),
@@ -158,6 +161,24 @@ def get_chat_session(session_id: UUID, actor_user_id: UUID) -> ChatSessionRecord
     if not row:
         return None
     return ChatSessionRecord(**row)
+
+
+def get_chat_session_admin_record(session_id: UUID) -> dict | None:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                session_id,
+                owner_user_id,
+                project_id,
+                deleted_at
+            FROM chat_sessions
+            WHERE session_id = %s
+            LIMIT 1
+            """,
+            (session_id,),
+        )
+        return cur.fetchone()
 
 
 def update_chat_session(
@@ -185,6 +206,7 @@ def update_chat_session(
             WHERE
                 session_id = %s
                 AND owner_user_id = %s
+                AND deleted_at IS NULL
             RETURNING
                 session_id,
                 owner_user_id,
@@ -264,6 +286,7 @@ def create_chat_message(
             FROM chat_sessions s
             WHERE
                 s.session_id = %s
+                AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             RETURNING
                 message_id,
@@ -319,6 +342,7 @@ def list_chat_messages(
               ON s.session_id = m.session_id
             WHERE
                 m.session_id = %s
+                AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             ORDER BY m.created_at ASC
             LIMIT %s OFFSET %s
@@ -342,6 +366,7 @@ def pin_engram_to_session(
                 FROM chat_sessions s
                 WHERE
                     s.session_id = %s
+                    AND s.deleted_at IS NULL
                     AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             ),
             accessible_engram AS (
@@ -349,6 +374,7 @@ def pin_engram_to_session(
                 FROM engrams e
                 WHERE
                     e.engram_id = %s
+                    AND e.deleted_at IS NULL
                     AND (e.owner_user_id = %s OR e.visibility_scope = 'project' OR e.owner_user_id IS NULL)
             )
             INSERT INTO session_pinned_engrams (
@@ -401,6 +427,7 @@ def unpin_engram_from_session(
                 p.session_id = s.session_id
                 AND p.session_id = %s
                 AND p.engram_id = %s
+                AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             RETURNING p.session_id
             """,
@@ -424,6 +451,7 @@ def list_pinned_engrams(session_id: UUID, actor_user_id: UUID) -> list[PinnedEng
               ON s.session_id = p.session_id
             WHERE
                 p.session_id = %s
+                AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             ORDER BY p.created_at ASC
             """,
@@ -458,7 +486,9 @@ def list_pinned_engram_summaries(
               ON e.engram_id = p.engram_id
             WHERE
                 p.session_id = %s
+                AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
+                AND e.deleted_at IS NULL
                 AND (e.owner_user_id = %s OR e.visibility_scope = 'project' OR e.owner_user_id IS NULL)
             ORDER BY p.created_at ASC
             """,
@@ -499,7 +529,9 @@ def list_session_linked_engrams(
               ON s.session_id = e.source_session_id
             WHERE
                 s.session_id = %s
+                AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
+                AND e.deleted_at IS NULL
                 AND (e.owner_user_id = %s OR e.visibility_scope = 'project' OR e.owner_user_id IS NULL)
             ORDER BY e.created_at DESC
             LIMIT %s OFFSET %s
@@ -525,6 +557,7 @@ def count_session_messages_by_role(
             WHERE
                 m.session_id = %s
                 AND m.role = %s
+                AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             """,
             (session_id, role, actor_user_id),
@@ -550,7 +583,9 @@ def delete_session_autosave_engrams(
                 e.source_session_id = s.session_id
                 AND s.session_id = %s
                 AND e.engram_id = ANY(%s::UUID[])
+                AND e.deleted_at IS NULL
                 AND e.tags @> ARRAY['autosave_snapshot']::TEXT[]
+                AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
                 AND (e.owner_user_id = %s OR e.visibility_scope = 'project' OR e.owner_user_id IS NULL)
             RETURNING e.engram_id
@@ -575,6 +610,7 @@ def pin_document_to_session(
                 FROM chat_sessions s
                 WHERE
                     s.session_id = %s
+                    AND s.deleted_at IS NULL
                     AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             ),
             accessible_document AS (
@@ -634,6 +670,7 @@ def unpin_document_from_session(
                 p.session_id = s.session_id
                 AND p.session_id = %s
                 AND p.document_id = %s
+                AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             RETURNING p.session_id
             """,
@@ -659,6 +696,7 @@ def list_pinned_documents(session_id: UUID, actor_user_id: UUID) -> list[PinnedD
               ON d.document_id = p.document_id
             WHERE
                 p.session_id = %s
+                AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
                 AND (d.owner_user_id = %s OR d.visibility_scope = 'project')
             ORDER BY p.created_at ASC

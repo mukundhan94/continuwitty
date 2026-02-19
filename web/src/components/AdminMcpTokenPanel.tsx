@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import styled from 'styled-components'
 
@@ -228,27 +228,26 @@ export function AdminMcpTokenPanel({
     () => availableProjects.filter((item) => !selectedProjects.includes(item)),
     [availableProjects, selectedProjects],
   )
-
-  useEffect(() => {
-    if (!isOpen) {
-      return
-    }
-    // Keep pending multi-selects synchronized with remaining available options.
-    setPendingTools((current) => current.filter((item) => availableToolChoices.includes(item)))
-    setPendingProjects((current) => current.filter((item) => availableProjectChoices.includes(item)))
-  }, [availableProjectChoices, availableToolChoices, isOpen])
+  const effectivePendingTools = useMemo(
+    () => pendingTools.filter((item) => availableToolChoices.includes(item)),
+    [availableToolChoices, pendingTools],
+  )
+  const effectivePendingProjects = useMemo(
+    () => pendingProjects.filter((item) => availableProjectChoices.includes(item)),
+    [availableProjectChoices, pendingProjects],
+  )
 
   if (!isOpen) {
     return null
   }
 
   const addTools = () => {
-    if (pendingTools.length === 0) {
+    if (effectivePendingTools.length === 0) {
       return
     }
     setSelectedTools((current) => {
       const merged = [...current]
-      for (const item of pendingTools) {
+      for (const item of effectivePendingTools) {
         if (!merged.includes(item)) {
           merged.push(item)
         }
@@ -259,12 +258,12 @@ export function AdminMcpTokenPanel({
   }
 
   const addProjects = () => {
-    if (pendingProjects.length === 0) {
+    if (effectivePendingProjects.length === 0) {
       return
     }
     setSelectedProjects((current) => {
       const merged = [...current]
-      for (const item of pendingProjects) {
+      for (const item of effectivePendingProjects) {
         if (!merged.includes(item)) {
           merged.push(item)
         }
@@ -373,7 +372,7 @@ export function AdminMcpTokenPanel({
                 data-testid="admin-tool-options"
                 multiple
                 size={Math.min(Math.max(availableToolChoices.length, 3), 8)}
-                value={pendingTools}
+                value={effectivePendingTools}
                 onChange={(event) =>
                   setPendingTools(Array.from(event.target.selectedOptions, (option) => option.value).filter(Boolean))
                 }
@@ -386,7 +385,12 @@ export function AdminMcpTokenPanel({
                   </option>
                 ))}
               </Select>
-              <button type="button" onClick={addTools} disabled={pendingTools.length === 0} data-testid="admin-add-tool-chip">
+              <button
+                type="button"
+                onClick={addTools}
+                disabled={effectivePendingTools.length === 0}
+                data-testid="admin-add-tool-chip"
+              >
                 Add Tools
               </button>
             </OptionSelectRow>
@@ -419,7 +423,7 @@ export function AdminMcpTokenPanel({
                 data-testid="admin-project-options"
                 multiple
                 size={Math.min(Math.max(availableProjectChoices.length, 3), 8)}
-                value={pendingProjects}
+                value={effectivePendingProjects}
                 onChange={(event) =>
                   setPendingProjects(Array.from(event.target.selectedOptions, (option) => option.value).filter(Boolean))
                 }
@@ -435,7 +439,7 @@ export function AdminMcpTokenPanel({
               <button
                 type="button"
                 onClick={addProjects}
-                disabled={pendingProjects.length === 0}
+                disabled={effectivePendingProjects.length === 0}
                 data-testid="admin-add-project-chip"
               >
                 Add Projects

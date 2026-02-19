@@ -12,7 +12,7 @@ def get_user_auth_record(username: str) -> dict | None:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT user_id, username, password_hash, role, is_active, created_at
+            SELECT user_id, username, password_hash, role, is_active, default_project_id, created_at
             FROM users
             WHERE username = %s
             """,
@@ -25,7 +25,7 @@ def get_user_auth_record_by_id(user_id: UUID) -> dict | None:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT user_id, username, password_hash, role, is_active, created_at
+            SELECT user_id, username, password_hash, role, is_active, default_project_id, created_at
             FROM users
             WHERE user_id = %s
             """,
@@ -38,7 +38,7 @@ def list_users(limit: int = 200, offset: int = 0) -> list[UserRecord]:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT user_id, username, role, is_active, created_at
+            SELECT user_id, username, role, is_active, default_project_id, created_at
             FROM users
             ORDER BY created_at ASC
             LIMIT %s OFFSET %s
@@ -56,7 +56,7 @@ def create_user(username: str, password_hash: str, role: UserRole, is_active: bo
                 """
                 INSERT INTO users (user_id, username, password_hash, role, is_active)
                 VALUES (%s, %s, %s, %s, %s)
-                RETURNING user_id, username, role, is_active, created_at
+                RETURNING user_id, username, role, is_active, default_project_id, created_at
                 """,
                 (uuid4(), username, password_hash, role.value, is_active),
             )
@@ -81,7 +81,7 @@ def update_user(
                 is_active = COALESCE(%s, is_active),
                 password_hash = COALESCE(%s, password_hash)
             WHERE user_id = %s
-            RETURNING user_id, username, role, is_active, created_at
+            RETURNING user_id, username, role, is_active, default_project_id, created_at
             """,
             (role.value if role else None, is_active, password_hash, user_id),
         )

@@ -495,6 +495,92 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 31 - Project Defaults and Enterprise Memory Management
+
+### Status
+
+- In progress (2026-02-19 checkpoint).
+- Completed subphases:
+  - 31.0 roadmap scaffolding in `Plan.md` and `README.md`
+  - 31.1 schema/repository foundation (`projects`, default-project persistence, soft-delete metadata, collections)
+  - 31.2 project APIs + default-project fallback integration + `/api/v1/engrams*` auth hardening
+  - 31.3 admin memory router/service for session/engram/collection lifecycle management
+  - 31.4 MCP organization tools with scope/owner/admin/project-policy enforcement
+  - 31.5 web routing + admin memory management page + workspace default-project control
+  - 31.6 backend/web/acceptance test additions for phase behavior
+- Remaining subphase:
+  - 31.7 docs/skills closeout (`AGENT.md`, skills updates, final acceptance-test-mock rerun and log sync).
+
+### Goals
+
+- Add first-class project registry and per-user default project selection.
+- Add enterprise-grade memory administration workflows for sessions and engrams.
+- Expose project/memory organization operations through REST, MCP, and admin UI.
+
+### Deliverables
+
+1. Add `projects` registry and per-user default project persistence.
+2. Add default-project fallback for engram create paths when `project_id` is omitted.
+3. Add admin memory router for session/engram/collection lifecycle operations:
+   - list/filter by project/session
+   - soft delete/restore
+   - move engrams across projects
+   - edit engram metadata/body/sources
+4. Add MCP organization tools:
+   - project tools (`project.*`)
+   - engram organization tools (`engram.list/get/update/move/delete/restore`)
+   - collection tools (`engram.collection_*`)
+   - session lifecycle tools (`chat.delete_session`, `chat.restore_session`)
+5. Harden `/api/v1/engrams*` auth and visibility checks.
+6. Add routing-based admin memory page in web UI.
+7. Add backend/web/acceptance coverage and roadmap/docs updates.
+
+### Deliverables Progress
+
+- [x] Projects registry and per-user default project persistence are active in schema + services.
+- [x] Default-project fallback is active for engram create paths in REST + MCP.
+- [x] Admin memory APIs are available under `/api/v1/admin/memory`.
+- [x] MCP organization toolset is implemented (`project_*`, `engram_*`, `chat_delete_session`, `chat_restore_session`).
+- [x] `/api/v1/engrams*` endpoints are authenticated and actor-scoped.
+- [x] Web admin memory route is implemented (`/admin/memory`) with management workflows.
+- [x] Backend/web test coverage added for project defaults, memory admin APIs, schema backfill, MCP organization, and admin UI route behavior.
+- [ ] Phase closeout docs still pending (`AGENT.md`/skills final pass + final acceptance mock evidence append).
+
+### Completed In Current Checkpoint
+
+1. Schema and persistence:
+   - `db/init/001_schema.sql` now includes first-class `projects`, user `default_project_id`, soft-delete metadata for sessions/engrams, and collection tables.
+   - Added idempotent backfill logic so existing project IDs are promoted into `projects`.
+2. Backend module layout for maintainability:
+   - Added `api/app/projects/` (api/repository/service/models).
+   - Added `api/app/memory_admin/` (api/repository/service/models).
+   - Wired routers into `api/app/main.py`.
+3. Behavior and security changes:
+   - `/api/v1/engrams*` now requires authenticated actors.
+   - Missing `project_id` on engram creation now resolves via caller default project with explicit response metadata.
+   - Soft-deleted sessions/engrams are excluded from standard retrieval paths by default.
+4. MCP organization layer:
+   - Added project, engram, collection, and session-management tool handlers.
+   - Added read/write/project-policy enforcement for the new toolset with owner/admin checks on mutating operations.
+5. Web/admin UX:
+   - Added app routing with dedicated admin memory page (`/admin/memory`).
+   - Added project-default display/set flow in session sidebar.
+   - Added admin workflows for listing/editing/moving/deleting/restoring sessions and engrams plus collection membership management.
+6. Validation completed in this checkpoint:
+   - `make -C /Users/mukundhan/Projects/engram check`
+   - `make -C /Users/mukundhan/Projects/engram web-check`
+   - `make -C /Users/mukundhan/Projects/engram acceptance-bddgen`
+   - `make -C /Users/mukundhan/Projects/engram acceptance-typecheck`
+
+### Exit Criteria
+
+- Users can set a default project and engram create operations resolve it when `project_id` is missing.
+- Admins can manage sessions and engrams from a dedicated admin page.
+- MCP clients can organize memory with scope/ownership checks and project policy enforcement.
+- Soft-delete defaults are safe, auditable, and restorable.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -509,11 +595,11 @@ Build a local-first memory system where agents and humans can:
 ## Near-Term Execution Order
 
 1. Phase 18 remaining timeline semantics
-2. Phase 30 complete: MCP token auth and scoped authorization for external agent integrations.
+2. Phase 31 closeout: AGENT/skills updates + acceptance-test-mock evidence append
 3. Phase 19 (sharing model) and Phase 20 (security hardening) parallel planning
-4. Phase 16 deferred CLI smoke utility (`engram-cli mcp-call`) after Phase 18 semantics close
+4. Phase 16 deferred CLI smoke utility (`engram-cli mcp-call`) after phase 18 semantics close
 5. Phase 21 onward after security and data-sharing model stabilize
-6. After Phase 23, execute link-graph roadmap in order:
+6. After phase 23, execute link-graph roadmap in order:
    - Phase 24 (graph foundations)
    - Phase 25 (link APIs/MCP + suggestions)
    - Phase 26 (graph-aware recall)

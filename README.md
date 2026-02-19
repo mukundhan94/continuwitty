@@ -89,6 +89,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add admin-only React MCP token manager (create/list/revoke) gated by authenticated `admin` role.
 - [x] Add chip-based admin token policy UX: load available MCP tools/projects, select them from dropdowns, and manage applied restrictions as removable chips.
 - [x] Add OAuth authorization server compatibility for MCP clients (metadata discovery, dynamic client registration, PKCE authorization code exchange, protected-resource metadata, and OAuth-guided `WWW-Authenticate` challenges).
+- [ ] Complete Phase 31 project-default resolution + enterprise memory management closeout (docs/skills finalization + remaining acceptance evidence).
 - [ ] Add production security hardening (full OIDC, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -102,8 +103,65 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
   - phase 16: MCP developer tooling and typed clients (in progress: compatibility + typed clients complete, CLI smoke command deferred).
   - phase 17: document ingestion and RAG-ready retrieval (implemented and verified, including session-level document pinning support).
   - phase 18: memory lifecycle policies (core autosave/retention/timeline controls implemented and validated).
+  - phase 31: project defaults + enterprise memory management + MCP organization (in progress: backend/API/MCP/web/tests implemented; docs/skills closeout pending).
   - phase 19: collaboration and sharing model.
   - phase 20: production security hardening.
+
+## Phase 31 Progress Tracker
+
+- [x] `Plan.md` updated with Phase 31 status and near-term execution order.
+- [x] Added first-class `projects` table and per-user default project persistence.
+- [x] Added default-project fallback when `project_id` is missing in engram create paths.
+- [x] Added admin memory router (`/api/v1/admin/memory`) for session/engram/collection management.
+- [x] Added MCP organization tools for project, engram, collection, and session lifecycle operations.
+- [x] Added dedicated admin memory UI page with routing (`/admin/memory`).
+- [x] Hardened `/api/v1/engrams*` with authenticated actor-scoped visibility.
+- [x] Added backend/web/acceptance tests for Phase 31 behavior.
+- [ ] Update `AGENT.md` + skills docs and append final phase-closeout validation evidence.
+
+### Planned Phase 31 User-Facing Areas
+
+- Project defaults:
+  - Set default project once and reuse it when `project_id` is omitted.
+  - Preserve explicit `project_id` when provided by callers.
+- Memory management page:
+  - Separate admin route for listing, editing, moving, deleting, and restoring sessions/engrams.
+  - Project-bounded collections to organize related engrams.
+- MCP organization tools:
+  - Allow agent-driven memory organization directly from chat/tool calls with scoped authorization.
+
+### Phase 31 Implemented So Far (Detailed)
+
+1. Schema and persistence foundation:
+   - `db/init/001_schema.sql`
+     - added `projects` table
+     - added `users.default_project_id` foreign key
+     - added soft-delete metadata (`deleted_at`, actor and reason fields) for sessions/engrams
+     - added `engram_collections` and `engram_collection_items`
+     - added idempotent project backfill for existing data
+2. Backend domain modules:
+   - `api/app/projects/` (`api.py`, `service.py`, `repository.py`, `models.py`)
+   - `api/app/memory_admin/` (`api.py`, `service.py`, `repository.py`, `models.py`)
+   - wired into `api/app/main.py`
+3. API behavior + security:
+   - `/api/v1/engrams*` now requires authenticated actors
+   - `POST /api/v1/engrams` now resolves missing project using caller default project
+   - response models expose `resolved_project_id` and `used_default_project`
+4. MCP organization capability:
+   - new project tools: `project_list`, `project_create`, `project_get_default`, `project_set_default`
+   - new engram tools: `engram_list`, `engram_get`, `engram_update`, `engram_move_project`, `engram_delete`, `engram_restore`
+   - new collection tools: `engram_collection_list`, `engram_collection_create`, `engram_collection_update`, `engram_collection_delete`, `engram_collection_add_items`, `engram_collection_remove_items`
+   - new session tools: `chat_delete_session`, `chat_restore_session`
+   - retained dotted aliases for backward compatibility
+5. Web admin UX:
+   - routing introduced (`/` workspace, `/admin/memory` admin page)
+   - default-project set/get controls in session sidebar
+   - admin page supports list/filter/edit/move/delete/restore for sessions/engrams and collection assignment workflows
+6. Phase 31 tests added/updated:
+   - backend: `api/tests/test_projects_api_integration.py`, `api/tests/test_memory_admin_api_integration.py`, `api/tests/test_schema_backfill_projects.py`
+   - MCP integration extensions in `api/tests/test_mcp_api_integration.py`
+   - web: `web/src/api/projects.test.ts`, `web/src/api/memoryAdmin.test.ts`, `web/src/components/AdminMemoryPage.test.tsx`
+   - acceptance: `acceptance-tests/features/phase31-memory-admin-mock.feature`, `acceptance-tests/src/steps/phase31-memory-admin-mock.steps.ts`
 
 ## Agent Guide
 
@@ -2026,13 +2084,55 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make check` passed (`157 passed` + eval pass).
    - focused OAuth/MCP integration suite passed (`36 passed`).
 
+### 2026-02-19 (Phase 31 progress checkpoint - projects, memory admin, MCP organization)
+
+1. Added project/default-project architecture and persistence semantics:
+   - schema updates in `db/init/001_schema.sql` (`projects`, user default project FK, soft-delete metadata, collection tables, idempotent backfill).
+   - ensured chat/ingestion/session creation paths create/resolve project records consistently.
+2. Added maintainable backend module boundaries for long-term growth:
+   - project domain under `api/app/projects/`
+   - memory administration domain under `api/app/memory_admin/`
+   - both mounted from `api/app/main.py` with actor-role checks.
+3. Implemented project APIs:
+   - `GET /api/v1/projects`
+   - `POST /api/v1/projects`
+   - `GET /api/v1/projects/default`
+   - `PATCH /api/v1/projects/default`
+4. Implemented admin memory management APIs (`/api/v1/admin/memory/*`):
+   - session list/delete/restore
+   - engram list/get/update/move/delete/restore
+   - collection list/create/update/delete/add-items/remove-item
+5. Hardened engram APIs:
+   - `/api/v1/engrams*` now requires authenticated actor context.
+   - `POST /api/v1/engrams` now supports default-project fallback when `project_id` is omitted and returns `resolved_project_id`/`used_default_project`.
+6. Implemented MCP organization tools and policy controls:
+   - project tools (`project_list`, `project_create`, `project_get_default`, `project_set_default`)
+   - engram tools (`engram_list`, `engram_get`, `engram_update`, `engram_move_project`, `engram_delete`, `engram_restore`)
+   - collection tools (`engram_collection_*`)
+   - session tools (`chat_delete_session`, `chat_restore_session`)
+   - owner/admin and read/write/project policy enforcement integrated with existing MCP token controls.
+7. Implemented web app routing + admin management UX:
+   - routes: `/` (workspace), `/admin/memory` (admin memory page)
+   - project default controls in `SessionSidebar`
+   - admin page table/filter/dialog workflows for session/engram/collection operations.
+8. Added/updated tests for Phase 31 behavior:
+   - backend integration: `api/tests/test_projects_api_integration.py`, `api/tests/test_memory_admin_api_integration.py`, `api/tests/test_schema_backfill_projects.py`
+   - MCP integration expansions in `api/tests/test_mcp_api_integration.py`
+   - web unit/integration: `web/src/api/projects.test.ts`, `web/src/api/memoryAdmin.test.ts`, `web/src/components/AdminMemoryPage.test.tsx`
+   - acceptance mock coverage: `acceptance-tests/features/phase31-memory-admin-mock.feature`, `acceptance-tests/src/steps/phase31-memory-admin-mock.steps.ts`
+9. Validation status at checkpoint:
+   - `make -C /Users/mukundhan/Projects/engram check` passed.
+   - `make -C /Users/mukundhan/Projects/engram web-check` passed.
+   - `make -C /Users/mukundhan/Projects/engram acceptance-bddgen` passed.
+   - `make -C /Users/mukundhan/Projects/engram acceptance-typecheck` passed.
+
 ### Next Immediate Steps (One By One)
 
-1. Phase 18 follow-up: add explicit consolidation merge/grouping event semantics in timeline rendering.
-2. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
-3. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
-4. Phase 16 deferred item: add CLI smoke utility (`engram-cli mcp-call`) after phase 18 semantics close.
-5. Add linked-engram lineage support (parent/child references + traversal) so memory origin chains can be traced across sessions.
+1. Phase 31 closeout: update `AGENT.md` + skills with final project-default/soft-delete/collection invariants and MCP organization contracts.
+2. Phase 31 closeout: run/record full acceptance mock execution (`make acceptance-test-mock`) with new admin-memory scenarios.
+3. Phase 18 follow-up: add explicit consolidation merge/grouping event semantics in timeline rendering.
+4. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
+5. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
 
 ## MVP API Surface
 
@@ -2068,6 +2168,25 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 - `DELETE /api/v1/chat/sessions/{session_id}/documents/{document_id}`
 - `POST /api/v1/chat/sessions/{session_id}/save-engram`
 - `POST /api/v1/chat/sessions/{session_id}/continue`
+- `GET /api/v1/projects`
+- `POST /api/v1/projects`
+- `GET /api/v1/projects/default`
+- `PATCH /api/v1/projects/default`
+- `GET /api/v1/admin/memory/sessions`
+- `DELETE /api/v1/admin/memory/sessions/{session_id}`
+- `POST /api/v1/admin/memory/sessions/{session_id}/restore`
+- `GET /api/v1/admin/memory/engrams`
+- `GET /api/v1/admin/memory/engrams/{engram_id}`
+- `PATCH /api/v1/admin/memory/engrams/{engram_id}`
+- `POST /api/v1/admin/memory/engrams/{engram_id}/move`
+- `DELETE /api/v1/admin/memory/engrams/{engram_id}`
+- `POST /api/v1/admin/memory/engrams/{engram_id}/restore`
+- `GET /api/v1/admin/memory/collections`
+- `POST /api/v1/admin/memory/collections`
+- `PATCH /api/v1/admin/memory/collections/{collection_id}`
+- `DELETE /api/v1/admin/memory/collections/{collection_id}`
+- `POST /api/v1/admin/memory/collections/{collection_id}/items`
+- `DELETE /api/v1/admin/memory/collections/{collection_id}/items/{engram_id}`
 - `POST /api/v1/mcp/tokens`
 - `GET /api/v1/mcp/tokens`
 - `POST /api/v1/mcp/tokens/{token_id}/revoke`

@@ -301,7 +301,7 @@ def list_engrams(
             owner_user_id, visibility_scope
         FROM engrams
     """
-    where_clauses: list[str] = []
+    where_clauses: list[str] = ["deleted_at IS NULL"]
     params: list = []
     if actor_user_id:
         where_clauses.append(
@@ -332,6 +332,7 @@ def query_engrams(
     query_literal = _vector_literal(query_embedding.vector)
 
     where_clauses: list[str] = []
+    where_clauses.append("deleted_at IS NULL")
     params: list = [query_literal]
 
     if request.project_id:
@@ -429,7 +430,7 @@ def get_rehydration_bundle(
     engram_id: UUID,
     actor_user_id: UUID | None = None,
 ) -> RehydrationBundle | None:
-    where_clause = "WHERE engram_id = %s"
+    where_clause = "WHERE engram_id = %s AND deleted_at IS NULL"
     where_params: list = [engram_id]
     if actor_user_id:
         where_clause += (

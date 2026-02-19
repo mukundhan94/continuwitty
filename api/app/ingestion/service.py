@@ -27,6 +27,7 @@ from app.ingestion.repository import (
     upsert_document_with_chunks,
 )
 from app.models import EngramQueryRequest
+from app.projects.repository import ensure_project_exists
 from app.repository import query_engrams
 
 
@@ -73,6 +74,7 @@ class DocumentIngestionService:
         self._validate_text_size(normalized_text)
 
         content_hash = build_content_hash(normalized_text)
+        ensure_project_exists(project_id=payload.project_id, owner_user_id=actor_user_id)
         document_id = build_document_id(
             owner_user_id=actor_user_id,
             project_id=payload.project_id,
@@ -140,6 +142,7 @@ class DocumentIngestionService:
 
         resolved_title = (payload.title or Path(filename).stem or "Untitled Document").strip()
         content_hash = build_content_hash(normalized_text)
+        ensure_project_exists(project_id=payload.project_id, owner_user_id=actor_user_id)
         document_id = build_document_id(
             owner_user_id=actor_user_id,
             project_id=payload.project_id,

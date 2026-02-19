@@ -1,10 +1,36 @@
+import re
 from uuid import UUID
 
 import pytest
 
+from app.config import get_settings
+
+
+def _extract_csrf_token(html: str) -> str:
+    match = re.search(r'name="csrf_token" value="([^"]+)"', html)
+    assert match is not None
+    return match.group(1)
+
+
+def _login(client) -> None:  # noqa: ANN001
+    settings = get_settings()
+    login_page = client.get("/login")
+    csrf_token = _extract_csrf_token(login_page.text)
+    response = client.post(
+        "/login",
+        data={
+            "username": settings.ui_demo_username,
+            "password": settings.ui_demo_password,
+            "csrf_token": csrf_token,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
 
 @pytest.mark.integration
 def test_roundtrip_create_list_query_rehydrate(client, clean_db) -> None:
+    _login(client)
     create_payload = {
         "project_id": "project-a",
         "thread_id": "run-1",
@@ -73,6 +99,7 @@ def test_roundtrip_create_list_query_rehydrate(client, clean_db) -> None:
 
 @pytest.mark.integration
 def test_create_engram_auto_enriches_empty_metadata(client, clean_db, db_conn) -> None:
+    _login(client)
     create_payload = {
         "project_id": "project-auto-meta",
         "thread_id": "conversation-1",
@@ -123,6 +150,7 @@ def test_create_engram_auto_enriches_empty_metadata(client, clean_db, db_conn) -
 
 @pytest.mark.integration
 def test_create_engram_preserves_explicit_metadata(client, clean_db, db_conn) -> None:
+    _login(client)
     create_payload = {
         "project_id": "project-explicit-meta",
         "thread_id": "conversation-2",
@@ -162,6 +190,7 @@ def test_create_engram_preserves_explicit_metadata(client, clean_db, db_conn) ->
 
 @pytest.mark.integration
 def test_query_metadata_filters(client, clean_db) -> None:
+    _login(client)
     payload_a = {
         "project_id": "project-a",
         "title": "A",
@@ -202,6 +231,7 @@ def test_query_metadata_filters(client, clean_db) -> None:
 
 @pytest.mark.integration
 def test_sources_endpoint_returns_provenance_records(client, clean_db) -> None:
+    _login(client)
     payload = {
         "project_id": "project-sources",
         "thread_id": "run-sources",
@@ -235,12 +265,14 @@ def test_sources_endpoint_returns_provenance_records(client, clean_db) -> None:
 
 
 def test_sources_endpoint_returns_404_for_missing_engram(client) -> None:
+    _login(client)
     response = client.get("/api/v1/engrams/00000000-0000-0000-0000-000000000000/sources")
     assert response.status_code == 404
 
 
 @pytest.mark.integration
 def test_rehydrate_packs_unique_citations(client, clean_db) -> None:
+    _login(client)
     payload = {
         "project_id": "project-citations",
         "title": "Citation packing",
@@ -287,6 +319,7 @@ def test_rehydrate_packs_unique_citations(client, clean_db) -> None:
 
 @pytest.mark.integration
 def test_rehydrate_uses_detailed_summary_when_abstract_is_generic(client, clean_db) -> None:
+    _login(client)
     payload = {
         "project_id": "project-chat-save",
         "title": "Chat snapshot",

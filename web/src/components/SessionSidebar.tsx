@@ -132,12 +132,15 @@ interface SessionSidebarProps {
   sessions: ChatSession[]
   selectedSessionId: string | null
   projectId: string
+  defaultProjectId: string | null
+  settingDefaultProject?: boolean
   defaultProvider: ChatProvider
   defaultVisibilityScope: VisibilityScope
   modelDefaults: Record<ChatProvider, string>
   loading: boolean
   creating: boolean
   onProjectChange: (projectId: string) => void
+  onSetDefaultProject?: () => Promise<void> | void
   onSelectSession: (sessionId: string) => void
   onCreateSession: (payload: CreateSessionRequest) => Promise<void>
 }
@@ -146,12 +149,15 @@ export function SessionSidebar({
   sessions,
   selectedSessionId,
   projectId,
+  defaultProjectId,
+  settingDefaultProject = false,
   defaultProvider,
   defaultVisibilityScope,
   modelDefaults,
   loading,
   creating,
   onProjectChange,
+  onSetDefaultProject,
   onSelectSession,
   onCreateSession,
 }: SessionSidebarProps) {
@@ -213,12 +219,26 @@ export function SessionSidebar({
               <CreatorFields>
                 <FieldBlock>
                   <label htmlFor="project-id">Project ID</label>
-                  <input
-                    id="project-id"
-                    value={projectId}
-                    onChange={(event) => onProjectChange(event.target.value)}
-                    placeholder="project-id"
-                  />
+                  <SplitGrid>
+                    <input
+                      id="project-id"
+                      value={projectId}
+                      onChange={(event) => onProjectChange(event.target.value)}
+                      placeholder="project-id"
+                    />
+                    <button
+                      type="button"
+                      disabled={settingDefaultProject || !projectId.trim() || !onSetDefaultProject}
+                      onClick={() => {
+                        void onSetDefaultProject?.()
+                      }}
+                    >
+                      {settingDefaultProject ? 'Saving…' : 'Set Default'}
+                    </button>
+                  </SplitGrid>
+                  <MutedText>
+                    Default Project: <strong>{defaultProjectId || 'not configured'}</strong>
+                  </MutedText>
                 </FieldBlock>
 
                 <label htmlFor="session-title">Title</label>

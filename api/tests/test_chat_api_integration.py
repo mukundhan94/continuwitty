@@ -341,8 +341,30 @@ def test_chat_api_reconciles_stale_session_user_id_after_db_reset(
     _login(client)
 
     settings = get_settings()
+    placeholder_user_id = uuid.uuid4()
     replacement_user_id = uuid.uuid4()
     with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO users (user_id, username, password_hash, role, is_active, created_at)
+            VALUES (%s, %s, %s, 'viewer', TRUE, now())
+            """,
+            (
+                placeholder_user_id,
+                f"placeholder_{uuid.uuid4().hex[:8]}",
+                "placeholder_hash",
+            ),
+        )
+        cur.execute(
+            """
+            UPDATE projects
+            SET owner_user_id = %s
+            WHERE owner_user_id = (
+                SELECT user_id FROM users WHERE username = %s
+            )
+            """,
+            (placeholder_user_id, settings.ui_demo_username),
+        )
         cur.execute(
             """
             UPDATE users
@@ -351,6 +373,15 @@ def test_chat_api_reconciles_stale_session_user_id_after_db_reset(
             """,
             (replacement_user_id, settings.ui_demo_username),
         )
+        cur.execute(
+            """
+            UPDATE projects
+            SET owner_user_id = %s
+            WHERE owner_user_id = %s
+            """,
+            (replacement_user_id, placeholder_user_id),
+        )
+        cur.execute("DELETE FROM users WHERE user_id = %s", (placeholder_user_id,))
     db_conn.commit()
 
     created = _create_session(client, project_id="project-session-reconcile")

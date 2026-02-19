@@ -10,6 +10,7 @@ from typing import Any
 import psycopg
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.main import app
 
 DEFAULT_DB_URL = "postgresql://engram:engram@localhost:5432/engram_vault"
@@ -42,6 +43,23 @@ def _create_engram(client: TestClient, payload: dict[str, Any]) -> str:
     if response.status_code != 200:
         raise RuntimeError(f"create engram failed: {response.status_code} {response.text}")
     return response.json()["engram_id"]
+
+
+def _login(client: TestClient) -> None:
+    settings = get_settings()
+    login_page = client.get("/login")
+    csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+    response = client.post(
+        "/login",
+        data={
+            "username": settings.ui_demo_username,
+            "password": settings.ui_demo_password,
+            "csrf_token": csrf_token,
+        },
+        follow_redirects=False,
+    )
+    if response.status_code != 303:
+        raise RuntimeError(f"eval login failed: {response.status_code} {response.text}")
 
 
 def _fact_recall_case(client: TestClient) -> EvalCaseResult:
@@ -185,6 +203,7 @@ def _abstention_case(client: TestClient) -> EvalCaseResult:
 def run_evaluations() -> dict[str, Any]:
     _bootstrap_clean_database()
     client = TestClient(app)
+    _login(client)
 
     cases = [
         _fact_recall_case(client),

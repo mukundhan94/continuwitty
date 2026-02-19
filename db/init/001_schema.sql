@@ -21,7 +21,11 @@ CREATE TABLE IF NOT EXISTS engrams (
 ALTER TABLE engrams
   ADD COLUMN IF NOT EXISTS owner_user_id UUID,
   ADD COLUMN IF NOT EXISTS visibility_scope TEXT NOT NULL DEFAULT 'private',
-  ADD COLUMN IF NOT EXISTS source_session_id UUID;
+  ADD COLUMN IF NOT EXISTS source_session_id UUID,
+  ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS deleted_by_user_id UUID,
+  ADD COLUMN IF NOT EXISTS delete_reason TEXT,
+  ADD COLUMN IF NOT EXISTS updated_by_user_id UUID;
 
 DO $$
 BEGIN
@@ -52,6 +56,13 @@ CREATE INDEX IF NOT EXISTS engrams_owner_idx
 
 CREATE INDEX IF NOT EXISTS engrams_visibility_idx
   ON engrams (visibility_scope);
+
+CREATE INDEX IF NOT EXISTS engrams_active_project_created_idx
+  ON engrams (project_id, created_at DESC)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS engrams_deleted_at_idx
+  ON engrams (deleted_at);
 
 CREATE INDEX IF NOT EXISTS engrams_embed_hnsw_idx
   ON engrams USING hnsw (embed vector_cosine_ops);
@@ -87,11 +98,15 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'analyst', 'viewer')),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  default_project_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS users_role_idx ON users (role);
 CREATE INDEX IF NOT EXISTS users_active_idx ON users (is_active);
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS default_project_id TEXT;
 
 -- Fresh setup seed user for local development.
 -- username: admin
@@ -105,6 +120,49 @@ VALUES (
   TRUE
 )
 ON CONFLICT (username) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS projects (
+  project_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  owner_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  is_archived BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (length(trim(project_id)) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS projects_owner_created_idx
+  ON projects (owner_user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS projects_archived_idx
+  ON projects (is_archived);
+
+INSERT INTO projects (project_id, name, description, owner_user_id, is_archived)
+SELECT
+  'engram-vault',
+  'Engram Vault',
+  'Default local workspace project.',
+  COALESCE(
+    (SELECT user_id FROM users WHERE username = 'admin' LIMIT 1),
+    (SELECT user_id FROM users ORDER BY created_at ASC LIMIT 1)
+  ),
+  FALSE
+ON CONFLICT (project_id) DO NOTHING;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'users_default_project_fk'
+  ) THEN
+    ALTER TABLE users
+      ADD CONSTRAINT users_default_project_fk
+      FOREIGN KEY (default_project_id)
+      REFERENCES projects(project_id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS mcp_tokens (
   token_id UUID PRIMARY KEY,
@@ -184,6 +242,9 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   autosave_min_messages INTEGER NOT NULL DEFAULT 6,
   retention_days INTEGER NOT NULL DEFAULT 30,
   retention_max_snapshots INTEGER NOT NULL DEFAULT 60,
+  deleted_at TIMESTAMPTZ,
+  deleted_by_user_id UUID,
+  delete_reason TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -193,7 +254,10 @@ ALTER TABLE chat_sessions
   ADD COLUMN IF NOT EXISTS autosave_interval_minutes INTEGER NOT NULL DEFAULT 30,
   ADD COLUMN IF NOT EXISTS autosave_min_messages INTEGER NOT NULL DEFAULT 6,
   ADD COLUMN IF NOT EXISTS retention_days INTEGER NOT NULL DEFAULT 30,
-  ADD COLUMN IF NOT EXISTS retention_max_snapshots INTEGER NOT NULL DEFAULT 60;
+  ADD COLUMN IF NOT EXISTS retention_max_snapshots INTEGER NOT NULL DEFAULT 60,
+  ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS deleted_by_user_id UUID,
+  ADD COLUMN IF NOT EXISTS delete_reason TEXT;
 
 DO $$
 BEGIN
@@ -264,6 +328,13 @@ CREATE INDEX IF NOT EXISTS chat_sessions_project_created_idx
 CREATE INDEX IF NOT EXISTS chat_sessions_visibility_idx
   ON chat_sessions (visibility_scope);
 
+CREATE INDEX IF NOT EXISTS chat_sessions_active_project_created_idx
+  ON chat_sessions (project_id, created_at DESC)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS chat_sessions_deleted_at_idx
+  ON chat_sessions (deleted_at);
+
 CREATE TABLE IF NOT EXISTS chat_messages (
   message_id UUID PRIMARY KEY,
   session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
@@ -289,6 +360,40 @@ CREATE TABLE IF NOT EXISTS session_pinned_engrams (
 
 CREATE INDEX IF NOT EXISTS session_pinned_engrams_by_user_idx
   ON session_pinned_engrams (pinned_by_user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS engram_collections (
+  collection_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  owner_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at TIMESTAMPTZ,
+  deleted_by_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  delete_reason TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS engram_collections_project_name_active_uidx
+  ON engram_collections (project_id, name)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS engram_collections_owner_created_idx
+  ON engram_collections (owner_user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_collections_project_created_idx
+  ON engram_collections (project_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS engram_collection_items (
+  collection_id UUID NOT NULL REFERENCES engram_collections(collection_id) ON DELETE CASCADE,
+  engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  added_by_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (collection_id, engram_id)
+);
+
+CREATE INDEX IF NOT EXISTS engram_collection_items_engram_idx
+  ON engram_collection_items (engram_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS documents (
   document_id UUID PRIMARY KEY,
@@ -379,3 +484,110 @@ BEGIN
       ON DELETE SET NULL;
   END IF;
 END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'engrams_deleted_by_user_fk'
+  ) THEN
+    ALTER TABLE engrams
+      ADD CONSTRAINT engrams_deleted_by_user_fk
+      FOREIGN KEY (deleted_by_user_id)
+      REFERENCES users(user_id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'engrams_updated_by_user_fk'
+  ) THEN
+    ALTER TABLE engrams
+      ADD CONSTRAINT engrams_updated_by_user_fk
+      FOREIGN KEY (updated_by_user_id)
+      REFERENCES users(user_id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'chat_sessions_deleted_by_user_fk'
+  ) THEN
+    ALTER TABLE chat_sessions
+      ADD CONSTRAINT chat_sessions_deleted_by_user_fk
+      FOREIGN KEY (deleted_by_user_id)
+      REFERENCES users(user_id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
+
+WITH discovered_projects AS (
+  SELECT DISTINCT project_id
+  FROM (
+    SELECT project_id FROM engrams WHERE project_id IS NOT NULL AND length(trim(project_id)) > 0
+    UNION
+    SELECT project_id FROM chat_sessions WHERE project_id IS NOT NULL AND length(trim(project_id)) > 0
+    UNION
+    SELECT project_id FROM documents WHERE project_id IS NOT NULL AND length(trim(project_id)) > 0
+  ) AS raw_ids
+)
+INSERT INTO projects (project_id, name, description, owner_user_id, is_archived)
+SELECT
+  discovered.project_id,
+  discovered.project_id,
+  'Backfilled project from existing memory records.',
+  COALESCE(
+    (
+      SELECT e.owner_user_id
+      FROM engrams e
+      WHERE e.project_id = discovered.project_id
+        AND e.owner_user_id IS NOT NULL
+      ORDER BY e.created_at ASC
+      LIMIT 1
+    ),
+    (
+      SELECT s.owner_user_id
+      FROM chat_sessions s
+      WHERE s.project_id = discovered.project_id
+      ORDER BY s.created_at ASC
+      LIMIT 1
+    ),
+    (
+      SELECT d.owner_user_id
+      FROM documents d
+      WHERE d.project_id = discovered.project_id
+      ORDER BY d.created_at ASC
+      LIMIT 1
+    ),
+    (SELECT user_id FROM users ORDER BY created_at ASC LIMIT 1)
+  ),
+  FALSE
+FROM discovered_projects discovered
+ON CONFLICT (project_id) DO NOTHING;
+
+UPDATE users u
+SET default_project_id = COALESCE(
+  (
+    SELECT p.project_id
+    FROM projects p
+    WHERE p.owner_user_id = u.user_id
+      AND p.is_archived = FALSE
+    ORDER BY p.created_at ASC
+    LIMIT 1
+  ),
+  (
+    SELECT p.project_id
+    FROM projects p
+    WHERE p.is_archived = FALSE
+    ORDER BY p.created_at ASC
+    LIMIT 1
+  ),
+  u.default_project_id
+)
+WHERE u.default_project_id IS NULL;

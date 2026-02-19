@@ -373,6 +373,9 @@ def test_create_session_delegates_to_repository(monkeypatch) -> None:
     service = ChatService(embedding_dim=256)
     expected = _session(actor_id)
     monkeypatch.setattr(
+        "app.chat.service.ensure_project_exists", lambda project_id, owner_user_id: None
+    )
+    monkeypatch.setattr(
         "app.chat.service.create_chat_session", lambda owner_user_id, payload: expected
     )
 

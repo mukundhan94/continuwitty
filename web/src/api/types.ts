@@ -203,3 +203,102 @@ export interface McpTokenCreateRequest {
 export interface McpTokenCreateResponse extends McpTokenSummary {
   token: string
 }
+
+export interface ProjectRecord {
+  project_id: string
+  name: string
+  description: string
+  owner_user_id: string
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ProjectDefaultResponse {
+  default_project_id: string | null
+}
+
+export interface AdminChatSessionRecord {
+  session_id: string
+  owner_user_id: string
+  project_id: string
+  title: string
+  provider: ChatProvider
+  model_id: string
+  system_prompt: string
+  visibility_scope: VisibilityScope
+  autosave_enabled: boolean
+  autosave_strategy: ChatAutosaveStrategy
+  autosave_interval_minutes: number
+  autosave_min_messages: number
+  retention_days: number
+  retention_max_snapshots: number
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+  deleted_by_user_id: string | null
+  delete_reason: string | null
+}
+
+export interface AdminEngramSourceInput {
+  captured_at: string
+  url: string
+  title: string
+  snippet: string
+  content_text?: string | null
+  content_hash?: string | null
+}
+
+export interface AdminEngramRecord {
+  engram_id: string
+  project_id: string
+  thread_id: string | null
+  title: string
+  abstract: string
+  detailed_summary_markdown: string
+  tags: string[]
+  keywords: string[]
+  owner_user_id: string | null
+  visibility_scope: VisibilityScope
+  source_session_id: string | null
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+  deleted_by_user_id: string | null
+  delete_reason: string | null
+  sources: AdminEngramSourceInput[]
+}
+
+export interface AdminSessionDeleteResponse {
+  session_id: string
+  deleted: boolean
+  linked_engrams_deleted: number
+}
+
+export interface AdminSessionRestoreResponse {
+  session_id: string
+  restored: boolean
+}
+
+export interface AdminEngramDeleteResponse {
+  engram_id: string
+  deleted: boolean
+}
+
+export interface AdminEngramRestoreResponse {
+  engram_id: string
+  restored: boolean
+}
+
+export interface EngramCollectionRecord {
+  collection_id: string
+  project_id: string
+  owner_user_id: string
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+  deleted_by_user_id: string | null
+  delete_reason: string | null
+}

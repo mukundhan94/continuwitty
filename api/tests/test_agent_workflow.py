@@ -2,6 +2,24 @@ import uuid
 
 import pytest
 
+from app.config import get_settings
+
+
+def _login(client) -> None:  # noqa: ANN001
+    login_page = client.get("/login")
+    csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+    settings = get_settings()
+    response = client.post(
+        "/login",
+        data={
+            "username": settings.ui_demo_username,
+            "password": settings.ui_demo_password,
+            "csrf_token": csrf_token,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
 
 @pytest.mark.integration
 def test_agent_run_creates_engram_and_checkpoint(client, clean_db) -> None:
@@ -78,6 +96,7 @@ def test_agent_resume_appends_notes(client, clean_db) -> None:
 
 @pytest.mark.integration
 def test_snapshot_creation_on_note_threshold(client, clean_db) -> None:
+    _login(client)
     thread_id = f"thread-{uuid.uuid4()}"
 
     run_response = client.post(

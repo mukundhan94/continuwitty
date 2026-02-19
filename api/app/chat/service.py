@@ -56,6 +56,7 @@ from app.observability import (
     ChatDebugTelemetryPublisher,
     bind_chat_debug_collector,
 )
+from app.projects.repository import ensure_project_exists
 from app.providers.base import ProviderGenerateRequest, ProviderGenerateResult, ProviderMessage
 from app.providers.errors import (
     ProviderAPIError,
@@ -279,6 +280,10 @@ class ChatService:
         self, actor_user_id: UUID, payload: ChatSessionCreateRequest
     ) -> ChatSessionRecord:
         normalized_payload = self._normalize_create_payload(payload)
+        ensure_project_exists(
+            project_id=normalized_payload.project_id,
+            owner_user_id=actor_user_id,
+        )
         return create_chat_session(owner_user_id=actor_user_id, payload=normalized_payload)
 
     def list_sessions(
