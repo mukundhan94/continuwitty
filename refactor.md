@@ -22,12 +22,29 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-19 (Checkpoint 2 - Memory Admin Repository Phase 2)
+
+- [x] Step 2.1 — Decompose `update_admin_engram`
+- [x] Added `_build_engram_update_fields(current, payload)` extraction
+- [x] Added `_compute_engram_embedding(retrieval_text, dim)` extraction
+- [x] Added `_replace_engram_sources(cur, engram_id, sources)` extraction
+- [x] Step 2.2 — Eliminate soft delete/restore duplication
+- [x] Added `_soft_delete_record(...)` and `_restore_record(...)`
+- [x] Refactored session/engram/collection delete+restore wrappers to thin delegates
+- [x] New test added: `api/tests/test_memory_admin_repository.py`
+- [x] Validation run: `api/tests/test_memory_admin_repository.py`, `api/tests/test_memory_admin_api_integration.py`, `api/tests/test_mcp_service_unit.py` (14 passed)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene score improvement: `api/app/memory_admin/repository.py` from **6.29** to **7.42**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
 | `api/app/mcp/service.py` | **3.0** | RED |
-| `api/app/memory_admin/repository.py` | 6.29 | YELLOW |
+| `api/app/memory_admin/repository.py` | 7.42 | YELLOW |
 | `api/app/chat_repository.py` | 6.69 | YELLOW |
 | `api/app/chat/service.py` | 6.77 | YELLOW |
 | `api/app/oauth/api.py` | 7.48 | YELLOW |
