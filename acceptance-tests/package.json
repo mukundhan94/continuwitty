@@ -10,6 +10,8 @@
     "test:docker": "WEB_BASE_URL=http://web:5173 API_BASE_URL=http://api:8000 sh -c 'bddgen && playwright test'",
     "test:bedrock-live": "PW_TIMEOUT_MS=120000 ACCEPTANCE_BDD_TAGS='@bedrock-live' sh -c 'bddgen && playwright test'",
     "test:bedrock-live:headed": "PW_HEADLESS=false PW_TIMEOUT_MS=120000 ACCEPTANCE_BDD_TAGS='@bedrock-live' sh -c 'bddgen && playwright test --headed'",
+    "test:mock": "ACCEPTANCE_BDD_TAGS='@mock' sh -c 'bddgen && playwright test'",
+    "test:mock:headed": "PW_HEADLESS=false ACCEPTANCE_BDD_TAGS='@mock' sh -c 'bddgen && playwright test --headed'",
     "test:triage-live": "PW_TIMEOUT_MS=120000 ACCEPTANCE_BDD_TAGS='@triage-live' sh -c 'bddgen && playwright test'",
     "test:triage-live:headed": "PW_HEADLESS=false PW_TIMEOUT_MS=120000 ACCEPTANCE_BDD_TAGS='@triage-live' sh -c 'bddgen && playwright test --headed'",
     "typecheck": "tsc --noEmit"

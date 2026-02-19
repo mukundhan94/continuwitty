@@ -125,6 +125,9 @@ def test_mcp_initialize_and_tools_list_contract(client, clean_db) -> None:
     tools = _final_result_frame(tools_frames)["result"]["tools"]
     tool_names = {item["name"] for item in tools}
     assert "chat.create_session" in tool_names
+    assert "chat.get_lifecycle_policy" in tool_names
+    assert "chat.update_lifecycle_policy" in tool_names
+    assert "chat.list_timeline" in tool_names
     assert "chat.list_messages" in tool_names
     assert "chat.list_pinned_engrams" in tool_names
     assert "chat.pin_engram" in tool_names
@@ -447,3 +450,79 @@ def test_mcp_engram_and_user_tools(client, clean_db, monkeypatch) -> None:
     )
     project_ids = _final_result_frame(projects_frames)["result"]["project_ids"]
     assert "project-mcp-tools" in project_ids
+
+
+@pytest.mark.integration
+def test_mcp_lifecycle_policy_and_timeline_tools(client, clean_db, monkeypatch) -> None:
+    _login(client)
+    _install_fake_provider(monkeypatch)
+
+    create_session_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.create_session",
+            "arguments": {
+                "project_id": "project-mcp-lifecycle",
+                "title": "Lifecycle Session",
+                "provider": "openai",
+                "model_id": "gpt-4o-mini",
+                "visibility_scope": "private",
+                "autosave_enabled": False,
+            },
+        },
+        request_id="mcp-lifecycle-create",
+    )
+    session_id = _final_result_frame(create_session_frames)["result"]["structuredContent"][
+        "session"
+    ]["session_id"]
+
+    update_policy = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.update_lifecycle_policy",
+            "arguments": {
+                "session_id": session_id,
+                "autosave_enabled": True,
+                "autosave_strategy": "interval",
+                "autosave_interval_minutes": 1,
+                "retention_days": 7,
+                "retention_max_snapshots": 20,
+            },
+        },
+        request_id="mcp-lifecycle-policy-update",
+    )
+    updated_policy = _final_result_frame(update_policy)["result"]["structuredContent"][
+        "lifecycle_policy"
+    ]
+    assert updated_policy["autosave_enabled"] is True
+    assert updated_policy["autosave_strategy"] == "interval"
+
+    _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.send_message",
+            "arguments": {
+                "session_id": session_id,
+                "content_text": (
+                    "Create a detailed stakeholder update including impact timeline and mitigation status."
+                ),
+                "stream": False,
+            },
+        },
+        request_id="mcp-lifecycle-send",
+    )
+
+    timeline_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat.list_timeline",
+            "arguments": {"session_id": session_id},
+        },
+        request_id="mcp-lifecycle-timeline",
+    )
+    events = _final_result_frame(timeline_frames)["result"]["structuredContent"]["events"]
+    assert any(item["event_type"] == "autosave_snapshot" for item in events)

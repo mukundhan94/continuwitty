@@ -13,6 +13,7 @@ description: Use this skill when adding tests, extending eval scenarios, and val
 - Unit tests for deterministic logic.
 - Integration tests for API + DB + auth/visibility behavior.
 - Ingestion tests for text/file intake, chunk persistence, and blended retrieval responses.
+- Lifecycle-policy tests for autosave cadence, retention pruning, and timeline event behavior.
 - Eval harness tests for recall, temporal correctness, abstention.
 - Add chat continuity eval scenarios when chat logic changes.
 - For MCP contract changes, include:

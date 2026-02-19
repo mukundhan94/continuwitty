@@ -67,7 +67,21 @@ def _create_session(client, project_id: str = "project-chat") -> dict:  # noqa: 
             "system_prompt": "You are concise.",
             "visibility_scope": "private",
             "autosave_enabled": False,
+            "autosave_strategy": "off",
+            "autosave_interval_minutes": 30,
+            "autosave_min_messages": 6,
+            "retention_days": 30,
+            "retention_max_snapshots": 60,
         },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def _send_long_message(client, session_id: str, content_text: str) -> dict:  # noqa: ANN001
+    response = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"content_text": content_text},
     )
     assert response.status_code == 201
     return response.json()
@@ -300,3 +314,174 @@ def test_chat_api_reconciles_stale_session_user_id_after_db_reset(
     me = client.get("/api/v1/me")
     assert me.status_code == 200
     assert me.json()["user_id"] == str(replacement_user_id)
+
+
+@pytest.mark.integration
+def test_chat_lifecycle_policy_and_timeline_flow(client, clean_db, monkeypatch) -> None:
+    _login(client)
+    _install_fake_provider(monkeypatch)
+    created = _create_session(client, project_id="project-lifecycle")
+    session_id = created["session_id"]
+
+    policy = client.get(f"/api/v1/chat/sessions/{session_id}/lifecycle-policy")
+    assert policy.status_code == 200
+    assert policy.json()["autosave_strategy"] == "off"
+    assert policy.json()["autosave_enabled"] is False
+
+    updated_policy = client.patch(
+        f"/api/v1/chat/sessions/{session_id}/lifecycle-policy",
+        json={
+            "autosave_enabled": True,
+            "autosave_strategy": "interval",
+            "autosave_interval_minutes": 1,
+            "retention_days": 7,
+            "retention_max_snapshots": 10,
+        },
+    )
+    assert updated_policy.status_code == 200
+    assert updated_policy.json()["autosave_enabled"] is True
+    assert updated_policy.json()["autosave_strategy"] == "interval"
+    assert updated_policy.json()["autosave_interval_minutes"] == 1
+
+    sent = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={
+            "content_text": (
+                "Create a detailed status summary covering impact, timeline, root cause, and next steps."
+            )
+        },
+    )
+    assert sent.status_code == 201
+
+    timeline = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
+    assert timeline.status_code == 200
+    events = timeline.json()
+    assert any(item["event_type"] == "autosave_snapshot" for item in events)
+
+
+@pytest.mark.integration
+def test_chat_lifecycle_policy_off_does_not_autosave(client, clean_db, monkeypatch) -> None:
+    _login(client)
+    _install_fake_provider(monkeypatch)
+    created = _create_session(client, project_id="project-lifecycle-off")
+    session_id = created["session_id"]
+
+    _send_long_message(
+        client,
+        session_id,
+        (
+            "Draft a full incident summary with impact, timeline, root cause, mitigation, "
+            "and follow-up actions for tomorrow's executive review."
+        ),
+    )
+
+    timeline = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
+    assert timeline.status_code == 200
+    autosave_events = [
+        item for item in timeline.json() if item["event_type"] == "autosave_snapshot"
+    ]
+    assert autosave_events == []
+
+
+@pytest.mark.integration
+def test_chat_lifecycle_policy_message_count_autosaves_on_threshold(
+    client,
+    clean_db,
+    monkeypatch,
+) -> None:
+    _login(client)
+    _install_fake_provider(monkeypatch)
+    created = _create_session(client, project_id="project-lifecycle-message-count")
+    session_id = created["session_id"]
+
+    updated_policy = client.patch(
+        f"/api/v1/chat/sessions/{session_id}/lifecycle-policy",
+        json={
+            "autosave_enabled": True,
+            "autosave_strategy": "message_count",
+            "autosave_min_messages": 2,
+            "retention_days": 7,
+            "retention_max_snapshots": 10,
+        },
+    )
+    assert updated_policy.status_code == 200
+
+    _send_long_message(
+        client,
+        session_id,
+        (
+            "Produce a detailed customer impact summary with observed failure patterns, "
+            "regional spread, and first-pass mitigation notes."
+        ),
+    )
+    timeline_after_first = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
+    assert timeline_after_first.status_code == 200
+    first_autosave_events = [
+        item for item in timeline_after_first.json() if item["event_type"] == "autosave_snapshot"
+    ]
+    assert first_autosave_events == []
+
+    _send_long_message(
+        client,
+        session_id,
+        (
+            "Now generate the escalation-ready remediation plan with ownership, rollback checkpoints, "
+            "and monitoring verification criteria."
+        ),
+    )
+    timeline_after_second = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
+    assert timeline_after_second.status_code == 200
+    second_autosave_events = [
+        item for item in timeline_after_second.json() if item["event_type"] == "autosave_snapshot"
+    ]
+    assert len(second_autosave_events) >= 1
+
+
+@pytest.mark.integration
+def test_chat_lifecycle_policy_interval_autosaves_then_waits(client, clean_db, monkeypatch) -> None:
+    _login(client)
+    _install_fake_provider(monkeypatch)
+    created = _create_session(client, project_id="project-lifecycle-interval")
+    session_id = created["session_id"]
+
+    updated_policy = client.patch(
+        f"/api/v1/chat/sessions/{session_id}/lifecycle-policy",
+        json={
+            "autosave_enabled": True,
+            "autosave_strategy": "interval",
+            "autosave_interval_minutes": 60,
+            "retention_days": 7,
+            "retention_max_snapshots": 10,
+        },
+    )
+    assert updated_policy.status_code == 200
+
+    _send_long_message(
+        client,
+        session_id,
+        (
+            "Summarize the current incident with timeline checkpoints, blast radius, and "
+            "validation tasks for on-call handoff."
+        ),
+    )
+    timeline_after_first = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
+    assert timeline_after_first.status_code == 200
+    first_autosave_events = [
+        item for item in timeline_after_first.json() if item["event_type"] == "autosave_snapshot"
+    ]
+    assert len(first_autosave_events) == 1
+
+    _send_long_message(
+        client,
+        session_id,
+        (
+            "Prepare the next status update in a different tone but keep the same factual grounding "
+            "for incident communication."
+        ),
+    )
+    timeline_after_second = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
+    assert timeline_after_second.status_code == 200
+    second_autosave_events = [
+        item for item in timeline_after_second.json() if item["event_type"] == "autosave_snapshot"
+    ]
+    assert len(second_autosave_events) == 1

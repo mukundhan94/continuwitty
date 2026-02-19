@@ -11,6 +11,7 @@ from app.chat.errors import ChatProviderExecutionError, ChatServiceError
 from app.chat.service import ChatService
 from app.ingestion.service import DocumentIngestionService
 from app.models import (
+    ChatLifecyclePolicyUpdateRequest,
     ChatMessageCreateRequest,
     ChatSessionCreateRequest,
     ContinueSessionRequest,
@@ -145,6 +146,14 @@ class McpService:
                         "system_prompt": {"type": "string"},
                         "visibility_scope": {"type": "string", "enum": ["private", "project"]},
                         "autosave_enabled": {"type": "boolean"},
+                        "autosave_strategy": {
+                            "type": "string",
+                            "enum": ["off", "interval", "message_count"],
+                        },
+                        "autosave_interval_minutes": {"type": "integer", "minimum": 1},
+                        "autosave_min_messages": {"type": "integer", "minimum": 1},
+                        "retention_days": {"type": "integer", "minimum": 1},
+                        "retention_max_snapshots": {"type": "integer", "minimum": 1},
                     },
                 },
             },
@@ -170,8 +179,50 @@ class McpService:
                 },
             },
             {
+                "name": "chat.get_lifecycle_policy",
+                "description": "Get autosave/retention lifecycle policy for a session.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {"session_id": {"type": "string", "format": "uuid"}},
+                },
+            },
+            {
+                "name": "chat.update_lifecycle_policy",
+                "description": "Update autosave/retention lifecycle policy for a session.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "autosave_enabled": {"type": "boolean"},
+                        "autosave_strategy": {
+                            "type": "string",
+                            "enum": ["off", "interval", "message_count"],
+                        },
+                        "autosave_interval_minutes": {"type": "integer", "minimum": 1},
+                        "autosave_min_messages": {"type": "integer", "minimum": 1},
+                        "retention_days": {"type": "integer", "minimum": 1},
+                        "retention_max_snapshots": {"type": "integer", "minimum": 1},
+                    },
+                },
+            },
+            {
                 "name": "chat.list_messages",
                 "description": "List persisted messages for a chat session.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["session_id"],
+                    "properties": {
+                        "session_id": {"type": "string", "format": "uuid"},
+                        "limit": {"type": "integer", "minimum": 1},
+                        "offset": {"type": "integer", "minimum": 0},
+                    },
+                },
+            },
+            {
+                "name": "chat.list_timeline",
+                "description": "List timeline events (manual saves, autosaves, consolidation) for a session.",
                 "inputSchema": {
                     "type": "object",
                     "required": ["session_id"],
@@ -415,6 +466,28 @@ class McpService:
             )
             return {"session": session.model_dump(mode="json")}
 
+        if method == "chat.get_lifecycle_policy":
+            policy = self._chat_service.get_lifecycle_policy(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+            )
+            return {"lifecycle_policy": policy.model_dump(mode="json")}
+
+        if method == "chat.update_lifecycle_policy":
+            policy = self._chat_service.update_lifecycle_policy(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+                payload=ChatLifecyclePolicyUpdateRequest(
+                    autosave_enabled=params.get("autosave_enabled"),
+                    autosave_strategy=params.get("autosave_strategy"),
+                    autosave_interval_minutes=params.get("autosave_interval_minutes"),
+                    autosave_min_messages=params.get("autosave_min_messages"),
+                    retention_days=params.get("retention_days"),
+                    retention_max_snapshots=params.get("retention_max_snapshots"),
+                ),
+            )
+            return {"lifecycle_policy": policy.model_dump(mode="json")}
+
         if method == "chat.list_messages":
             messages = self._chat_service.list_messages(
                 actor_user_id=actor_user_id,
@@ -423,6 +496,15 @@ class McpService:
                 offset=int(params.get("offset", 0)),
             )
             return {"messages": [item.model_dump(mode="json") for item in messages]}
+
+        if method == "chat.list_timeline":
+            events = self._chat_service.list_timeline_events(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+                limit=int(params.get("limit", 100)),
+                offset=int(params.get("offset", 0)),
+            )
+            return {"events": [item.model_dump(mode="json") for item in events]}
 
         if method == "chat.send_message":
             message = self._chat_service.send_message(

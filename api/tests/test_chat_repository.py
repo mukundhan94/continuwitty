@@ -8,10 +8,12 @@ from app.auth import hash_password
 from app.chat_repository import (
     create_chat_message,
     create_chat_session,
+    delete_session_autosave_engrams,
     list_chat_messages,
     list_chat_sessions,
     list_pinned_documents,
     list_pinned_engram_summaries,
+    list_session_linked_engrams,
     pin_document_to_session,
     pin_engram_to_session,
     unpin_document_from_session,
@@ -48,6 +50,8 @@ def test_chat_session_create_list_update(clean_db) -> None:
         ),
     )
     assert created.title == "Session A"
+    assert created.autosave_strategy.value == "off"
+    assert created.retention_days == 30
 
     listed = list_chat_sessions(actor_user_id=admin["user_id"], project_id="project-chat")
     assert len(listed) == 1
@@ -56,11 +60,22 @@ def test_chat_session_create_list_update(clean_db) -> None:
     updated = update_chat_session(
         session_id=created.session_id,
         actor_user_id=admin["user_id"],
-        payload=ChatSessionUpdateRequest(title="Session A Updated", autosave_enabled=True),
+        payload=ChatSessionUpdateRequest(
+            title="Session A Updated",
+            autosave_enabled=True,
+            autosave_strategy="interval",
+            autosave_interval_minutes=5,
+            retention_days=14,
+            retention_max_snapshots=80,
+        ),
     )
     assert updated is not None
     assert updated.title == "Session A Updated"
     assert updated.autosave_enabled is True
+    assert updated.autosave_strategy.value == "interval"
+    assert updated.autosave_interval_minutes == 5
+    assert updated.retention_days == 14
+    assert updated.retention_max_snapshots == 80
 
 
 @pytest.mark.integration
@@ -309,3 +324,72 @@ def test_cannot_pin_private_engram_of_other_user(clean_db) -> None:
         actor_user_id=analyst.user_id,
     )
     assert pinned is None
+
+
+@pytest.mark.integration
+def test_session_linked_engrams_and_autosave_delete(clean_db) -> None:
+    admin = get_user_auth_record(get_settings().ui_demo_username)
+    assert admin is not None
+
+    session = create_chat_session(
+        owner_user_id=admin["user_id"],
+        payload=ChatSessionCreateRequest(
+            project_id="project-lifecycle",
+            title="Lifecycle Session",
+            provider="openai",
+            model_id="gpt-4o-mini",
+            visibility_scope="private",
+        ),
+    )
+
+    autosave = create_engram(
+        MemoryEngramCreate(
+            project_id="project-lifecycle",
+            thread_id=f"chat-session:{session.session_id}:autosave",
+            title="Autosave Snapshot",
+            abstract="Autosave timeline summary for lifecycle pruning behavior.",
+            detailed_summary_markdown="Snapshot details",
+            tags=["autosave_snapshot", "session-lifecycle"],
+            source_session_id=session.session_id,
+            visibility_scope="private",
+        ),
+        embedding_dim=get_settings().embedding_dim,
+        owner_user_id=admin["user_id"],
+    )
+    manual = create_engram(
+        MemoryEngramCreate(
+            project_id="project-lifecycle",
+            thread_id=f"chat-session:{session.session_id}",
+            title="Manual Save",
+            abstract="Manual save should remain after autosave pruning.",
+            detailed_summary_markdown="Manual save details",
+            tags=["chat"],
+            source_session_id=session.session_id,
+            visibility_scope="private",
+        ),
+        embedding_dim=get_settings().embedding_dim,
+        owner_user_id=admin["user_id"],
+    )
+
+    linked = list_session_linked_engrams(
+        session_id=session.session_id,
+        actor_user_id=admin["user_id"],
+    )
+    linked_ids = {item.engram_id for item in linked}
+    assert autosave.engram_id in linked_ids
+    assert manual.engram_id in linked_ids
+
+    removed_ids = delete_session_autosave_engrams(
+        session_id=session.session_id,
+        actor_user_id=admin["user_id"],
+        engram_ids=[autosave.engram_id, manual.engram_id],
+    )
+    assert removed_ids == [autosave.engram_id]
+
+    linked_after = list_session_linked_engrams(
+        session_id=session.session_id,
+        actor_user_id=admin["user_id"],
+    )
+    linked_after_ids = {item.engram_id for item in linked_after}
+    assert autosave.engram_id not in linked_after_ids
+    assert manual.engram_id in linked_after_ids

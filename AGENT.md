@@ -46,6 +46,7 @@ Use it as the default workflow when adding or refactoring features.
 - Domain routers (`api/app/chat/api.py`) should remain thin and delegate to services.
 - DB access must live in repository modules.
 - Context assembly logic belongs in domain context modules (`api/app/chat/context.py`), not route handlers.
+- Lifecycle/autosave/retention heuristics must stay in `api/app/chat/lifecycle_policy.py` as pure functions so they remain testable and reusable across REST/MCP paths.
 - Provider SDK calls must stay in `api/app/providers/`.
 - Document chunking and retrieval behavior belongs in `api/app/ingestion/`.
 - Embedding provider routing belongs in `api/app/embeddings/`; do not call provider endpoints directly from repositories.
@@ -105,6 +106,10 @@ Use it as the default workflow when adding or refactoring features.
 - Eval tests for memory quality scenarios.
 - Frontend tests for UI helpers/components and session workflow logic.
 - Acceptance tests for end-to-end workflow regressions (`acceptance-tests/features/*.feature`).
+- Lifecycle policy changes require regression coverage across:
+  - `api/tests/test_chat_lifecycle_policy.py`
+  - `api/tests/test_chat_api_integration.py`
+  - `api/tests/test_mcp_api_integration.py`
 - `@bedrock-live` acceptance tests are optional for deterministic local runs, but required when Bedrock adapter/runtime behavior changes.
 - Add regression tests when fixing bugs.
 - No phase is complete unless `make check` passes. If web files changed, `make web-check` is also required.

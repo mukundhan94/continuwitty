@@ -120,6 +120,12 @@ class ChatProvider(str, Enum):
     bedrock = "bedrock"
 
 
+class ChatAutosaveStrategy(str, Enum):
+    off = "off"
+    interval = "interval"
+    message_count = "message_count"
+
+
 class UserRecord(BaseModel):
     user_id: UUID
     username: str
@@ -163,6 +169,11 @@ class ChatSessionCreateRequest(BaseModel):
     system_prompt: str = ""
     visibility_scope: VisibilityScope = VisibilityScope.private
     autosave_enabled: bool = False
+    autosave_strategy: ChatAutosaveStrategy = ChatAutosaveStrategy.off
+    autosave_interval_minutes: int = Field(default=30, ge=1, le=10_080)
+    autosave_min_messages: int = Field(default=6, ge=1, le=500)
+    retention_days: int = Field(default=30, ge=1, le=3_650)
+    retention_max_snapshots: int = Field(default=60, ge=1, le=10_000)
 
 
 class ChatSessionUpdateRequest(BaseModel):
@@ -172,6 +183,11 @@ class ChatSessionUpdateRequest(BaseModel):
     system_prompt: str | None = None
     visibility_scope: VisibilityScope | None = None
     autosave_enabled: bool | None = None
+    autosave_strategy: ChatAutosaveStrategy | None = None
+    autosave_interval_minutes: int | None = Field(default=None, ge=1, le=10_080)
+    autosave_min_messages: int | None = Field(default=None, ge=1, le=500)
+    retention_days: int | None = Field(default=None, ge=1, le=3_650)
+    retention_max_snapshots: int | None = Field(default=None, ge=1, le=10_000)
 
 
 class ChatSessionRecord(BaseModel):
@@ -184,12 +200,45 @@ class ChatSessionRecord(BaseModel):
     system_prompt: str
     visibility_scope: VisibilityScope
     autosave_enabled: bool
+    autosave_strategy: ChatAutosaveStrategy = ChatAutosaveStrategy.off
+    autosave_interval_minutes: int = 30
+    autosave_min_messages: int = 6
+    retention_days: int = 30
+    retention_max_snapshots: int = 60
     created_at: datetime
     updated_at: datetime
 
 
 class ChatMessageCreateRequest(BaseModel):
     content_text: str
+
+
+class ChatLifecyclePolicy(BaseModel):
+    autosave_enabled: bool
+    autosave_strategy: ChatAutosaveStrategy
+    autosave_interval_minutes: int = Field(ge=1)
+    autosave_min_messages: int = Field(ge=1)
+    retention_days: int = Field(ge=1)
+    retention_max_snapshots: int = Field(ge=1)
+
+
+class ChatLifecyclePolicyUpdateRequest(BaseModel):
+    autosave_enabled: bool | None = None
+    autosave_strategy: ChatAutosaveStrategy | None = None
+    autosave_interval_minutes: int | None = Field(default=None, ge=1, le=10_080)
+    autosave_min_messages: int | None = Field(default=None, ge=1, le=500)
+    retention_days: int | None = Field(default=None, ge=1, le=3_650)
+    retention_max_snapshots: int | None = Field(default=None, ge=1, le=10_000)
+
+
+class ChatTimelineEvent(BaseModel):
+    event_id: UUID
+    session_id: UUID
+    event_type: str
+    title: str
+    abstract: str
+    tags: list[str] = Field(default_factory=list)
+    created_at: datetime
 
 
 class ChatMessageRecord(BaseModel):

@@ -2,19 +2,23 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
 from uuid import UUID
 
 from app.chat_repository import (
+    count_session_messages_by_role,
     create_chat_message,
     create_chat_session,
+    delete_session_autosave_engrams,
     get_chat_session,
     list_chat_messages,
     list_chat_sessions,
     list_pinned_documents,
     list_pinned_engram_summaries,
     list_pinned_engrams,
+    list_session_linked_engrams,
     pin_document_to_session,
     pin_engram_to_session,
     unpin_document_from_session,
@@ -23,16 +27,20 @@ from app.chat_repository import (
 )
 from app.config import get_settings
 from app.models import (
+    ChatAutosaveStrategy,
     ChatDebugEmbeddingCall,
     ChatDebugLLMCall,
     ChatDebugProviderMessage,
     ChatDebugTrace,
+    ChatLifecyclePolicy,
+    ChatLifecyclePolicyUpdateRequest,
     ChatMessageCreateRequest,
     ChatMessageRecord,
     ChatSendResponse,
     ChatSessionCreateRequest,
     ChatSessionRecord,
     ChatSessionUpdateRequest,
+    ChatTimelineEvent,
     ContinueSessionRequest,
     ContinueSessionResponse,
     EngramSummary,
@@ -66,6 +74,15 @@ from .errors import (
     ChatSessionNotFoundError,
     ChatValidationError,
 )
+from .lifecycle_policy import (
+    classify_timeline_event_type,
+    duplicate_snapshot_exists,
+    is_low_value_snapshot_abstract,
+    normalize_autosave_policy,
+    select_retention_prune_ids,
+    should_take_interval_snapshot,
+    should_take_message_count_snapshot,
+)
 
 _GENERIC_SNAPSHOT_ABSTRACTS = {
     "",
@@ -74,6 +91,12 @@ _GENERIC_SNAPSHOT_ABSTRACTS = {
     "chat snapshot",
     "session snapshot",
 }
+
+_AUTOSAVE_SNAPSHOT_TAGS = [
+    "autosave_snapshot",
+    "session-lifecycle",
+    "chat",
+]
 
 
 @dataclass(frozen=True)
@@ -86,6 +109,13 @@ class PreparedGeneration:
     prepare_duration_ms: float
     context_duration_ms: float
     history_load_duration_ms: float
+
+
+@dataclass(frozen=True)
+class LifecycleMaintenanceResult:
+    snapshot_engram_id: UUID | None
+    pruned_engram_ids: list[UUID]
+    skipped_reason: str | None = None
 
 
 def _history_as_provider_messages(
@@ -193,10 +223,63 @@ class ChatService:
             langfuse_host=settings.langfuse_host,
         )
 
+    @staticmethod
+    def _normalize_create_payload(payload: ChatSessionCreateRequest) -> ChatSessionCreateRequest:
+        autosave_enabled, autosave_strategy = normalize_autosave_policy(
+            autosave_enabled=payload.autosave_enabled,
+            autosave_strategy=payload.autosave_strategy,
+        )
+        return payload.model_copy(
+            update={
+                "autosave_enabled": autosave_enabled,
+                "autosave_strategy": autosave_strategy,
+            }
+        )
+
+    @staticmethod
+    def _normalize_update_payload(payload: ChatSessionUpdateRequest) -> ChatSessionUpdateRequest:
+        autosave_enabled = payload.autosave_enabled
+        autosave_strategy = payload.autosave_strategy
+
+        if autosave_enabled is None and autosave_strategy is None:
+            return payload
+
+        if autosave_enabled is None and autosave_strategy is not None:
+            autosave_enabled = autosave_strategy != ChatAutosaveStrategy.off
+        if autosave_strategy is None and autosave_enabled is not None:
+            autosave_strategy = (
+                ChatAutosaveStrategy.interval if autosave_enabled else ChatAutosaveStrategy.off
+            )
+
+        assert autosave_enabled is not None
+        assert autosave_strategy is not None
+        normalized_enabled, normalized_strategy = normalize_autosave_policy(
+            autosave_enabled=autosave_enabled,
+            autosave_strategy=autosave_strategy,
+        )
+        return payload.model_copy(
+            update={
+                "autosave_enabled": normalized_enabled,
+                "autosave_strategy": normalized_strategy,
+            }
+        )
+
+    @staticmethod
+    def _build_lifecycle_policy(session: ChatSessionRecord) -> ChatLifecyclePolicy:
+        return ChatLifecyclePolicy(
+            autosave_enabled=session.autosave_enabled,
+            autosave_strategy=session.autosave_strategy,
+            autosave_interval_minutes=session.autosave_interval_minutes,
+            autosave_min_messages=session.autosave_min_messages,
+            retention_days=session.retention_days,
+            retention_max_snapshots=session.retention_max_snapshots,
+        )
+
     def create_session(
         self, actor_user_id: UUID, payload: ChatSessionCreateRequest
     ) -> ChatSessionRecord:
-        return create_chat_session(owner_user_id=actor_user_id, payload=payload)
+        normalized_payload = self._normalize_create_payload(payload)
+        return create_chat_session(owner_user_id=actor_user_id, payload=normalized_payload)
 
     def list_sessions(
         self,
@@ -224,14 +307,73 @@ class ChatService:
         session_id: UUID,
         payload: ChatSessionUpdateRequest,
     ) -> ChatSessionRecord:
+        normalized_payload = self._normalize_update_payload(payload)
         updated = update_chat_session(
             session_id=session_id,
             actor_user_id=actor_user_id,
-            payload=payload,
+            payload=normalized_payload,
         )
         if not updated:
             raise ChatSessionNotFoundError()
         return updated
+
+    def get_lifecycle_policy(
+        self,
+        actor_user_id: UUID,
+        session_id: UUID,
+    ) -> ChatLifecyclePolicy:
+        session = self.get_session(actor_user_id=actor_user_id, session_id=session_id)
+        return self._build_lifecycle_policy(session)
+
+    def update_lifecycle_policy(
+        self,
+        actor_user_id: UUID,
+        session_id: UUID,
+        payload: ChatLifecyclePolicyUpdateRequest,
+    ) -> ChatLifecyclePolicy:
+        if not payload.model_fields_set:
+            return self.get_lifecycle_policy(actor_user_id=actor_user_id, session_id=session_id)
+
+        updated = self.update_session(
+            actor_user_id=actor_user_id,
+            session_id=session_id,
+            payload=ChatSessionUpdateRequest(
+                autosave_enabled=payload.autosave_enabled,
+                autosave_strategy=payload.autosave_strategy,
+                autosave_interval_minutes=payload.autosave_interval_minutes,
+                autosave_min_messages=payload.autosave_min_messages,
+                retention_days=payload.retention_days,
+                retention_max_snapshots=payload.retention_max_snapshots,
+            ),
+        )
+        return self._build_lifecycle_policy(updated)
+
+    def list_timeline_events(
+        self,
+        actor_user_id: UUID,
+        session_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> list[ChatTimelineEvent]:
+        self.get_session(actor_user_id=actor_user_id, session_id=session_id)
+        linked = list_session_linked_engrams(
+            session_id=session_id,
+            actor_user_id=actor_user_id,
+            limit=limit,
+            offset=offset,
+        )
+        return [
+            ChatTimelineEvent(
+                event_id=item.engram_id,
+                session_id=session_id,
+                event_type=classify_timeline_event_type(item.tags),
+                title=item.title,
+                abstract=item.abstract,
+                tags=item.tags,
+                created_at=item.created_at,
+            )
+            for item in linked
+        ]
 
     def list_messages(
         self,
@@ -515,6 +657,144 @@ class ChatService:
         )
         return debug_trace
 
+    @staticmethod
+    def _is_autosave_snapshot(summary: EngramSummary) -> bool:
+        return "autosave_snapshot" in {item.strip().lower() for item in summary.tags}
+
+    def _list_autosave_snapshots(
+        self,
+        *,
+        actor_user_id: UUID,
+        session_id: UUID,
+        limit: int = 500,
+    ) -> list[EngramSummary]:
+        linked = list_session_linked_engrams(
+            session_id=session_id,
+            actor_user_id=actor_user_id,
+            limit=limit,
+            offset=0,
+        )
+        return [item for item in linked if self._is_autosave_snapshot(item)]
+
+    def _create_autosave_snapshot(
+        self,
+        *,
+        actor_user_id: UUID,
+        session: ChatSessionRecord,
+        existing_snapshots: list[EngramSummary],
+    ) -> UUID | None:
+        messages = list_chat_messages(
+            session_id=session.session_id,
+            actor_user_id=actor_user_id,
+            limit=500,
+            offset=0,
+        )
+        if not messages:
+            return None
+
+        abstract = _derive_chat_snapshot_abstract(messages)
+        if is_low_value_snapshot_abstract(abstract):
+            return None
+        if duplicate_snapshot_exists(abstract=abstract, existing_snapshots=existing_snapshots):
+            return None
+
+        now = datetime.now(UTC)
+        created = create_engram(
+            payload=MemoryEngramCreate(
+                project_id=session.project_id,
+                thread_id=f"chat-session:{session.session_id}:autosave",
+                title=f"{session.title} Autosave {now.strftime('%Y-%m-%d %H:%M:%S')}",
+                abstract=abstract,
+                detailed_summary_markdown=_transcript_markdown(session, messages),
+                tags=[
+                    *_AUTOSAVE_SNAPSHOT_TAGS,
+                    f"autosave_strategy:{session.autosave_strategy.value}",
+                ],
+                keywords=["autosave", "snapshot", session.provider.value, session.model_id],
+                visibility_scope=session.visibility_scope.value,
+                source_session_id=session.session_id,
+                retrieval_text=_retrieval_text_from_messages(messages),
+            ),
+            embedding_dim=self._embedding_dim,
+            owner_user_id=actor_user_id,
+        )
+        return created.engram_id
+
+    def _run_session_lifecycle_maintenance(
+        self,
+        *,
+        actor_user_id: UUID,
+        session: ChatSessionRecord,
+    ) -> LifecycleMaintenanceResult:
+        if not session.autosave_enabled or session.autosave_strategy == ChatAutosaveStrategy.off:
+            return LifecycleMaintenanceResult(
+                snapshot_engram_id=None,
+                pruned_engram_ids=[],
+                skipped_reason="autosave_disabled",
+            )
+
+        now = datetime.now(UTC)
+        autosave_snapshots = self._list_autosave_snapshots(
+            actor_user_id=actor_user_id,
+            session_id=session.session_id,
+        )
+
+        should_create = False
+        skipped_reason: str | None = None
+        if session.autosave_strategy == ChatAutosaveStrategy.interval:
+            latest_created_at = autosave_snapshots[0].created_at if autosave_snapshots else None
+            should_create = should_take_interval_snapshot(
+                now=now,
+                latest_snapshot_created_at=latest_created_at,
+                interval_minutes=session.autosave_interval_minutes,
+            )
+            if not should_create:
+                skipped_reason = "interval_not_elapsed"
+        elif session.autosave_strategy == ChatAutosaveStrategy.message_count:
+            assistant_message_count = count_session_messages_by_role(
+                session_id=session.session_id,
+                actor_user_id=actor_user_id,
+                role="assistant",
+            )
+            should_create = should_take_message_count_snapshot(
+                assistant_message_count=assistant_message_count,
+                min_messages=session.autosave_min_messages,
+            )
+            if not should_create:
+                skipped_reason = "message_count_threshold_not_met"
+
+        created_snapshot_id: UUID | None = None
+        if should_create:
+            created_snapshot_id = self._create_autosave_snapshot(
+                actor_user_id=actor_user_id,
+                session=session,
+                existing_snapshots=autosave_snapshots,
+            )
+            if created_snapshot_id is None:
+                skipped_reason = "duplicate_or_low_value_snapshot"
+            autosave_snapshots = self._list_autosave_snapshots(
+                actor_user_id=actor_user_id,
+                session_id=session.session_id,
+            )
+
+        prune_ids = select_retention_prune_ids(
+            snapshots=autosave_snapshots,
+            retention_days=session.retention_days,
+            retention_max_snapshots=session.retention_max_snapshots,
+            now=now,
+        )
+        pruned_ids = delete_session_autosave_engrams(
+            session_id=session.session_id,
+            actor_user_id=actor_user_id,
+            engram_ids=prune_ids,
+        )
+
+        return LifecycleMaintenanceResult(
+            snapshot_engram_id=created_snapshot_id,
+            pruned_engram_ids=pruned_ids,
+            skipped_reason=skipped_reason,
+        )
+
     def send_message(
         self,
         actor_user_id: UUID,
@@ -541,6 +821,10 @@ class ChatService:
             actor_user_id=actor_user_id,
             prepared=prepared,
             result=result,
+        )
+        self._run_session_lifecycle_maintenance(
+            actor_user_id=actor_user_id,
+            session=prepared.session,
         )
         persistence_duration_ms = _duration_ms(persistence_started_at)
         debug_trace = self._build_debug_trace(
@@ -626,6 +910,10 @@ class ChatService:
                 actor_user_id=actor_user_id,
                 prepared=prepared,
                 result=result,
+            )
+            self._run_session_lifecycle_maintenance(
+                actor_user_id=actor_user_id,
+                session=prepared.session,
             )
             persistence_duration_ms = _duration_ms(persistence_started_at)
         except ChatServiceError as exc:
@@ -724,6 +1012,11 @@ class ChatService:
                 system_prompt=session.system_prompt,
                 visibility_scope=session.visibility_scope,
                 autosave_enabled=session.autosave_enabled,
+                autosave_strategy=session.autosave_strategy,
+                autosave_interval_minutes=session.autosave_interval_minutes,
+                autosave_min_messages=session.autosave_min_messages,
+                retention_days=session.retention_days,
+                retention_max_snapshots=session.retention_max_snapshots,
             ),
         )
 

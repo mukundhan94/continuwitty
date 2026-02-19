@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -9,6 +9,8 @@ from app.chat.context import AssembledChatContext
 from app.chat.errors import ChatProviderExecutionError, ChatValidationError
 from app.chat.service import ChatService
 from app.models import (
+    ChatAutosaveStrategy,
+    ChatLifecyclePolicyUpdateRequest,
     ChatMessageCreateRequest,
     ChatMessageRecord,
     ChatProvider,
@@ -16,6 +18,7 @@ from app.models import (
     ChatSessionRecord,
     ContinueSessionRequest,
     EngramCreateResponse,
+    EngramSummary,
     PinEngramRequest,
     PinnedDocumentRecord,
     PinnedEngramRecord,
@@ -379,3 +382,140 @@ def test_raise_provider_error_maps_provider_request_error() -> None:
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.error_code == "provider_request_error"
+
+
+def test_update_lifecycle_policy_normalizes_disabled_autosave(monkeypatch) -> None:
+    actor_id = uuid4()
+    service = ChatService(embedding_dim=256)
+    captured: dict = {}
+
+    def _fake_update_chat_session(session_id, actor_user_id, payload):  # noqa: ANN001
+        _ = session_id, actor_user_id
+        captured["payload"] = payload
+        return _session(actor_id).model_copy(
+            update={
+                "autosave_enabled": payload.autosave_enabled,
+                "autosave_strategy": payload.autosave_strategy,
+            }
+        )
+
+    monkeypatch.setattr("app.chat.service.update_chat_session", _fake_update_chat_session)
+
+    policy = service.update_lifecycle_policy(
+        actor_user_id=actor_id,
+        session_id=uuid4(),
+        payload=ChatLifecyclePolicyUpdateRequest(
+            autosave_enabled=False,
+            autosave_strategy=ChatAutosaveStrategy.interval,
+        ),
+    )
+
+    assert captured["payload"].autosave_enabled is False
+    assert captured["payload"].autosave_strategy == ChatAutosaveStrategy.off
+    assert policy.autosave_enabled is False
+    assert policy.autosave_strategy == ChatAutosaveStrategy.off
+
+
+def test_run_session_lifecycle_creates_autosave_snapshot(monkeypatch) -> None:
+    actor_id = uuid4()
+    session = _session(actor_id).model_copy(
+        update={
+            "autosave_enabled": True,
+            "autosave_strategy": ChatAutosaveStrategy.interval,
+            "autosave_interval_minutes": 1,
+            "retention_days": 30,
+            "retention_max_snapshots": 10,
+        }
+    )
+    service = ChatService(embedding_dim=256)
+    captured: dict = {}
+
+    monkeypatch.setattr("app.chat.service.list_session_linked_engrams", lambda **kwargs: [])
+    monkeypatch.setattr(
+        "app.chat.service.list_chat_messages",
+        lambda **kwargs: [
+            _message(
+                message_id=uuid4(),
+                session_id=session.session_id,
+                role="user",
+                content_text="Summarize incident details for stakeholders.",
+            ),
+            _message(
+                message_id=uuid4(),
+                session_id=session.session_id,
+                role="assistant",
+                content_text=(
+                    "Incident timeline confirmed. Primary issue was cache invalidation lag "
+                    "causing stale checkout reads and payment retries."
+                ),
+            ),
+        ],
+    )
+
+    def _fake_create_engram(payload, embedding_dim: int, owner_user_id):  # noqa: ANN001
+        captured["payload"] = payload
+        captured["embedding_dim"] = embedding_dim
+        captured["owner_user_id"] = owner_user_id
+        return EngramCreateResponse(engram_id=uuid4(), created_at=datetime.now(UTC))
+
+    monkeypatch.setattr("app.chat.service.create_engram", _fake_create_engram)
+    monkeypatch.setattr(
+        "app.chat.service.delete_session_autosave_engrams",
+        lambda **kwargs: [],
+    )
+
+    result = service._run_session_lifecycle_maintenance(
+        actor_user_id=actor_id,
+        session=session,
+    )
+
+    assert result.snapshot_engram_id is not None
+    assert result.pruned_engram_ids == []
+    assert "autosave_snapshot" in captured["payload"].tags
+    assert captured["payload"].source_session_id == session.session_id
+
+
+def test_run_session_lifecycle_prunes_retention_excess(monkeypatch) -> None:
+    actor_id = uuid4()
+    now = datetime.now(UTC)
+    session = _session(actor_id).model_copy(
+        update={
+            "autosave_enabled": True,
+            "autosave_strategy": ChatAutosaveStrategy.interval,
+            "autosave_interval_minutes": 60,
+            "retention_days": 365,
+            "retention_max_snapshots": 1,
+        }
+    )
+    service = ChatService(embedding_dim=256)
+
+    snapshots = [
+        EngramSummary(
+            engram_id=uuid4(),
+            project_id=session.project_id,
+            thread_id=f"chat-session:{session.session_id}:autosave",
+            title=f"Snapshot {idx}",
+            abstract="High-value summary for lifecycle retention policy.",
+            created_at=now - timedelta(minutes=idx),
+            tags=["autosave_snapshot"],
+            keywords=[],
+        )
+        for idx in range(3)
+    ]
+
+    monkeypatch.setattr(
+        "app.chat.service.list_session_linked_engrams",
+        lambda **kwargs: snapshots,
+    )
+    monkeypatch.setattr(
+        "app.chat.service.delete_session_autosave_engrams",
+        lambda **kwargs: kwargs["engram_ids"],
+    )
+
+    result = service._run_session_lifecycle_maintenance(
+        actor_user_id=actor_id,
+        session=session,
+    )
+
+    assert result.snapshot_engram_id is None
+    assert len(result.pruned_engram_ids) == 2

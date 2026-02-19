@@ -10,6 +10,7 @@ import {
   listPinnedDocuments,
   listPinnedEngrams,
   listSessionMessages,
+  listSessionTimeline,
   pinDocumentToSession,
   pinEngramToSession,
   saveSessionAsEngram,
@@ -24,6 +25,7 @@ import type {
   ChatSession,
   ChatDebugTrace,
   ChatSourceReference,
+  ChatTimelineEvent,
   DocumentRecord,
   EngramSummary,
   PinnedDocumentRecord,
@@ -119,6 +121,7 @@ export default function App() {
 
   const [sourceReferences, setSourceReferences] = useState<ChatSourceReference[]>([])
   const [chatDebugTrace, setChatDebugTrace] = useState<ChatDebugTrace | null>(null)
+  const [timelineEvents, setTimelineEvents] = useState<ChatTimelineEvent[]>([])
 
   const [engramLoading, setEngramLoading] = useState(false)
   const [pinnedEngrams, setPinnedEngrams] = useState<EngramSummary[]>([])
@@ -157,16 +160,18 @@ export default function App() {
   const loadSessionData = async (sessionId: string, currentProjectId: string) => {
     setEngramLoading(true)
     try {
-      const [loadedMessages, loadedPinned, loadedPinnedDocuments, loadedEngrams] = await Promise.all([
+      const [loadedMessages, loadedPinned, loadedPinnedDocuments, loadedEngrams, loadedTimeline] = await Promise.all([
         listSessionMessages(sessionId),
         listPinnedEngrams(sessionId),
         listPinnedDocuments(sessionId),
         listEngrams(normalizeProjectId(currentProjectId)),
+        listSessionTimeline(sessionId),
       ])
       setMessages(loadedMessages)
       setPinnedEngrams(loadedPinned)
       setPinnedDocuments(loadedPinnedDocuments)
       setAvailableEngrams(loadedEngrams)
+      setTimelineEvents(loadedTimeline)
     } catch (error) {
       setChatError(describeError(error))
     } finally {
@@ -230,6 +235,7 @@ export default function App() {
       setPinnedDocuments([])
       setSourceReferences([])
       setChatDebugTrace(null)
+      setTimelineEvents([])
       return
     }
     void loadSessionData(selectedSessionId, projectId)
@@ -267,6 +273,7 @@ export default function App() {
     setSourceReferences([])
     setDocuments([])
     setDocumentsError(null)
+    setTimelineEvents([])
     setNotice(null)
     setAuthError(null)
   }
@@ -279,6 +286,11 @@ export default function App() {
     system_prompt: string
     visibility_scope: 'private' | 'project'
     autosave_enabled: boolean
+    autosave_strategy: 'off' | 'interval' | 'message_count'
+    autosave_interval_minutes: number
+    autosave_min_messages: number
+    retention_days: number
+    retention_max_snapshots: number
   }) => {
     setCreatingSession(true)
     setChatError(null)
@@ -570,6 +582,7 @@ export default function App() {
           error={chatError}
           sourceReferences={sourceReferences}
           debugTrace={chatDebugTrace}
+          timelineEvents={timelineEvents}
           onComposerChange={setComposerText}
           onSend={handleSend}
           onRetry={handleRetry}

@@ -42,6 +42,9 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 - `chat.list_sessions`
 - `chat.get_session`
 - `chat.list_messages`
+- `chat.get_lifecycle_policy`
+- `chat.update_lifecycle_policy`
+- `chat.list_timeline`
 - `chat.send_message`
 - `chat.list_pinned_engrams`
 - `chat.pin_engram`

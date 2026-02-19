@@ -1,10 +1,13 @@
 import { apiJson, apiVoid, parseApiError } from './http'
 import type {
+  ChatAutosaveStrategy,
   ChatDebugTrace,
+  ChatLifecyclePolicy,
   ChatMessage,
   ChatSendResponse,
   ChatSession,
   ChatSourceReference,
+  ChatTimelineEvent,
   ContinueSessionResponse,
   EngramSummary,
   PinnedDocumentRecord,
@@ -21,6 +24,11 @@ export interface CreateSessionPayload {
   system_prompt: string
   visibility_scope: VisibilityScope
   autosave_enabled: boolean
+  autosave_strategy: ChatAutosaveStrategy
+  autosave_interval_minutes: number
+  autosave_min_messages: number
+  retention_days: number
+  retention_max_snapshots: number
 }
 
 export interface SaveEngramPayload {
@@ -79,6 +87,20 @@ export async function createChatSession(payload: CreateSessionPayload): Promise<
   })
 }
 
+export async function getLifecyclePolicy(sessionId: string): Promise<ChatLifecyclePolicy> {
+  return apiJson<ChatLifecyclePolicy>(`/api/v1/chat/sessions/${sessionId}/lifecycle-policy`)
+}
+
+export async function updateLifecyclePolicy(
+  sessionId: string,
+  payload: Partial<ChatLifecyclePolicy>,
+): Promise<ChatLifecyclePolicy> {
+  return apiJson<ChatLifecyclePolicy>(`/api/v1/chat/sessions/${sessionId}/lifecycle-policy`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function updateChatSession(
   sessionId: string,
   payload: Partial<CreateSessionPayload>,
@@ -91,6 +113,10 @@ export async function updateChatSession(
 
 export async function listSessionMessages(sessionId: string): Promise<ChatMessage[]> {
   return apiJson<ChatMessage[]>(`/api/v1/chat/sessions/${sessionId}/messages`)
+}
+
+export async function listSessionTimeline(sessionId: string): Promise<ChatTimelineEvent[]> {
+  return apiJson<ChatTimelineEvent[]>(`/api/v1/chat/sessions/${sessionId}/timeline`)
 }
 
 export async function listPinnedEngrams(sessionId: string): Promise<EngramSummary[]> {

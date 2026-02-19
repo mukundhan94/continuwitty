@@ -10,12 +10,15 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
 from app.models import (
+    ChatLifecyclePolicy,
+    ChatLifecyclePolicyUpdateRequest,
     ChatMessageCreateRequest,
     ChatMessageRecord,
     ChatSendResponse,
     ChatSessionCreateRequest,
     ChatSessionRecord,
     ChatSessionUpdateRequest,
+    ChatTimelineEvent,
     ContinueSessionRequest,
     ContinueSessionResponse,
     EngramSummary,
@@ -84,6 +87,33 @@ def create_chat_router(
         except ChatServiceError as exc:
             raise _to_http_exception(exc) from exc
 
+    @router.get("/sessions/{session_id}/lifecycle-policy", response_model=ChatLifecyclePolicy)
+    def get_lifecycle_policy(request: Request, session_id: UUID) -> ChatLifecyclePolicy:
+        actor = require_api_actor(request)
+        try:
+            return chat_service.get_lifecycle_policy(
+                actor_user_id=UUID(actor["user_id"]),
+                session_id=session_id,
+            )
+        except ChatServiceError as exc:
+            raise _to_http_exception(exc) from exc
+
+    @router.patch("/sessions/{session_id}/lifecycle-policy", response_model=ChatLifecyclePolicy)
+    def update_lifecycle_policy(
+        request: Request,
+        session_id: UUID,
+        payload: ChatLifecyclePolicyUpdateRequest,
+    ) -> ChatLifecyclePolicy:
+        actor = require_api_actor(request)
+        try:
+            return chat_service.update_lifecycle_policy(
+                actor_user_id=UUID(actor["user_id"]),
+                session_id=session_id,
+                payload=payload,
+            )
+        except ChatServiceError as exc:
+            raise _to_http_exception(exc) from exc
+
     @router.patch("/sessions/{session_id}", response_model=ChatSessionRecord)
     def update_session(
         request: Request,
@@ -110,6 +140,24 @@ def create_chat_router(
         actor = require_api_actor(request)
         try:
             return chat_service.list_messages(
+                actor_user_id=UUID(actor["user_id"]),
+                session_id=session_id,
+                limit=limit,
+                offset=offset,
+            )
+        except ChatServiceError as exc:
+            raise _to_http_exception(exc) from exc
+
+    @router.get("/sessions/{session_id}/timeline", response_model=list[ChatTimelineEvent])
+    def list_timeline_events(
+        request: Request,
+        session_id: UUID,
+        limit: int = Query(default=100, ge=1, le=500),
+        offset: int = Query(default=0, ge=0),
+    ) -> list[ChatTimelineEvent]:
+        actor = require_api_actor(request)
+        try:
+            return chat_service.list_timeline_events(
                 actor_user_id=UUID(actor["user_id"]),
                 session_id=session_id,
                 limit=limit,

@@ -79,6 +79,18 @@ Live triage continuity run (focused non-deterministic scenario):
 make acceptance-test-triage-live
 ```
 
+Deterministic mocked lifecycle run (no live provider dependency):
+
+```bash
+make acceptance-test-mock
+```
+
+Dockerized deterministic mocked lifecycle run:
+
+```bash
+make acceptance-test-mock-docker
+```
+
 Dockerized live Bedrock run:
 
 ```bash
@@ -103,5 +115,11 @@ The `@triage-live` scenario adds an incident-command workflow:
 - saves that response as a project-visible engram,
 - continues into a new chat, pins the saved engram,
 - requests a commander handoff brief and validates continuity-oriented signals.
+
+The `@mock` lifecycle scenario validates autosave behavior deterministically by mocking chat/session endpoints:
+
+- autosave `message_count` triggers a timeline snapshot only at threshold,
+- autosave `off` keeps timeline empty after repeated sends,
+- create-session payload carries expected autosave policy fields.
 
 When dockerized scenarios fail, screenshots are written to `acceptance-tests/artifacts/`.

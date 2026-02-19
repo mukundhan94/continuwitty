@@ -116,9 +116,81 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   system_prompt TEXT NOT NULL DEFAULT '',
   visibility_scope TEXT NOT NULL DEFAULT 'private' CHECK (visibility_scope IN ('private', 'project')),
   autosave_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  autosave_strategy TEXT NOT NULL DEFAULT 'off',
+  autosave_interval_minutes INTEGER NOT NULL DEFAULT 30,
+  autosave_min_messages INTEGER NOT NULL DEFAULT 6,
+  retention_days INTEGER NOT NULL DEFAULT 30,
+  retention_max_snapshots INTEGER NOT NULL DEFAULT 60,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE chat_sessions
+  ADD COLUMN IF NOT EXISTS autosave_strategy TEXT NOT NULL DEFAULT 'off',
+  ADD COLUMN IF NOT EXISTS autosave_interval_minutes INTEGER NOT NULL DEFAULT 30,
+  ADD COLUMN IF NOT EXISTS autosave_min_messages INTEGER NOT NULL DEFAULT 6,
+  ADD COLUMN IF NOT EXISTS retention_days INTEGER NOT NULL DEFAULT 30,
+  ADD COLUMN IF NOT EXISTS retention_max_snapshots INTEGER NOT NULL DEFAULT 60;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'chat_sessions_autosave_strategy_check'
+  ) THEN
+    ALTER TABLE chat_sessions
+      ADD CONSTRAINT chat_sessions_autosave_strategy_check
+      CHECK (autosave_strategy IN ('off', 'interval', 'message_count'));
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'chat_sessions_autosave_interval_minutes_check'
+  ) THEN
+    ALTER TABLE chat_sessions
+      ADD CONSTRAINT chat_sessions_autosave_interval_minutes_check
+      CHECK (autosave_interval_minutes >= 1);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'chat_sessions_autosave_min_messages_check'
+  ) THEN
+    ALTER TABLE chat_sessions
+      ADD CONSTRAINT chat_sessions_autosave_min_messages_check
+      CHECK (autosave_min_messages >= 1);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'chat_sessions_retention_days_check'
+  ) THEN
+    ALTER TABLE chat_sessions
+      ADD CONSTRAINT chat_sessions_retention_days_check
+      CHECK (retention_days >= 1);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'chat_sessions_retention_max_snapshots_check'
+  ) THEN
+    ALTER TABLE chat_sessions
+      ADD CONSTRAINT chat_sessions_retention_max_snapshots_check
+      CHECK (retention_max_snapshots >= 1);
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS chat_sessions_owner_created_idx
   ON chat_sessions (owner_user_id, created_at DESC);

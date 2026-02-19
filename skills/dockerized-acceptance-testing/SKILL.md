@@ -18,6 +18,7 @@ Keep end-to-end UX regressions detectable through Gherkin scenarios running agai
    - `make acceptance-typecheck`
 4. Run dockerized acceptance:
    - `make acceptance-test-docker`
+   - `make acceptance-test-mock-docker` for deterministic mocked workflow checks.
 5. If Bedrock integration changed, run live acceptance:
    - `make acceptance-test-bedrock-live`
    - `make acceptance-test-triage-live`
@@ -43,6 +44,7 @@ Keep end-to-end UX regressions detectable through Gherkin scenarios running agai
 - `make acceptance-bddgen` passes
 - `make acceptance-typecheck` passes
 - `make acceptance-test-docker` passes
+- If deterministic mock workflows changed: `make acceptance-test-mock` or `make acceptance-test-mock-docker` passes
 - If Bedrock changed: `make acceptance-test-bedrock-live` passes
 - If triage continuity behavior changed: `make acceptance-test-triage-live` passes
 - README contains updated workflow + env notes for newcomers

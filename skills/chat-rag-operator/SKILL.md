@@ -10,6 +10,7 @@ description: Use this skill when implementing chat sessions, context assembly wi
 - Wiring pinned engrams into model context.
 - Blending ingested document chunk evidence with snapshot memory.
 - Implementing continue-in-new-chat flows.
+- Adding session lifecycle policy controls (autosave cadence, retention, timeline events).
 
 ## Workflow
 1. Persist session and message state in DB-backed repositories.
@@ -26,12 +27,18 @@ description: Use this skill when implementing chat sessions, context assembly wi
    - provider call duration and token usage
    - request/response snapshots
 7. Add save-as-engram endpoint to snapshot useful chat state.
+8. Apply lifecycle maintenance after assistant output:
+   - autosave policy trigger (interval or message-count)
+   - duplicate/low-value snapshot guards
+   - retention pruning of autosave-tagged snapshots
+   - timeline event typing for UI/MCP consumers
 
 ## Module Layout (Current)
 - `api/app/chat/api.py`: chat route transport layer.
 - `api/app/chat/service.py`: orchestration and continuity flows.
 - `api/app/chat/context.py`: retrieval + pinned context assembly.
 - `api/app/chat/errors.py`: domain errors for HTTP mapping.
+- `api/app/chat/lifecycle_policy.py`: autosave trigger/retention/timeline pure-policy helpers.
 
 ## Continuity Pattern
 - Start a new session by cloning provider/system settings and pinned engrams.
@@ -40,3 +47,4 @@ description: Use this skill when implementing chat sessions, context assembly wi
 ## Validation
 - Integration test: create -> message -> pin -> continue -> save-as-engram.
 - Unit test: debug trace contains timings/tokens and remains non-blocking when telemetry sinks fail.
+- Lifecycle test: policy normalization, autosave trigger guards, retention pruning, and timeline route/MCP parity.

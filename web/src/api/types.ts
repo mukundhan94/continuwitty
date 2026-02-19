@@ -1,6 +1,7 @@
 export type UserRole = 'admin' | 'analyst' | 'viewer'
 export type ChatProvider = 'openai' | 'anthropic' | 'bedrock'
 export type VisibilityScope = 'private' | 'project'
+export type ChatAutosaveStrategy = 'off' | 'interval' | 'message_count'
 
 export interface UserProfile {
   user_id: string
@@ -46,8 +47,32 @@ export interface ChatSession {
   system_prompt: string
   visibility_scope: VisibilityScope
   autosave_enabled: boolean
+  autosave_strategy: ChatAutosaveStrategy
+  autosave_interval_minutes: number
+  autosave_min_messages: number
+  retention_days: number
+  retention_max_snapshots: number
   created_at: string
   updated_at: string
+}
+
+export interface ChatLifecyclePolicy {
+  autosave_enabled: boolean
+  autosave_strategy: ChatAutosaveStrategy
+  autosave_interval_minutes: number
+  autosave_min_messages: number
+  retention_days: number
+  retention_max_snapshots: number
+}
+
+export interface ChatTimelineEvent {
+  event_id: string
+  session_id: string
+  event_type: 'autosave_snapshot' | 'manual_snapshot' | 'consolidation' | string
+  title: string
+  abstract: string
+  tags: string[]
+  created_at: string
 }
 
 export interface ChatMessage {

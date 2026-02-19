@@ -80,6 +80,8 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Guarantee multi-document pin behavior so all pinned docs contribute to context and source metadata.
 - [x] Add chat debug traces with embed/LLM timing, token usage, and input/output inspection (optional Langfuse sink).
 - [x] Harden observability with latest Langfuse API-only tracing, explicit publish/error logs, and scrollable in-UI debug trace inspection.
+- [x] Add Phase 18 memory lifecycle controls (autosave strategies, retention pruning, consolidation-aware timeline events, and UI/MCP policy management).
+- [x] Add deterministic mocked acceptance coverage for autosave lifecycle policies.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -90,7 +92,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - Next implementation scope:
   - phase 16: MCP developer tooling and typed clients (in progress: compatibility + typed clients complete, CLI smoke command deferred).
   - phase 17: document ingestion and RAG-ready retrieval (implemented and verified, including session-level document pinning support).
-  - phase 18: memory lifecycle policies (autosave/retention/consolidation).
+  - phase 18: memory lifecycle policies (core autosave/retention/timeline controls implemented and validated).
   - phase 19: collaboration and sharing model.
   - phase 20: production security hardening.
 
@@ -118,6 +120,7 @@ Agent workflow skills are under `skills/`:
 - `frontend-style-system`: token-driven styled-components + Tailwind workflow rules.
 - `dockerized-acceptance-testing`: Playwright-BDD (`bddgen`) dockerized quality-gate workflow.
 - `document-ingestion-rag`: deterministic document chunking, ingestion APIs, and blended retrieval workflow.
+- `memory-lifecycle-policies`: autosave cadence, retention bounds, consolidation guards, and timeline event workflow.
 
 ## Why This Exists
 
@@ -216,6 +219,8 @@ engram/
       SKILL.md
     document-ingestion-rag/
       SKILL.md
+    memory-lifecycle-policies/
+      SKILL.md
   db/
     init/
       001_schema.sql
@@ -238,6 +243,7 @@ engram/
         api.py
         context.py
         errors.py
+        lifecycle_policy.py
         service.py
       chat_repository.py
       cli.py
@@ -341,6 +347,7 @@ engram/
     features/
       authentication.feature
       bedrock-live.feature
+      lifecycle-autosave-mock.feature
       session-layout.feature
       triage-live.feature
     src/
@@ -351,6 +358,7 @@ engram/
       steps/
         auth.steps.ts
         bedrock.steps.ts
+        lifecycle-mock.steps.ts
         session.steps.ts
         triage.steps.ts
 ```
@@ -373,11 +381,12 @@ engram/
 - `api/app/agent_workflow.py`: LangGraph workflow, checkpointing, and resume logic.
 - `api/app/audit.py`: append-only local audit event writer (`jsonl`).
 - `api/app/auth.py`: password hashing/verification and CSRF token helpers.
-- `api/app/chat/api.py`: chat/session REST route layer (`/api/v1/chat/*`) including pinned engram and pinned document management routes.
+- `api/app/chat/api.py`: chat/session REST route layer (`/api/v1/chat/*`) including lifecycle policy/timeline and pinned engram/document management routes.
 - `api/app/chat/context.py`: context assembler for pinned + retrieved engram packs plus pinned/retrieved document chunk context.
 - `api/app/chat/errors.py`: chat-domain error types mapped to HTTP responses.
-- `api/app/chat/service.py`: chat continuity orchestration and provider call workflow.
-- `api/app/chat_repository.py`: chat session/message, pinned-engram, and pinned-document persistence with visibility checks.
+- `api/app/chat/lifecycle_policy.py`: pure lifecycle policy helpers for autosave normalization, snapshot triggers, retention pruning, and timeline event typing.
+- `api/app/chat/service.py`: chat continuity orchestration, lifecycle maintenance (autosave/retention), and provider call workflow.
+- `api/app/chat_repository.py`: chat session/message, lifecycle policy field persistence, and pinned-engram/pinned-document visibility checks.
 - `api/app/cli.py`: local terminal workflows for upload/search/rehydrate.
 - `api/app/consolidation.py`: local background maintenance logic for consolidation snapshots.
 - `api/app/ingestion/api.py`: ingestion REST routes (`/api/v1/ingestion/*`) for text/file intake and retrieval.
@@ -426,6 +435,7 @@ engram/
 - `api/tests/test_chat_repository.py`: integration coverage for chat sessions/messages/pinning visibility.
 - `api/tests/test_chat_api_integration.py`: end-to-end chat API lifecycle and continuity flow tests.
 - `api/tests/test_chat_context.py`: context assembly merge/dedupe behavior tests.
+- `api/tests/test_chat_lifecycle_policy.py`: lifecycle policy normalization/trigger/pruning helper tests.
 - `api/tests/test_chat_service.py`: chat service orchestration and save/continue behavior tests.
 - `api/tests/test_mcp_api_integration.py`: MCP SSE transport and tool success/error/auth coverage.
 - `api/tests/test_mcp_client.py`: typed Python MCP client parsing/auth/transport contract tests.
@@ -744,12 +754,19 @@ make acceptance-sync
 make acceptance-bddgen
 make acceptance-typecheck
 make acceptance-test
+make acceptance-test-mock
 ```
 
 Dockerized runner (uses compose services):
 
 ```bash
 make acceptance-test-docker
+```
+
+Dockerized deterministic mocked lifecycle runner:
+
+```bash
+make acceptance-test-mock-docker
 ```
 
 Live Bedrock runner (real provider call, excluded from default deterministic suite):
@@ -762,6 +779,12 @@ Live triage continuity runner (real provider call, excluded from default determi
 
 ```bash
 make acceptance-test-triage-live
+```
+
+Deterministic mocked lifecycle runner:
+
+```bash
+make acceptance-test-mock
 ```
 
 Dockerized live Bedrock runner:
@@ -787,6 +810,7 @@ Current feature coverage:
 - continue-in-new-chat continuity behavior
 - tagged live Bedrock scenario for non-deterministic response validation with default model selection
 - tagged live triage scenario for save-as-engram, pinning, and continuity handoff generation
+- deterministic mocked lifecycle policy scenario for autosave `off` and `message_count` thresholds
 
 ## Workflow Notes (Current Validation Sequence)
 
@@ -1801,9 +1825,62 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make check` passed (`111` API tests + eval suite).
    - `make web-check` passed (`39` web tests + build).
 
+### 2026-02-18 (Phase 18 - memory lifecycle policy controls pass)
+
+1. Added session lifecycle schema controls:
+   - `autosave_strategy`, `autosave_interval_minutes`, `autosave_min_messages`.
+   - `retention_days`, `retention_max_snapshots`.
+   - idempotent schema alter support and value constraints in `db/init/001_schema.sql`.
+2. Added lifecycle policy contracts and pure-policy module:
+   - new models for policy read/update and timeline events in `api/app/models.py`.
+   - new `api/app/chat/lifecycle_policy.py` for normalization, trigger guards, retention selectors, and event typing.
+3. Added chat lifecycle APIs and service wiring:
+   - `GET/PATCH /api/v1/chat/sessions/{session_id}/lifecycle-policy`
+   - `GET /api/v1/chat/sessions/{session_id}/timeline`
+   - autosave snapshot + retention pruning maintenance on assistant completion (sync + stream).
+4. Added MCP lifecycle tool coverage:
+   - `chat.get_lifecycle_policy`
+   - `chat.update_lifecycle_policy`
+   - `chat.list_timeline`
+5. Added UI lifecycle controls and timeline visibility:
+   - session creator now captures autosave strategy and retention settings.
+   - chat panel renders lifecycle timeline entries for newcomers/operators.
+6. Added tests:
+   - `api/tests/test_chat_lifecycle_policy.py`
+   - lifecycle policy/repository/service/API/MCP coverage expansions.
+   - web updates for session sidebar and chat panel lifecycle rendering checks.
+7. Validation:
+   - `make check` passed (`123` API tests + eval suite).
+   - `make web-check` passed (`39` web tests + build).
+
+### 2026-02-18 (Phase 18 follow-up - autosave configuration trigger tests)
+
+1. Expanded lifecycle integration tests to validate autosave behavior by policy configuration:
+   - `off`: no autosave snapshots are created after chat messages.
+   - `message_count` (threshold 2): autosave triggers on threshold and not before.
+   - `interval` (60 minutes): first autosave is created, immediate second message does not create another snapshot.
+2. Validation:
+   - `make check` passed (`126` API tests + eval suite).
+
+### 2026-02-18 (Acceptance follow-up - mocked autosave lifecycle scenario)
+
+1. Added deterministic mocked acceptance scenario:
+   - `acceptance-tests/features/lifecycle-autosave-mock.feature`
+   - validates autosave `message_count` threshold trigger and autosave `off` no-trigger behavior.
+2. Added stateful mock step bindings:
+   - `acceptance-tests/src/steps/lifecycle-mock.steps.ts`
+   - intercepts chat/session endpoints and emits deterministic SSE stream events.
+3. Added runner commands:
+   - `make acceptance-test-mock`
+   - `cd acceptance-tests && npm run test:mock`
+4. Validation:
+   - `make acceptance-bddgen` passed
+   - `make acceptance-typecheck` passed
+   - `make acceptance-test-mock` passed
+
 ### Next Immediate Steps (One By One)
 
-1. Phase 18 kickoff: ship memory lifecycle controls for autosave cadence, retention, and consolidation policies.
+1. Phase 18 follow-up: add explicit consolidation merge/grouping event semantics in timeline rendering.
 2. Add linked-engram lineage support (parent/child references + traversal) so memory origin chains can be traced across sessions.
 3. Expand MCP workflow docs and tool coverage for external clients (for example, LibreChat) using the existing SSE JSON-RPC surface.
 4. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
@@ -1830,6 +1907,9 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 - `GET /api/v1/chat/sessions/{session_id}`
 - `PATCH /api/v1/chat/sessions/{session_id}`
 - `GET /api/v1/chat/sessions/{session_id}/messages`
+- `GET /api/v1/chat/sessions/{session_id}/lifecycle-policy`
+- `PATCH /api/v1/chat/sessions/{session_id}/lifecycle-policy`
+- `GET /api/v1/chat/sessions/{session_id}/timeline`
 - `GET /api/v1/chat/sessions/{session_id}/engrams`
 - `GET /api/v1/chat/sessions/{session_id}/documents`
 - `POST /api/v1/chat/sessions/{session_id}/messages`
@@ -1910,6 +1990,9 @@ Core tools:
 - `chat.list_sessions`
 - `chat.get_session`
 - `chat.list_messages`
+- `chat.get_lifecycle_policy`
+- `chat.update_lifecycle_policy`
+- `chat.list_timeline`
 - `chat.send_message`
 - `chat.list_pinned_engrams`
 - `chat.pin_engram`
@@ -1947,7 +2030,12 @@ Example calls by tool group:
     "provider": "openai",
     "model_id": "gpt-4o-mini",
     "visibility_scope": "private",
-    "autosave_enabled": false
+    "autosave_enabled": true,
+    "autosave_strategy": "interval",
+    "autosave_interval_minutes": 30,
+    "autosave_min_messages": 4,
+    "retention_days": 30,
+    "retention_max_snapshots": 25
   }
 }
 ```
@@ -2068,6 +2156,11 @@ Backend tests live under `api/tests`:
 - `test_eval_harness.py`: scenario-based evaluation harness pass/fail checks.
 - `test_cli.py`: upload/search/rehydrate CLI command behavior.
 - `test_consolidation.py`: consolidation snapshot generation and safety checks.
+- `test_chat_lifecycle_policy.py`: autosave normalization/trigger rules and retention pruning heuristics.
+- `test_chat_repository.py`: chat session/message, pinning, and lifecycle policy persistence checks.
+- `test_chat_api_integration.py`: end-to-end chat API lifecycle/continuity including policy and timeline routes.
+- `test_chat_service.py`: chat orchestration with autosave execution and retention pruning behavior.
+- `test_mcp_api_integration.py`: MCP tool contract coverage including lifecycle policy/timeline tools.
 - `conftest.py`: DB fixture, schema bootstrap, and cleanup.
 
 Frontend unit/component tests live under `web/src/**/*.test.ts(x)`:
@@ -2087,6 +2180,7 @@ Acceptance tests live under `acceptance-tests`:
 - `features/session-layout.feature`: pane height stability + continuation behavior.
 - `features/bedrock-live.feature`: tagged non-deterministic Bedrock live-provider flow.
 - `features/triage-live.feature`: tagged non-deterministic triage continuity flow (save/pin/continue/handoff).
+- `features/lifecycle-autosave-mock.feature`: deterministic mocked lifecycle autosave policy behavior coverage.
 - `src/steps/*.ts`: Playwright step bindings.
 - `src/support/*.ts`: shared world/env/hooks.
 
@@ -2099,6 +2193,8 @@ Notes:
 - `make acceptance-bddgen` regenerates Playwright specs from `.feature` files.
 - `make acceptance-typecheck` validates acceptance TypeScript.
 - `make acceptance-test-docker` runs Gherkin acceptance tests against dockerized API+web.
+- `make acceptance-test-mock` runs only `@mock` deterministic acceptance scenarios.
+- `make acceptance-test-mock-docker` runs `@mock` deterministic acceptance scenarios against dockerized API+web.
 - `make acceptance-test-bedrock-live` runs only `@bedrock-live` scenarios against live Bedrock.
 - `make acceptance-test-triage-live` runs only `@triage-live` incident triage continuity scenarios.
 
@@ -2254,26 +2350,23 @@ Planned upgrade: swap to a local embedding model (e.g. sentence-transformers) or
 - Remaining in milestone:
   - CLI smoke utility (`engram-cli mcp-call`) deferred to the next pass
 
-### Milestone 16 (Next)
-
-- MCP developer experience and tooling:
-  - typed MCP client helpers (Python + TypeScript)
-  - MCP contract tests and local smoke CLI tools
-  - expanded MCP usage docs and copy-ready examples
-
-### Milestone 17 (Next)
+### Milestone 17 (Completed)
 
 - RAG-ready ingestion and retrieval expansion:
   - file/document upload ingestion
-  - chunking + metadata pipeline
+  - deterministic chunking + metadata pipeline
   - retrieval blending between chat snapshots and document chunks
+  - session-level document pin/unpin and continuation carry-forward
 
-### Milestone 18 (Next)
+### Milestone 18 (In Progress)
 
-- Memory lifecycle controls:
-  - autosave policy options
-  - retention windows and pruning controls
-  - consolidation visibility and controls in UI
+- Memory lifecycle controls (core shipped):
+  - session-level autosave strategy options (`off`/`interval`/`message_count`)
+  - retention windows and bounded snapshot pruning
+  - lifecycle policy and timeline APIs + MCP tool coverage
+  - lifecycle timeline surfaced in chat UI
+- Remaining in milestone:
+  - richer consolidation merge/group timeline semantics
 
 ### Milestone 19 (Planned)
 

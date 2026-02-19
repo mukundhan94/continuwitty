@@ -5,7 +5,13 @@ import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import styled from 'styled-components'
 
-import type { ChatDebugTrace, ChatMessage, ChatSession, ChatSourceReference } from '../api/types'
+import type {
+  ChatDebugTrace,
+  ChatMessage,
+  ChatSession,
+  ChatSourceReference,
+  ChatTimelineEvent,
+} from '../api/types'
 import {
   ChatMessageBubble,
   ErrorText,
@@ -92,6 +98,39 @@ const DebugBlock = styled.pre`
   overflow: auto;
 `
 
+const TimelineStrip = styled.div`
+  border-top: 1px dashed var(--color-line);
+  padding-top: 0.5rem;
+  display: grid;
+  gap: 0.4rem;
+`
+
+const TimelineList = styled.ul`
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  max-height: 12rem;
+  overflow: auto;
+  display: grid;
+  gap: 0.3rem;
+`
+
+const TimelineItem = styled.li`
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  padding: 0.38rem 0.45rem;
+  display: grid;
+  gap: 0.2rem;
+`
+
+const TimelineMeta = styled.p`
+  font-size: 0.72rem;
+  color: var(--color-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+`
+
 interface ChatPanelProps {
   session: ChatSession | null
   messages: ChatMessage[]
@@ -102,6 +141,7 @@ interface ChatPanelProps {
   error: string | null
   sourceReferences: ChatSourceReference[]
   debugTrace: ChatDebugTrace | null
+  timelineEvents: ChatTimelineEvent[]
   onComposerChange: (value: string) => void
   onSend: () => Promise<void>
   onRetry: () => Promise<void>
@@ -139,6 +179,7 @@ export function ChatPanel({
   error,
   sourceReferences,
   debugTrace,
+  timelineEvents,
   onComposerChange,
   onSend,
   onRetry,
@@ -256,6 +297,25 @@ export function ChatPanel({
           </DebugPanelBody>
         </DebugPanel>
       ) : null}
+
+      <TimelineStrip>
+        <SourceTitle>Lifecycle Timeline</SourceTitle>
+        {timelineEvents.length === 0 ? (
+          <MutedText>No lifecycle events yet.</MutedText>
+        ) : (
+          <TimelineList>
+            {timelineEvents.map((event) => (
+              <TimelineItem key={event.event_id}>
+                <TimelineMeta>
+                  {event.event_type.replaceAll('_', ' ')} · {new Date(event.created_at).toLocaleString()}
+                </TimelineMeta>
+                <strong>{event.title}</strong>
+                <MutedText>{event.abstract}</MutedText>
+              </TimelineItem>
+            ))}
+          </TimelineList>
+        )}
+      </TimelineStrip>
 
       <ComposerForm onSubmit={handleSubmit}>
         <textarea

@@ -132,7 +132,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- Implemented in current cycle (pending phase verification/commit).
+- Implemented and validated in current cycle.
 - Delivered: ingestion routes, deterministic chunking, embedding abstraction/fallback, chat context blending, and UI upload workflow.
 
 ### Goals
@@ -154,6 +154,11 @@ Build a local-first memory system where agents and humans can:
 ---
 
 ### Phase 18 - Memory Lifecycle Policies (Autosave, Retention, Consolidation)
+
+### Status
+
+- In progress: lifecycle policy schema/models/service/API/MCP/UI timeline controls are implemented and validated.
+- Remaining: richer merge/consolidation grouping semantics in timeline presentation.
 
 ### Goals
 

@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 
 import styled from 'styled-components'
 
-import type { ChatProvider, ChatSession, VisibilityScope } from '../api/types'
+import type { ChatAutosaveStrategy, ChatProvider, ChatSession, VisibilityScope } from '../api/types'
 import {
   GlassPane,
   MutedText,
@@ -121,6 +121,11 @@ interface CreateSessionRequest {
   system_prompt: string
   visibility_scope: VisibilityScope
   autosave_enabled: boolean
+  autosave_strategy: ChatAutosaveStrategy
+  autosave_interval_minutes: number
+  autosave_min_messages: number
+  retention_days: number
+  retention_max_snapshots: number
 }
 
 interface SessionSidebarProps {
@@ -156,6 +161,11 @@ export function SessionSidebar({
   const [systemPrompt, setSystemPrompt] = useState('')
   const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>(defaultVisibilityScope)
   const [autosaveEnabled, setAutosaveEnabled] = useState(false)
+  const [autosaveStrategy, setAutosaveStrategy] = useState<ChatAutosaveStrategy>('interval')
+  const [autosaveIntervalMinutes, setAutosaveIntervalMinutes] = useState(30)
+  const [autosaveMinMessages, setAutosaveMinMessages] = useState(6)
+  const [retentionDays, setRetentionDays] = useState(30)
+  const [retentionMaxSnapshots, setRetentionMaxSnapshots] = useState(60)
   const [showCreator, setShowCreator] = useState(true)
 
   const sortedSessions = useMemo(
@@ -178,6 +188,11 @@ export function SessionSidebar({
       system_prompt: systemPrompt.trim(),
       visibility_scope: visibilityScope,
       autosave_enabled: autosaveEnabled,
+      autosave_strategy: autosaveEnabled ? autosaveStrategy : 'off',
+      autosave_interval_minutes: autosaveIntervalMinutes,
+      autosave_min_messages: autosaveMinMessages,
+      retention_days: retentionDays,
+      retention_max_snapshots: retentionMaxSnapshots,
     })
     setTitle('New chat session')
   }
@@ -262,6 +277,70 @@ export function SessionSidebar({
                   />
                   <span>Enable autosave snapshots</span>
                 </CheckboxRow>
+
+                {autosaveEnabled ? (
+                  <>
+                    <FieldBlock>
+                      <label htmlFor="autosave-strategy">Autosave Strategy</label>
+                      <select
+                        id="autosave-strategy"
+                        value={autosaveStrategy}
+                        onChange={(event) => setAutosaveStrategy(event.target.value as ChatAutosaveStrategy)}
+                      >
+                        <option value="interval">Interval</option>
+                        <option value="message_count">Message Count</option>
+                      </select>
+                    </FieldBlock>
+
+                    {autosaveStrategy === 'interval' ? (
+                      <FieldBlock>
+                        <label htmlFor="autosave-interval-minutes">Autosave Interval (minutes)</label>
+                        <input
+                          id="autosave-interval-minutes"
+                          type="number"
+                          min={1}
+                          value={autosaveIntervalMinutes}
+                          onChange={(event) => setAutosaveIntervalMinutes(Number(event.target.value) || 1)}
+                        />
+                      </FieldBlock>
+                    ) : (
+                      <FieldBlock>
+                        <label htmlFor="autosave-min-messages">Autosave Every N Assistant Messages</label>
+                        <input
+                          id="autosave-min-messages"
+                          type="number"
+                          min={1}
+                          value={autosaveMinMessages}
+                          onChange={(event) => setAutosaveMinMessages(Number(event.target.value) || 1)}
+                        />
+                      </FieldBlock>
+                    )}
+
+                    <SplitGrid>
+                      <FieldBlock>
+                        <label htmlFor="retention-days">Retention Days</label>
+                        <input
+                          id="retention-days"
+                          type="number"
+                          min={1}
+                          value={retentionDays}
+                          onChange={(event) => setRetentionDays(Number(event.target.value) || 1)}
+                        />
+                      </FieldBlock>
+
+                      <FieldBlock>
+                        <label htmlFor="retention-max-snapshots">Max Snapshots</label>
+                        <input
+                          id="retention-max-snapshots"
+                          type="number"
+                          min={1}
+                          value={retentionMaxSnapshots}
+                          onChange={(event) => setRetentionMaxSnapshots(Number(event.target.value) || 1)}
+                        />
+                      </FieldBlock>
+                    </SplitGrid>
+                  </>
+                ) : null}
               </CreatorFields>
 
               <CreatorStickyFooter>
