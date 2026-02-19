@@ -3,137 +3,279 @@ SHELL := /bin/zsh
 -include .env
 export
 
+# Docker / paths
+DOCKER_COMPOSE_DIR ?= .
+DOCKER_COMPOSE_FILE ?= $(DOCKER_COMPOSE_DIR)/docker-compose.yml
+DOCKER_COMPOSE := docker compose -f $(DOCKER_COMPOSE_FILE)
+ACCEPTANCE_DIR ?= ./acceptance-tests
+
+# Diagram assets
 DIAGRAM_PUML_FILES := docs/architecture-workflows.puml docs/model-switch-engram-usecases.puml
 
-.PHONY: db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+# Terminal colors
+SUCCESS = \033[0;32m
+PROGRESS = \033[1;35m
+ERROR = \033[0;31m
+INFO = \033[1;36m
+NC = \033[0m
 
-db-up:
-	docker compose up -d --build --force-recreate db
+.DEFAULT_GOAL := help
 
-db-down:
-	docker compose down
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
-db-reset:
-	docker compose down -v
-	rm -f data/langgraph_checkpoints.sqlite data/audit_events.jsonl
-	docker compose up -d --build --force-recreate db
+help: ## Print all Makefile commands with categorized descriptions and usage hints
+	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
+	@printf '$(PROGRESS)Usage:$(NC) $(INFO)make <target>$(NC)\n'
+	@printf '$(PROGRESS)Example:$(NC) $(INFO)make stack-up$(NC)\n\n'
+	@awk ' \
+		BEGIN { \
+			FS = ":.*## "; \
+			c_reset = "\033[0m"; \
+			c_group = "\033[1;33m"; \
+			c_cmd = "\033[1;34m"; \
+			c_desc = "\033[0;37m"; \
+		} \
+		function group_name(target) { \
+			if (target == "help" || target == "print-config") return "Help"; \
+			if (target ~ /^db-/) return "Database"; \
+			if (target ~ /^stack-/) return "Stack"; \
+			if (target ~ /^acceptance-/) return "Acceptance"; \
+			if (target ~ /^web-/ || target == "web") return "Web"; \
+			if (target ~ /^diagram-/) return "Diagrams"; \
+			if (target == "sync" || target == "api" || target == "cli" || target == "consolidate" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "eval" || target == "check") return "API/Backend"; \
+			return "Other"; \
+		} \
+		/^[a-zA-Z0-9_.-]+:.*## / { \
+			target = $$1; \
+			desc = $$2; \
+			group = group_name(target); \
+			if (!(group in seen)) { \
+				seen[group] = 1; \
+				order[++count] = group; \
+			} \
+			lines[group] = lines[group] sprintf("  %s%-34s%s %s%s%s\n", c_cmd, target, c_reset, c_desc, desc, c_reset); \
+		} \
+		END { \
+			for (i = 1; i <= count; i++) { \
+				group = order[i]; \
+				printf "%s%s%s\n", c_group, group, c_reset; \
+				printf "%s", lines[group]; \
+				printf "\n"; \
+			} \
+		} \
+	' Makefile
+	@printf '$(SUCCESS)Recommended flows:$(NC)\n'
+	@printf '  $(INFO)make sync && make web-sync$(NC)                  Setup dependencies\n'
+	@printf '  $(INFO)make stack-up$(NC)                               Run db + api + web\n'
+	@printf '  $(INFO)make check && make web-check$(NC)                Run backend + web quality gates\n'
+	@printf '  $(INFO)make acceptance-bddgen && make acceptance-test-mock$(NC)  Run deterministic acceptance tests\n'
+	@printf '\n'
+	@$(MAKE) --no-print-directory print-config
 
-db-logs:
-	docker compose logs -f db
+print-config: ## Print key Makefile configuration values for local debugging
+	@printf '$(SUCCESS)Current configuration:$(NC)\n'
+	@printf '  $(PROGRESS)DOCKER_COMPOSE_FILE$(NC): %s\n' "$(DOCKER_COMPOSE_FILE)"
+	@printf '  $(PROGRESS)ACCEPTANCE_DIR$(NC):    %s\n' "$(ACCEPTANCE_DIR)"
+	@printf '  $(PROGRESS)DIAGRAM_PUML_FILES$(NC): %s\n' "$(DIAGRAM_PUML_FILES)"
 
-stack-up:
-	docker compose up -d --build --force-recreate db api web
+db-up: ## Start only the database container (build + force recreate)
+	@printf '$(PROGRESS)Starting database service...$(NC)\n'
+	@$(DOCKER_COMPOSE) up -d --build --force-recreate db
+	@printf '$(SUCCESS)✓ Database is up$(NC)\n'
 
-stack-down:
-	docker compose down
+db-down: ## Stop the current compose stack
+	@printf '$(PROGRESS)Stopping compose stack...$(NC)\n'
+	@$(DOCKER_COMPOSE) down
+	@printf '$(SUCCESS)✓ Compose stack stopped$(NC)\n'
 
-stack-reset:
-	docker compose down -v
-	rm -f data/langgraph_checkpoints.sqlite data/audit_events.jsonl
-	docker compose up -d --build --force-recreate db api web
+db-reset: ## Recreate database from scratch (drops volumes + local checkpoint artifacts)
+	@printf '$(PROGRESS)Resetting database volumes and local artifacts...$(NC)\n'
+	@$(DOCKER_COMPOSE) down -v
+	@rm -f data/langgraph_checkpoints.sqlite data/audit_events.jsonl
+	@$(DOCKER_COMPOSE) up -d --build --force-recreate db
+	@printf '$(SUCCESS)✓ Database reset complete$(NC)\n'
 
-stack-logs:
-	docker compose logs -f db api web
+db-logs: ## Tail database logs
+	@printf '$(PROGRESS)Tailing database logs (Ctrl+C to exit)...$(NC)\n'
+	@$(DOCKER_COMPOSE) logs -f db
 
-acceptance-sync:
-	cd acceptance-tests && npm install
+stack-up: ## Start db + api + web containers (build + force recreate)
+	@printf '$(PROGRESS)Starting db + api + web services...$(NC)\n'
+	@$(DOCKER_COMPOSE) up -d --build --force-recreate db api web
+	@printf '$(SUCCESS)✓ Stack started (db, api, web)$(NC)\n'
+	@printf '$(INFO)Tip: run make stack-logs to follow logs$(NC)\n'
 
-acceptance-bddgen:
-	cd acceptance-tests && npm run bdd:gen
+stack-down: ## Stop db + api + web containers
+	@printf '$(PROGRESS)Stopping db + api + web services...$(NC)\n'
+	@$(DOCKER_COMPOSE) down
+	@printf '$(SUCCESS)✓ Stack stopped$(NC)\n'
 
-acceptance-typecheck:
-	cd acceptance-tests && npm run typecheck
+stack-reset: ## Recreate full stack and wipe local checkpoints/artifacts
+	@printf '$(PROGRESS)Resetting full stack and local artifacts...$(NC)\n'
+	@$(DOCKER_COMPOSE) down -v
+	@rm -f data/langgraph_checkpoints.sqlite data/audit_events.jsonl
+	@$(DOCKER_COMPOSE) up -d --build --force-recreate db api web
+	@printf '$(SUCCESS)✓ Full stack reset complete$(NC)\n'
 
-acceptance-test:
-	cd acceptance-tests && npm run test
+stack-logs: ## Tail combined logs for db, api, and web
+	@printf '$(PROGRESS)Tailing stack logs (db, api, web). Press Ctrl+C to exit.$(NC)\n'
+	@$(DOCKER_COMPOSE) logs -f db api web
 
-acceptance-test-mock:
-	cd acceptance-tests && npm run test:mock
+acceptance-sync: ## Install acceptance test dependencies
+	@printf '$(PROGRESS)Installing acceptance test dependencies...$(NC)\n'
+	@cd $(ACCEPTANCE_DIR) && npm install
+	@printf '$(SUCCESS)✓ Acceptance dependencies installed$(NC)\n'
 
-acceptance-test-bedrock-live:
-	cd acceptance-tests && npm run test:bedrock-live
+acceptance-bddgen: ## Generate Playwright-BDD test artifacts from feature files
+	@printf '$(PROGRESS)Generating Playwright-BDD artifacts...$(NC)\n'
+	@cd $(ACCEPTANCE_DIR) && npm run bdd:gen
+	@printf '$(SUCCESS)✓ BDD generation complete$(NC)\n'
 
-acceptance-test-triage-live:
-	cd acceptance-tests && npm run test:triage-live
+acceptance-typecheck: ## Type-check acceptance test code
+	@printf '$(PROGRESS)Type-checking acceptance tests...$(NC)\n'
+	@cd $(ACCEPTANCE_DIR) && npm run typecheck
+	@printf '$(SUCCESS)✓ Acceptance type-check passed$(NC)\n'
 
-acceptance-test-docker:
+acceptance-test: ## Run full acceptance suite
+	@printf '$(PROGRESS)Running full acceptance suite...$(NC)\n'
+	@cd $(ACCEPTANCE_DIR) && npm run test
+	@printf '$(SUCCESS)✓ Acceptance suite completed$(NC)\n'
+
+acceptance-test-mock: ## Run deterministic mock acceptance scenarios
+	@printf '$(PROGRESS)Running deterministic mock acceptance scenarios...$(NC)\n'
+	@cd $(ACCEPTANCE_DIR) && npm run test:mock
+	@printf '$(SUCCESS)✓ Mock acceptance scenarios completed$(NC)\n'
+
+acceptance-test-bedrock-live: ## Run live Bedrock acceptance scenarios
+	@printf '$(PROGRESS)Running live Bedrock acceptance scenarios...$(NC)\n'
+	@cd $(ACCEPTANCE_DIR) && npm run test:bedrock-live
+	@printf '$(SUCCESS)✓ Bedrock live acceptance completed$(NC)\n'
+
+acceptance-test-triage-live: ## Run live triage acceptance scenario
+	@printf '$(PROGRESS)Running live triage acceptance scenario...$(NC)\n'
+	@cd $(ACCEPTANCE_DIR) && npm run test:triage-live
+	@printf '$(SUCCESS)✓ Triage live acceptance completed$(NC)\n'
+
+acceptance-test-docker: ## Run full acceptance suite inside docker compose profile
+	@printf '$(PROGRESS)Running full acceptance suite in Docker profile \"acceptance\"...$(NC)\n'
 	@exit_code=0; \
-	docker compose --profile acceptance up --build --force-recreate --abort-on-container-exit acceptance-tests || exit_code=$$?; \
-	docker compose --profile acceptance down; \
+	$(DOCKER_COMPOSE) --profile acceptance up --build --force-recreate --abort-on-container-exit acceptance-tests || exit_code=$$?; \
+	$(DOCKER_COMPOSE) --profile acceptance down; \
 	exit $$exit_code
+	@printf '$(SUCCESS)✓ Docker acceptance suite completed$(NC)\n'
 
-acceptance-test-mock-docker:
+acceptance-test-mock-docker: ## Run mock acceptance suite in docker (ACCEPTANCE_BDD_TAGS=@mock)
+	@printf '$(PROGRESS)Running mock acceptance suite in Docker...$(NC)\n'
 	@exit_code=0; \
-	ACCEPTANCE_BDD_TAGS='@mock' docker compose --profile acceptance up --build --force-recreate --abort-on-container-exit acceptance-tests || exit_code=$$?; \
-	docker compose --profile acceptance down; \
+	ACCEPTANCE_BDD_TAGS='@mock' $(DOCKER_COMPOSE) --profile acceptance up --build --force-recreate --abort-on-container-exit acceptance-tests || exit_code=$$?; \
+	$(DOCKER_COMPOSE) --profile acceptance down; \
 	exit $$exit_code
+	@printf '$(SUCCESS)✓ Docker mock acceptance suite completed$(NC)\n'
 
-acceptance-test-bedrock-live-docker:
+acceptance-test-bedrock-live-docker: ## Run live Bedrock acceptance in docker (ACCEPTANCE_BDD_TAGS=@bedrock-live)
+	@printf '$(PROGRESS)Running Bedrock live acceptance in Docker...$(NC)\n'
 	@exit_code=0; \
-	ACCEPTANCE_BDD_TAGS='@bedrock-live' docker compose --profile acceptance up --build --force-recreate --abort-on-container-exit acceptance-tests || exit_code=$$?; \
-	docker compose --profile acceptance down; \
+	ACCEPTANCE_BDD_TAGS='@bedrock-live' $(DOCKER_COMPOSE) --profile acceptance up --build --force-recreate --abort-on-container-exit acceptance-tests || exit_code=$$?; \
+	$(DOCKER_COMPOSE) --profile acceptance down; \
 	exit $$exit_code
+	@printf '$(SUCCESS)✓ Docker Bedrock acceptance suite completed$(NC)\n'
 
-acceptance-test-triage-live-docker:
+acceptance-test-triage-live-docker: ## Run live triage acceptance in docker (ACCEPTANCE_BDD_TAGS=@triage-live)
+	@printf '$(PROGRESS)Running triage live acceptance in Docker...$(NC)\n'
 	@exit_code=0; \
-	ACCEPTANCE_BDD_TAGS='@triage-live' docker compose --profile acceptance up --build --force-recreate --abort-on-container-exit acceptance-tests || exit_code=$$?; \
-	docker compose --profile acceptance down; \
+	ACCEPTANCE_BDD_TAGS='@triage-live' $(DOCKER_COMPOSE) --profile acceptance up --build --force-recreate --abort-on-container-exit acceptance-tests || exit_code=$$?; \
+	$(DOCKER_COMPOSE) --profile acceptance down; \
 	exit $$exit_code
+	@printf '$(SUCCESS)✓ Docker triage acceptance suite completed$(NC)\n'
 
-sync:
-	cd api && uv sync --group dev
+sync: ## Sync Python dependencies via uv (including dev group)
+	@printf '$(PROGRESS)Syncing Python dependencies with uv...$(NC)\n'
+	@cd api && uv sync --group dev
+	@printf '$(SUCCESS)✓ Python dependencies synced$(NC)\n'
 
-api:
-	cd api && uv run uvicorn app.main:app --host $${API_HOST:-0.0.0.0} --port $${API_PORT:-8000} --reload
+api: ## Run FastAPI in local dev mode with reload
+	@printf '$(PROGRESS)Starting FastAPI dev server (reload enabled)...$(NC)\n'
+	@printf '  $(INFO)Host:$(NC) %s\n' "$${API_HOST:-0.0.0.0}"
+	@printf '  $(INFO)Port:$(NC) %s\n' "$${API_PORT:-8000}"
+	@cd api && uv run uvicorn app.main:app --host $${API_HOST:-0.0.0.0} --port $${API_PORT:-8000} --reload
 
-cli:
-	cd api && uv run python -m app.cli $(ARGS)
+cli: ## Run API CLI entrypoint (pass args with ARGS="...")
+	@printf '$(PROGRESS)Running CLI: python -m app.cli %s$(NC)\n' "$(ARGS)"
+	@cd api && uv run python -m app.cli $(ARGS)
 
-consolidate:
-	cd api && uv run python -m app.cli consolidate $(ARGS)
+consolidate: ## Run consolidation workflow via CLI (pass args with ARGS="...")
+	@printf '$(PROGRESS)Running consolidation CLI: python -m app.cli consolidate %s$(NC)\n' "$(ARGS)"
+	@cd api && uv run python -m app.cli consolidate $(ARGS)
 
-lint:
-	cd api && uv run ruff check .
+lint: ## Run Ruff lint checks
+	@printf '$(PROGRESS)Running Ruff lint checks...$(NC)\n'
+	@cd api && uv run ruff check .
+	@printf '$(SUCCESS)✓ Lint checks passed$(NC)\n'
 
-format:
-	cd api && uv run ruff format .
+format: ## Apply Ruff formatting fixes
+	@printf '$(PROGRESS)Applying Ruff formatting...$(NC)\n'
+	@cd api && uv run ruff format .
+	@printf '$(SUCCESS)✓ Formatting applied$(NC)\n'
 
-format-check:
-	cd api && uv run ruff format --check .
+format-check: ## Verify code formatting without changing files
+	@printf '$(PROGRESS)Checking code formatting...$(NC)\n'
+	@cd api && uv run ruff format --check .
+	@printf '$(SUCCESS)✓ Format check passed$(NC)\n'
 
-test:
-	cd api && uv run pytest -q
+test: ## Run full API pytest suite
+	@printf '$(PROGRESS)Running full API pytest suite...$(NC)\n'
+	@cd api && uv run pytest -q
+	@printf '$(SUCCESS)✓ API test suite passed$(NC)\n'
 
-test-unit:
-	cd api && uv run pytest -q -m "not integration"
+test-unit: ## Run API unit tests only
+	@printf '$(PROGRESS)Running API unit tests...$(NC)\n'
+	@cd api && uv run pytest -q -m "not integration"
+	@printf '$(SUCCESS)✓ API unit tests passed$(NC)\n'
 
-test-integration:
-	cd api && uv run pytest -q -m integration
+test-integration: ## Run API integration tests only
+	@printf '$(PROGRESS)Running API integration tests...$(NC)\n'
+	@cd api && uv run pytest -q -m integration
+	@printf '$(SUCCESS)✓ API integration tests passed$(NC)\n'
 
-eval:
-	cd api && uv run python -m evals.run_eval --out evals/last_eval.json
+eval: ## Run eval harness and write evals/last_eval.json
+	@printf '$(PROGRESS)Running evaluation harness...$(NC)\n'
+	@cd api && uv run python -m evals.run_eval --out evals/last_eval.json
+	@printf '$(SUCCESS)✓ Eval completed (api/evals/last_eval.json)$(NC)\n'
 
-check: lint format-check test eval
+check: lint format-check test eval ## Run full API quality gate (lint + format-check + tests + eval)
 
-web-sync:
-	cd web && npm install
+web-sync: ## Install web dependencies
+	@printf '$(PROGRESS)Installing web dependencies...$(NC)\n'
+	@cd web && npm install
+	@printf '$(SUCCESS)✓ Web dependencies installed$(NC)\n'
 
-web:
-	cd web && npm run dev -- --host
+web: ## Run Vite dev server on all interfaces
+	@printf '$(PROGRESS)Starting web dev server...$(NC)\n'
+	@cd web && npm run dev -- --host
 
-web-lint:
-	cd web && npm run lint
+web-lint: ## Run web lint checks
+	@printf '$(PROGRESS)Running web lint checks...$(NC)\n'
+	@cd web && npm run lint
+	@printf '$(SUCCESS)✓ Web lint checks passed$(NC)\n'
 
-web-test:
-	cd web && npm run test
+web-test: ## Run web unit/integration tests
+	@printf '$(PROGRESS)Running web tests...$(NC)\n'
+	@cd web && npm run test
+	@printf '$(SUCCESS)✓ Web tests passed$(NC)\n'
 
-web-build:
-	cd web && npm run build
+web-build: ## Build production web bundle
+	@printf '$(PROGRESS)Building web production bundle...$(NC)\n'
+	@cd web && npm run build
+	@printf '$(SUCCESS)✓ Web build completed$(NC)\n'
 
-web-check: web-lint web-test web-build
+web-check: web-lint web-test web-build ## Run full web quality gate (lint + tests + build)
 
-diagram-render:
-	./docs/render-plantuml.sh svg $(DIAGRAM_PUML_FILES)
+diagram-render: ## Render PlantUML diagrams to SVG
+	@printf '$(PROGRESS)Rendering PlantUML diagrams to SVG...$(NC)\n'
+	@./docs/render-plantuml.sh svg $(DIAGRAM_PUML_FILES)
+	@printf '$(SUCCESS)✓ SVG diagrams generated$(NC)\n'
 
-diagram-render-png:
-	./docs/render-plantuml.sh png $(DIAGRAM_PUML_FILES)
+diagram-render-png: ## Render PlantUML diagrams to PNG
+	@printf '$(PROGRESS)Rendering PlantUML diagrams to PNG...$(NC)\n'
+	@./docs/render-plantuml.sh png $(DIAGRAM_PUML_FILES)
+	@printf '$(SUCCESS)✓ PNG diagrams generated$(NC)\n'

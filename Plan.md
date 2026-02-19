@@ -571,6 +571,8 @@ Build a local-first memory system where agents and humans can:
    - `make -C /Users/mukundhan/Projects/engram web-check`
    - `make -C /Users/mukundhan/Projects/engram acceptance-bddgen`
    - `make -C /Users/mukundhan/Projects/engram acceptance-typecheck`
+7. Developer workflow UX:
+   - Upgraded `Makefile` help output with colorized grouped commands, quick-start guidance, and a `print-config` diagnostics target.
 
 ### Exit Criteria
 

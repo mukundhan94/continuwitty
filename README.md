@@ -624,13 +624,19 @@ engram/
 
 ## Quick Start (Local Only)
 
-1. Copy environment file:
+1. Print local command reference:
+
+```bash
+make help
+```
+
+2. Copy environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Start database:
+3. Start database:
 
 ```bash
 docker compose up -d db
@@ -643,7 +649,7 @@ docker compose up -d db
 docker compose ps
 ```
 
-3. Sync dependencies with `uv`:
+4. Sync dependencies with `uv`:
 
 ```bash
 cd api
@@ -651,7 +657,7 @@ uv sync --group dev
 cd ..
 ```
 
-4. Install web dependencies:
+5. Install web dependencies:
 
 ```bash
 cd web
@@ -659,25 +665,25 @@ npm install
 cd ..
 ```
 
-5. Optional: set frontend defaults:
+6. Optional: set frontend defaults:
 
 ```bash
 cp web/.env.example web/.env
 ```
 
-6. Run API:
+7. Run API:
 
 ```bash
 make api
 ```
 
-7. In a second terminal, run web app:
+8. In a second terminal, run web app:
 
 ```bash
-make web-dev
+make web
 ```
 
-8. Open API docs:
+9. Open API docs:
 
 - [http://localhost:8000/docs](http://localhost:8000/docs)
 - [http://localhost:5173](http://localhost:5173) (React chat workbench)
@@ -2146,6 +2152,23 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `make -C /Users/mukundhan/Projects/engram web-check` passed.
    - `make -C /Users/mukundhan/Projects/engram acceptance-bddgen` passed.
    - `make -C /Users/mukundhan/Projects/engram acceptance-typecheck` passed.
+
+### 2026-02-19 (Makefile UX refresh - colored help + detailed command output)
+
+1. Updated `/Users/mukundhan/Projects/engram/Makefile` to use a richer command UX modeled after production-grade Docker workflows:
+   - added `.DEFAULT_GOAL := help`
+   - added shared config vars (`DOCKER_COMPOSE_DIR`, `DOCKER_COMPOSE_FILE`, `DOCKER_COMPOSE`, `ACCEPTANCE_DIR`)
+   - added terminal color constants (`SUCCESS`, `PROGRESS`, `ERROR`, `INFO`, `NC`)
+2. Enhanced help surface:
+   - grouped command catalog with colorized sections
+   - quick-start command recommendations
+   - new `print-config` target to show effective compose and path settings
+3. Improved command readability:
+   - added progress/success status lines across database, stack, acceptance, API, web, and diagram targets
+   - standardized Docker compose execution through `$(DOCKER_COMPOSE)`
+4. Validation:
+   - `make -C /Users/mukundhan/Projects/engram help` passed
+   - `make -C /Users/mukundhan/Projects/engram print-config` passed
 
 ### Next Immediate Steps (One By One)
 
