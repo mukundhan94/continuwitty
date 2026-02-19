@@ -169,13 +169,18 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - Before changing architecture, API contracts, or schema behavior, read `AGENT.md` first.
 - Every phase updates this README and keeps `Plan.md` and `skills/` aligned.
 
-## Skills Catalog
+## Agents & Skills Catalog
+
+Agent definitions are under `agents/`:
+
+- `sentinel`: full-codebase code health sweep using CodeScene (see `agents/sentinel.md`).
 
 Agent workflow skills are under `skills/`:
 
 - `engram-lifecycle`: creation/query/rehydration and ownership/visibility behavior.
 - `chat-rag-operator`: chat session continuity and context assembly with engrams.
 - `mcp-http-stream-tools`: JSON-RPC over SSE tool contracts and handlers.
+- `mcp-token-authz`: MCP PAT lifecycle, scope/allowlist/project authorization rules, and external agent integration checks.
 - `provider-openai`: OpenAI adapter implementation conventions.
 - `provider-anthropic`: Anthropic adapter implementation conventions.
 - `provider-bedrock`: Bedrock adapter implementation conventions.
@@ -189,7 +194,9 @@ Agent workflow skills are under `skills/`:
 - `document-ingestion-rag`: deterministic document chunking, ingestion APIs, and blended retrieval workflow.
 - `memory-lifecycle-policies`: autosave cadence, retention bounds, consolidation guards, and timeline event workflow.
 - `engram-auto-metadata-enrichment`: deterministic fill-empty metadata derivation rules and integration points.
-- `mcp-token-authz`: MCP PAT lifecycle, scope/allowlist/project authorization rules, and external agent integration checks.
+- `codescene`: code health analysis and improvement using CodeScene MCP tools.
+
+Skills and agents are accessible to Claude Code (via `.claude/` symlinks), OpenAI Codex (via `AGENTS.md`), and GitHub Copilot (via `.github/copilot-instructions.md`).
 
 ## Why This Exists
 
@@ -240,11 +247,20 @@ Long research threads lose useful context once a session ends. The goal here is 
 
 ```text
 engram/
+  .claude/
+    settings.local.json
+    agents -> ../agents       # symlink
+    skills -> ../skills       # symlink
+  .github/
+    copilot-instructions.md
   .vscode/
     mcp.json
   README.md
   AGENT.md
+  AGENTS.md
   Plan.md
+  agents/
+    sentinel.md
   docs/
     architecture-playbook.md
     user-flow-engram-workflow.md
@@ -452,6 +468,11 @@ engram/
 - `.dockerignore`: build context exclusions for API/web/acceptance Docker builds.
 - `docker-compose.yml`: local DB + API + web + acceptance test orchestration.
 - `AGENT.md`: project operating guide for contributors and agents.
+- `AGENTS.md`: Codex-oriented agent and skill reference; points to canonical `skills/` and `agents/` directories.
+- `agents/sentinel.md`: sentinel agent definition — autonomous code health sweep using CodeScene.
+- `.claude/agents`: symlink to `agents/` for Claude Code agent discovery.
+- `.claude/skills`: symlink to `skills/` for Claude Code skill discovery.
+- `.github/copilot-instructions.md`: GitHub Copilot project instructions with skill/agent catalog.
 - `Plan.md`: canonical merged roadmap (completed phases + upcoming phases).
 - `docs/architecture-playbook.md`: newcomer-first and technical architecture narrative with call-flow diagrams and multi-model continuity runbooks.
 - `docs/user-flow-engram-workflow.md`: ordered UI walkthrough for session creation, save-as-engram, pinning, and continuation with screenshots.
