@@ -74,7 +74,7 @@ def _mcp_frames(
             "method": method,
             "params": params,
         },
-        headers=headers,
+        headers={"Accept": "text/event-stream", **(headers or {})},
     )
     assert response.status_code == 200
     assert "text/event-stream" in response.headers.get("content-type", "")
@@ -84,6 +84,28 @@ def _mcp_frames(
             frames.append(json.loads(line[6:]))
     assert frames
     return frames
+
+
+def _mcp_json_response(
+    client,
+    method: str,
+    params: dict,
+    request_id: str = "1",
+    headers: dict[str, str] | None = None,
+) -> dict:  # noqa: ANN001
+    response = client.post(
+        "/api/v1/mcp/stream",
+        json={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": method,
+            "params": params,
+        },
+        headers={"Accept": "application/json", **(headers or {})},
+    )
+    assert response.status_code == 200
+    assert "application/json" in response.headers.get("content-type", "")
+    return response.json()
 
 
 def _create_mcp_token(
@@ -125,6 +147,34 @@ def test_mcp_stream_requires_authentication(client, clean_db) -> None:
 
 
 @pytest.mark.integration
+def test_mcp_stream_probe_supports_get_and_head(client, clean_db) -> None:
+    get_response = client.get("/api/v1/mcp/stream")
+    assert get_response.status_code == 200
+    payload = get_response.json()
+    assert payload["name"] == "engram-mcp-stream"
+    assert payload["request_method"] == "POST"
+    assert payload["response_type"] == "text/event-stream"
+
+    head_response = client.head("/api/v1/mcp/stream")
+    assert head_response.status_code == 200
+
+
+@pytest.mark.integration
+def test_mcp_notifications_initialized_returns_accepted(client, clean_db) -> None:
+    _login(client)
+    response = client.post(
+        "/api/v1/mcp/stream",
+        json={
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 202
+    assert response.text == ""
+
+
+@pytest.mark.integration
 def test_mcp_returns_method_not_found_error(client, clean_db) -> None:
     _login(client)
     frames = _mcp_frames(client, method="unknown.tool", params={}, request_id="missing")
@@ -157,27 +207,49 @@ def test_mcp_initialize_and_tools_list_contract(client, clean_db) -> None:
     tools_frames = _mcp_frames(client, method="tools/list", params={}, request_id="tools-list")
     tools = _final_result_frame(tools_frames)["result"]["tools"]
     tool_names = {item["name"] for item in tools}
-    assert "chat.create_session" in tool_names
-    assert "chat.get_lifecycle_policy" in tool_names
-    assert "chat.update_lifecycle_policy" in tool_names
-    assert "chat.list_timeline" in tool_names
-    assert "chat.list_messages" in tool_names
-    assert "chat.list_pinned_engrams" in tool_names
-    assert "chat.pin_engram" in tool_names
-    assert "chat.unpin_engram" in tool_names
-    assert "chat.list_pinned_documents" in tool_names
-    assert "chat.pin_document" in tool_names
-    assert "chat.unpin_document" in tool_names
-    assert "chat.list_project_documents" in tool_names
-    assert "chat.send_message" in tool_names
-    assert "engram.create_from_conversation" in tool_names
-    assert "engram.query" in tool_names
-    assert "user.get_profile" in tool_names
+    assert "chat_create_session" in tool_names
+    assert "chat_get_lifecycle_policy" in tool_names
+    assert "chat_update_lifecycle_policy" in tool_names
+    assert "chat_list_timeline" in tool_names
+    assert "chat_list_messages" in tool_names
+    assert "chat_list_pinned_engrams" in tool_names
+    assert "chat_pin_engram" in tool_names
+    assert "chat_unpin_engram" in tool_names
+    assert "chat_list_pinned_documents" in tool_names
+    assert "chat_pin_document" in tool_names
+    assert "chat_unpin_document" in tool_names
+    assert "chat_list_project_documents" in tool_names
+    assert "chat_send_message" in tool_names
+    assert "engram_create_from_conversation" in tool_names
+    assert "engram_query" in tool_names
+    assert "user_get_profile" in tool_names
 
-    send_message_tool = next(item for item in tools if item["name"] == "chat.send_message")
+    send_message_tool = next(item for item in tools if item["name"] == "chat_send_message")
     assert send_message_tool["inputSchema"]["type"] == "object"
     assert "session_id" in send_message_tool["inputSchema"]["required"]
     assert "content_text" in send_message_tool["inputSchema"]["required"]
+
+
+@pytest.mark.integration
+def test_mcp_initialize_supports_json_response_mode(client, clean_db) -> None:
+    _login(client)
+    frame = _mcp_json_response(client, method="initialize", params={}, request_id="init-json")
+    assert frame["id"] == "init-json"
+    assert frame["result"]["protocolVersion"] == "2024-11-05"
+
+
+@pytest.mark.integration
+def test_mcp_initialize_prefers_json_when_accepts_json_and_sse(client, clean_db) -> None:
+    _login(client)
+    frame = _mcp_json_response(
+        client,
+        method="initialize",
+        params={},
+        request_id="init-mixed-accept",
+        headers={"Accept": "text/event-stream, application/json"},
+    )
+    assert frame["id"] == "init-mixed-accept"
+    assert frame["result"]["protocolVersion"] == "2024-11-05"
 
 
 @pytest.mark.integration
@@ -275,6 +347,49 @@ def test_mcp_tools_call_stream_flow(client, clean_db, monkeypatch) -> None:
     final = _final_result_frame(send_frames)
     assert final["result"]["tool_name"] == "chat.send_message"
     assert final["result"]["isError"] is False
+    assert final["result"]["structuredContent"]["message"]["assistant_text"] == "assistant:streamed"
+
+
+@pytest.mark.integration
+def test_mcp_tools_call_accepts_underscore_tool_names(client, clean_db, monkeypatch) -> None:
+    _login(client)
+    _install_fake_provider(monkeypatch)
+
+    create_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat_create_session",
+            "arguments": {
+                "project_id": "project-mcp-underscore",
+                "title": "MCP underscore session",
+                "provider": "openai",
+                "model_id": "gpt-4o-mini",
+                "visibility_scope": "private",
+                "autosave_enabled": False,
+            },
+        },
+        request_id="underscore-create",
+    )
+    session_id = _final_result_frame(create_frames)["result"]["structuredContent"]["session"][
+        "session_id"
+    ]
+
+    send_frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "chat_send_message",
+            "arguments": {
+                "session_id": session_id,
+                "content_text": "hello underscore tools",
+                "stream": True,
+            },
+        },
+        request_id="underscore-send",
+    )
+    final = _final_result_frame(send_frames)
+    assert final["result"]["tool_name"] == "chat_send_message"
     assert final["result"]["structuredContent"]["message"]["assistant_text"] == "assistant:streamed"
 
 
@@ -761,7 +876,7 @@ def test_mcp_token_allowed_tools_and_project_guards(client, clean_db) -> None:
     visible_names = {
         tool["name"] for tool in _final_result_frame(tools_list_frames)["result"]["tools"]
     }
-    assert visible_names == {"engram.query"}
+    assert visible_names == {"engram_query"}
 
     denied_write = _mcp_frames(
         bearer_client,

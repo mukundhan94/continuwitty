@@ -44,7 +44,7 @@ def _mcp_frames(client, *, headers: dict[str, str] | None = None) -> list[dict]:
             "method": "tools/list",
             "params": {},
         },
-        headers=headers,
+        headers={"Accept": "text/event-stream", **(headers or {})},
     )
     assert response.status_code == 200
     frames: list[dict] = []
@@ -182,7 +182,7 @@ def test_oauth_authorization_code_exchange_issues_mcp_bearer_token(client, clean
     result_frames = [item for item in frames if "result" in item]
     assert result_frames
     tool_names = {item["name"] for item in result_frames[-1]["result"]["tools"]}
-    assert "chat.send_message" in tool_names
+    assert "chat_send_message" in tool_names
 
 
 @pytest.mark.integration

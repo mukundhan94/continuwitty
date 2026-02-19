@@ -2,6 +2,9 @@
 
 This guide provides copy-paste commands to connect external MCP clients to Engram.
 
+Repository shortcut:
+- A ready file is included at `.vscode/mcp.json` for OAuth-style VS Code MCP setup.
+
 ## Prerequisites
 
 - Engram API running at `http://localhost:8000`
@@ -131,6 +134,15 @@ EOF_VSCODE_OAUTH
 ```
 
 When VS Code prompts for OAuth consent, continue in browser and sign in with your Engram user.
+The MCP stream endpoint supports:
+- `POST` for JSON-RPC calls:
+  - returns JSON if `Accept` includes `application/json`
+  - returns SSE when the client explicitly prefers `text/event-stream`
+  - if both are present with equal priority, JSON is returned (safer for `initialize`)
+- JSON-RPC notifications without `id` (for example `notifications/initialized`) return `202 Accepted`
+- `GET`/`HEAD` probe responses (`200`) for client capability checks
+- `tools/list` uses underscore tool names (for strict client validation), e.g. `chat_send_message`
+- `tools/call` still accepts both underscore and dotted names for backward compatibility
 
 ## 5) Codex Integration
 

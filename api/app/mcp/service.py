@@ -73,6 +73,29 @@ _OPTIONAL_PROJECT_TOOLS = {
     "chat.list_project_documents",
 }
 
+_TOOL_NAMESPACE_PREFIXES = ("chat", "engram", "user")
+
+
+def _to_public_tool_name(canonical_name: str) -> str:
+    """Expose VS Code-compatible tool names (no dots)."""
+    return canonical_name.replace(".", "_")
+
+
+def _to_dotted_tool_name(tool_name: str) -> str:
+    """Convert external tool names back to dotted canonical method names.
+
+    We intentionally support both forms:
+    - dotted (`chat.send_message`) for backward compatibility
+    - underscore (`chat_send_message`) for strict MCP clients.
+    """
+    if "." in tool_name:
+        return tool_name
+    for namespace in _TOOL_NAMESPACE_PREFIXES:
+        prefix = f"{namespace}_"
+        if tool_name.startswith(prefix):
+            return f"{namespace}.{tool_name[len(prefix) :]}"
+    return tool_name
+
 
 class McpService:
     """JSON-RPC tool dispatcher for MCP-over-SSE.
@@ -89,18 +112,20 @@ class McpService:
         chat_service: ChatService,
         embedding_dim: int,
         ingestion_service: DocumentIngestionService | None = None,
+        server_version: str = "0.1.0",
     ) -> None:
         self._chat_service = chat_service
         self._embedding_dim = embedding_dim
         self._ingestion_service = ingestion_service
+        self._server_version = server_version
 
     @staticmethod
-    def _success(id_value: str | int, result: dict[str, Any]) -> dict[str, Any]:
+    def _success(id_value: str | int | None, result: dict[str, Any]) -> dict[str, Any]:
         return {"jsonrpc": "2.0", "id": id_value, "result": result}
 
     @staticmethod
     def _error(
-        id_value: str | int,
+        id_value: str | int | None,
         *,
         code: int,
         message: str,
@@ -113,7 +138,7 @@ class McpService:
 
     @staticmethod
     def _event(
-        id_value: str | int,
+        id_value: str | int | None,
         *,
         tool: str,
         event_name: str,
@@ -173,6 +198,11 @@ class McpService:
             "content": [{"type": "text", "text": json.dumps(payload, default=str)}],
             "isError": False,
         }
+
+    @staticmethod
+    def _canonical_tool_name(tool_name: str) -> str:
+        dotted = _to_dotted_tool_name(tool_name)
+        return _TOOL_ALIASES.get(dotted, dotted)
 
     @staticmethod
     def _tool_catalog() -> list[dict[str, Any]]:
@@ -491,7 +521,7 @@ class McpService:
         ]
 
     def _required_scope_for_tool(self, tool_name: str) -> str:
-        canonical = _TOOL_ALIASES.get(tool_name, tool_name)
+        canonical = self._canonical_tool_name(tool_name)
         if canonical in _WRITE_TOOL_NAMES:
             return "write"
         if canonical in _READ_TOOL_NAMES:
@@ -500,21 +530,30 @@ class McpService:
 
     def _visible_tool_catalog(self, token_auth: McpTokenAuthContext | None) -> list[dict[str, Any]]:
         if token_auth is None:
-            return self._tool_catalog()
+            return [
+                {**item, "name": _to_public_tool_name(item["name"])}
+                for item in self._tool_catalog()
+            ]
+
+        allowed_tools = token_auth.allowed_tools
+        allowed_canonical = (
+            {self._canonical_tool_name(item) for item in allowed_tools} if allowed_tools else set()
+        )
 
         visible: list[dict[str, Any]] = []
         for item in self._tool_catalog():
-            tool_name = item["name"]
-            canonical_name = _TOOL_ALIASES.get(tool_name, tool_name)
-            required_scope = self._required_scope_for_tool(tool_name)
+            canonical_name = item["name"]
+            public_name = _to_public_tool_name(canonical_name)
+            required_scope = self._required_scope_for_tool(canonical_name)
             if token_auth.scope == "read" and required_scope == "write":
                 continue
-            if token_auth.allowed_tools and (
-                tool_name not in token_auth.allowed_tools
-                and canonical_name not in token_auth.allowed_tools
+            if allowed_tools and (
+                canonical_name not in allowed_canonical
+                and public_name not in allowed_tools
+                and canonical_name not in allowed_tools
             ):
                 continue
-            visible.append(item)
+            visible.append({**item, "name": public_name})
         return visible
 
     def _project_id_for_tool(
@@ -524,7 +563,9 @@ class McpService:
         tool_name: str,
         params: dict[str, Any],
     ) -> str | None:
-        if tool_name in {
+        canonical_tool = self._canonical_tool_name(tool_name)
+
+        if canonical_tool in {
             "chat.create_session",
             "engram.create",
             "engram.create_from_conversation",
@@ -532,7 +573,7 @@ class McpService:
             raw_project = params.get("project_id")
             return str(raw_project) if raw_project else None
 
-        if tool_name in {
+        if canonical_tool in {
             "chat.get_session",
             "chat.get_lifecycle_policy",
             "chat.update_lifecycle_policy",
@@ -555,14 +596,14 @@ class McpService:
             )
             return session.project_id
 
-        if tool_name == "engram.rehydrate":
+        if canonical_tool == "engram.rehydrate":
             bundle = get_rehydration_bundle(
                 self._parse_uuid(params, "engram_id"),
                 actor_user_id=actor_user_id,
             )
             return bundle.project_id if bundle else None
 
-        if tool_name in _OPTIONAL_PROJECT_TOOLS:
+        if canonical_tool in _OPTIONAL_PROJECT_TOOLS:
             raw_project = params.get("project_id")
             return str(raw_project) if raw_project else None
 
@@ -582,7 +623,7 @@ class McpService:
         if tool_name in {"initialize", "tools/list"}:
             return params
 
-        canonical_tool = _TOOL_ALIASES.get(tool_name, tool_name)
+        canonical_tool = self._canonical_tool_name(tool_name)
         required_scope = self._required_scope_for_tool(canonical_tool)
         if token_auth.scope == "read" and required_scope == "write":
             raise McpRpcError(
@@ -595,9 +636,14 @@ class McpService:
                 },
             )
 
-        if token_auth.allowed_tools and (
-            tool_name not in token_auth.allowed_tools
-            and canonical_tool not in token_auth.allowed_tools
+        allowed_tools = token_auth.allowed_tools
+        allowed_canonical = (
+            {self._canonical_tool_name(item) for item in allowed_tools} if allowed_tools else set()
+        )
+        if allowed_tools and (
+            canonical_tool not in allowed_canonical
+            and tool_name not in allowed_tools
+            and _to_public_tool_name(canonical_tool) not in allowed_tools
         ):
             raise McpRpcError(
                 code=-32003,
@@ -616,11 +662,11 @@ class McpService:
 
         project_id = self._project_id_for_tool(
             actor_user_id=actor_user_id,
-            tool_name=tool_name,
+            tool_name=canonical_tool,
             params=normalized_params,
         )
 
-        if tool_name in _OPTIONAL_PROJECT_TOOLS and not project_id:
+        if canonical_tool in _OPTIONAL_PROJECT_TOOLS and not project_id:
             if len(allowed_projects) > 1:
                 raise McpRpcError(
                     code=-32602,
@@ -666,6 +712,8 @@ class McpService:
         method: str,
         params: dict[str, Any],
     ) -> dict[str, Any]:
+        method = self._canonical_tool_name(method)
+
         if method == "chat.create_session":
             created = self._chat_service.create_session(
                 actor_user_id=actor_user_id,
@@ -904,7 +952,7 @@ class McpService:
         if method == "initialize":
             return {
                 "protocolVersion": "2024-11-05",
-                "serverInfo": {"name": "engram-vault-mcp", "version": "0.1.0"},
+                "serverInfo": {"name": "engram-vault-mcp", "version": self._server_version},
                 "capabilities": {"tools": {"listChanged": False}},
             }
 
@@ -913,6 +961,7 @@ class McpService:
 
         if method == "tools/call":
             tool_name, tool_params = self._tool_name_and_params_for_tools_call(params)
+            canonical_tool_name = self._canonical_tool_name(tool_name)
             authorized_params = self._enforce_token_authorization(
                 actor_user_id=actor_user_id,
                 token_auth=token_auth,
@@ -922,12 +971,13 @@ class McpService:
             tool_payload = self._dispatch_tool(
                 actor=actor,
                 actor_user_id=actor_user_id,
-                method=tool_name,
+                method=canonical_tool_name,
                 params=authorized_params,
             )
             return self._tool_call_success(tool_name, tool_payload)
 
         # Backward-compatible direct method path.
+        canonical_method = self._canonical_tool_name(method)
         authorized_params = self._enforce_token_authorization(
             actor_user_id=actor_user_id,
             token_auth=token_auth,
@@ -937,7 +987,7 @@ class McpService:
         return self._dispatch_tool(
             actor=actor,
             actor_user_id=actor_user_id,
-            method=method,
+            method=canonical_method,
             params=authorized_params,
         )
 
@@ -968,13 +1018,15 @@ class McpService:
             )
             return
 
+        canonical_method = self._canonical_tool_name(request.method)
+
         # Direct streaming path retained for backward compatibility.
-        if request.method == "chat.send_message":
+        if canonical_method == "chat.send_message":
             try:
                 authorized_params = self._enforce_token_authorization(
                     actor_user_id=actor_user_id,
                     token_auth=token_auth,
-                    tool_name="chat.send_message",
+                    tool_name=request.method,
                     params=request.params,
                 )
             except McpRpcError as exc:
@@ -983,7 +1035,7 @@ class McpService:
             yield from self._stream_chat_send_message(
                 actor_user_id=actor_user_id,
                 request_id=request.id,
-                tool_name="chat.send_message",
+                tool_name=request.method,
                 params=authorized_params,
             )
             return
@@ -992,6 +1044,7 @@ class McpService:
         if request.method == "tools/call":
             try:
                 tool_name, tool_params = self._tool_name_and_params_for_tools_call(request.params)
+                canonical_tool_name = self._canonical_tool_name(tool_name)
                 tool_params = self._enforce_token_authorization(
                     actor_user_id=actor_user_id,
                     token_auth=token_auth,
@@ -1003,7 +1056,7 @@ class McpService:
                 return
 
             # Streaming is currently only meaningful for chat message generation.
-            if tool_name == "chat.send_message" and bool(tool_params.get("stream", True)):
+            if canonical_tool_name == "chat.send_message" and bool(tool_params.get("stream", True)):
                 yield from self._stream_chat_send_message(
                     actor_user_id=actor_user_id,
                     request_id=request.id,
@@ -1056,6 +1109,20 @@ class McpService:
                 message="Internal MCP error",
                 data={"detail": str(exc)},
             )
+
+    def handle_notification(
+        self,
+        *,
+        request: McpJsonRpcRequest,
+    ) -> None:
+        """Best-effort handling for JSON-RPC notifications.
+
+        Streamable HTTP clients (including VS Code MCP) can send lifecycle
+        notifications such as `notifications/initialized` without an `id`.
+        We currently do not require side effects for these notifications, so we
+        accept and ignore them to maintain protocol compatibility.
+        """
+        _ = request
 
     def _stream_chat_send_message(
         self,

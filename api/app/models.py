@@ -103,6 +103,12 @@ class EngramSourceRecord(BaseModel):
     snippet: str | None = None
 
 
+class AppVersionResponse(BaseModel):
+    commit_id: str
+    semantic_version: str
+    release: str
+
+
 class UserRole(str, Enum):
     admin = "admin"
     analyst = "analyst"
@@ -427,13 +433,13 @@ class ContinueSessionResponse(BaseModel):
 
 class McpJsonRpcRequest(BaseModel):
     jsonrpc: str = "2.0"
-    id: str | int
+    id: str | int | None = None
     method: str
     params: dict = Field(default_factory=dict)
 
 
 class McpJsonRpcResponse(BaseModel):
     jsonrpc: str = "2.0"
-    id: str | int
+    id: str | int | None = None
     result: dict | None = None
     error: dict | None = None
