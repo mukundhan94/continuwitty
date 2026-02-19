@@ -586,6 +586,125 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 32 - ContinuWitty Query Prefix (`cw>`) + Federated Linked Engram Recall
+
+### Status
+
+- Planned.
+- This phase introduces a lightweight query protocol for users/agents (`cw>`) and extends linked-memory retrieval to cross-project associations with strict access-aware filtering.
+
+### Why This Phase
+
+- Users need a simple way to tell agents: "use ContinuWitty MCP memory workflows first".
+- Linked memory should not stop at project boundaries when the actor legitimately has access to related engrams.
+- Retrieval quality should improve by combining semantic search with graph/tree traversal and provenance-safe ranking.
+
+### Goals
+
+1. Add a stable `cw>` query-prefix protocol that nudges agents to use MCP + memory-aware workflows deterministically.
+2. Support cross-project engram association and retrieval when authorization allows it.
+3. Add access-aware tree/graph search in backend retrieval path for better context assembly.
+
+### Locked Decisions
+
+1. Prefix contract:
+   - `cw>` at start of message enables ContinuWitty protocol mode.
+   - If no directives are present, default mode is `auto` (retrieve-first, suggest-save).
+2. Directive styles:
+   - line-1 prefix (`cw>`)
+   - optional intent form (`cw> retrieve`)
+   - optional key-value form (`cw> mode=analyze project=engram-vault citations=required`).
+3. Cross-project retrieval:
+   - only if actor has visibility rights to each candidate engram.
+   - never leak inaccessible engram existence in responses or metadata.
+4. Search strategy:
+   - hybrid semantic seed + bounded graph/tree expansion.
+   - default depth bounded, cycle-safe traversal, token-budget aware packing.
+
+### Deliverables
+
+1. Query protocol parser and planner:
+   - add parser module for `cw>` directives and normalized execution intents.
+   - add execution-plan object used by chat + MCP entry paths.
+2. Backend retrieval upgrades:
+   - add hybrid retrieval mode:
+     - semantic seed retrieval
+     - access-aware graph expansion (BFS/beam bounded traversal)
+     - relevance + link score + temporal decay ranking.
+3. Cross-project link support:
+   - allow link traversal across projects where actor has access.
+   - maintain strict per-node visibility filtering before scoring and packing.
+4. MCP and API integration:
+   - ensure `chat.send_message` and MCP message paths accept protocol-derived retrieval hints.
+   - return enriched provenance metadata:
+     - `used_engram_ids`
+     - `used_engram_link_ids`
+     - `engram_trace_paths`
+     - optional `cw_plan_applied` summary.
+5. UI affordances:
+   - add optional helper/hint near composer describing `cw>` usage patterns.
+   - add response panel badge when `cw>` plan is active.
+6. Documentation:
+   - add `cw>` protocol reference with examples.
+   - update architecture docs for hybrid semantic+graph recall flow.
+
+### API / Interface Additions (Planned)
+
+1. Chat message request extension (optional):
+   - `query_protocol` or parsed `query_options` (server may auto-derive from message prefix).
+2. Chat/MCP response extension (non-breaking additive fields):
+   - `cw_plan_applied`
+   - `used_engram_link_ids`
+   - `engram_trace_paths`.
+3. MCP tool additions or extensions:
+   - extend existing query tools with graph-depth/retrieval hints and protocol metadata.
+   - add optional explicit graph query tool if needed for admin/debug clients.
+
+### Data and Policy Changes (Planned)
+
+1. Link policy upgrade:
+   - move from same-project-only v1 constraint to access-allowed federated traversal.
+2. Optional indexing/backfill:
+   - optimize cross-project traversal with additional source/target project indexes.
+3. Audit:
+   - add retrieval audit signals for cross-project path use and blocked-node filtering counts.
+
+### Security and Guardrails
+
+1. Access checks executed at every candidate node and edge expansion step.
+2. Hidden-node suppression:
+   - inaccessible nodes are dropped silently without existence leakage.
+3. Traversal limits:
+   - max depth, max visited nodes, max neighbors per node, max context tokens.
+4. Safe defaults:
+   - `cw>` without explicit directives cannot escalate permissions or override auth.
+
+### Test Plan
+
+1. Unit tests:
+   - `cw>` parser normalization and directive precedence.
+   - retrieval rank fusion and traversal bounds.
+2. Integration tests:
+   - cross-project graph recall with mixed-access fixtures.
+   - verify inaccessible nodes never appear in outputs/metadata.
+3. MCP tests:
+   - `cw>` messages through MCP paths produce protocol metadata and valid retrieval behavior.
+4. Acceptance tests:
+   - end-to-end scenario:
+     - save related engrams in different projects
+     - grant actor access to subset
+     - query with `cw>`
+     - verify only authorized linked context is used.
+
+### Exit Criteria
+
+1. `cw>` messages consistently trigger memory-aware retrieval planning.
+2. Cross-project linked recall works only for authorized memory.
+3. Responses include clear provenance over semantic + linked context usage.
+4. No auth leakage regressions in REST/MCP/UI flows.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -610,3 +729,6 @@ Build a local-first memory system where agents and humans can:
    - Phase 26 (graph-aware recall)
    - Phase 27 (traceability UX)
    - Phase 28 (temporal dynamics + graph quality)
+7. Execute Phase 32 after Phase 19 + Phase 24-28 baselines are in place:
+   - add `cw>` query protocol
+   - enable access-aware federated linked recall across projects
