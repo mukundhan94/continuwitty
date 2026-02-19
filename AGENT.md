@@ -32,15 +32,18 @@ Use it as the default workflow when adding or refactoring features.
 
 ## 3. Daily Workflow
 1. Pull latest and inspect `git status`.
-2. Run setup: `make sync`, `make db-up`.
-3. Implement one phase at a time.
-4. Run checks: `make lint`, `make test`, `make eval`, `make check`.
-5. If `web/` changed: run `make web-check`.
-6. If `acceptance-tests/`, `web/Dockerfile`, `api/Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-bddgen`, `make acceptance-typecheck`, and `make acceptance-test-docker`.
-7. If Bedrock provider behavior changed, run live non-deterministic acceptance gate: `make acceptance-test-bedrock-live` (or docker equivalent).
-8. For docker runtime changes: validate `docker compose config`.
-9. Update docs (`README.md`, `Plan.md` progress, `docs/architecture-playbook.md` when call flows or schema semantics change, skill docs if needed).
-10. Commit with phase-scoped message.
+2. Run setup: `make sync`, `make web-sync`.
+3. Preferred local run mode: `make dev` (starts Docker DB + local `make api` and `make web` together in one terminal).
+4. Use split terminals only when needed: run `make api` and `make web` separately.
+5. Use `make stack-up` sparingly (containerized stack debugging only, not default day-to-day development).
+6. Implement one phase at a time.
+7. Run checks: `make lint`, `make test`, `make eval`, `make check`.
+8. If `web/` changed: run `make web-check`.
+9. If `acceptance-tests/`, `web/Dockerfile`, `api/Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-bddgen`, `make acceptance-typecheck`, and `make acceptance-test-docker`.
+10. If Bedrock provider behavior changed, run live non-deterministic acceptance gate: `make acceptance-test-bedrock-live` (or docker equivalent).
+11. For docker runtime changes: validate `docker compose config`.
+12. Update docs (`README.md`, `Plan.md` progress, `docs/architecture-playbook.md` when call flows or schema semantics change, skill docs if needed).
+13. Commit with phase-scoped message.
 
 ## 4. Architecture Boundaries
 - Route handlers in `main.py` should orchestrate only.
@@ -126,6 +129,9 @@ Before merging refactors:
 
 ## 11. Operations and Incident Handling (Local)
 - If API is unhealthy: check `/healthz`, DB container status, and env vars.
+- Default dev startup: use `make dev`.
+- If you need manual server control: use `make db-up`, then `make api` and `make web` in separate terminals.
+- Keep `make stack-up` for occasional full-container checks only.
 - For startup/debug issues: use `APP_ENV=development` and `LOG_CONFIG_IN_DEV=true` to print a redacted parsed config snapshot.
 - If retrieval quality drops: run `make eval`, inspect reranking and citation packing paths.
 - If auth fails unexpectedly: inspect `data/audit_events.jsonl` and session settings.

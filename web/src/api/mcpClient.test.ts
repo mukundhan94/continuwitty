@@ -23,6 +23,7 @@ function createResponse(params: {
   status: number
   body?: ReadableStream<Uint8Array> | null
   headers?: Record<string, string>
+  jsonBody?: unknown
 }): Response {
   return {
     ok: params.ok,
@@ -31,7 +32,7 @@ function createResponse(params: {
     body: params.body ?? null,
     headers: new Headers(params.headers ?? { 'content-type': 'text/event-stream' }),
     text: async () => '',
-    json: async () => ({}),
+    json: async () => params.jsonBody ?? {},
   } as Response
 }
 
@@ -96,6 +97,54 @@ describe('streamMcpCall', () => {
     expect(finalMcpResultFrame(frames)?.result).toEqual({
       message: { assistant_text: 'hello' },
     })
+  })
+
+  it('supports JSON-RPC response fallback when server returns application/json', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      createResponse({
+        ok: true,
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        jsonBody: {
+          jsonrpc: '2.0',
+          id: 'tools-list-1',
+          result: { tools: [{ name: 'chat_send_message' }] },
+        },
+      }),
+    )
+
+    const frames = await streamMcpCall({
+      jsonrpc: '2.0',
+      id: 'tools-list-1',
+      method: 'tools/list',
+    })
+
+    expect(frames.length).toBe(1)
+    expect(finalMcpResultFrame(frames)?.result).toEqual({
+      tools: [{ name: 'chat_send_message' }],
+    })
+  })
+
+  it('sends explicit Accept header for SSE+JSON compatibility', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      createResponse({
+        ok: true,
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        jsonBody: { jsonrpc: '2.0', id: 'hdr-1', result: { ok: true } },
+      }),
+    )
+
+    await streamMcpCall({
+      jsonrpc: '2.0',
+      id: 'hdr-1',
+      method: 'user.get_profile',
+    })
+
+    const secondArg = fetchSpy.mock.calls[0]?.[1] as RequestInit
+    const headers = secondArg?.headers as Record<string, string>
+    expect(headers.Accept).toContain('text/event-stream')
+    expect(headers.Accept).toContain('application/json')
   })
 
   it('fails when stream has no jsonrpc frames', async () => {

@@ -639,13 +639,13 @@ cp .env.example .env
 3. Start database:
 
 ```bash
-docker compose up -d db
+make db-up
 ```
 
 If this fails with "Cannot connect to the Docker daemon", start Docker Desktop first, wait until it is healthy, then rerun:
 
 ```bash
-docker compose up -d db
+make db-up
 docker compose ps
 ```
 
@@ -671,22 +671,31 @@ cd ..
 cp web/.env.example web/.env
 ```
 
-7. Run API:
+7. Preferred local run mode (single terminal, starts DB + API + Web):
 
 ```bash
+make dev
+```
+
+8. Optional split-terminal mode (if you want separate processes/logs):
+
+```bash
+make db-up
 make api
 ```
 
-8. In a second terminal, run web app:
+In a second terminal:
 
 ```bash
 make web
 ```
 
+`make stack-up` is still available for full containerized stack checks, but treat it as occasional debugging mode rather than daily local development.
+
 9. Open API docs:
 
 - [http://localhost:8000/docs](http://localhost:8000/docs)
-- [http://localhost:5173](http://localhost:5173) (React chat workbench)
+- [http://localhost:5174](http://localhost:5174) (React chat workbench)
 
 UI testing entrypoints:
 
@@ -2169,6 +2178,29 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 4. Validation:
    - `make -C /Users/mukundhan/Projects/engram help` passed
    - `make -C /Users/mukundhan/Projects/engram print-config` passed
+
+### 2026-02-19 (MCP token panel fix - JSON/SSE compatibility + acceptance hardening)
+
+1. Fixed admin MCP token options loading in React:
+   - `web/src/api/mcpClient.ts` now explicitly requests `Accept: text/event-stream, application/json`.
+   - Added JSON fallback parsing when `/api/v1/mcp/stream` returns `application/json` (streamable HTTP request/response mode).
+   - This prevents `MCP stream returned no jsonrpc frames` when the server chooses JSON over SSE.
+2. Added frontend test coverage:
+   - `web/src/api/mcpClient.test.ts` now verifies JSON fallback parsing and request Accept header behavior.
+3. Hardened acceptance MCP flow parsing:
+   - updated `acceptance-tests/src/steps/engram-auto-metadata-mock.steps.ts`
+   - updated `acceptance-tests/src/steps/phase31-memory-admin-mock.steps.ts`
+   - both now parse MCP responses for either SSE or JSON-RPC JSON payloads.
+4. Removed race in admin token options acceptance assertion:
+   - updated `acceptance-tests/src/steps/admin-mcp-token-ui.steps.ts` to poll until tool/project options are populated before strict assertions.
+5. Dev-run consistency:
+   - `make web` now defaults to port `5174` to match local acceptance/test workflow and avoid localhost port confusion.
+6. Validation:
+   - `make -C /Users/mukundhan/Projects/engram check` passed (`176` tests + eval pass).
+   - `make -C /Users/mukundhan/Projects/engram web-check` passed (`52` web tests + build).
+   - `make -C /Users/mukundhan/Projects/engram acceptance-bddgen` passed.
+   - `make -C /Users/mukundhan/Projects/engram acceptance-typecheck` passed.
+   - `make -C /Users/mukundhan/Projects/engram acceptance-test-mock` passed (`10` scenarios).
 
 ### Next Immediate Steps (One By One)
 

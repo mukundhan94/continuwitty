@@ -1,5 +1,6 @@
 import { When, Then, expect } from '../support/fixtures'
 import type { Page } from '@playwright/test'
+import type { APIResponse } from '@playwright/test'
 
 type McpFrame = {
   result?: {
@@ -41,6 +42,14 @@ function parseMcpFrames(rawSse: string): McpFrame[] {
   return frames
 }
 
+async function parseMcpResponse(response: APIResponse): Promise<McpFrame[]> {
+  const contentType = (response.headers()['content-type'] || '').toLowerCase()
+  if (contentType.includes('application/json')) {
+    return [(await response.json()) as McpFrame]
+  }
+  return parseMcpFrames(await response.text())
+}
+
 function finalResultFrame(frames: McpFrame[]): McpFrame {
   const resultFrames = frames.filter((frame) => frame.result)
   if (resultFrames.length === 0) {
@@ -55,6 +64,9 @@ async function callMcpToolsCall(
   args: Record<string, unknown>,
 ): Promise<McpFrame> {
   const response = await page.request.post('/api/v1/mcp/stream', {
+    headers: {
+      Accept: 'text/event-stream, application/json',
+    },
     data: {
       jsonrpc: '2.0',
       id: `acceptance-${Date.now()}`,
@@ -67,8 +79,7 @@ async function callMcpToolsCall(
   })
 
   expect(response.ok()).toBeTruthy()
-  const body = await response.text()
-  const frames = parseMcpFrames(body)
+  const frames = await parseMcpResponse(response)
   const finalFrame = finalResultFrame(frames)
   if (finalFrame.error) {
     throw new Error(`MCP tool call failed: ${JSON.stringify(finalFrame.error)}`)

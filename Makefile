@@ -21,12 +21,14 @@ NC = \033[0m
 
 .DEFAULT_GOAL := help
 
-.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+WEB_PORT ?= 5174
+
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
 help: ## Print all Makefile commands with categorized descriptions and usage hints
 	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
 	@printf '$(PROGRESS)Usage:$(NC) $(INFO)make <target>$(NC)\n'
-	@printf '$(PROGRESS)Example:$(NC) $(INFO)make stack-up$(NC)\n\n'
+	@printf '$(PROGRESS)Example:$(NC) $(INFO)make dev$(NC)\n\n'
 	@awk ' \
 		BEGIN { \
 			FS = ":.*## "; \
@@ -39,6 +41,7 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 			if (target == "help" || target == "print-config") return "Help"; \
 			if (target ~ /^db-/) return "Database"; \
 			if (target ~ /^stack-/) return "Stack"; \
+			if (target == "dev") return "Local Dev"; \
 			if (target ~ /^acceptance-/) return "Acceptance"; \
 			if (target ~ /^web-/ || target == "web") return "Web"; \
 			if (target ~ /^diagram-/) return "Diagrams"; \
@@ -66,7 +69,9 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 	' Makefile
 	@printf '$(SUCCESS)Recommended flows:$(NC)\n'
 	@printf '  $(INFO)make sync && make web-sync$(NC)                  Setup dependencies\n'
-	@printf '  $(INFO)make stack-up$(NC)                               Run db + api + web\n'
+	@printf '  $(INFO)make dev$(NC)                                    Run db + api + web in one terminal\n'
+	@printf '  $(INFO)make api$(NC) + $(INFO)make web$(NC)                          Manual split-terminal flow\n'
+	@printf '  $(INFO)make stack-up$(NC)                               Container stack (use sparingly)\n'
 	@printf '  $(INFO)make check && make web-check$(NC)                Run backend + web quality gates\n'
 	@printf '  $(INFO)make acceptance-bddgen && make acceptance-test-mock$(NC)  Run deterministic acceptance tests\n'
 	@printf '\n'
@@ -77,6 +82,9 @@ print-config: ## Print key Makefile configuration values for local debugging
 	@printf '  $(PROGRESS)DOCKER_COMPOSE_FILE$(NC): %s\n' "$(DOCKER_COMPOSE_FILE)"
 	@printf '  $(PROGRESS)ACCEPTANCE_DIR$(NC):    %s\n' "$(ACCEPTANCE_DIR)"
 	@printf '  $(PROGRESS)DIAGRAM_PUML_FILES$(NC): %s\n' "$(DIAGRAM_PUML_FILES)"
+	@printf '  $(PROGRESS)API_HOST$(NC):          %s\n' "$${API_HOST:-0.0.0.0}"
+	@printf '  $(PROGRESS)API_PORT$(NC):          %s\n' "$${API_PORT:-8000}"
+	@printf '  $(PROGRESS)WEB_PORT$(NC):          %s\n' "$${WEB_PORT:-5174}"
 
 db-up: ## Start only the database container (build + force recreate)
 	@printf '$(PROGRESS)Starting database service...$(NC)\n'
@@ -193,6 +201,18 @@ sync: ## Sync Python dependencies via uv (including dev group)
 	@cd api && uv sync --group dev
 	@printf '$(SUCCESS)✓ Python dependencies synced$(NC)\n'
 
+dev: ## Start DB (docker) + API + Web together in one terminal (Ctrl+C stops both local servers)
+	@printf '$(PROGRESS)Ensuring database container is running...$(NC)\n'
+	@$(DOCKER_COMPOSE) up -d --build --force-recreate db
+	@printf '$(SUCCESS)✓ Database ready$(NC)\n'
+	@printf '$(PROGRESS)Starting API and Web in one terminal (Ctrl+C to stop)...$(NC)\n'
+	@printf '  $(INFO)API:$(NC) http://localhost:%s\n' "$${API_PORT:-8000}"
+	@printf '  $(INFO)WEB:$(NC) http://localhost:%s\n' "$${WEB_PORT:-5174}"
+	@trap 'printf "\n$(PROGRESS)Stopping local dev servers...$(NC)\n"; kill $$api_pid $$web_pid >/dev/null 2>&1 || true' INT TERM EXIT; \
+		(cd api && uv run uvicorn app.main:app --host $${API_HOST:-0.0.0.0} --port $${API_PORT:-8000} --reload 2>&1 | sed -e "s/^/[api] /") & api_pid=$$!; \
+		(cd web && npm run dev -- --host --port $${WEB_PORT:-5174} 2>&1 | sed -e "s/^/[web] /") & web_pid=$$!; \
+		wait $$api_pid $$web_pid
+
 api: ## Run FastAPI in local dev mode with reload
 	@printf '$(PROGRESS)Starting FastAPI dev server (reload enabled)...$(NC)\n'
 	@printf '  $(INFO)Host:$(NC) %s\n' "$${API_HOST:-0.0.0.0}"
@@ -251,7 +271,9 @@ web-sync: ## Install web dependencies
 
 web: ## Run Vite dev server on all interfaces
 	@printf '$(PROGRESS)Starting web dev server...$(NC)\n'
-	@cd web && npm run dev -- --host
+	@printf '  $(INFO)Host:$(NC) %s\n' "0.0.0.0"
+	@printf '  $(INFO)Port:$(NC) %s\n' "$${WEB_PORT:-5174}"
+	@cd web && npm run dev -- --host --port $${WEB_PORT:-5174}
 
 web-lint: ## Run web lint checks
 	@printf '$(PROGRESS)Running web lint checks...$(NC)\n'

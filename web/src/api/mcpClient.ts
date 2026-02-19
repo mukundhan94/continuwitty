@@ -124,12 +124,21 @@ export async function streamMcpCall(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      // Ask for SSE first while allowing JSON-RPC fallback for streamable HTTP
+      // request/response methods (for example tools/list).
+      Accept: 'text/event-stream, application/json',
     },
     body: JSON.stringify({ ...request, params: request.params ?? {} }),
   })
 
   if (!response.ok) {
     throw await parseApiError(response)
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    const payload = (await response.json()) as unknown
+    return [parseMcpJsonRpcFrame(payload)]
   }
 
   if (!response.body) {

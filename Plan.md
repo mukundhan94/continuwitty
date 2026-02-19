@@ -573,6 +573,9 @@ Build a local-first memory system where agents and humans can:
    - `make -C /Users/mukundhan/Projects/engram acceptance-typecheck`
 7. Developer workflow UX:
    - Upgraded `Makefile` help output with colorized grouped commands, quick-start guidance, and a `print-config` diagnostics target.
+8. MCP token panel reliability:
+   - Updated frontend MCP client to accept both SSE and JSON-RPC fallback responses from `/api/v1/mcp/stream` so tool/project option loading remains stable.
+   - Updated acceptance MCP step parsers to support both transports and removed race conditions in admin token option assertions.
 
 ### Exit Criteria
 

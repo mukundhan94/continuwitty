@@ -148,6 +148,13 @@ Then('I should see selectable MCP tool and project options', async ({ page }) =>
 
   await expect(toolSelect).toBeVisible()
   await expect(projectSelect).toBeVisible()
+  await expect
+    .poll(async () => {
+      const tools = await optionValues(toolSelect)
+      const projects = await optionValues(projectSelect)
+      return tools.length > 0 && projects.length > 0
+    })
+    .toBe(true)
 
   const tools = await optionValues(toolSelect)
   const projects = await optionValues(projectSelect)

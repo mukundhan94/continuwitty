@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { Then, When, expect } from '../support/fixtures'
+import type { APIResponse } from '@playwright/test'
 
 type McpFrame = {
   result?: {
@@ -39,6 +40,14 @@ function parseMcpFrames(rawSse: string): McpFrame[] {
   return frames
 }
 
+async function parseMcpResponse(response: APIResponse): Promise<McpFrame[]> {
+  const contentType = (response.headers()['content-type'] || '').toLowerCase()
+  if (contentType.includes('application/json')) {
+    return [(await response.json()) as McpFrame]
+  }
+  return parseMcpFrames(await response.text())
+}
+
 function finalResultFrame(frames: McpFrame[]): McpFrame {
   const resultFrames = frames.filter((frame) => frame.result)
   if (resultFrames.length === 0) {
@@ -66,6 +75,9 @@ When('I configure a default project for the phase31 scenario', async ({ page }) 
 
 When('I create an engram through MCP without project_id', async ({ page }) => {
   const response = await page.request.post('/api/v1/mcp/stream', {
+    headers: {
+      Accept: 'text/event-stream, application/json',
+    },
     data: {
       jsonrpc: '2.0',
       id: `phase31-mcp-${Date.now()}`,
@@ -81,8 +93,7 @@ When('I create an engram through MCP without project_id', async ({ page }) => {
     },
   })
   expect(response.ok()).toBeTruthy()
-  const body = await response.text()
-  const frames = parseMcpFrames(body)
+  const frames = await parseMcpResponse(response)
   const finalFrame = finalResultFrame(frames)
   if (finalFrame.error) {
     throw new Error(`MCP create failed: ${JSON.stringify(finalFrame.error)}`)
