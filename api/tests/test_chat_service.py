@@ -5,9 +5,10 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from app.chat import service as chat_service_module
 from app.chat.context import AssembledChatContext
 from app.chat.errors import ChatProviderExecutionError, ChatValidationError
-from app.chat.service import ChatService
+from app.chat.service import ChatService, PreparedGeneration
 from app.models import (
     ChatAutosaveStrategy,
     ChatLifecyclePolicyUpdateRequest,
@@ -25,7 +26,8 @@ from app.models import (
     SaveSessionAsEngramRequest,
     VisibilityScope,
 )
-from app.providers.base import ProviderGenerateResult
+from app.observability import ChatDebugCollector
+from app.providers.base import ProviderGenerateRequest, ProviderGenerateResult, ProviderMessage
 from app.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
@@ -100,6 +102,28 @@ class _FixedReplyAdapter:
         )
 
 
+def _prepared_generation(
+    *,
+    session: ChatSessionRecord,
+    user_message: ChatMessageRecord,
+    context: AssembledChatContext,
+) -> PreparedGeneration:
+    return PreparedGeneration(
+        session=session,
+        user_message=user_message,
+        context=context,
+        provider_request=ProviderGenerateRequest(
+            model_id=session.model_id,
+            messages=[ProviderMessage(role="user", content=user_message.content_text)],
+            system_prompt="system context",
+        ),
+        debug_collector=ChatDebugCollector(),
+        prepare_duration_ms=1.5,
+        context_duration_ms=0.8,
+        history_load_duration_ms=0.5,
+    )
+
+
 def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
     actor_id = uuid4()
     session = _session(actor_id)
@@ -159,6 +183,92 @@ def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
     assert response.debug_trace.llm_calls[0].provider == "openai"
     assert response.debug_trace.llm_calls[0].token_usage["total_tokens"] == 13
     assert response.debug_trace.request_input_text == "How should we proceed?"
+
+
+def test_resolve_token_usage_prefers_provider_total() -> None:
+    provided = {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+
+    resolved, estimated = chat_service_module._resolve_token_usage(
+        token_usage=provided,
+        input_chars=100,
+        output_chars=50,
+    )
+
+    assert resolved == provided
+    assert estimated is False
+
+
+def test_resolve_token_usage_estimates_when_total_missing() -> None:
+    resolved, estimated = chat_service_module._resolve_token_usage(
+        token_usage={"input_tokens": 3},
+        input_chars=120,
+        output_chars=44,
+    )
+
+    assert estimated is True
+    assert resolved["total_tokens"] > 0
+    assert resolved["input_tokens"] > 0
+    assert resolved["output_tokens"] > 0
+
+
+def test_stream_message_events_emits_meta_chunks_and_done(monkeypatch) -> None:
+    actor_id = uuid4()
+    session = _session(actor_id)
+    user_message = _message(
+        message_id=uuid4(),
+        session_id=session.session_id,
+        role="user",
+        content_text="Stream this response",
+    )
+    assistant_message = _message(
+        message_id=uuid4(),
+        session_id=session.session_id,
+        role="assistant",
+        content_text="part-1 part-2",
+    )
+    prepared = _prepared_generation(
+        session=session,
+        user_message=user_message,
+        context=AssembledChatContext(
+            context_markdown="ctx",
+            used_engram_ids=[],
+            used_document_chunk_ids=[],
+            source_references=[],
+        ),
+    )
+    service = ChatService(embedding_dim=256)
+
+    monkeypatch.setattr(service, "_prepare_generation", lambda **kwargs: prepared)
+
+    class _StreamingAdapter:
+        def stream_generate(self, request):  # noqa: ANN001
+            _ = request
+            yield "part-1 "
+            yield ""
+            yield "part-2"
+
+    monkeypatch.setattr(
+        "app.chat.service.get_provider_adapter",
+        lambda provider: _StreamingAdapter(),
+    )
+    monkeypatch.setattr(service, "_persist_assistant_reply", lambda **kwargs: assistant_message)
+    monkeypatch.setattr(service, "_run_session_lifecycle_maintenance", lambda **kwargs: None)
+    monkeypatch.setattr(service, "_build_debug_trace", lambda **kwargs: None)
+
+    events = list(
+        service.stream_message_events(
+            actor_user_id=actor_id,
+            session_id=session.session_id,
+            payload=ChatMessageCreateRequest(content_text="Stream this response"),
+        )
+    )
+
+    kinds = [event_type for event_type, _payload in events]
+    assert kinds == ["meta", "chunk", "chunk", "done"]
+    done_payload = events[-1][1]
+    assert done_payload["assistant_text"] == "part-1 part-2"
+    assert done_payload["reply_message_id"] == assistant_message.message_id
+    assert done_payload["debug_trace"] is None
 
 
 def test_continue_session_copies_pinned_engrams(monkeypatch) -> None:

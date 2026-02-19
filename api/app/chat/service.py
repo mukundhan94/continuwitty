@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import perf_counter
@@ -128,6 +128,17 @@ class LifecycleMaintenanceResult:
     skipped_reason: str | None = None
 
 
+@dataclass(frozen=True)
+class _DebugBuildContext:
+    actor_user_id: UUID
+    prepared: PreparedGeneration
+    result: ProviderGenerateResult
+    llm_call_duration_ms: float
+    persistence_duration_ms: float
+    total_duration_ms: float
+    call_type: str
+
+
 def _history_as_provider_messages(
     messages: list[ChatMessageRecord],
     history_limit: int = 40,
@@ -201,6 +212,46 @@ def _estimate_token_usage(*, input_chars: int, output_chars: int) -> dict[str, i
         "output_tokens": output_tokens,
         "total_tokens": input_tokens + output_tokens,
     }
+
+
+def _build_provider_message_debug(
+    messages: list[ProviderMessage],
+) -> list[ChatDebugProviderMessage]:
+    return [
+        ChatDebugProviderMessage(
+            role=message.role,
+            content_preview=_preview_text(message.content),
+            char_count=len(message.content),
+        )
+        for message in messages
+    ]
+
+
+def _build_embedding_call_debug(embedding_calls: list[Any]) -> list[ChatDebugEmbeddingCall]:
+    return [
+        ChatDebugEmbeddingCall(
+            operation=item.operation,
+            provider_id=item.provider_id,
+            duration_ms=round(item.duration_ms, 2),
+            item_count=item.item_count,
+            text_chars=item.text_chars,
+            dim=item.dim,
+            used_fallback=item.used_fallback,
+        )
+        for item in embedding_calls
+    ]
+
+
+def _resolve_token_usage(
+    *,
+    token_usage: dict[str, int] | None,
+    input_chars: int,
+    output_chars: int,
+) -> tuple[dict[str, int], bool]:
+    resolved = token_usage or {}
+    if int(resolved.get("total_tokens", 0)) <= 0:
+        return _estimate_token_usage(input_chars=input_chars, output_chars=output_chars), True
+    return resolved, False
 
 
 def _is_generic_snapshot_abstract(value: str) -> bool:
@@ -566,55 +617,32 @@ class ChatService:
     def _build_debug_trace(
         self,
         *,
-        actor_user_id: UUID,
-        prepared: PreparedGeneration,
-        result: ProviderGenerateResult,
-        llm_call_duration_ms: float,
-        persistence_duration_ms: float,
-        total_duration_ms: float,
-        call_type: str,
+        context: _DebugBuildContext,
     ) -> ChatDebugTrace | None:
         if not self._chat_debug_enabled:
             return None
 
-        response_output_text = result.text if self._chat_debug_include_raw_text else ""
-        provider_message_debug = [
-            ChatDebugProviderMessage(
-                role=message.role,
-                content_preview=_preview_text(message.content),
-                char_count=len(message.content),
-            )
-            for message in prepared.provider_request.messages
-        ]
-
-        embedding_calls = [
-            ChatDebugEmbeddingCall(
-                operation=item.operation,
-                provider_id=item.provider_id,
-                duration_ms=round(item.duration_ms, 2),
-                item_count=item.item_count,
-                text_chars=item.text_chars,
-                dim=item.dim,
-                used_fallback=item.used_fallback,
-            )
-            for item in prepared.debug_collector.embedding_calls
-        ]
-
-        input_chars = sum(len(item.content) for item in prepared.provider_request.messages) + len(
-            prepared.provider_request.system_prompt
+        response_output_text = (
+            context.result.text if self._chat_debug_include_raw_text else ""
         )
-        output_chars = len(result.text)
-        token_usage = result.token_usage or {}
-        token_usage_is_estimated = False
-        if int(token_usage.get("total_tokens", 0)) <= 0:
-            token_usage = _estimate_token_usage(input_chars=input_chars, output_chars=output_chars)
-            token_usage_is_estimated = True
+        provider_message_debug = _build_provider_message_debug(context.prepared.provider_request.messages)
+        embedding_calls = _build_embedding_call_debug(context.prepared.debug_collector.embedding_calls)
+
+        input_chars = sum(len(item.content) for item in context.prepared.provider_request.messages) + len(
+            context.prepared.provider_request.system_prompt
+        )
+        output_chars = len(context.result.text)
+        token_usage, token_usage_is_estimated = _resolve_token_usage(
+            token_usage=context.result.token_usage,
+            input_chars=input_chars,
+            output_chars=output_chars,
+        )
 
         llm_call = ChatDebugLLMCall(
-            provider=prepared.session.provider.value,
-            model_id=prepared.session.model_id,
-            call_type=call_type,
-            duration_ms=round(llm_call_duration_ms, 2),
+            provider=context.prepared.session.provider.value,
+            model_id=context.prepared.session.model_id,
+            call_type=context.call_type,
+            duration_ms=round(context.llm_call_duration_ms, 2),
             input_chars=input_chars,
             output_chars=output_chars,
             token_usage=token_usage,
@@ -622,20 +650,20 @@ class ChatService:
         )
 
         debug_trace = ChatDebugTrace(
-            total_duration_ms=round(total_duration_ms, 2),
-            prepare_duration_ms=round(prepared.prepare_duration_ms, 2),
-            context_duration_ms=round(prepared.context_duration_ms, 2),
-            history_load_duration_ms=round(prepared.history_load_duration_ms, 2),
-            llm_call_duration_ms=round(llm_call_duration_ms, 2),
-            persistence_duration_ms=round(persistence_duration_ms, 2),
-            used_engram_count=len(prepared.context.used_engram_ids),
-            used_document_chunk_count=len(prepared.context.used_document_chunk_ids),
-            source_reference_count=len(prepared.context.source_references),
-            provider=prepared.session.provider.value,
-            model_id=prepared.session.model_id,
-            request_input_text=prepared.user_message.content_text,
+            total_duration_ms=round(context.total_duration_ms, 2),
+            prepare_duration_ms=round(context.prepared.prepare_duration_ms, 2),
+            context_duration_ms=round(context.prepared.context_duration_ms, 2),
+            history_load_duration_ms=round(context.prepared.history_load_duration_ms, 2),
+            llm_call_duration_ms=round(context.llm_call_duration_ms, 2),
+            persistence_duration_ms=round(context.persistence_duration_ms, 2),
+            used_engram_count=len(context.prepared.context.used_engram_ids),
+            used_document_chunk_count=len(context.prepared.context.used_document_chunk_ids),
+            source_reference_count=len(context.prepared.context.source_references),
+            provider=context.prepared.session.provider.value,
+            model_id=context.prepared.session.model_id,
+            request_input_text=context.prepared.user_message.content_text,
             response_output_text=response_output_text,
-            provider_system_prompt_preview=_preview_text(prepared.provider_request.system_prompt),
+            provider_system_prompt_preview=_preview_text(context.prepared.provider_request.system_prompt),
             provider_messages=provider_message_debug,
             embedding_calls=embedding_calls,
             llm_calls=[llm_call],
@@ -643,8 +671,8 @@ class ChatService:
 
         self._debug_publisher.publish_chat_trace(
             trace_payload={
-                "actor_user_id": str(actor_user_id),
-                "session_id": str(prepared.session.session_id),
+                "actor_user_id": str(context.actor_user_id),
+                "session_id": str(context.prepared.session.session_id),
                 **debug_trace.model_dump(mode="json"),
             }
         )
@@ -822,13 +850,15 @@ class ChatService:
         )
         persistence_duration_ms = _duration_ms(persistence_started_at)
         debug_trace = self._build_debug_trace(
-            actor_user_id=actor_user_id,
-            prepared=prepared,
-            result=result,
-            llm_call_duration_ms=llm_call_duration_ms,
-            persistence_duration_ms=persistence_duration_ms,
-            total_duration_ms=_duration_ms(call_started_at),
-            call_type="generate",
+            context=_DebugBuildContext(
+                actor_user_id=actor_user_id,
+                prepared=prepared,
+                result=result,
+                llm_call_duration_ms=llm_call_duration_ms,
+                persistence_duration_ms=persistence_duration_ms,
+                total_duration_ms=_duration_ms(call_started_at),
+                call_type="generate",
+            ),
         )
         return ChatSendResponse(
             session_id=prepared.session.session_id,
@@ -841,31 +871,22 @@ class ChatService:
             debug_trace=debug_trace,
         )
 
-    def stream_message_events(
+    @staticmethod
+    def _build_stream_meta_payload(*, prepared: PreparedGeneration) -> dict[str, Any]:
+        return {
+            "session_id": prepared.session.session_id,
+            "message_id": prepared.user_message.message_id,
+            "used_engram_ids": prepared.context.used_engram_ids,
+            "used_document_chunk_ids": prepared.context.used_document_chunk_ids,
+            "source_references": prepared.context.source_references,
+        }
+
+    def _yield_stream_chunks(
         self,
-        actor_user_id: UUID,
-        session_id: UUID,
-        payload: ChatMessageCreateRequest,
-    ) -> Iterator[tuple[str, dict[str, Any]]]:
-        call_started_at = perf_counter()
-        prepared = self._prepare_generation(
-            actor_user_id=actor_user_id,
-            session_id=session_id,
-            payload=payload,
-        )
-        adapter = get_provider_adapter(prepared.session.provider)
-
-        yield (
-            "meta",
-            {
-                "session_id": prepared.session.session_id,
-                "message_id": prepared.user_message.message_id,
-                "used_engram_ids": prepared.context.used_engram_ids,
-                "used_document_chunk_ids": prepared.context.used_document_chunk_ids,
-                "source_references": prepared.context.source_references,
-            },
-        )
-
+        *,
+        adapter: Any,
+        prepared: PreparedGeneration,
+    ) -> Generator[tuple[str, dict[str, Any]], None, tuple[str, float] | None]:
         chunks: list[str] = []
         llm_started_at = perf_counter()
         try:
@@ -887,11 +908,67 @@ class ChatService:
                         "error_code": provider_error.error_code,
                     },
                 )
-                return
+                return None
             raise
-        llm_call_duration_ms = _duration_ms(llm_started_at)
+        return "".join(chunks), _duration_ms(llm_started_at)
 
-        full_text = "".join(chunks)
+    def _persist_stream_completion(
+        self,
+        *,
+        actor_user_id: UUID,
+        prepared: PreparedGeneration,
+        result: ProviderGenerateResult,
+    ) -> tuple[ChatMessageRecord, float]:
+        persistence_started_at = perf_counter()
+        assistant_message = self._persist_assistant_reply(
+            actor_user_id=actor_user_id,
+            prepared=prepared,
+            result=result,
+        )
+        self._run_session_lifecycle_maintenance(
+            actor_user_id=actor_user_id,
+            session=prepared.session,
+        )
+        return assistant_message, _duration_ms(persistence_started_at)
+
+    @staticmethod
+    def _build_stream_done_payload(
+        *,
+        prepared: PreparedGeneration,
+        assistant_message: ChatMessageRecord,
+        full_text: str,
+        debug_trace: ChatDebugTrace | None,
+    ) -> dict[str, Any]:
+        return {
+            "session_id": prepared.session.session_id,
+            "message_id": prepared.user_message.message_id,
+            "reply_message_id": assistant_message.message_id,
+            "assistant_text": full_text,
+            "used_engram_ids": prepared.context.used_engram_ids,
+            "used_document_chunk_ids": prepared.context.used_document_chunk_ids,
+            "source_references": prepared.context.source_references,
+            "debug_trace": debug_trace.model_dump(mode="json") if debug_trace else None,
+        }
+
+    def stream_message_events(
+        self,
+        actor_user_id: UUID,
+        session_id: UUID,
+        payload: ChatMessageCreateRequest,
+    ) -> Iterator[tuple[str, dict[str, Any]]]:
+        call_started_at = perf_counter()
+        prepared = self._prepare_generation(
+            actor_user_id=actor_user_id,
+            session_id=session_id,
+            payload=payload,
+        )
+        adapter = get_provider_adapter(prepared.session.provider)
+
+        yield ("meta", self._build_stream_meta_payload(prepared=prepared))
+        streamed = yield from self._yield_stream_chunks(adapter=adapter, prepared=prepared)
+        if streamed is None:
+            return
+        full_text, llm_call_duration_ms = streamed
         result = ProviderGenerateResult(
             provider=prepared.session.provider,
             model_id=prepared.session.model_id,
@@ -899,17 +976,11 @@ class ChatService:
             token_usage={},
         )
         try:
-            persistence_started_at = perf_counter()
-            assistant_message = self._persist_assistant_reply(
+            assistant_message, persistence_duration_ms = self._persist_stream_completion(
                 actor_user_id=actor_user_id,
                 prepared=prepared,
                 result=result,
             )
-            self._run_session_lifecycle_maintenance(
-                actor_user_id=actor_user_id,
-                session=prepared.session,
-            )
-            persistence_duration_ms = _duration_ms(persistence_started_at)
         except ChatServiceError as exc:
             yield (
                 "error",
@@ -922,27 +993,25 @@ class ChatService:
             return
 
         debug_trace = self._build_debug_trace(
-            actor_user_id=actor_user_id,
-            prepared=prepared,
-            result=result,
-            llm_call_duration_ms=llm_call_duration_ms,
-            persistence_duration_ms=persistence_duration_ms,
-            total_duration_ms=_duration_ms(call_started_at),
-            call_type="stream_generate",
+            context=_DebugBuildContext(
+                actor_user_id=actor_user_id,
+                prepared=prepared,
+                result=result,
+                llm_call_duration_ms=llm_call_duration_ms,
+                persistence_duration_ms=persistence_duration_ms,
+                total_duration_ms=_duration_ms(call_started_at),
+                call_type="stream_generate",
+            ),
         )
 
         yield (
             "done",
-            {
-                "session_id": prepared.session.session_id,
-                "message_id": prepared.user_message.message_id,
-                "reply_message_id": assistant_message.message_id,
-                "assistant_text": full_text,
-                "used_engram_ids": prepared.context.used_engram_ids,
-                "used_document_chunk_ids": prepared.context.used_document_chunk_ids,
-                "source_references": prepared.context.source_references,
-                "debug_trace": debug_trace.model_dump(mode="json") if debug_trace else None,
-            },
+            self._build_stream_done_payload(
+                prepared=prepared,
+                assistant_message=assistant_message,
+                full_text=full_text,
+                debug_trace=debug_trace,
+            ),
         )
 
     def save_session_as_engram(

@@ -69,6 +69,23 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-19 (Checkpoint 5 - Chat Service Phase 4.2/4.3)
+
+- [x] Step 4.2 — Decomposed `_build_debug_trace`
+- [x] Added `_DebugBuildContext` dataclass to reduce `_build_debug_trace` argument count
+- [x] Extracted `_build_provider_message_debug(...)`, `_build_embedding_call_debug(...)`, and `_resolve_token_usage(...)`
+- [x] Step 4.3 — Reduced `stream_message_events` method length
+- [x] Extracted `_build_stream_meta_payload(...)`, `_yield_stream_chunks(...)`, `_persist_stream_completion(...)`, `_build_stream_done_payload(...)`
+- [x] Added tests in `api/tests/test_chat_service.py`:
+  - token usage resolution (provider total vs estimated fallback)
+  - stream event flow (`meta`/`chunk`/`done`) with persisted completion payload assertions
+- [x] Validation run: `api/tests/test_chat_service.py`, `api/tests/test_chat_repository.py` (25 passed)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene score improvement: `api/app/chat/service.py` from **6.95** to **7.90**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -76,7 +93,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/mcp/service.py` | **3.0** | RED |
 | `api/app/memory_admin/repository.py` | 7.42 | YELLOW |
 | `api/app/chat_repository.py` | 7.10 | YELLOW |
-| `api/app/chat/service.py` | 6.95 | YELLOW |
+| `api/app/chat/service.py` | 7.90 | YELLOW |
 | `api/app/oauth/api.py` | 7.48 | YELLOW |
 | `api/app/main.py` | 7.66 | YELLOW |
 | `api/app/repository.py` | 7.88 | YELLOW |
