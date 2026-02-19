@@ -8,6 +8,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 
 - Architecture playbook: `docs/architecture-playbook.md`
 - UI user flow (sessions + engrams): `docs/user-flow-engram-workflow.md`
+- MCP client integration commands (LibreChat/Copilot/Codex): `docs/mcp-client-integrations.md`
 - PlantUML architecture/workflow map: `docs/architecture-workflows.puml`
 - PlantUML use-case map (model switch + save/pin/continue): `docs/model-switch-engram-usecases.puml`
 - Render PlantUML via Docker (no local `dot` needed): `make diagram-render`
@@ -185,6 +186,7 @@ engram/
   docs/
     architecture-playbook.md
     user-flow-engram-workflow.md
+    mcp-client-integrations.md
     architecture-workflows.puml
     model-switch-engram-usecases.puml
     render-plantuml.sh
@@ -2053,6 +2055,7 @@ Auth/session requirement:
 ## MCP Token Workflow (Admin + External Agent)
 
 `ENGRAM_MCP_TOKEN` is now first-class and backed by persisted token records. Create token credentials as admin, store only the plaintext token client-side, and send it in the `Authorization` header for MCP calls.
+For client-specific setup commands, see `docs/mcp-client-integrations.md`.
 
 Token policy model:
 
