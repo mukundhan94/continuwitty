@@ -9,7 +9,7 @@ The flow uses the same default model for all sessions and captures screenshots o
 ## Preconditions
 
 1. API and web are running locally.
-2. Open `http://localhost:5174/`.
+2. Open `http://localhost:5173/`.
 3. Login credentials: `admin` / `admin123`.
 4. Start from a clean stack/database.
 

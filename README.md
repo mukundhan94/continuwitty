@@ -695,7 +695,7 @@ make web
 9. Open API docs:
 
 - [http://localhost:8000/docs](http://localhost:8000/docs)
-- [http://localhost:5174](http://localhost:5174) (React chat workbench)
+- [http://localhost:5173](http://localhost:5173) (React chat workbench)
 
 UI testing entrypoints:
 
@@ -713,7 +713,7 @@ Default local UI credentials (seeded in `db/init/001_schema.sql`):
 Use this sequence to validate the latest multi-document continuity path end-to-end with admin credentials.
 
 1. Sign in as admin:
-- open [http://localhost:5173](http://localhost:5173) (or [http://localhost:5174](http://localhost:5174) in docker mode)
+- open [http://localhost:5173](http://localhost:5173) (or [http://localhost:5173](http://localhost:5173) in docker mode)
 - login with `admin` / `admin123`
 
 2. Optional admin-role sanity check:
@@ -866,7 +866,7 @@ docker compose ps
 3. Open:
 
 - [http://localhost:8000/docs](http://localhost:8000/docs)
-- [http://localhost:5174](http://localhost:5174) (React chat workbench)
+- [http://localhost:5173](http://localhost:5173) (React chat workbench)
 
 4. Stop stack:
 
@@ -1098,7 +1098,7 @@ make stack-up
 make acceptance-test-docker
 ```
 
-2. Open [http://localhost:5174](http://localhost:5174) and sign in (`admin` / `admin123`).
+2. Open [http://localhost:5173](http://localhost:5173) and sign in (`admin` / `admin123`).
 
 3. Create three sessions in the same project:
 - Session A (`openai`) for general prompts.
@@ -2194,7 +2194,7 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 4. Removed race in admin token options acceptance assertion:
    - updated `acceptance-tests/src/steps/admin-mcp-token-ui.steps.ts` to poll until tool/project options are populated before strict assertions.
 5. Dev-run consistency:
-   - `make web` now defaults to port `5174` to match local acceptance/test workflow and avoid localhost port confusion.
+   - `make web` now defaults to port `5173` to match local acceptance/test workflow and avoid localhost port confusion.
 6. Validation:
    - `make -C /Users/mukundhan/Projects/engram check` passed (`176` tests + eval pass).
    - `make -C /Users/mukundhan/Projects/engram web-check` passed (`52` web tests + build).

@@ -24,7 +24,7 @@ function asOptionalNonEmpty(value: string | undefined): string | undefined {
 }
 
 export const acceptanceEnv = {
-  webBaseUrl: process.env.WEB_BASE_URL || 'http://localhost:5174',
+  webBaseUrl: process.env.WEB_BASE_URL || 'http://localhost:5173',
   apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:8000',
   username: process.env.UI_USERNAME || 'admin',
   password: process.env.UI_PASSWORD || 'admin123',

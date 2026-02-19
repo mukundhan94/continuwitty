@@ -21,7 +21,7 @@ NC = \033[0m
 
 .DEFAULT_GOAL := help
 
-WEB_PORT ?= 5174
+WEB_PORT ?= 5173
 
 .PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
@@ -84,7 +84,7 @@ print-config: ## Print key Makefile configuration values for local debugging
 	@printf '  $(PROGRESS)DIAGRAM_PUML_FILES$(NC): %s\n' "$(DIAGRAM_PUML_FILES)"
 	@printf '  $(PROGRESS)API_HOST$(NC):          %s\n' "$${API_HOST:-0.0.0.0}"
 	@printf '  $(PROGRESS)API_PORT$(NC):          %s\n' "$${API_PORT:-8000}"
-	@printf '  $(PROGRESS)WEB_PORT$(NC):          %s\n' "$${WEB_PORT:-5174}"
+	@printf '  $(PROGRESS)WEB_PORT$(NC):          %s\n' "$${WEB_PORT:-5173}"
 
 db-up: ## Start only the database container (build + force recreate)
 	@printf '$(PROGRESS)Starting database service...$(NC)\n'
@@ -207,10 +207,10 @@ dev: ## Start DB (docker) + API + Web together in one terminal (Ctrl+C stops bot
 	@printf '$(SUCCESS)✓ Database ready$(NC)\n'
 	@printf '$(PROGRESS)Starting API and Web in one terminal (Ctrl+C to stop)...$(NC)\n'
 	@printf '  $(INFO)API:$(NC) http://localhost:%s\n' "$${API_PORT:-8000}"
-	@printf '  $(INFO)WEB:$(NC) http://localhost:%s\n' "$${WEB_PORT:-5174}"
+	@printf '  $(INFO)WEB:$(NC) http://localhost:%s\n' "$${WEB_PORT:-5173}"
 	@trap 'printf "\n$(PROGRESS)Stopping local dev servers...$(NC)\n"; kill $$api_pid $$web_pid >/dev/null 2>&1 || true' INT TERM EXIT; \
 		(cd api && uv run uvicorn app.main:app --host $${API_HOST:-0.0.0.0} --port $${API_PORT:-8000} --reload 2>&1 | sed -e "s/^/[api] /") & api_pid=$$!; \
-		(cd web && npm run dev -- --host --port $${WEB_PORT:-5174} 2>&1 | sed -e "s/^/[web] /") & web_pid=$$!; \
+		(cd web && npm run dev -- --host --port $${WEB_PORT:-5173} 2>&1 | sed -e "s/^/[web] /") & web_pid=$$!; \
 		wait $$api_pid $$web_pid
 
 api: ## Run FastAPI in local dev mode with reload
@@ -272,8 +272,8 @@ web-sync: ## Install web dependencies
 web: ## Run Vite dev server on all interfaces
 	@printf '$(PROGRESS)Starting web dev server...$(NC)\n'
 	@printf '  $(INFO)Host:$(NC) %s\n' "0.0.0.0"
-	@printf '  $(INFO)Port:$(NC) %s\n' "$${WEB_PORT:-5174}"
-	@cd web && npm run dev -- --host --port $${WEB_PORT:-5174}
+	@printf '  $(INFO)Port:$(NC) %s\n' "$${WEB_PORT:-5173}"
+	@cd web && npm run dev -- --host --port $${WEB_PORT:-5173}
 
 web-lint: ## Run web lint checks
 	@printf '$(PROGRESS)Running web lint checks...$(NC)\n'
