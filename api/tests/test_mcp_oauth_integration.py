@@ -229,6 +229,48 @@ def test_oauth_token_rejects_invalid_pkce_verifier(client, clean_db) -> None:
 
 
 @pytest.mark.integration
+def test_oauth_token_requires_client_secret_for_confidential_clients(client, clean_db) -> None:
+    register = client.post(
+        "/oauth/register",
+        json={
+            "client_name": "confidential-mcp-client",
+            "redirect_uris": ["http://127.0.0.1:33418"],
+            "token_endpoint_auth_method": "client_secret_post",
+        },
+    )
+    assert register.status_code == 201
+    registered = register.json()
+
+    _login(client)
+    authorize = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": registered["client_id"],
+            "redirect_uri": "http://127.0.0.1:33418",
+            "scope": "mcp:read",
+        },
+        follow_redirects=False,
+    )
+    assert authorize.status_code == 303
+    code = parse_qs(urlparse(authorize.headers["location"]).query)["code"][0]
+
+    token_response = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": "http://127.0.0.1:33418",
+            "client_id": registered["client_id"],
+            "code_verifier": "unused-for-missing-secret",
+        },
+    )
+    assert token_response.status_code == 401
+    assert token_response.json()["error"] == "invalid_client"
+    assert token_response.headers["www-authenticate"] == 'Bearer realm="engram-oauth"'
+
+
+@pytest.mark.integration
 def test_mcp_unauthorized_response_includes_oauth_resource_metadata_header(
     client, clean_db
 ) -> None:

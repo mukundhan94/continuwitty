@@ -114,6 +114,31 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-19 (Checkpoint 7 - OAuth API Phase 6.1/6.2/6.3)
+
+- [x] Step 6.1 — Extracted OAuth route bodies from `create_oauth_router(...)` into top-level handlers:
+  - `_handle_oauth_register(...)`
+  - `_handle_oauth_authorize(...)`
+  - `_handle_oauth_token(...)`
+- [x] Reduced router closure responsibilities; `create_oauth_router(...)` now primarily wires endpoints to extracted handlers
+- [x] Step 6.2 — Added `_validate_oauth_client_and_redirect(...)` for shared client + redirect validation logic in authorize flow
+- [x] Step 6.3 — Added `_dedup_string_list(...)` and reused it for metadata/redirect URI normalization
+- [x] New unit test file: `api/tests/test_oauth_api_unit.py`
+- [x] Integration expanded: `api/tests/test_mcp_oauth_integration.py` confidential-client token secret requirement
+- [x] Validation run:
+  - `api/tests/test_oauth_api_unit.py`
+  - `api/tests/test_oauth_service.py`
+  - `api/tests/test_mcp_oauth_integration.py`
+  - Aggregate: `9 passed, 6 skipped`
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/oauth/api.py` score improved from **7.48** to **7.54**
+  - `create_oauth_router` complex-method and bumpy-road findings resolved
+  - pre-commit quality gate passed
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -122,7 +147,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/memory_admin/repository.py` | 7.42 | YELLOW |
 | `api/app/chat_repository.py` | 7.10 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
-| `api/app/oauth/api.py` | 7.48 | YELLOW |
+| `api/app/oauth/api.py` | 7.54 | YELLOW |
 | `api/app/main.py` | 7.66 | YELLOW |
 | `api/app/repository.py` | 7.88 | YELLOW |
 | `api/app/providers/bedrock_provider.py` | 8.17 | YELLOW |
