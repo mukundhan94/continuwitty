@@ -216,45 +216,62 @@ export function AdminMcpTokenPanel({
   const [expiresInDays, setExpiresInDays] = useState(90)
   const [selectedTools, setSelectedTools] = useState<string[]>([])
   const [selectedProjects, setSelectedProjects] = useState<string[]>([])
-  const [pendingTool, setPendingTool] = useState('')
-  const [pendingProject, setPendingProject] = useState('')
+  const [pendingTools, setPendingTools] = useState<string[]>([])
+  const [pendingProjects, setPendingProjects] = useState<string[]>([])
 
   const activeCount = useMemo(() => tokens.filter((item) => item.is_active).length, [tokens])
+  const availableToolChoices = useMemo(
+    () => availableTools.filter((item) => !selectedTools.includes(item)),
+    [availableTools, selectedTools],
+  )
+  const availableProjectChoices = useMemo(
+    () => availableProjects.filter((item) => !selectedProjects.includes(item)),
+    [availableProjects, selectedProjects],
+  )
 
   useEffect(() => {
     if (!isOpen) {
       return
     }
-    if (!pendingTool && availableTools.length > 0) {
-      setPendingTool(availableTools[0])
-    }
-    if (!pendingProject && availableProjects.length > 0) {
-      setPendingProject(availableProjects[0])
-    }
-  }, [availableProjects, availableTools, isOpen, pendingProject, pendingTool])
+    // Keep pending multi-selects synchronized with remaining available options.
+    setPendingTools((current) => current.filter((item) => availableToolChoices.includes(item)))
+    setPendingProjects((current) => current.filter((item) => availableProjectChoices.includes(item)))
+  }, [availableProjectChoices, availableToolChoices, isOpen])
 
   if (!isOpen) {
     return null
   }
 
-  const addTool = () => {
-    if (!pendingTool || selectedTools.includes(pendingTool)) {
+  const addTools = () => {
+    if (pendingTools.length === 0) {
       return
     }
-    setSelectedTools((current) => [...current, pendingTool])
-    const nextCandidate = availableTools.find((item) => item !== pendingTool && !selectedTools.includes(item))
-    setPendingTool(nextCandidate || pendingTool)
+    setSelectedTools((current) => {
+      const merged = [...current]
+      for (const item of pendingTools) {
+        if (!merged.includes(item)) {
+          merged.push(item)
+        }
+      }
+      return merged
+    })
+    setPendingTools([])
   }
 
-  const addProject = () => {
-    if (!pendingProject || selectedProjects.includes(pendingProject)) {
+  const addProjects = () => {
+    if (pendingProjects.length === 0) {
       return
     }
-    setSelectedProjects((current) => [...current, pendingProject])
-    const nextCandidate = availableProjects.find(
-      (item) => item !== pendingProject && !selectedProjects.includes(item),
-    )
-    setPendingProject(nextCandidate || pendingProject)
+    setSelectedProjects((current) => {
+      const merged = [...current]
+      for (const item of pendingProjects) {
+        if (!merged.includes(item)) {
+          merged.push(item)
+        }
+      }
+      return merged
+    })
+    setPendingProjects([])
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -268,6 +285,8 @@ export function AdminMcpTokenPanel({
     })
     setSelectedTools([])
     setSelectedProjects([])
+    setPendingTools([])
+    setPendingProjects([])
   }
 
   return (
@@ -352,24 +371,26 @@ export function AdminMcpTokenPanel({
               <Select
                 aria-label="Tool Options"
                 data-testid="admin-tool-options"
-                value={pendingTool}
-                onChange={(event) => setPendingTool(event.target.value)}
-                disabled={availableTools.length === 0}
+                multiple
+                size={Math.min(Math.max(availableToolChoices.length, 3), 8)}
+                value={pendingTools}
+                onChange={(event) =>
+                  setPendingTools(Array.from(event.target.selectedOptions, (option) => option.value).filter(Boolean))
+                }
+                disabled={availableToolChoices.length === 0}
               >
-                {availableTools.length === 0 ? (
-                  <option value="">No tools available</option>
-                ) : (
-                  availableTools.map((toolName) => (
-                    <option key={toolName} value={toolName}>
-                      {toolName}
-                    </option>
-                  ))
-                )}
+                {availableToolChoices.length === 0 ? <option value="">No tools available</option> : null}
+                {availableToolChoices.map((toolName) => (
+                  <option key={toolName} value={toolName}>
+                    {toolName}
+                  </option>
+                ))}
               </Select>
-              <button type="button" onClick={addTool} disabled={!pendingTool} data-testid="admin-add-tool-chip">
-                Add Tool
+              <button type="button" onClick={addTools} disabled={pendingTools.length === 0} data-testid="admin-add-tool-chip">
+                Add Tools
               </button>
             </OptionSelectRow>
+            <Hint>Select one or more tools from the list, then click Add Tools.</Hint>
             <ChipWrap>
               {selectedTools.length === 0 ? (
                 <Hint>No tool restrictions selected.</Hint>
@@ -396,29 +417,31 @@ export function AdminMcpTokenPanel({
               <Select
                 aria-label="Project Options"
                 data-testid="admin-project-options"
-                value={pendingProject}
-                onChange={(event) => setPendingProject(event.target.value)}
-                disabled={availableProjects.length === 0}
+                multiple
+                size={Math.min(Math.max(availableProjectChoices.length, 3), 8)}
+                value={pendingProjects}
+                onChange={(event) =>
+                  setPendingProjects(Array.from(event.target.selectedOptions, (option) => option.value).filter(Boolean))
+                }
+                disabled={availableProjectChoices.length === 0}
               >
-                {availableProjects.length === 0 ? (
-                  <option value="">No projects available</option>
-                ) : (
-                  availableProjects.map((projectName) => (
-                    <option key={projectName} value={projectName}>
-                      {projectName}
-                    </option>
-                  ))
-                )}
+                {availableProjectChoices.length === 0 ? <option value="">No projects available</option> : null}
+                {availableProjectChoices.map((projectName) => (
+                  <option key={projectName} value={projectName}>
+                    {projectName}
+                  </option>
+                ))}
               </Select>
               <button
                 type="button"
-                onClick={addProject}
-                disabled={!pendingProject}
+                onClick={addProjects}
+                disabled={pendingProjects.length === 0}
                 data-testid="admin-add-project-chip"
               >
-                Add Project
+                Add Projects
               </button>
             </OptionSelectRow>
+            <Hint>Select one or more projects from the list, then click Add Projects.</Hint>
             <ChipWrap>
               {selectedProjects.length === 0 ? (
                 <Hint>No project restrictions selected.</Hint>

@@ -83,11 +83,11 @@ describe('AdminMcpTokenPanel', () => {
     await user.selectOptions(screen.getByLabelText(/scope/i), 'write')
     fireEvent.change(screen.getByLabelText(/expiry days/i), { target: { value: '45' } })
 
-    await user.selectOptions(screen.getByLabelText(/tool options/i), 'engram.query')
-    await user.click(screen.getByRole('button', { name: /add tool/i }))
+    await user.selectOptions(screen.getByLabelText(/tool options/i), ['chat.list_sessions', 'engram.query'])
+    await user.click(screen.getByRole('button', { name: /add tools/i }))
 
-    await user.selectOptions(screen.getByLabelText(/project options/i), 'project-a')
-    await user.click(screen.getByRole('button', { name: /add project/i }))
+    await user.selectOptions(screen.getByLabelText(/project options/i), ['engram-vault', 'project-a'])
+    await user.click(screen.getByRole('button', { name: /add projects/i }))
 
     await user.click(screen.getByRole('button', { name: /create token/i }))
 
@@ -96,10 +96,34 @@ describe('AdminMcpTokenPanel', () => {
         name: 'LibreChat Token',
         scope: 'write',
         expires_in_days: 45,
-        allowed_tools: ['engram.query'],
-        allowed_project_ids: ['project-a'],
+        allowed_tools: ['chat.list_sessions', 'engram.query'],
+        allowed_project_ids: ['engram-vault', 'project-a'],
       })
     })
+  })
+
+  it('supports selecting multiple options at once before adding chips', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+
+    const toolSelect = screen.getByLabelText(/tool options/i) as HTMLSelectElement
+    const projectSelect = screen.getByLabelText(/project options/i) as HTMLSelectElement
+    const addTools = screen.getByRole('button', { name: /add tools/i })
+    const addProjects = screen.getByRole('button', { name: /add projects/i })
+    expect(addTools).toBeDisabled()
+    expect(addProjects).toBeDisabled()
+
+    await user.selectOptions(toolSelect, ['chat.list_sessions', 'engram.query'])
+    await user.click(addTools)
+    expect(Array.from(toolSelect.selectedOptions)).toHaveLength(0)
+    expect(screen.getByLabelText(/remove tool chat.list_sessions/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/remove tool engram.query/i)).toBeInTheDocument()
+
+    await user.selectOptions(projectSelect, ['engram-vault', 'project-a'])
+    await user.click(addProjects)
+    expect(Array.from(projectSelect.selectedOptions)).toHaveLength(0)
+    expect(screen.getByLabelText(/remove project engram-vault/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/remove project project-a/i)).toBeInTheDocument()
   })
 
   it('shows one-time created token and triggers revoke for active token', async () => {
