@@ -26,7 +26,13 @@ from app.models import (
     VisibilityScope,
 )
 from app.providers.base import ProviderGenerateResult
-from app.providers.errors import ProviderRequestError
+from app.providers.errors import (
+    ProviderAPIError,
+    ProviderAuthError,
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderRequestError,
+)
 
 
 def _session(owner_user_id) -> ChatSessionRecord:
@@ -400,12 +406,31 @@ def test_create_session_delegates_to_repository(monkeypatch) -> None:
     assert created.session_id == expected.session_id
 
 
-def test_raise_provider_error_maps_provider_request_error() -> None:
+@pytest.mark.parametrize(
+    ("provider_error", "expected_status", "expected_code"),
+    [
+        (ProviderRequestError("bad request to provider"), 400, "provider_request_error"),
+        (ProviderRateLimitError("too many requests"), 429, "provider_rate_limit"),
+        (ProviderAuthError("missing credentials"), 503, "provider_auth_error"),
+        (ProviderAPIError("provider downstream error"), 502, "provider_api_error"),
+        (ProviderError("provider generic error"), 502, "provider_error"),
+    ],
+)
+def test_raise_provider_error_maps_provider_exceptions(
+    provider_error: ProviderError,
+    expected_status: int,
+    expected_code: str,
+) -> None:
     with pytest.raises(ChatProviderExecutionError) as exc_info:
-        ChatService._raise_provider_error(ProviderRequestError("bad request to provider"))
+        ChatService._raise_provider_error(provider_error)
 
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.error_code == "provider_request_error"
+    assert exc_info.value.status_code == expected_status
+    assert exc_info.value.error_code == expected_code
+
+
+def test_raise_provider_error_reraises_unknown_exception() -> None:
+    with pytest.raises(RuntimeError, match="unexpected"):
+        ChatService._raise_provider_error(RuntimeError("unexpected"))
 
 
 def test_update_lifecycle_policy_normalizes_disabled_autosave(monkeypatch) -> None:

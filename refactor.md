@@ -56,6 +56,19 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-19 (Checkpoint 4 - Chat Service Phase 4.1)
+
+- [x] Step 4.1 — Replaced `_raise_provider_error` branch chain with `_PROVIDER_ERROR_STATUS_MAP` dispatch table
+- [x] Fixed unknown-exception passthrough in `_raise_provider_error` (`raise exc` outside mapped provider errors)
+- [x] Expanded tests: provider error mapping now covers request/rate-limit/auth/api/generic provider exceptions
+- [x] Added unknown-exception passthrough test in `api/tests/test_chat_service.py`
+- [x] Validation run: `api/tests/test_chat_service.py`, `api/tests/test_chat_repository.py` (15 passed, 7 skipped)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene score improvement: `api/app/chat/service.py` from **6.77** to **6.95**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -63,7 +76,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/mcp/service.py` | **3.0** | RED |
 | `api/app/memory_admin/repository.py` | 7.42 | YELLOW |
 | `api/app/chat_repository.py` | 7.10 | YELLOW |
-| `api/app/chat/service.py` | 6.77 | YELLOW |
+| `api/app/chat/service.py` | 6.95 | YELLOW |
 | `api/app/oauth/api.py` | 7.48 | YELLOW |
 | `api/app/main.py` | 7.66 | YELLOW |
 | `api/app/repository.py` | 7.88 | YELLOW |

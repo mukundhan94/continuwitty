@@ -100,6 +100,14 @@ _AUTOSAVE_SNAPSHOT_TAGS = [
     "chat",
 ]
 
+_PROVIDER_ERROR_STATUS_MAP: list[tuple[type[ProviderError], int]] = [
+    (ProviderRateLimitError, 429),
+    (ProviderAuthError, 503),
+    (ProviderRequestError, 400),
+    (ProviderAPIError, 502),
+    (ProviderError, 502),
+]
+
 
 @dataclass(frozen=True)
 class PreparedGeneration:
@@ -523,37 +531,14 @@ class ChatService:
 
     @staticmethod
     def _raise_provider_error(exc: Exception) -> None:
-        if isinstance(exc, ProviderRateLimitError):
-            raise ChatProviderExecutionError(
-                detail=str(exc),
-                status_code=429,
-                error_code=exc.code,
-            ) from exc
-        if isinstance(exc, ProviderAuthError):
-            raise ChatProviderExecutionError(
-                detail=str(exc),
-                status_code=503,
-                error_code=exc.code,
-            ) from exc
-        if isinstance(exc, ProviderRequestError):
-            raise ChatProviderExecutionError(
-                detail=str(exc),
-                status_code=400,
-                error_code=exc.code,
-            ) from exc
-        if isinstance(exc, ProviderAPIError):
-            raise ChatProviderExecutionError(
-                detail=str(exc),
-                status_code=502,
-                error_code=exc.code,
-            ) from exc
-        if isinstance(exc, ProviderError):
-            raise ChatProviderExecutionError(
-                detail=str(exc),
-                status_code=502,
-                error_code=exc.code,
-            ) from exc
-        raise
+        for exception_type, status_code in _PROVIDER_ERROR_STATUS_MAP:
+            if isinstance(exc, exception_type):
+                raise ChatProviderExecutionError(
+                    detail=str(exc),
+                    status_code=status_code,
+                    error_code=exc.code,
+                ) from exc
+        raise exc
 
     def _persist_assistant_reply(
         self,
