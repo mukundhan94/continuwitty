@@ -9,6 +9,7 @@ This README is written for a newcomer and follows an implementation sequence bas
 - Architecture playbook: `docs/architecture-playbook.md`
 - UI user flow (sessions + engrams): `docs/user-flow-engram-workflow.md`
 - MCP client integration commands (LibreChat/Copilot/Codex): `docs/mcp-client-integrations.md`
+- Ready-to-use VS Code MCP config: `.vscode/mcp.json`
 - PlantUML architecture/workflow map: `docs/architecture-workflows.puml`
 - PlantUML use-case map (model switch + save/pin/continue): `docs/model-switch-engram-usecases.puml`
 - Render PlantUML via Docker (no local `dot` needed): `make diagram-render`
@@ -181,6 +182,8 @@ Long research threads lose useful context once a session ends. The goal here is 
 
 ```text
 engram/
+  .vscode/
+    mcp.json
   README.md
   AGENT.md
   Plan.md
@@ -787,7 +790,7 @@ make stack-reset
 ### Docker Env Matrix (Core)
 
 - DB: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`
-- API runtime: `APP_ENV`, `LOG_CONFIG_IN_DEV`, `EMBEDDING_DIM`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_FALLBACK_TO_LOCAL`, `INGESTION_MAX_FILE_BYTES`, `INGESTION_MAX_TEXT_CHARS`, `APP_SESSION_SECRET`
+- API runtime: `APP_ENV`, `LOG_CONFIG_IN_DEV`, `APP_SEMANTIC_VERSION`, `APP_COMMIT_SHA`, `EMBEDDING_DIM`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_FALLBACK_TO_LOCAL`, `INGESTION_MAX_FILE_BYTES`, `INGESTION_MAX_TEXT_CHARS`, `APP_SESSION_SECRET`
 - UI auth defaults come from DB seed (`db/init/001_schema.sql`); acceptance runner reads `UI_USERNAME`/`UI_PASSWORD`.
 - Providers: `DEFAULT_CHAT_PROVIDER`, `DEFAULT_CHAT_MODEL`, `OPENAI_*`, `ANTHROPIC_*`, `AWS_*`
 - Web runtime: `WEB_PORT`, `VITE_API_PROXY_TARGET`, `VITE_ALLOWED_HOSTS`, `VITE_DEFAULT_*`
@@ -2079,18 +2082,22 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 - `GET /api/v1/agent-runs/{thread_id}`
 - `POST /api/v1/agent-runs/{thread_id}/resume`
 - `GET /healthz`
+- `GET /api/v1/version`
 
 ## MCP Stream Usage (JSON-RPC over SSE)
 
 Endpoint:
 
 - `POST /api/v1/mcp/stream`
+- `GET /api/v1/mcp/stream` (probe metadata)
+- `HEAD /api/v1/mcp/stream` (probe health)
 
 Auth/session requirement:
 
 - Preferred for external tools: MCP bearer token via `Authorization: Bearer <token>`.
 - Backward-compatible fallback: authenticated UI session cookies.
 - Bearer and session auth resolve the same actor model and visibility checks.
+- Some MCP clients preflight with `GET`/`HEAD`; these now return `200` to avoid noisy `405` logs.
 
 ## MCP Token Workflow (Admin + External Agent)
 
@@ -2159,6 +2166,14 @@ curl -sN \
   | sed -n 's/^data: //p' \
   | jq
 ```
+
+Transport note:
+- `POST /api/v1/mcp/stream` returns JSON when `Accept` includes `application/json`.
+- It returns SSE when `Accept` explicitly prefers `text/event-stream`.
+- If both are sent with equal priority (common in editor MCP clients), JSON is returned for better `initialize` compatibility.
+- JSON-RPC notifications without `id` (for example `notifications/initialized`) are accepted with `202` and no body.
+- `tools/list` exposes client-safe tool names with underscores (example: `chat_send_message`).
+- For backward compatibility, dotted names (`chat.send_message`) are still accepted in direct calls and `tools/call`.
 
 Revoke token:
 

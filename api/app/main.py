@@ -30,6 +30,7 @@ from .mcp_tokens import (
     token_summary_dict,
 )
 from .models import (
+    AppVersionResponse,
     EngramCreateResponse,
     EngramQueryRequest,
     EngramQueryResult,
@@ -80,7 +81,7 @@ async def lifespan(_app: FastAPI):
 settings = get_settings()
 app = FastAPI(
     title="Engram Vault API",
-    version="0.1.0",
+    version=settings.app_semantic_version,
     description="Local-first memory engram store with semantic query and rehydration.",
     lifespan=lifespan,
 )
@@ -107,6 +108,7 @@ mcp_service = McpService(
     chat_service=chat_service,
     embedding_dim=settings.embedding_dim,
     ingestion_service=ingestion_service,
+    server_version=settings.app_semantic_version,
 )
 # FastAPI dependency object kept at module scope to satisfy lint rule B008.
 MCP_TOKEN_SCOPE_FORM_DEFAULT = Form(default=McpTokenScope.read)
@@ -536,6 +538,19 @@ def ui_admin_revoke_mcp_token(
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/v1/version", response_model=AppVersionResponse)
+def app_version() -> AppVersionResponse:
+    # This endpoint is intentionally public so external MCP clients and operators
+    # can verify runtime build identity without requiring an authenticated session.
+    semantic_version = (settings.app_semantic_version or app.version).strip() or "0.1.0"
+    commit_id = (settings.app_commit_sha or "").strip() or "unknown"
+    return AppVersionResponse(
+        commit_id=commit_id,
+        semantic_version=semantic_version,
+        release=f"v{semantic_version}",
+    )
 
 
 @app.get("/api/v1/me")

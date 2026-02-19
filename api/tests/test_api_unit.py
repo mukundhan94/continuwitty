@@ -13,6 +13,17 @@ def test_healthz() -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_version_endpoint() -> None:
+    client = TestClient(app)
+    response = client.get("/api/v1/version")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["semantic_version"] == app.version
+    assert payload["release"] == f"v{app.version}"
+    assert isinstance(payload["commit_id"], str)
+    assert payload["commit_id"]
+
+
 def test_list_engrams_uses_repository(monkeypatch) -> None:
     now = datetime.now(UTC)
     engram_id = uuid4()

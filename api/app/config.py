@@ -1,5 +1,9 @@
+import subprocess
 from functools import lru_cache
+from importlib import metadata
+from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _SENSITIVE_SETTING_KEYS = {
@@ -21,9 +25,37 @@ _SENSITIVE_SETTING_KEYS = {
 _DEV_ENV_NAMES = {"dev", "development", "local"}
 
 
+def _default_semantic_version() -> str:
+    try:
+        return metadata.version("engram-vault-api")
+    except metadata.PackageNotFoundError:
+        return "0.1.0"
+
+
+def _default_commit_sha() -> str:
+    # Best-effort only: local/dev usually has .git, containers may not.
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        commit = result.stdout.strip()
+        if commit:
+            return commit
+    except Exception:
+        pass
+    return "unknown"
+
+
 class Settings(BaseSettings):
     app_env: str = "development"
     log_config_in_dev: bool = True
+    app_semantic_version: str = Field(default_factory=_default_semantic_version)
+    app_commit_sha: str = Field(default_factory=_default_commit_sha)
     database_url: str = "postgresql://engram:engram@localhost:5432/engram_vault"
     embedding_dim: int = 256
     embedding_provider: str = "local"
