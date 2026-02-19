@@ -86,6 +86,34 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-19 (Checkpoint 6 - Main Module Phase 5.1/5.2/5.3)
+
+- [x] Step 5.1 — Moved MCP token orchestration helpers out of `api/app/main.py` into `api/app/mcp_tokens/service.py`
+- [x] Added high-level token service helpers:
+  - `create_token_for_owner(...)`
+  - `list_token_summaries(...)`
+  - `revoke_token_for_owner(...)`
+- [x] Updated `api/app/main.py` UI + API token endpoints to use service-layer helpers
+- [x] Step 5.2 — Reduced `ui_admin_create_mcp_token` argument footprint using `_McpTokenFormPayload` dependency parser
+- [x] Step 5.3 — Added `_validate_login_preconditions(...)` and simplified `login_submit(...)` flow
+- [x] New test coverage: expanded `api/tests/test_mcp_token_service.py` for create/list/revoke service helpers
+- [x] Validation run:
+  - `api/tests/test_mcp_token_service.py`
+  - `api/tests/test_admin_mcp_tokens_ui.py`
+  - `api/tests/test_mcp_token_api_integration.py`
+  - `api/tests/test_ui_auth.py::test_login_rejects_invalid_credentials`
+  - `api/tests/test_ui_auth.py::test_login_rate_limit_after_repeated_failures`
+  - `api/tests/test_ui_auth.py::test_login_rejects_invalid_csrf`
+  - Aggregate: `7 passed, 4 skipped` plus `3 passed` (precondition-focused auth tests)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/main.py` score remains **7.66** (stable)
+  - `ui_admin_create_mcp_token` excess-arguments smell fixed
+  - quality gate passed
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |

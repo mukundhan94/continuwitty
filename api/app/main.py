@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager, suppress
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from fastapi import FastAPI, Form, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -22,12 +22,10 @@ from .login_guard import LoginAttemptGuard
 from .mcp import McpService, create_mcp_router
 from .mcp.auth import McpResolvedActor, resolve_mcp_actor
 from .mcp_tokens import (
-    create_mcp_token,
-    issue_new_token,
-    list_mcp_tokens,
+    create_token_for_owner,
+    list_token_summaries,
     normalize_string_list,
-    revoke_mcp_token,
-    token_summary_dict,
+    revoke_token_for_owner,
 )
 from .memory_admin import MemoryAdminService, create_memory_admin_router
 from .models import (
@@ -120,7 +118,44 @@ mcp_service = McpService(
     server_version=settings.app_semantic_version,
 )
 # FastAPI dependency object kept at module scope to satisfy lint rule B008.
-MCP_TOKEN_SCOPE_FORM_DEFAULT = Form(default=McpTokenScope.read)
+MCP_TOKEN_SCOPE_DEFAULT = McpTokenScope.read
+
+
+@dataclass(frozen=True)
+class _McpTokenFormPayload:
+    name: str
+    scope: McpTokenScope
+    allowed_tools: str
+    allowed_project_ids: str
+    expires_in_days: int
+    csrf_token: str
+
+
+async def _parse_mcp_token_form_payload(
+    request: Request,
+) -> _McpTokenFormPayload:
+    form = await request.form()
+    scope_raw = str(form.get("scope", MCP_TOKEN_SCOPE_DEFAULT.value))
+    try:
+        scope = McpTokenScope(scope_raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid scope") from exc
+    try:
+        expires_in_days = int(str(form.get("expires_in_days", "90")))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="expires_in_days must be an integer") from exc
+    return _McpTokenFormPayload(
+        name=str(form.get("name", "")),
+        scope=scope,
+        allowed_tools=str(form.get("allowed_tools", "")),
+        allowed_project_ids=str(form.get("allowed_project_ids", "")),
+        expires_in_days=expires_in_days,
+        csrf_token=str(form.get("csrf_token", "")),
+    )
+
+
+# FastAPI dependency object kept at module scope to satisfy lint rule B008.
+MCP_TOKEN_FORM_PAYLOAD_DEPENDENCY = Depends(_parse_mcp_token_form_payload)
 
 
 def _session_user(request: Request) -> dict[str, Any] | None:
@@ -210,6 +245,33 @@ def _authenticate_user(username: str, password: str) -> dict[str, Any] | None:
     return None
 
 
+def _validate_login_preconditions(*, request: Request, username: str, csrf_token: str) -> str:
+    if not _verify_csrf_token(request, csrf_token):
+        log_audit_event(
+            request=request,
+            event_type="login_csrf_rejected",
+            success=False,
+            username=username,
+        )
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    attempt_key = _login_attempt_key(request, username)
+    allowed, retry_seconds = login_attempt_guard.check(attempt_key)
+    if not allowed:
+        log_audit_event(
+            request=request,
+            event_type="login_rate_limited",
+            success=False,
+            username=username,
+            detail=f"retry_in_seconds={retry_seconds}",
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many login attempts. Retry in {retry_seconds} seconds.",
+        )
+    return attempt_key
+
+
 def _require_roles_api(request: Request, allowed_roles: set[str]) -> dict[str, Any]:
     user = _resolve_session_user(request)
     if not user:
@@ -236,55 +298,6 @@ def _resolve_mcp_actor(request: Request) -> McpResolvedActor:
         settings=settings,
         require_session_actor=_require_authenticated_api_user,
     )
-
-
-def _create_mcp_token_for_owner(
-    *,
-    owner_user_id: UUID,
-    payload: McpTokenCreateRequest,
-) -> McpTokenCreateResponse:
-    normalized_tools = normalize_string_list(payload.allowed_tools)
-    normalized_projects = normalize_string_list(payload.allowed_project_ids)
-
-    token_id = uuid4()
-    plaintext_token, token_hash_value, token_hint, expires_at = issue_new_token(
-        token_id=token_id,
-        expires_in_days=payload.expires_in_days,
-        pepper=settings.mcp_token_pepper,
-    )
-    created = create_mcp_token(
-        token_id=token_id,
-        owner_user_id=owner_user_id,
-        name=payload.name.strip(),
-        scope=payload.scope.value,
-        allowed_tools=normalized_tools,
-        allowed_project_ids=normalized_projects,
-        token_secret_hash=token_hash_value,
-        token_secret_hint=token_hint,
-        expires_at=expires_at,
-    )
-    return McpTokenCreateResponse(
-        token_id=created.token_id,
-        name=created.name,
-        scope=McpTokenScope(created.scope),
-        allowed_tools=created.allowed_tools,
-        allowed_project_ids=created.allowed_project_ids,
-        token_secret_hint=created.token_secret_hint,
-        token=plaintext_token,
-        expires_at=created.expires_at,
-        created_at=created.created_at,
-    )
-
-
-def _list_mcp_token_summaries(
-    *,
-    owner_user_id: UUID,
-    limit: int = 200,
-    offset: int = 0,
-) -> list[McpTokenSummary]:
-    records = list_mcp_tokens(owner_user_id=owner_user_id, limit=limit, offset=offset)
-    now = datetime.now(UTC)
-    return [McpTokenSummary(**token_summary_dict(record=item, now=now)) for item in records]
 
 
 app.include_router(
@@ -357,29 +370,11 @@ def login_submit(
     csrf_token: str = Form(...),
     next_path: str = Form(default=""),
 ) -> Response:
-    if not _verify_csrf_token(request, csrf_token):
-        log_audit_event(
-            request=request,
-            event_type="login_csrf_rejected",
-            success=False,
-            username=username,
-        )
-        raise HTTPException(status_code=403, detail="Invalid CSRF token")
-
-    attempt_key = _login_attempt_key(request, username)
-    allowed, retry_seconds = login_attempt_guard.check(attempt_key)
-    if not allowed:
-        log_audit_event(
-            request=request,
-            event_type="login_rate_limited",
-            success=False,
-            username=username,
-            detail=f"retry_in_seconds={retry_seconds}",
-        )
-        raise HTTPException(
-            status_code=429,
-            detail=f"Too many login attempts. Retry in {retry_seconds} seconds.",
-        )
+    attempt_key = _validate_login_preconditions(
+        request=request,
+        username=username,
+        csrf_token=csrf_token,
+    )
 
     authenticated_user = _authenticate_user(username, password)
     if authenticated_user:
@@ -470,7 +465,7 @@ def ui_admin(request: Request) -> Response:
     except Exception as exc:  # pragma: no cover - local display fallback
         error = str(exc)
     try:
-        mcp_tokens = _list_mcp_token_summaries(
+        mcp_tokens = list_token_summaries(
             owner_user_id=UUID(user["user_id"]), limit=500, offset=0
         )
     except Exception as exc:  # pragma: no cover - local display fallback
@@ -496,26 +491,25 @@ def ui_admin(request: Request) -> Response:
 @app.post("/ui/admin/mcp-tokens/create", include_in_schema=False)
 def ui_admin_create_mcp_token(
     request: Request,
-    name: str = Form(...),
-    scope: McpTokenScope = MCP_TOKEN_SCOPE_FORM_DEFAULT,
-    allowed_tools: str = Form(default=""),
-    allowed_project_ids: str = Form(default=""),
-    expires_in_days: int = Form(default=90),
-    csrf_token: str = Form(...),
+    form: _McpTokenFormPayload = MCP_TOKEN_FORM_PAYLOAD_DEPENDENCY,
 ) -> Response:
     user = _require_roles_api(request, {UserRole.admin.value})
-    if not _verify_csrf_token(request, csrf_token):
+    if not _verify_csrf_token(request, form.csrf_token):
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
     try:
         payload = McpTokenCreateRequest(
-            name=name,
-            scope=scope,
-            allowed_tools=normalize_string_list(allowed_tools.split(",")),
-            allowed_project_ids=normalize_string_list(allowed_project_ids.split(",")),
-            expires_in_days=expires_in_days,
+            name=form.name,
+            scope=form.scope,
+            allowed_tools=normalize_string_list(form.allowed_tools.split(",")),
+            allowed_project_ids=normalize_string_list(form.allowed_project_ids.split(",")),
+            expires_in_days=form.expires_in_days,
         )
-        created = _create_mcp_token_for_owner(owner_user_id=UUID(user["user_id"]), payload=payload)
+        created = create_token_for_owner(
+            owner_user_id=UUID(user["user_id"]),
+            payload=payload,
+            pepper=settings.mcp_token_pepper,
+        )
     except Exception as exc:
         request.session["admin_mcp_error"] = str(exc)
         return RedirectResponse(url="/ui/admin", status_code=303)
@@ -546,7 +540,10 @@ def ui_admin_revoke_mcp_token(
     if not _verify_csrf_token(request, csrf_token):
         raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
-    revoked = revoke_mcp_token(token_id=token_id, owner_user_id=UUID(user["user_id"]))
+    revoked = revoke_token_for_owner(
+        token_id=token_id,
+        owner_user_id=UUID(user["user_id"]),
+    )
     if not revoked:
         raise HTTPException(status_code=404, detail="Token not found")
 
@@ -667,7 +664,11 @@ def create_mcp_token_endpoint(
     request: Request, payload: McpTokenCreateRequest
 ) -> McpTokenCreateResponse:
     actor = _require_roles_api(request, {UserRole.admin.value})
-    created = _create_mcp_token_for_owner(owner_user_id=UUID(actor["user_id"]), payload=payload)
+    created = create_token_for_owner(
+        owner_user_id=UUID(actor["user_id"]),
+        payload=payload,
+        pepper=settings.mcp_token_pepper,
+    )
     log_audit_event(
         request=request,
         event_type="mcp_token_created",
@@ -692,7 +693,7 @@ def list_mcp_tokens_endpoint(
     offset: int = Query(default=0, ge=0),
 ) -> list[McpTokenSummary]:
     actor = _require_roles_api(request, {UserRole.admin.value})
-    return _list_mcp_token_summaries(
+    return list_token_summaries(
         owner_user_id=UUID(actor["user_id"]), limit=limit, offset=offset
     )
 
@@ -704,7 +705,10 @@ def revoke_mcp_token_endpoint(
     payload: McpTokenRevokeRequest,
 ) -> McpTokenSummary:
     actor = _require_roles_api(request, {UserRole.admin.value})
-    revoked = revoke_mcp_token(token_id=token_id, owner_user_id=UUID(actor["user_id"]))
+    revoked = revoke_token_for_owner(
+        token_id=token_id,
+        owner_user_id=UUID(actor["user_id"]),
+    )
     if not revoked:
         raise HTTPException(status_code=404, detail="Token not found")
 
@@ -715,7 +719,7 @@ def revoke_mcp_token_endpoint(
         username=actor["username"],
         metadata={"token_id": str(token_id), "reason": payload.reason},
     )
-    return McpTokenSummary(**token_summary_dict(record=revoked, now=datetime.now(UTC)))
+    return revoked
 
 
 @app.post("/api/v1/agent-runs", response_model=AgentRunResponse)

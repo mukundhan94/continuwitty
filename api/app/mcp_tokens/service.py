@@ -5,9 +5,17 @@ import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
+
+from app.models import (
+    McpTokenCreateRequest,
+    McpTokenCreateResponse,
+    McpTokenScope,
+    McpTokenSummary,
+)
 
 from .models import TOKEN_PREFIX, McpTokenAuthContext, McpTokenRecord
+from .repository import create_mcp_token, list_mcp_tokens, revoke_mcp_token
 
 
 def normalize_string_list(values: list[str] | None) -> list[str]:
@@ -139,3 +147,67 @@ def token_summary_dict(*, record: McpTokenRecord, now: datetime | None = None) -
         "created_at": record.created_at,
         "is_active": token_is_active(record, now=now),
     }
+
+
+def create_token_for_owner(
+    *,
+    owner_user_id: UUID,
+    payload: McpTokenCreateRequest,
+    pepper: str,
+) -> McpTokenCreateResponse:
+    normalized_tools = normalize_string_list(payload.allowed_tools)
+    normalized_projects = normalize_string_list(payload.allowed_project_ids)
+
+    token_id = uuid4()
+    plaintext_token, token_hash_value, token_hint, expires_at = issue_new_token(
+        token_id=token_id,
+        expires_in_days=payload.expires_in_days,
+        pepper=pepper,
+    )
+    created = create_mcp_token(
+        token_id=token_id,
+        owner_user_id=owner_user_id,
+        name=payload.name.strip(),
+        scope=payload.scope.value,
+        allowed_tools=normalized_tools,
+        allowed_project_ids=normalized_projects,
+        token_secret_hash=token_hash_value,
+        token_secret_hint=token_hint,
+        expires_at=expires_at,
+    )
+    return McpTokenCreateResponse(
+        token_id=created.token_id,
+        name=created.name,
+        scope=McpTokenScope(created.scope),
+        allowed_tools=created.allowed_tools,
+        allowed_project_ids=created.allowed_project_ids,
+        token_secret_hint=created.token_secret_hint,
+        token=plaintext_token,
+        expires_at=created.expires_at,
+        created_at=created.created_at,
+    )
+
+
+def list_token_summaries(
+    *,
+    owner_user_id: UUID,
+    limit: int = 200,
+    offset: int = 0,
+    now: datetime | None = None,
+) -> list[McpTokenSummary]:
+    records = list_mcp_tokens(owner_user_id=owner_user_id, limit=limit, offset=offset)
+    current = now or datetime.now(UTC)
+    return [McpTokenSummary(**token_summary_dict(record=item, now=current)) for item in records]
+
+
+def revoke_token_for_owner(
+    *,
+    token_id: UUID,
+    owner_user_id: UUID,
+    now: datetime | None = None,
+) -> McpTokenSummary | None:
+    revoked = revoke_mcp_token(token_id=token_id, owner_user_id=owner_user_id)
+    if not revoked:
+        return None
+    current = now or datetime.now(UTC)
+    return McpTokenSummary(**token_summary_dict(record=revoked, now=current))
