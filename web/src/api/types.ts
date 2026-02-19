@@ -175,3 +175,31 @@ export interface SaveSessionAsEngramResponse {
   session_id: string
   created_at: string
 }
+
+export type McpTokenScope = 'read' | 'write'
+
+export interface McpTokenSummary {
+  token_id: string
+  name: string
+  scope: McpTokenScope
+  allowed_tools: string[]
+  allowed_project_ids: string[]
+  token_secret_hint: string
+  expires_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+  created_at: string
+  is_active: boolean
+}
+
+export interface McpTokenCreateRequest {
+  name: string
+  scope: McpTokenScope
+  allowed_tools: string[]
+  allowed_project_ids: string[]
+  expires_in_days: number
+}
+
+export interface McpTokenCreateResponse extends McpTokenSummary {
+  token: string
+}

@@ -16,17 +16,26 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 - Include deterministic `id` correlation for every tool call.
 - Return structured errors with code/message/data.
 - Emit progress notifications as `mcp.event` frames for long-running tools.
+- Keep auth dual-path support:
+  - bearer token via `Authorization: Bearer engram_mcp_<token_id_hex>_<secret>`
+  - session-cookie fallback for local/UI compatibility
 - Keep interoperability paths for external MCP clients:
   - `initialize`
   - `tools/list`
   - `tools/call`
 - Keep direct tool methods for backward compatibility (`chat.*`, `engram.*`, `user.*`).
+- For token-authenticated calls, enforce in service layer before dispatch:
+  - scope check (`read` / `write`)
+  - optional per-tool allowlist
+  - optional project allowlist
 
 ## Module Layout (Current)
 - `api/app/mcp/api.py`: HTTP transport and SSE writer.
+- `api/app/mcp/auth.py`: bearer/session actor resolution and token validation.
 - `api/app/mcp/service.py`: tool dispatch and JSON-RPC frame generation.
 - `api/app/mcp/errors.py`: RPC error object and codes.
 - `api/app/mcp/client.py`: typed Python MCP client helper for JSON-RPC/SSE transport.
+- `api/app/mcp_tokens/*`: token issue/hash/parse/revoke persistence and auth context helpers.
 - `web/src/api/mcpClient.ts`: typed TypeScript MCP client helper for JSON-RPC/SSE transport.
 
 ## Tool Implementation Sequence
@@ -36,6 +45,7 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 4. Emit success frame or error frame.
 5. Add test coverage for success, invalid params, unauthorized, forbidden.
 6. If `tools/list` schemas change, update typed clients and docs in the same phase.
+7. If tool scope/project semantics change, update token policy tests and docs in the same phase.
 
 ## Initial Tool Set
 - `chat.create_session`
@@ -66,6 +76,8 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 ## Contract Test Minimum
 - `api/tests/test_mcp_api_integration.py`: transport + tool success/error contracts.
 - `api/tests/test_mcp_client.py`: Python typed client frame parsing and protocol handling.
+- `api/tests/test_mcp_token_service.py`: token format/hash/expiry/revocation behavior.
+- `api/tests/test_mcp_token_api_integration.py`: token lifecycle APIs and role restrictions.
 - `web/src/api/mcpClient.test.ts`: TypeScript typed client frame parsing and SSE handling.
 
 ## Future Consideration (Do Not Auto-Migrate)

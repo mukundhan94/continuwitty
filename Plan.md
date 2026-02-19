@@ -448,6 +448,52 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 30 - MCP Token Auth and Scoped Authorization
+
+### Status
+
+- Implemented in current cycle.
+- Delivered: MCP personal access tokens, bearer-token auth for `/api/v1/mcp/stream`, scope/allowlist/project guards, admin token lifecycle UI (server + React), and automated coverage.
+
+### Goals
+
+- Enable secure MCP access for external agents (for example LibreChat) without session-cookie coupling.
+- Enforce least privilege using token scopes, optional tool allowlists, and optional project allowlists.
+
+### Deliverables
+
+1. MCP token lifecycle APIs:
+   - `POST /api/v1/mcp/tokens`
+   - `GET /api/v1/mcp/tokens`
+   - `POST /api/v1/mcp/tokens/{token_id}/revoke`
+2. Add bearer token auth path to `/api/v1/mcp/stream`:
+   - parse/validate `Authorization: Bearer ...`
+   - resolve actor from token owner
+   - keep session-cookie fallback for backward compatibility
+3. Add hybrid authorization policy:
+   - base scope (`read` / `write`)
+   - optional per-tool allowlist
+   - optional project allowlist
+4. Add admin token management UI:
+   - create/list/revoke
+   - one-time token plaintext reveal at creation
+   - include both server-admin console and React admin workspace access
+   - React admin workspace loads discoverable tool/project options and applies restrictions as removable chips
+5. Add automated quality gates:
+   - token service unit tests
+   - token REST/API integration tests
+   - MCP bearer scope/project/allowlist integration tests
+   - acceptance mock scenarios for read-vs-write behavior and admin UI chip-flow token creation
+
+### Exit Criteria
+
+- Admins can issue/revoke multiple MCP tokens with distinct privilege policies.
+- Read-scoped tokens cannot execute write tools.
+- Project-scoped tokens cannot access out-of-scope projects.
+- Revoked/expired tokens are denied authentication.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -462,10 +508,11 @@ Build a local-first memory system where agents and humans can:
 ## Near-Term Execution Order
 
 1. Phase 18 remaining timeline semantics
-2. Phase 19 (sharing model) and Phase 20 (security hardening) parallel planning
-3. Phase 16 deferred CLI smoke utility (`engram-cli mcp-call`) after Phase 18 semantics close
-4. Phase 21 onward after security and data-sharing model stabilize
-5. After Phase 23, execute link-graph roadmap in order:
+2. Phase 30 complete: MCP token auth and scoped authorization for external agent integrations.
+3. Phase 19 (sharing model) and Phase 20 (security hardening) parallel planning
+4. Phase 16 deferred CLI smoke utility (`engram-cli mcp-call`) after Phase 18 semantics close
+5. Phase 21 onward after security and data-sharing model stabilize
+6. After Phase 23, execute link-graph roadmap in order:
    - Phase 24 (graph foundations)
    - Phase 25 (link APIs/MCP + suggestions)
    - Phase 26 (graph-aware recall)

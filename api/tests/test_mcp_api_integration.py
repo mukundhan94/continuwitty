@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import re
+from uuid import UUID
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.config import get_settings
+from app.main import app
 from app.models import ChatProvider
 from app.providers.base import ProviderGenerateResult
 
@@ -56,7 +59,13 @@ def _install_fake_provider(monkeypatch) -> None:
     monkeypatch.setattr("app.chat.service.get_provider_adapter", lambda provider: _FakeAdapter())
 
 
-def _mcp_frames(client, method: str, params: dict, request_id: str = "1") -> list[dict]:  # noqa: ANN001
+def _mcp_frames(
+    client,
+    method: str,
+    params: dict,
+    request_id: str = "1",
+    headers: dict[str, str] | None = None,
+) -> list[dict]:  # noqa: ANN001
     response = client.post(
         "/api/v1/mcp/stream",
         json={
@@ -65,6 +74,7 @@ def _mcp_frames(client, method: str, params: dict, request_id: str = "1") -> lis
             "method": method,
             "params": params,
         },
+        headers=headers,
     )
     assert response.status_code == 200
     assert "text/event-stream" in response.headers.get("content-type", "")
@@ -74,6 +84,29 @@ def _mcp_frames(client, method: str, params: dict, request_id: str = "1") -> lis
             frames.append(json.loads(line[6:]))
     assert frames
     return frames
+
+
+def _create_mcp_token(
+    client,
+    *,
+    name: str,
+    scope: str,
+    allowed_tools: list[str] | None = None,
+    allowed_project_ids: list[str] | None = None,
+    expires_in_days: int = 90,
+) -> dict:  # noqa: ANN001
+    response = client.post(
+        "/api/v1/mcp/tokens",
+        json={
+            "name": name,
+            "scope": scope,
+            "allowed_tools": allowed_tools or [],
+            "allowed_project_ids": allowed_project_ids or [],
+            "expires_in_days": expires_in_days,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
 
 
 def _final_result_frame(frames: list[dict]) -> dict:
@@ -608,3 +641,210 @@ def test_mcp_lifecycle_policy_and_timeline_tools(client, clean_db, monkeypatch) 
     )
     events = _final_result_frame(timeline_frames)["result"]["structuredContent"]["events"]
     assert any(item["event_type"] == "autosave_snapshot" for item in events)
+
+
+@pytest.mark.integration
+def test_mcp_bearer_read_token_can_call_read_tools_without_session(client, clean_db) -> None:
+    _login(client)
+    created = _create_mcp_token(client, name="read profile", scope="read")
+    headers = {"Authorization": f"Bearer {created['token']}"}
+
+    bearer_client = TestClient(app)
+    frames = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={"name": "user.get_profile", "arguments": {}},
+        request_id="bearer-profile",
+        headers=headers,
+    )
+    profile = _final_result_frame(frames)["result"]["structuredContent"]["profile"]
+    assert profile["username"] == get_settings().ui_demo_username
+
+
+@pytest.mark.integration
+def test_mcp_bearer_read_token_cannot_perform_write_tools(client, clean_db) -> None:
+    _login(client)
+    created = _create_mcp_token(client, name="read no write", scope="read")
+    headers = {"Authorization": f"Bearer {created['token']}"}
+
+    bearer_client = TestClient(app)
+    frames = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={
+            "name": "chat.create_session",
+            "arguments": {"project_id": "project-bearer", "title": "Denied"},
+        },
+        request_id="bearer-denied-write",
+        headers=headers,
+    )
+    error_frame = [item for item in frames if "error" in item][0]
+    assert error_frame["error"]["code"] == -32003
+    assert error_frame["error"]["data"]["required_scope"] == "write"
+    assert error_frame["error"]["data"]["token_scope"] == "read"
+
+
+@pytest.mark.integration
+def test_mcp_bearer_write_token_can_perform_write_tools(client, clean_db) -> None:
+    _login(client)
+    created = _create_mcp_token(
+        client,
+        name="write token",
+        scope="write",
+        allowed_project_ids=["project-bearer-write"],
+    )
+    headers = {"Authorization": f"Bearer {created['token']}"}
+    bearer_client = TestClient(app)
+
+    create_session_frames = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={
+            "name": "chat.create_session",
+            "arguments": {
+                "project_id": "project-bearer-write",
+                "title": "Write Session",
+                "provider": "openai",
+                "model_id": "gpt-4o-mini",
+                "visibility_scope": "private",
+                "autosave_enabled": False,
+            },
+        },
+        request_id="bearer-write-create-session",
+        headers=headers,
+    )
+    session_id = _final_result_frame(create_session_frames)["result"]["structuredContent"][
+        "session"
+    ]["session_id"]
+    assert session_id
+
+    create_engram_frames = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={
+            "name": "engram.create",
+            "arguments": {
+                "project_id": "project-bearer-write",
+                "title": "Bearer Write Engram",
+                "abstract": "Created by bearer token.",
+                "detailed_summary_markdown": "This engram was created through token auth.",
+            },
+        },
+        request_id="bearer-write-create-engram",
+        headers=headers,
+    )
+    created_engram_id = _final_result_frame(create_engram_frames)["result"]["structuredContent"][
+        "engram"
+    ]["engram_id"]
+    assert created_engram_id
+
+
+@pytest.mark.integration
+def test_mcp_token_allowed_tools_and_project_guards(client, clean_db) -> None:
+    _login(client)
+    tools_token = _create_mcp_token(
+        client,
+        name="query-only",
+        scope="write",
+        allowed_tools=["engram.query"],
+    )
+    tools_headers = {"Authorization": f"Bearer {tools_token['token']}"}
+    bearer_client = TestClient(app)
+
+    tools_list_frames = _mcp_frames(
+        bearer_client,
+        method="tools/list",
+        params={},
+        request_id="token-tools-list",
+        headers=tools_headers,
+    )
+    visible_names = {
+        tool["name"] for tool in _final_result_frame(tools_list_frames)["result"]["tools"]
+    }
+    assert visible_names == {"engram.query"}
+
+    denied_write = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={
+            "name": "chat.create_session",
+            "arguments": {"project_id": "engram-vault", "title": "blocked"},
+        },
+        request_id="token-tools-denied",
+        headers=tools_headers,
+    )
+    denied_write_error = [item for item in denied_write if "error" in item][0]
+    assert denied_write_error["error"]["code"] == -32003
+    assert denied_write_error["error"]["data"]["tool"] == "chat.create_session"
+
+    project_token = _create_mcp_token(
+        client,
+        name="multi-project",
+        scope="read",
+        allowed_project_ids=["project-a", "project-b"],
+    )
+    project_headers = {"Authorization": f"Bearer {project_token['token']}"}
+    missing_project = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={"name": "engram.query", "arguments": {"query": "incident"}},
+        request_id="token-project-missing",
+        headers=project_headers,
+    )
+    project_error = [item for item in missing_project if "error" in item][0]
+    assert project_error["error"]["code"] == -32602
+    assert project_error["error"]["data"]["missing"] == "project_id"
+
+    single_project = _create_mcp_token(
+        client,
+        name="single-project-auto",
+        scope="read",
+        allowed_project_ids=["engram-vault"],
+    )
+    single_headers = {"Authorization": f"Bearer {single_project['token']}"}
+    auto_project_frames = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={"name": "engram.query", "arguments": {"query": "memory"}},
+        request_id="token-project-auto",
+        headers=single_headers,
+    )
+    assert _final_result_frame(auto_project_frames)["result"]["tool_name"] == "engram.query"
+
+
+@pytest.mark.integration
+def test_mcp_revoked_and_expired_tokens_fail_authentication(client, clean_db, db_conn) -> None:
+    _login(client)
+    created = _create_mcp_token(client, name="revoked token", scope="read")
+    token_id = UUID(created["token_id"])
+    headers = {"Authorization": f"Bearer {created['token']}"}
+    bearer_client = TestClient(app)
+
+    revoke_response = client.post(
+        f"/api/v1/mcp/tokens/{token_id}/revoke", json={"reason": "rotate"}
+    )
+    assert revoke_response.status_code == 200
+
+    revoked_response = bearer_client.post(
+        "/api/v1/mcp/stream",
+        headers=headers,
+        json={"jsonrpc": "2.0", "id": "revoked", "method": "tools/list", "params": {}},
+    )
+    assert revoked_response.status_code == 401
+
+    expired = _create_mcp_token(client, name="expired token", scope="read")
+    expired_id = UUID(expired["token_id"])
+    expired_headers = {"Authorization": f"Bearer {expired['token']}"}
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "UPDATE mcp_tokens SET expires_at = now() - interval '1 minute' WHERE token_id = %s",
+            (expired_id,),
+        )
+    db_conn.commit()
+
+    expired_response = bearer_client.post(
+        "/api/v1/mcp/stream",
+        headers=expired_headers,
+        json={"jsonrpc": "2.0", "id": "expired", "method": "tools/list", "params": {}},
+    )
+    assert expired_response.status_code == 401

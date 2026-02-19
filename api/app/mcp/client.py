@@ -192,10 +192,12 @@ class McpSseClient:
         self,
         *,
         base_url: str,
+        bearer_token: str | None = None,
         timeout_seconds: float = 30.0,
         http_client: httpx.Client | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._bearer_token = bearer_token
         self._owns_client = http_client is None
         self._client = http_client or httpx.Client(timeout=timeout_seconds, follow_redirects=False)
 
@@ -251,7 +253,10 @@ class McpSseClient:
             "POST",
             f"{self._base_url}/api/v1/mcp/stream",
             json=request.model_dump(mode="json"),
-            headers={"Accept": "text/event-stream"},
+            headers={
+                "Accept": "text/event-stream",
+                **({"Authorization": f"Bearer {self._bearer_token}"} if self._bearer_token else {}),
+            },
         ) as response:
             if response.status_code != 200:
                 detail = _error_detail_from_response(response)

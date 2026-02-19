@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from app.chat.errors import ChatProviderExecutionError, ChatServiceError
 from app.chat.service import ChatService
 from app.ingestion.service import DocumentIngestionService
+from app.mcp_tokens import McpTokenAuthContext
 from app.models import (
     ChatLifecyclePolicyUpdateRequest,
     ChatMessageCreateRequest,
@@ -32,6 +33,45 @@ from app.repository import (
 )
 
 from .errors import McpRpcError
+
+_READ_TOOL_NAMES = {
+    "chat.list_sessions",
+    "chat.get_session",
+    "chat.get_lifecycle_policy",
+    "chat.list_messages",
+    "chat.list_timeline",
+    "chat.list_pinned_engrams",
+    "chat.list_pinned_documents",
+    "chat.list_project_documents",
+    "engram.query",
+    "engram.rehydrate",
+    "user.get_profile",
+    "user.list_projects",
+}
+
+_WRITE_TOOL_NAMES = {
+    "chat.create_session",
+    "chat.update_lifecycle_policy",
+    "chat.send_message",
+    "chat.pin_engram",
+    "chat.unpin_engram",
+    "chat.pin_document",
+    "chat.unpin_document",
+    "chat.save_as_engram",
+    "chat.continue_session",
+    "engram.create",
+    "engram.create_from_conversation",
+    "engram.pin_to_session",
+}
+
+# Alias maps to existing implementation branch but should obey the same scope semantics.
+_TOOL_ALIASES = {"engram.pin_to_session": "chat.pin_engram"}
+
+_OPTIONAL_PROJECT_TOOLS = {
+    "engram.query",
+    "chat.list_sessions",
+    "chat.list_project_documents",
+}
 
 
 class McpService:
@@ -450,6 +490,159 @@ class McpService:
             },
         ]
 
+    def _required_scope_for_tool(self, tool_name: str) -> str:
+        canonical = _TOOL_ALIASES.get(tool_name, tool_name)
+        if canonical in _WRITE_TOOL_NAMES:
+            return "write"
+        if canonical in _READ_TOOL_NAMES:
+            return "read"
+        return "read"
+
+    def _visible_tool_catalog(self, token_auth: McpTokenAuthContext | None) -> list[dict[str, Any]]:
+        if token_auth is None:
+            return self._tool_catalog()
+
+        visible: list[dict[str, Any]] = []
+        for item in self._tool_catalog():
+            tool_name = item["name"]
+            canonical_name = _TOOL_ALIASES.get(tool_name, tool_name)
+            required_scope = self._required_scope_for_tool(tool_name)
+            if token_auth.scope == "read" and required_scope == "write":
+                continue
+            if token_auth.allowed_tools and (
+                tool_name not in token_auth.allowed_tools
+                and canonical_name not in token_auth.allowed_tools
+            ):
+                continue
+            visible.append(item)
+        return visible
+
+    def _project_id_for_tool(
+        self,
+        *,
+        actor_user_id: UUID,
+        tool_name: str,
+        params: dict[str, Any],
+    ) -> str | None:
+        if tool_name in {
+            "chat.create_session",
+            "engram.create",
+            "engram.create_from_conversation",
+        }:
+            raw_project = params.get("project_id")
+            return str(raw_project) if raw_project else None
+
+        if tool_name in {
+            "chat.get_session",
+            "chat.get_lifecycle_policy",
+            "chat.update_lifecycle_policy",
+            "chat.list_messages",
+            "chat.list_timeline",
+            "chat.send_message",
+            "chat.list_pinned_engrams",
+            "chat.pin_engram",
+            "chat.unpin_engram",
+            "chat.list_pinned_documents",
+            "chat.pin_document",
+            "chat.unpin_document",
+            "chat.save_as_engram",
+            "chat.continue_session",
+            "engram.pin_to_session",
+        }:
+            session = self._chat_service.get_session(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+            )
+            return session.project_id
+
+        if tool_name == "engram.rehydrate":
+            bundle = get_rehydration_bundle(
+                self._parse_uuid(params, "engram_id"),
+                actor_user_id=actor_user_id,
+            )
+            return bundle.project_id if bundle else None
+
+        if tool_name in _OPTIONAL_PROJECT_TOOLS:
+            raw_project = params.get("project_id")
+            return str(raw_project) if raw_project else None
+
+        return None
+
+    def _enforce_token_authorization(
+        self,
+        *,
+        actor_user_id: UUID,
+        token_auth: McpTokenAuthContext | None,
+        tool_name: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        if token_auth is None:
+            return params
+
+        if tool_name in {"initialize", "tools/list"}:
+            return params
+
+        canonical_tool = _TOOL_ALIASES.get(tool_name, tool_name)
+        required_scope = self._required_scope_for_tool(canonical_tool)
+        if token_auth.scope == "read" and required_scope == "write":
+            raise McpRpcError(
+                code=-32003,
+                message="Token scope does not allow this tool",
+                data={
+                    "tool": tool_name,
+                    "required_scope": required_scope,
+                    "token_scope": token_auth.scope,
+                },
+            )
+
+        if token_auth.allowed_tools and (
+            tool_name not in token_auth.allowed_tools
+            and canonical_tool not in token_auth.allowed_tools
+        ):
+            raise McpRpcError(
+                code=-32003,
+                message="Tool not allowed by token policy",
+                data={
+                    "tool": tool_name,
+                    "required_scope": required_scope,
+                    "token_scope": token_auth.scope,
+                },
+            )
+
+        normalized_params = dict(params)
+        allowed_projects = token_auth.allowed_project_ids
+        if not allowed_projects:
+            return normalized_params
+
+        project_id = self._project_id_for_tool(
+            actor_user_id=actor_user_id,
+            tool_name=tool_name,
+            params=normalized_params,
+        )
+
+        if tool_name in _OPTIONAL_PROJECT_TOOLS and not project_id:
+            if len(allowed_projects) > 1:
+                raise McpRpcError(
+                    code=-32602,
+                    message="Invalid params",
+                    data={"missing": "project_id", "reason": "token_has_multiple_allowed_projects"},
+                )
+            normalized_params["project_id"] = next(iter(allowed_projects))
+            return normalized_params
+
+        if project_id and project_id not in allowed_projects:
+            raise McpRpcError(
+                code=-32003,
+                message="Project not allowed by token policy",
+                data={
+                    "tool": tool_name,
+                    "required_scope": required_scope,
+                    "token_scope": token_auth.scope,
+                    "project_id": project_id,
+                },
+            )
+        return normalized_params
+
     @staticmethod
     def _tool_name_and_params_for_tools_call(
         params: dict[str, Any],
@@ -702,6 +895,7 @@ class McpService:
         actor: dict[str, Any],
         actor_user_id: UUID,
         request: McpJsonRpcRequest,
+        token_auth: McpTokenAuthContext | None = None,
     ) -> dict[str, Any]:
         params = request.params
         method = request.method
@@ -715,24 +909,36 @@ class McpService:
             }
 
         if method == "tools/list":
-            return {"tools": self._tool_catalog()}
+            return {"tools": self._visible_tool_catalog(token_auth)}
 
         if method == "tools/call":
             tool_name, tool_params = self._tool_name_and_params_for_tools_call(params)
+            authorized_params = self._enforce_token_authorization(
+                actor_user_id=actor_user_id,
+                token_auth=token_auth,
+                tool_name=tool_name,
+                params=tool_params,
+            )
             tool_payload = self._dispatch_tool(
                 actor=actor,
                 actor_user_id=actor_user_id,
                 method=tool_name,
-                params=tool_params,
+                params=authorized_params,
             )
             return self._tool_call_success(tool_name, tool_payload)
 
         # Backward-compatible direct method path.
+        authorized_params = self._enforce_token_authorization(
+            actor_user_id=actor_user_id,
+            token_auth=token_auth,
+            tool_name=method,
+            params=params,
+        )
         return self._dispatch_tool(
             actor=actor,
             actor_user_id=actor_user_id,
             method=method,
-            params=params,
+            params=authorized_params,
         )
 
     def stream_call(
@@ -740,6 +946,7 @@ class McpService:
         *,
         actor: dict[str, Any],
         request: McpJsonRpcRequest,
+        token_auth: McpTokenAuthContext | None = None,
     ):
         if request.jsonrpc != "2.0":
             yield self._error(
@@ -763,11 +970,21 @@ class McpService:
 
         # Direct streaming path retained for backward compatibility.
         if request.method == "chat.send_message":
+            try:
+                authorized_params = self._enforce_token_authorization(
+                    actor_user_id=actor_user_id,
+                    token_auth=token_auth,
+                    tool_name="chat.send_message",
+                    params=request.params,
+                )
+            except McpRpcError as exc:
+                yield self._error(request.id, code=exc.code, message=exc.message, data=exc.data)
+                return
             yield from self._stream_chat_send_message(
                 actor_user_id=actor_user_id,
                 request_id=request.id,
                 tool_name="chat.send_message",
-                params=request.params,
+                params=authorized_params,
             )
             return
 
@@ -775,6 +992,12 @@ class McpService:
         if request.method == "tools/call":
             try:
                 tool_name, tool_params = self._tool_name_and_params_for_tools_call(request.params)
+                tool_params = self._enforce_token_authorization(
+                    actor_user_id=actor_user_id,
+                    token_auth=token_auth,
+                    tool_name=tool_name,
+                    params=tool_params,
+                )
             except McpRpcError as exc:
                 yield self._error(request.id, code=exc.code, message=exc.message, data=exc.data)
                 return
@@ -795,6 +1018,7 @@ class McpService:
                 actor=actor,
                 actor_user_id=actor_user_id,
                 request=request,
+                token_auth=token_auth,
             )
             yield self._success(request.id, result)
         except McpRpcError as exc:

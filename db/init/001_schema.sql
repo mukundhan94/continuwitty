@@ -106,6 +106,31 @@ VALUES (
 )
 ON CONFLICT (username) DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS mcp_tokens (
+  token_id UUID PRIMARY KEY,
+  owner_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  scope TEXT NOT NULL CHECK (scope IN ('read', 'write')),
+  allowed_tools TEXT[] NOT NULL DEFAULT '{}',
+  allowed_project_ids TEXT[] NOT NULL DEFAULT '{}',
+  token_secret_hash TEXT NOT NULL,
+  token_secret_hint TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  last_used_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS mcp_tokens_owner_created_idx
+  ON mcp_tokens (owner_user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS mcp_tokens_expires_idx
+  ON mcp_tokens (expires_at);
+
+CREATE INDEX IF NOT EXISTS mcp_tokens_active_idx
+  ON mcp_tokens (owner_user_id, expires_at)
+  WHERE revoked_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS chat_sessions (
   session_id UUID PRIMARY KEY,
   owner_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

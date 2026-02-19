@@ -180,7 +180,7 @@ def extract_keywords(text: str, max_keywords: int = 12) -> list[str]:
         ordered_tokens,
         key=lambda token: (-counts[token], seen_index[token], token),
     )
-    return ranked[:max(max_keywords, 1)]
+    return ranked[: max(max_keywords, 1)]
 
 
 def map_keywords_to_tags(keywords: list[str], max_tags: int = 8) -> list[str]:
@@ -194,7 +194,7 @@ def map_keywords_to_tags(keywords: list[str], max_tags: int = 8) -> list[str]:
     if not selected:
         selected = ["conversation", "snapshot"]
 
-    return selected[:max(max_tags, 1)]
+    return selected[: max(max_tags, 1)]
 
 
 def enrich_if_missing(payload: MemoryEngramCreate, origin: str) -> EngramEnrichmentResult:
@@ -238,12 +238,16 @@ def enrich_if_missing(payload: MemoryEngramCreate, origin: str) -> EngramEnrichm
         report.auto_keywords = resolved_keywords
 
     if tags_missing:
-        tag_seed = resolved_keywords if report.keywords_derived else _non_empty_trimmed(payload.keywords)
+        tag_seed = (
+            resolved_keywords if report.keywords_derived else _non_empty_trimmed(payload.keywords)
+        )
         resolved_tags = map_keywords_to_tags(tag_seed, max_tags=8)
         report.tags_derived = True
         report.auto_tags = resolved_tags
 
-    report.enrichment_applied = report.abstract_derived or report.tags_derived or report.keywords_derived
+    report.enrichment_applied = (
+        report.abstract_derived or report.tags_derived or report.keywords_derived
+    )
 
     resolved_payload = payload.model_copy(
         update={

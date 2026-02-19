@@ -14,6 +14,7 @@ _SENSITIVE_SETTING_KEYS = {
     "aws_session_token",
     "langfuse_public_key",
     "langfuse_secret_key",
+    "mcp_token_pepper",
 }
 
 _DEV_ENV_NAMES = {"dev", "development", "local"}
@@ -59,6 +60,7 @@ class Settings(BaseSettings):
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
     aws_session_token: str | None = None
+    mcp_token_pepper: str = "engram-local-dev-mcp-token-pepper"
 
     model_config = SettingsConfigDict(
         env_file=".env",

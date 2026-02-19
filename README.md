@@ -83,6 +83,9 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - [x] Add Phase 18 memory lifecycle controls (autosave strategies, retention pruning, consolidation-aware timeline events, and UI/MCP policy management).
 - [x] Add deterministic mocked acceptance coverage for autosave lifecycle policies.
 - [x] Add Phase 29 optional auto-metadata enrichment (fill-empty-only) across all engram create paths plus MCP conversation-only persistence tooling.
+- [x] Add Phase 30 MCP personal access tokens (PAT) with scoped read/write, optional tool allowlists, optional project allowlists, bearer auth on MCP stream, and admin token lifecycle UI.
+- [x] Add admin-only React MCP token manager (create/list/revoke) gated by authenticated `admin` role.
+- [x] Add chip-based admin token policy UX: load available MCP tools/projects, select them from dropdowns, and manage applied restrictions as removable chips.
 - [ ] Add production security hardening (oauth/oidc, centralized audit sink, distributed rate limits).
 
 ## Unified Plan Status
@@ -91,6 +94,7 @@ If local PlantUML fails with `Cannot run program "/opt/local/bin/dot"`, use the 
 - Completed scope:
   - phases 0-15 completed (foundation, schema/storage, retrieval/rehydration, durability, chat continuity, providers, MCP, UI, acceptance, theme/UX hardening).
   - phase 29 completed (optional deterministic auto-metadata enrichment and MCP conversation-only persistence path).
+  - phase 30 completed (MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents).
 - Next implementation scope:
   - phase 16: MCP developer tooling and typed clients (in progress: compatibility + typed clients complete, CLI smoke command deferred).
   - phase 17: document ingestion and RAG-ready retrieval (implemented and verified, including session-level document pinning support).
@@ -124,6 +128,7 @@ Agent workflow skills are under `skills/`:
 - `document-ingestion-rag`: deterministic document chunking, ingestion APIs, and blended retrieval workflow.
 - `memory-lifecycle-policies`: autosave cadence, retention bounds, consolidation guards, and timeline event workflow.
 - `engram-auto-metadata-enrichment`: deterministic fill-empty metadata derivation rules and integration points.
+- `mcp-token-authz`: MCP PAT lifecycle, scope/allowlist/project authorization rules, and external agent integration checks.
 
 ## Why This Exists
 
@@ -225,6 +230,8 @@ engram/
     memory-lifecycle-policies/
       SKILL.md
     engram-auto-metadata-enrichment/
+      SKILL.md
+    mcp-token-authz/
       SKILL.md
   db/
     init/
@@ -358,6 +365,7 @@ engram/
       bedrock-live.feature
       engram-auto-metadata-mock.feature
       lifecycle-autosave-mock.feature
+      mcp-token-auth-mock.feature
       session-layout.feature
       triage-live.feature
     src/
@@ -370,6 +378,7 @@ engram/
         bedrock.steps.ts
         engram-auto-metadata-mock.steps.ts
         lifecycle-mock.steps.ts
+        mcp-token-auth-mock.steps.ts
         session.steps.ts
         triage.steps.ts
 ```
@@ -407,9 +416,13 @@ engram/
 - `api/app/ingestion/models.py`: ingestion request/response contracts and blended query models.
 - `api/app/login_guard.py`: login attempt rate-limit and lockout state machine.
 - `api/app/mcp/api.py`: MCP JSON-RPC over SSE route layer.
+- `api/app/mcp/auth.py`: bearer-token/session actor resolution for MCP stream requests.
 - `api/app/mcp/client.py`: typed Python JSON-RPC/SSE MCP client helper for external integrations.
 - `api/app/mcp/errors.py`: MCP RPC error types and codes.
-- `api/app/mcp/service.py`: MCP tool dispatch, compatibility methods (`initialize`/`tools/*`), and JSON-RPC frame generation.
+- `api/app/mcp/service.py`: MCP tool dispatch, compatibility methods (`initialize`/`tools/*`), JSON-RPC frame generation, and token scope/allowlist/project authz checks.
+- `api/app/mcp_tokens/models.py`: MCP token entity and auth-context contracts.
+- `api/app/mcp_tokens/repository.py`: MCP token persistence/read/revoke/last-used operations.
+- `api/app/mcp_tokens/service.py`: token issue/parse/hash/verify helpers and token policy normalization.
 - `api/app/observability/chat_debug.py`: chat debug collector hooks and optional Langfuse trace publishing.
 - `api/app/models.py`: Request/response and engram schema models.
 - `api/app/providers/base.py`: provider adapter contract and normalized request/response types.
@@ -452,6 +465,9 @@ engram/
 - `api/tests/test_chat_service.py`: chat service orchestration and save/continue behavior tests.
 - `api/tests/test_mcp_api_integration.py`: MCP SSE transport and tool success/error/auth coverage.
 - `api/tests/test_mcp_client.py`: typed Python MCP client parsing/auth/transport contract tests.
+- `api/tests/test_mcp_token_service.py`: token generation/hash/parse/expiry/revocation behavior tests.
+- `api/tests/test_mcp_token_api_integration.py`: MCP token lifecycle REST authz tests (admin vs non-admin).
+- `api/tests/test_admin_mcp_tokens_ui.py`: admin UI MCP token create/revoke workflow coverage.
 - `api/tests/test_engram_enrichment.py`: deterministic enrichment behavior and non-overwrite contract tests.
 - `api/tests/test_engram_visibility.py`: integration checks for owner/project scope filtering behavior.
 - `api/tests/test_provider_registry.py`: provider registry construction and adapter selection checks.
@@ -469,9 +485,12 @@ engram/
 - `web/src/api/*.ts`: browser API clients for auth/chat/engram interactions.
 - `web/src/api/chat.ts`: browser API client for chat/session/pin flows, including pinned-document route calls.
 - `web/src/api/ingestion.ts`: browser API client for document ingestion and project document listing.
+- `web/src/api/mcpTokens.ts`: browser API client for admin MCP token lifecycle routes.
 - `web/src/api/mcpClient.ts`: typed TypeScript JSON-RPC/SSE MCP client helper.
 - `web/src/api/mcpClient.test.ts`: TypeScript MCP client protocol parsing and stream contract tests.
 - `web/src/components/*.tsx`: UI modules for login, sessions, chat transcript, pinning, and save modal.
+- `web/src/components/AdminMcpTokenPanel.tsx`: admin-only token manager modal for create/list/revoke token flows.
+- `web/src/components/AdminMcpTokenPanel.test.tsx`: token manager form parsing + revoke workflow unit coverage.
 - `web/src/components/DocumentIngestionPanel.tsx`: project-scoped file/text ingestion surface with recent docs and session pin/unpin controls.
 - `web/src/components/DocumentIngestionPanel.test.tsx`: ingestion panel interaction tests (text/file plus pin/unpin flows).
 - `web/src/components/SessionSidebar.test.tsx`: sidebar interaction tests (toggle, labels, active-state marker).
@@ -493,8 +512,12 @@ engram/
 - `acceptance-tests/README.md`: acceptance framework guide and commands.
 - `acceptance-tests/features/*.feature`: Gherkin acceptance scenarios.
 - `acceptance-tests/features/engram-auto-metadata-mock.feature`: deterministic MCP conversation-only enrichment behavior.
+- `acceptance-tests/features/mcp-token-auth-mock.feature`: MCP bearer read/write scope authorization scenarios.
+- `acceptance-tests/features/admin-mcp-token-ui.feature`: admin UI chip-selection workflow for tool/project-scoped MCP token creation.
 - `acceptance-tests/src/steps/*.ts`: Playwright-backed step definitions.
 - `acceptance-tests/src/steps/engram-auto-metadata-mock.steps.ts`: step bindings for MCP conversation-only metadata enrichment checks.
+- `acceptance-tests/src/steps/mcp-token-auth-mock.steps.ts`: step bindings for MCP token creation, bearer invocation, and scope enforcement checks.
+- `acceptance-tests/src/steps/admin-mcp-token-ui.steps.ts`: step bindings for admin token panel option loading, chip selection, and role-gated visibility checks.
 - `acceptance-tests/src/support/*.ts`: shared fixtures, env parsing, chat helpers, login helpers, and failure artifacts.
 - `acceptance-tests/playwright.config.ts`: `playwright-bdd` + `defineBddConfig` + runtime fixture wiring.
 - `acceptance-tests/Dockerfile`: Playwright runtime image for dockerized acceptance runs.
@@ -1924,13 +1947,53 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
    - `cd acceptance-tests && npm run typecheck` passed.
    - `cd acceptance-tests && npm run test:mock` passed (`4 passed`).
 
+### 2026-02-19 (Phase 30 - MCP PAT auth with scoped read/write authorization)
+
+1. Added MCP token domain and storage:
+   - `api/app/mcp_tokens/models.py`
+   - `api/app/mcp_tokens/repository.py`
+   - `api/app/mcp_tokens/service.py`
+   - `db/init/001_schema.sql` (`mcp_tokens` table + indexes)
+   - `api/app/config.py` and `.env.example` (`MCP_TOKEN_PEPPER`)
+2. Added bearer-token MCP auth resolution with session fallback:
+   - `api/app/mcp/auth.py`
+   - `api/app/mcp/api.py`
+3. Added scoped MCP authorization guard:
+   - `api/app/mcp/service.py` now enforces scope (`read`/`write`), optional `allowed_tools`, and optional `allowed_project_ids`.
+4. Added admin token lifecycle APIs/UI:
+   - `POST /api/v1/mcp/tokens`
+   - `GET /api/v1/mcp/tokens`
+   - `POST /api/v1/mcp/tokens/{token_id}/revoke`
+   - admin console token create/list/revoke panel in `api/app/templates/admin.html`
+   - admin-only React token manager panel in `web/src/components/AdminMcpTokenPanel.tsx`
+   - panel now loads available MCP tools/projects and applies restrictions via selectable chips
+5. Added typed contracts and client support:
+   - `api/app/models.py` token request/response models
+   - `api/app/mcp/client.py` optional `bearer_token` support
+6. Added automated test coverage:
+   - `api/tests/test_mcp_token_service.py`
+   - `api/tests/test_mcp_token_api_integration.py`
+   - `api/tests/test_admin_mcp_tokens_ui.py`
+   - extended `api/tests/test_mcp_api_integration.py` for bearer scope/allowlist/project/revoked/expired paths
+   - extended `api/tests/test_mcp_client.py` for bearer header propagation
+   - `web/src/components/AdminMcpTokenPanel.test.tsx`
+   - `acceptance-tests/features/mcp-token-auth-mock.feature`
+   - `acceptance-tests/src/steps/mcp-token-auth-mock.steps.ts`
+   - `acceptance-tests/features/admin-mcp-token-ui.feature`
+   - `acceptance-tests/src/steps/admin-mcp-token-ui.steps.ts`
+7. Validation:
+   - `make check` passed (`147 passed` + eval pass).
+   - `make acceptance-bddgen` passed.
+   - `make acceptance-typecheck` passed.
+   - `make acceptance-test-mock` passed (`8 passed`).
+
 ### Next Immediate Steps (One By One)
 
 1. Phase 18 follow-up: add explicit consolidation merge/grouping event semantics in timeline rendering.
 2. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
 3. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
-4. Add linked-engram lineage support (parent/child references + traversal) so memory origin chains can be traced across sessions.
-5. Add graph-aware continuity roadmap phases (24-28) after phase 23 stabilization gates.
+4. Phase 16 deferred item: add CLI smoke utility (`engram-cli mcp-call`) after phase 18 semantics close.
+5. Add linked-engram lineage support (parent/child references + traversal) so memory origin chains can be traced across sessions.
 
 ## MVP API Surface
 
@@ -1966,6 +2029,9 @@ make cli ARGS="search --query 'continued' --project-id engram-vault --top-k 5"
 - `DELETE /api/v1/chat/sessions/{session_id}/documents/{document_id}`
 - `POST /api/v1/chat/sessions/{session_id}/save-engram`
 - `POST /api/v1/chat/sessions/{session_id}/continue`
+- `POST /api/v1/mcp/tokens`
+- `GET /api/v1/mcp/tokens`
+- `POST /api/v1/mcp/tokens/{token_id}/revoke`
 - `POST /api/v1/mcp/stream`
 - `POST /api/v1/agent-runs`
 - `GET /api/v1/agent-runs/{thread_id}`
@@ -1980,8 +2046,112 @@ Endpoint:
 
 Auth/session requirement:
 
-- MCP uses the same authenticated session-cookie model as `/ui`.
-- For local/dev usage, login once and reuse cookies for all MCP calls.
+- Preferred for external tools: MCP bearer token via `Authorization: Bearer <token>`.
+- Backward-compatible fallback: authenticated UI session cookies.
+- Bearer and session auth resolve the same actor model and visibility checks.
+
+## MCP Token Workflow (Admin + External Agent)
+
+`ENGRAM_MCP_TOKEN` is now first-class and backed by persisted token records. Create token credentials as admin, store only the plaintext token client-side, and send it in the `Authorization` header for MCP calls.
+
+Token policy model:
+
+- Scope: `read` or `write`.
+- Optional `allowed_tools`: when empty, all tools in scope are allowed.
+- Optional `allowed_project_ids`: when empty, no additional project restriction; when provided, calls are limited to those projects.
+- Default token expiry: `90` days.
+
+Create a read token (admin session):
+
+```bash
+COOKIE_JAR=/tmp/engram-admin.cookies
+BASE_URL=http://localhost:8000
+USERNAME=admin
+PASSWORD=admin123
+
+CSRF_TOKEN=$(
+  curl -s -c "$COOKIE_JAR" "$BASE_URL/login" \
+  | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' \
+  | head -n 1
+)
+
+curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  -X POST "$BASE_URL/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "username=$USERNAME" \
+  --data-urlencode "password=$PASSWORD" \
+  --data-urlencode "csrf_token=$CSRF_TOKEN" >/dev/null
+
+TOKEN_JSON=$(
+  curl -s -b "$COOKIE_JAR" \
+    -H "Content-Type: application/json" \
+    -X POST "$BASE_URL/api/v1/mcp/tokens" \
+    -d '{
+      "name": "librechat-read-token",
+      "scope": "read",
+      "allowed_tools": [],
+      "allowed_project_ids": ["engram-vault"],
+      "expires_in_days": 90
+    }'
+)
+
+echo "$TOKEN_JSON" | jq
+MCP_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.token')
+```
+
+Use bearer token for MCP stream calls (no login cookie required):
+
+```bash
+curl -sN \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_TOKEN" \
+  -X POST "$BASE_URL/api/v1/mcp/stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "tools-list-bearer",
+    "method": "tools/list",
+    "params": {}
+  }' \
+  | sed -n 's/^data: //p' \
+  | jq
+```
+
+Revoke token:
+
+```bash
+TOKEN_ID=$(echo "$TOKEN_JSON" | jq -r '.token_id')
+curl -s -b "$COOKIE_JAR" \
+  -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/v1/mcp/tokens/$TOKEN_ID/revoke" \
+  -d '{"reason":"rotation"}' | jq
+```
+
+LibreChat-style MCP bearer endpoint example:
+
+```json
+{
+  "type": "sse",
+  "url": "https://your-host.example.com/api/v1/mcp/stream",
+  "headers": {
+    "Authorization": "Bearer engram_mcp_<token_id_hex>_<secret>",
+    "Accept": "text/event-stream"
+  }
+}
+```
+
+Python helper (bearer mode):
+
+```python
+from app.mcp.client import McpSseClient
+
+with McpSseClient(
+    base_url="http://localhost:8000",
+    bearer_token="engram_mcp_<token_id_hex>_<secret>",
+) as client:
+    tools = client.call_tool(method="tools/list", params={}).require_result()
+    print("visible tools:", [tool["name"] for tool in tools["tools"]])
+```
 
 Quick start (curl, local):
 

@@ -109,6 +109,11 @@ class UserRole(str, Enum):
     viewer = "viewer"
 
 
+class McpTokenScope(str, Enum):
+    read = "read"
+    write = "write"
+
+
 class VisibilityScope(str, Enum):
     private = "private"
     project = "project"
@@ -145,6 +150,44 @@ class UserUpdateRequest(BaseModel):
     role: UserRole | None = None
     is_active: bool | None = None
     password: str | None = Field(default=None, min_length=8, max_length=128)
+
+
+class McpTokenCreateRequest(BaseModel):
+    name: str = Field(min_length=3, max_length=120)
+    scope: McpTokenScope = McpTokenScope.read
+    allowed_tools: list[str] = Field(default_factory=list)
+    allowed_project_ids: list[str] = Field(default_factory=list)
+    expires_in_days: int = Field(default=90, ge=1, le=3650)
+
+
+class McpTokenCreateResponse(BaseModel):
+    token_id: UUID
+    name: str
+    scope: McpTokenScope
+    allowed_tools: list[str] = Field(default_factory=list)
+    allowed_project_ids: list[str] = Field(default_factory=list)
+    token_secret_hint: str
+    token: str
+    expires_at: datetime
+    created_at: datetime
+
+
+class McpTokenSummary(BaseModel):
+    token_id: UUID
+    name: str
+    scope: McpTokenScope
+    allowed_tools: list[str] = Field(default_factory=list)
+    allowed_project_ids: list[str] = Field(default_factory=list)
+    token_secret_hint: str
+    expires_at: datetime
+    last_used_at: datetime | None = None
+    revoked_at: datetime | None = None
+    created_at: datetime
+    is_active: bool
+
+
+class McpTokenRevokeRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=240)
 
 
 class RehydrationBundle(BaseModel):

@@ -21,6 +21,19 @@ def get_user_auth_record(username: str) -> dict | None:
         return cur.fetchone()
 
 
+def get_user_auth_record_by_id(user_id: UUID) -> dict | None:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT user_id, username, password_hash, role, is_active, created_at
+            FROM users
+            WHERE user_id = %s
+            """,
+            (user_id,),
+        )
+        return cur.fetchone()
+
+
 def list_users(limit: int = 200, offset: int = 0) -> list[UserRecord]:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(

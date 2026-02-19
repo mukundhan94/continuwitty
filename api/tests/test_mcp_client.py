@@ -112,3 +112,23 @@ def test_mcp_sse_client_rejects_malformed_frames() -> None:
 
     with pytest.raises(McpClientProtocolError):
         _ = mcp_client.call_tool(method="user.get_profile", request_id="bad")
+
+
+def test_mcp_sse_client_uses_bearer_token_when_configured() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/mcp/stream":
+            assert request.headers.get("authorization") == "Bearer token-123"
+            sse = (
+                "event: jsonrpc\ndata: "
+                '{"jsonrpc":"2.0","id":"bearer","result":{"profile":{"username":"admin"}}}\n\n'
+            )
+            return httpx.Response(200, headers={"content-type": "text/event-stream"}, text=sse)
+        return httpx.Response(404)
+
+    mcp_client = McpSseClient(
+        base_url="http://testserver",
+        bearer_token="token-123",
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    result = mcp_client.call_tool(method="user.get_profile", params={}, request_id="bearer")
+    assert result.require_result()["profile"]["username"] == "admin"

@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from app.models import McpJsonRpcRequest
 
+from .auth import McpResolvedActor
 from .service import McpService
 
 
@@ -21,14 +22,18 @@ def _sse_event(event_name: str, payload: dict[str, Any]) -> str:
 def create_mcp_router(
     *,
     mcp_service: McpService,
-    require_api_actor: Callable[[Request], dict[str, Any]],
+    resolve_mcp_actor: Callable[[Request], McpResolvedActor],
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/mcp", tags=["mcp"])
 
     @router.post("/stream")
     def mcp_stream(request: Request, payload: McpJsonRpcRequest) -> StreamingResponse:
-        actor = require_api_actor(request)
-        events = mcp_service.stream_call(actor=actor, request=payload)
+        actor_context = resolve_mcp_actor(request)
+        events = mcp_service.stream_call(
+            actor=actor_context.actor,
+            request=payload,
+            token_auth=actor_context.token_auth,
+        )
 
         def _stream():
             for frame in events:

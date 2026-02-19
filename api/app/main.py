@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -18,12 +19,26 @@ from .db import ensure_schema_initialized
 from .ingestion import DocumentIngestionService, create_ingestion_router
 from .login_guard import LoginAttemptGuard
 from .mcp import McpService, create_mcp_router
+from .mcp.auth import McpResolvedActor, resolve_mcp_actor
+from .mcp_tokens import (
+    create_mcp_token,
+    issue_new_token,
+    list_mcp_tokens,
+    normalize_string_list,
+    revoke_mcp_token,
+    token_summary_dict,
+)
 from .models import (
     EngramCreateResponse,
     EngramQueryRequest,
     EngramQueryResult,
     EngramSourceRecord,
     EngramSummary,
+    McpTokenCreateRequest,
+    McpTokenCreateResponse,
+    McpTokenRevokeRequest,
+    McpTokenScope,
+    McpTokenSummary,
     MemoryEngramCreate,
     RehydrationBundle,
     UserCreateRequest,
@@ -91,6 +106,8 @@ mcp_service = McpService(
     embedding_dim=settings.embedding_dim,
     ingestion_service=ingestion_service,
 )
+# FastAPI dependency object kept at module scope to satisfy lint rule B008.
+MCP_TOKEN_SCOPE_FORM_DEFAULT = Form(default=McpTokenScope.read)
 
 
 def _session_user(request: Request) -> dict[str, Any] | None:
@@ -185,6 +202,63 @@ def _require_authenticated_api_user(request: Request) -> dict[str, Any]:
     )
 
 
+def _resolve_mcp_actor(request: Request) -> McpResolvedActor:
+    return resolve_mcp_actor(
+        request=request,
+        settings=settings,
+        require_session_actor=_require_authenticated_api_user,
+    )
+
+
+def _create_mcp_token_for_owner(
+    *,
+    owner_user_id: UUID,
+    payload: McpTokenCreateRequest,
+) -> McpTokenCreateResponse:
+    normalized_tools = normalize_string_list(payload.allowed_tools)
+    normalized_projects = normalize_string_list(payload.allowed_project_ids)
+
+    token_id = uuid4()
+    plaintext_token, token_hash_value, token_hint, expires_at = issue_new_token(
+        token_id=token_id,
+        expires_in_days=payload.expires_in_days,
+        pepper=settings.mcp_token_pepper,
+    )
+    created = create_mcp_token(
+        token_id=token_id,
+        owner_user_id=owner_user_id,
+        name=payload.name.strip(),
+        scope=payload.scope.value,
+        allowed_tools=normalized_tools,
+        allowed_project_ids=normalized_projects,
+        token_secret_hash=token_hash_value,
+        token_secret_hint=token_hint,
+        expires_at=expires_at,
+    )
+    return McpTokenCreateResponse(
+        token_id=created.token_id,
+        name=created.name,
+        scope=McpTokenScope(created.scope),
+        allowed_tools=created.allowed_tools,
+        allowed_project_ids=created.allowed_project_ids,
+        token_secret_hint=created.token_secret_hint,
+        token=plaintext_token,
+        expires_at=created.expires_at,
+        created_at=created.created_at,
+    )
+
+
+def _list_mcp_token_summaries(
+    *,
+    owner_user_id: UUID,
+    limit: int = 200,
+    offset: int = 0,
+) -> list[McpTokenSummary]:
+    records = list_mcp_tokens(owner_user_id=owner_user_id, limit=limit, offset=offset)
+    now = datetime.now(UTC)
+    return [McpTokenSummary(**token_summary_dict(record=item, now=now)) for item in records]
+
+
 app.include_router(
     create_chat_router(
         chat_service=chat_service,
@@ -194,7 +268,7 @@ app.include_router(
 app.include_router(
     create_mcp_router(
         mcp_service=mcp_service,
-        require_api_actor=_require_authenticated_api_user,
+        resolve_mcp_actor=_resolve_mcp_actor,
     )
 )
 app.include_router(
@@ -334,10 +408,19 @@ def ui_admin(request: Request) -> Response:
 
     users: list[UserRecord] = []
     error: str | None = None
+    token_error = request.session.pop("admin_mcp_error", None)
+    latest_mcp_token = request.session.pop("latest_mcp_token", None)
+    mcp_tokens: list[McpTokenSummary] = []
     try:
         users = list_users(limit=500, offset=0)
     except Exception as exc:  # pragma: no cover - local display fallback
         error = str(exc)
+    try:
+        mcp_tokens = _list_mcp_token_summaries(
+            owner_user_id=UUID(user["user_id"]), limit=500, offset=0
+        )
+    except Exception as exc:  # pragma: no cover - local display fallback
+        token_error = str(exc)
 
     return templates.TemplateResponse(
         request,
@@ -349,8 +432,78 @@ def ui_admin(request: Request) -> Response:
             "csrf_token": _csrf_token_for_request(request),
             "users": users,
             "error": error,
+            "mcp_tokens": mcp_tokens,
+            "latest_mcp_token": latest_mcp_token,
+            "token_error": token_error,
         },
     )
+
+
+@app.post("/ui/admin/mcp-tokens/create", include_in_schema=False)
+def ui_admin_create_mcp_token(
+    request: Request,
+    name: str = Form(...),
+    scope: McpTokenScope = MCP_TOKEN_SCOPE_FORM_DEFAULT,
+    allowed_tools: str = Form(default=""),
+    allowed_project_ids: str = Form(default=""),
+    expires_in_days: int = Form(default=90),
+    csrf_token: str = Form(...),
+) -> Response:
+    user = _require_roles_api(request, {UserRole.admin.value})
+    if not _verify_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    try:
+        payload = McpTokenCreateRequest(
+            name=name,
+            scope=scope,
+            allowed_tools=normalize_string_list(allowed_tools.split(",")),
+            allowed_project_ids=normalize_string_list(allowed_project_ids.split(",")),
+            expires_in_days=expires_in_days,
+        )
+        created = _create_mcp_token_for_owner(owner_user_id=UUID(user["user_id"]), payload=payload)
+    except Exception as exc:
+        request.session["admin_mcp_error"] = str(exc)
+        return RedirectResponse(url="/ui/admin", status_code=303)
+
+    request.session["latest_mcp_token"] = created.model_dump(mode="json")
+    log_audit_event(
+        request=request,
+        event_type="mcp_token_created",
+        success=True,
+        username=user["username"],
+        metadata={
+            "token_id": str(created.token_id),
+            "scope": created.scope.value,
+            "name": created.name,
+            "allowed_tools": created.allowed_tools,
+            "allowed_project_ids": created.allowed_project_ids,
+            "expires_at": created.expires_at.isoformat(),
+        },
+    )
+    return RedirectResponse(url="/ui/admin", status_code=303)
+
+
+@app.post("/ui/admin/mcp-tokens/{token_id}/revoke", include_in_schema=False)
+def ui_admin_revoke_mcp_token(
+    request: Request, token_id: UUID, csrf_token: str = Form(...)
+) -> Response:
+    user = _require_roles_api(request, {UserRole.admin.value})
+    if not _verify_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+    revoked = revoke_mcp_token(token_id=token_id, owner_user_id=UUID(user["user_id"]))
+    if not revoked:
+        raise HTTPException(status_code=404, detail="Token not found")
+
+    log_audit_event(
+        request=request,
+        event_type="mcp_token_revoked",
+        success=True,
+        username=user["username"],
+        metadata={"token_id": str(token_id)},
+    )
+    return RedirectResponse(url="/ui/admin", status_code=303)
 
 
 @app.get("/healthz")
@@ -440,6 +593,62 @@ def update_user_endpoint(request: Request, user_id: UUID, payload: UserUpdateReq
         },
     )
     return updated
+
+
+@app.post("/api/v1/mcp/tokens", response_model=McpTokenCreateResponse, status_code=201)
+def create_mcp_token_endpoint(
+    request: Request, payload: McpTokenCreateRequest
+) -> McpTokenCreateResponse:
+    actor = _require_roles_api(request, {UserRole.admin.value})
+    created = _create_mcp_token_for_owner(owner_user_id=UUID(actor["user_id"]), payload=payload)
+    log_audit_event(
+        request=request,
+        event_type="mcp_token_created",
+        success=True,
+        username=actor["username"],
+        metadata={
+            "token_id": str(created.token_id),
+            "scope": created.scope.value,
+            "name": created.name,
+            "allowed_tools": created.allowed_tools,
+            "allowed_project_ids": created.allowed_project_ids,
+            "expires_at": created.expires_at.isoformat(),
+        },
+    )
+    return created
+
+
+@app.get("/api/v1/mcp/tokens", response_model=list[McpTokenSummary])
+def list_mcp_tokens_endpoint(
+    request: Request,
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[McpTokenSummary]:
+    actor = _require_roles_api(request, {UserRole.admin.value})
+    return _list_mcp_token_summaries(
+        owner_user_id=UUID(actor["user_id"]), limit=limit, offset=offset
+    )
+
+
+@app.post("/api/v1/mcp/tokens/{token_id}/revoke", response_model=McpTokenSummary)
+def revoke_mcp_token_endpoint(
+    request: Request,
+    token_id: UUID,
+    payload: McpTokenRevokeRequest,
+) -> McpTokenSummary:
+    actor = _require_roles_api(request, {UserRole.admin.value})
+    revoked = revoke_mcp_token(token_id=token_id, owner_user_id=UUID(actor["user_id"]))
+    if not revoked:
+        raise HTTPException(status_code=404, detail="Token not found")
+
+    log_audit_event(
+        request=request,
+        event_type="mcp_token_revoked",
+        success=True,
+        username=actor["username"],
+        metadata={"token_id": str(token_id), "reason": payload.reason},
+    )
+    return McpTokenSummary(**token_summary_dict(record=revoked, now=datetime.now(UTC)))
 
 
 @app.post("/api/v1/agent-runs", response_model=AgentRunResponse)
