@@ -24,19 +24,18 @@ from app.models import (
     EngramCollectionUpdateRequest,
 )
 
-from .service import MemoryAdminService
+from .service import MemoryAdminEngramListRequest, MemoryAdminListRequest, MemoryAdminService
 
 OWNER_USER_ID_QUERY_DEFAULT = Query(default=None)
 SESSION_ID_QUERY_DEFAULT = Query(default=None)
 
 
-def create_memory_admin_router(
+def _register_session_routes(
     *,
+    router: APIRouter,
     memory_admin_service: MemoryAdminService,
     require_admin_actor: Callable[[Request], dict[str, Any]],
-) -> APIRouter:
-    router = APIRouter(prefix="/api/v1/admin/memory", tags=["admin-memory"])
-
+) -> None:
     @router.get("/sessions", response_model=list[AdminChatSessionRecord])
     def list_sessions(
         request: Request,
@@ -48,11 +47,13 @@ def create_memory_admin_router(
     ) -> list[AdminChatSessionRecord]:
         require_admin_actor(request)
         return memory_admin_service.list_sessions(
-            project_id=project_id,
-            owner_user_id=owner_user_id,
-            include_deleted=include_deleted,
-            limit=limit,
-            offset=offset,
+            request=MemoryAdminListRequest(
+                project_id=project_id,
+                owner_user_id=owner_user_id,
+                include_deleted=include_deleted,
+                limit=limit,
+                offset=offset,
+            )
         )
 
     @router.delete("/sessions/{session_id}", response_model=AdminSessionDeleteResponse)
@@ -73,6 +74,13 @@ def create_memory_admin_router(
         require_admin_actor(request)
         return memory_admin_service.restore_session(session_id=session_id)
 
+
+def _register_engram_read_routes(
+    *,
+    router: APIRouter,
+    memory_admin_service: MemoryAdminService,
+    require_admin_actor: Callable[[Request], dict[str, Any]],
+) -> None:
     @router.get("/engrams", response_model=list[AdminEngramRecord])
     def list_engrams(
         request: Request,
@@ -85,13 +93,15 @@ def create_memory_admin_router(
     ) -> list[AdminEngramRecord]:
         require_admin_actor(request)
         return memory_admin_service.list_engrams(
-            project_id=project_id,
-            session_id=session_id,
-            owner_user_id=None,
-            query_text=q,
-            include_deleted=include_deleted,
-            limit=limit,
-            offset=offset,
+            request=MemoryAdminEngramListRequest(
+                project_id=project_id,
+                owner_user_id=None,
+                include_deleted=include_deleted,
+                limit=limit,
+                offset=offset,
+                session_id=session_id,
+                query_text=q,
+            )
         )
 
     @router.get("/engrams/{engram_id}", response_model=AdminEngramRecord)
@@ -105,6 +115,14 @@ def create_memory_admin_router(
             engram_id=engram_id,
             include_deleted=include_deleted,
         )
+
+
+def _register_engram_write_routes(
+    *,
+    router: APIRouter,
+    memory_admin_service: MemoryAdminService,
+    require_admin_actor: Callable[[Request], dict[str, Any]],
+) -> None:
 
     @router.patch("/engrams/{engram_id}", response_model=AdminEngramRecord)
     def update_engram(
@@ -151,6 +169,31 @@ def create_memory_admin_router(
         require_admin_actor(request)
         return memory_admin_service.restore_engram(engram_id=engram_id)
 
+
+def _register_engram_routes(
+    *,
+    router: APIRouter,
+    memory_admin_service: MemoryAdminService,
+    require_admin_actor: Callable[[Request], dict[str, Any]],
+) -> None:
+    _register_engram_read_routes(
+        router=router,
+        memory_admin_service=memory_admin_service,
+        require_admin_actor=require_admin_actor,
+    )
+    _register_engram_write_routes(
+        router=router,
+        memory_admin_service=memory_admin_service,
+        require_admin_actor=require_admin_actor,
+    )
+
+
+def _register_collection_read_routes(
+    *,
+    router: APIRouter,
+    memory_admin_service: MemoryAdminService,
+    require_admin_actor: Callable[[Request], dict[str, Any]],
+) -> None:
     @router.get("/collections", response_model=list[EngramCollectionRecord])
     def list_collections(
         request: Request,
@@ -161,12 +204,22 @@ def create_memory_admin_router(
     ) -> list[EngramCollectionRecord]:
         require_admin_actor(request)
         return memory_admin_service.list_collections(
-            project_id=project_id,
-            owner_user_id=None,
-            include_deleted=include_deleted,
-            limit=limit,
-            offset=offset,
+            request=MemoryAdminListRequest(
+                project_id=project_id,
+                owner_user_id=None,
+                include_deleted=include_deleted,
+                limit=limit,
+                offset=offset,
+            )
         )
+
+
+def _register_collection_write_routes(
+    *,
+    router: APIRouter,
+    memory_admin_service: MemoryAdminService,
+    require_admin_actor: Callable[[Request], dict[str, Any]],
+) -> None:
 
     @router.post("/collections", response_model=EngramCollectionRecord, status_code=201)
     def create_collection(
@@ -223,4 +276,44 @@ def create_memory_admin_router(
             engram_id=engram_id,
         )
 
+
+def _register_collection_routes(
+    *,
+    router: APIRouter,
+    memory_admin_service: MemoryAdminService,
+    require_admin_actor: Callable[[Request], dict[str, Any]],
+) -> None:
+    _register_collection_read_routes(
+        router=router,
+        memory_admin_service=memory_admin_service,
+        require_admin_actor=require_admin_actor,
+    )
+    _register_collection_write_routes(
+        router=router,
+        memory_admin_service=memory_admin_service,
+        require_admin_actor=require_admin_actor,
+    )
+
+
+def create_memory_admin_router(
+    *,
+    memory_admin_service: MemoryAdminService,
+    require_admin_actor: Callable[[Request], dict[str, Any]],
+) -> APIRouter:
+    router = APIRouter(prefix="/api/v1/admin/memory", tags=["admin-memory"])
+    _register_session_routes(
+        router=router,
+        memory_admin_service=memory_admin_service,
+        require_admin_actor=require_admin_actor,
+    )
+    _register_engram_routes(
+        router=router,
+        memory_admin_service=memory_admin_service,
+        require_admin_actor=require_admin_actor,
+    )
+    _register_collection_routes(
+        router=router,
+        memory_admin_service=memory_admin_service,
+        require_admin_actor=require_admin_actor,
+    )
     return router

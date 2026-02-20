@@ -280,11 +280,43 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 13 - Memory Admin Service Phase 13a)
+
+- [x] Step 13a — Refactored list APIs in `api/app/memory_admin/service.py` to use parameter objects:
+  - added `MemoryAdminListRequest`
+  - added `MemoryAdminEngramListRequest`
+  - updated `list_sessions(...)`, `list_engrams(...)`, and `list_collections(...)` to accept request objects
+- [x] Deduplicated list-query lifecycle pattern:
+  - added `_list_project_scoped_records(...)`
+  - reused shared helper for sessions + collections list paths
+- [x] Consolidated stale-write conflict guard:
+  - added `_raise_if_stale_update(...)`
+  - reused in `update_engram(...)`, `move_engram(...)`, and `update_collection(...)`
+- [x] API + MCP call sites updated for new request-object contract:
+  - `api/app/memory_admin/api.py`
+  - `api/app/mcp/service.py`
+  - `api/app/memory_admin/__init__.py` export surface
+- [x] New tests added: `api/tests/test_memory_admin_service.py`
+  - verifies request-object forwarding for list methods
+  - verifies stale `expected_updated_at` conflict handling
+- [x] Validation run:
+  - `uv run ruff check app/memory_admin/service.py app/memory_admin/api.py app/memory_admin/__init__.py app/mcp/service.py tests/test_memory_admin_service.py`
+  - `uv run pytest -q tests/test_memory_admin_service.py tests/test_memory_admin_api_integration.py tests/test_mcp_service_unit.py`
+  - aggregate: `15 passed`
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/memory_admin/service.py` score improved from **9.09** to **10.0**
+  - `api/app/memory_admin/api.py` score currently **9.38**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **3.0** | RED |
+| `api/app/mcp/service.py` | **4.56** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.42 | YELLOW |
 | `api/app/chat_repository.py` | 7.10 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
@@ -296,7 +328,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |
 | `api/app/engram_enrichment/service.py` | 10.0 | GREEN |
-| `api/app/memory_admin/service.py` | 9.09 | GREEN |
+| `api/app/memory_admin/service.py` | 10.0 | GREEN |
 | `api/app/ingestion/service.py` | 9.33 | GREEN |
 | `api/app/mcp/auth.py` | 9.66 | GREEN |
 

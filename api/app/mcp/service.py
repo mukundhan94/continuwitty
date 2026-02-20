@@ -12,10 +12,15 @@ from app.chat.errors import ChatProviderExecutionError, ChatServiceError
 from app.chat.service import ChatService
 from app.ingestion.service import DocumentIngestionService
 from app.mcp_tokens import McpTokenAuthContext
-from app.memory_admin import MemoryAdminService
+from app.memory_admin import (
+    MemoryAdminEngramListRequest,
+    MemoryAdminListRequest,
+    MemoryAdminService,
+)
 from app.models import (
     AdminEngramDeleteRequest,
     AdminEngramMoveRequest,
+    AdminEngramRecord,
     AdminEngramUpdateRequest,
     AdminSessionDeleteRequest,
     ChatLifecyclePolicyUpdateRequest,
@@ -25,6 +30,7 @@ from app.models import (
     EngramCollectionCreateRequest,
     EngramCollectionDeleteRequest,
     EngramCollectionItemsUpdateRequest,
+    EngramCollectionRecord,
     EngramCollectionUpdateRequest,
     EngramCreateFromConversationRequest,
     EngramQueryRequest,
@@ -921,14 +927,11 @@ class McpService:
                 if session_id_value is not None
                 else None
             )
-            listed = self._memory_admin_service.list_engrams(
-                project_id=params.get("project_id"),
+            listed = self._list_engrams_for_actor(
+                actor=actor,
+                actor_user_id=actor_user_id,
                 session_id=session_id,
-                owner_user_id=None if self._is_admin(actor) else actor_user_id,
-                query_text=params.get("q"),
-                include_deleted=bool(params.get("include_deleted", False)),
-                limit=int(params.get("limit", 200)),
-                offset=int(params.get("offset", 0)),
+                params=params,
             )
             return {"engrams": [item.model_dump(mode="json") for item in listed]}
 
@@ -1009,12 +1012,10 @@ class McpService:
             return {"result": restored.model_dump(mode="json")}
 
         if method == "engram.collection_list":
-            collections = self._memory_admin_service.list_collections(
-                project_id=params.get("project_id"),
-                owner_user_id=None if self._is_admin(actor) else actor_user_id,
-                include_deleted=bool(params.get("include_deleted", False)),
-                limit=int(params.get("limit", 200)),
-                offset=int(params.get("offset", 0)),
+            collections = self._list_collections_for_actor(
+                actor=actor,
+                actor_user_id=actor_user_id,
+                params=params,
             )
             return {"collections": [item.model_dump(mode="json") for item in collections]}
 
@@ -1085,6 +1086,43 @@ class McpService:
             return {"result": result}
 
         return None
+
+    def _list_engrams_for_actor(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        session_id: UUID | None,
+        params: dict[str, Any],
+    ) -> list[AdminEngramRecord]:
+        return self._memory_admin_service.list_engrams(
+            request=MemoryAdminEngramListRequest(
+                project_id=params.get("project_id"),
+                owner_user_id=None if self._is_admin(actor) else actor_user_id,
+                include_deleted=bool(params.get("include_deleted", False)),
+                limit=int(params.get("limit", 200)),
+                offset=int(params.get("offset", 0)),
+                session_id=session_id,
+                query_text=params.get("q"),
+            )
+        )
+
+    def _list_collections_for_actor(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        params: dict[str, Any],
+    ) -> list[EngramCollectionRecord]:
+        return self._memory_admin_service.list_collections(
+            request=MemoryAdminListRequest(
+                project_id=params.get("project_id"),
+                owner_user_id=None if self._is_admin(actor) else actor_user_id,
+                include_deleted=bool(params.get("include_deleted", False)),
+                limit=int(params.get("limit", 200)),
+                offset=int(params.get("offset", 0)),
+            )
+        )
 
     def _dispatch_project_tool(
         self,

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TypeVar
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -44,27 +47,61 @@ from .repository import (
     update_collection,
 )
 
+TRecord = TypeVar("TRecord")
+
+
+@dataclass(frozen=True)
+class MemoryAdminListRequest:
+    project_id: str | None
+    owner_user_id: UUID | None
+    include_deleted: bool
+    limit: int
+    offset: int
+
+
+@dataclass(frozen=True)
+class MemoryAdminEngramListRequest(MemoryAdminListRequest):
+    session_id: UUID | None = None
+    query_text: str | None = None
+
 
 class MemoryAdminService:
     def __init__(self, *, embedding_dim: int, project_service: ProjectService) -> None:
         self._embedding_dim = embedding_dim
         self._project_service = project_service
 
+    @staticmethod
+    def _list_project_scoped_records(
+        *,
+        request: MemoryAdminListRequest,
+        fetcher: Callable[..., list[TRecord]],
+    ) -> list[TRecord]:
+        return fetcher(
+            project_id=request.project_id,
+            owner_user_id=request.owner_user_id,
+            include_deleted=request.include_deleted,
+            limit=request.limit,
+            offset=request.offset,
+        )
+
+    @staticmethod
+    def _raise_if_stale_update(
+        *,
+        expected_updated_at,
+        current_updated_at,
+        detail: str,
+    ) -> None:
+        if expected_updated_at and expected_updated_at != current_updated_at:
+            raise HTTPException(status_code=409, detail=detail)
+
     def list_sessions(
         self,
         *,
-        project_id: str | None,
-        owner_user_id: UUID | None,
-        include_deleted: bool,
-        limit: int,
-        offset: int,
+        request: MemoryAdminListRequest,
     ) -> list[AdminChatSessionRecord]:
-        return list_admin_sessions(
-            project_id=project_id,
-            owner_user_id=owner_user_id,
-            include_deleted=include_deleted,
-            limit=limit,
-            offset=offset,
+        return self._list_project_scoped_records(
+            request=request,
+            fetcher=list_admin_sessions,
         )
 
     def get_session(
@@ -111,22 +148,16 @@ class MemoryAdminService:
     def list_engrams(
         self,
         *,
-        project_id: str | None,
-        session_id: UUID | None,
-        owner_user_id: UUID | None,
-        query_text: str | None,
-        include_deleted: bool,
-        limit: int,
-        offset: int,
+        request: MemoryAdminEngramListRequest,
     ) -> list[AdminEngramRecord]:
         return list_admin_engrams(
-            project_id=project_id,
-            session_id=session_id,
-            owner_user_id=owner_user_id,
-            query_text=query_text,
-            include_deleted=include_deleted,
-            limit=limit,
-            offset=offset,
+            project_id=request.project_id,
+            session_id=request.session_id,
+            owner_user_id=request.owner_user_id,
+            query_text=request.query_text,
+            include_deleted=request.include_deleted,
+            limit=request.limit,
+            offset=request.offset,
         )
 
     def find_engram(
@@ -148,8 +179,11 @@ class MemoryAdminService:
         payload: AdminEngramUpdateRequest,
     ) -> AdminEngramRecord:
         current = self.get_engram(engram_id=engram_id, include_deleted=False)
-        if payload.expected_updated_at and payload.expected_updated_at != current.updated_at:
-            raise HTTPException(status_code=409, detail="Engram was updated by another operation")
+        self._raise_if_stale_update(
+            expected_updated_at=payload.expected_updated_at,
+            current_updated_at=current.updated_at,
+            detail="Engram was updated by another operation",
+        )
 
         updated = update_admin_engram(
             engram_id=engram_id,
@@ -176,8 +210,11 @@ class MemoryAdminService:
         payload: AdminEngramMoveRequest,
     ) -> AdminEngramRecord:
         current = self.get_engram(engram_id=engram_id, include_deleted=False)
-        if payload.expected_updated_at and payload.expected_updated_at != current.updated_at:
-            raise HTTPException(status_code=409, detail="Engram was updated by another operation")
+        self._raise_if_stale_update(
+            expected_updated_at=payload.expected_updated_at,
+            current_updated_at=current.updated_at,
+            detail="Engram was updated by another operation",
+        )
 
         resolution = self._project_service.resolve_project_id_for_write(
             actor_user_id=actor_user_id,
@@ -218,18 +255,11 @@ class MemoryAdminService:
     def list_collections(
         self,
         *,
-        project_id: str | None,
-        owner_user_id: UUID | None,
-        include_deleted: bool,
-        limit: int,
-        offset: int,
+        request: MemoryAdminListRequest,
     ) -> list[EngramCollectionRecord]:
-        return list_collections(
-            project_id=project_id,
-            owner_user_id=owner_user_id,
-            include_deleted=include_deleted,
-            limit=limit,
-            offset=offset,
+        return self._list_project_scoped_records(
+            request=request,
+            fetcher=list_collections,
         )
 
     def find_collection(
@@ -268,10 +298,11 @@ class MemoryAdminService:
         current = self.find_collection(collection_id=collection_id, include_deleted=False)
         if current is None:
             raise HTTPException(status_code=404, detail="Collection not found")
-        if payload.expected_updated_at and payload.expected_updated_at != current.updated_at:
-            raise HTTPException(
-                status_code=409, detail="Collection was updated by another operation"
-            )
+        self._raise_if_stale_update(
+            expected_updated_at=payload.expected_updated_at,
+            current_updated_at=current.updated_at,
+            detail="Collection was updated by another operation",
+        )
         updated = update_collection(
             collection_id=collection_id,
             name=payload.name.strip() if payload.name else None,
