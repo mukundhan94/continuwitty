@@ -23,19 +23,14 @@ import {
   listPinnedEngrams,
   listSessionMessages,
   listSessionTimeline,
-  pinDocumentToSession,
-  pinEngramToSession,
   saveSessionAsEngram,
-  streamChatMessage,
-  unpinDocumentFromSession,
-  unpinEngramFromSession,
 } from './api/chat'
 import { ApiError } from './api/http'
-import { ingestFileDocument, ingestTextDocument, listProjectDocuments } from './api/ingestion'
+import { listProjectDocuments } from './api/ingestion'
 import type {
   ChatMessage,
-  ChatSession,
   ChatDebugTrace,
+  ChatSession,
   ChatSourceReference,
   ChatTimelineEvent,
   DocumentRecord,
@@ -65,6 +60,7 @@ import {
   WorkspaceGrid,
 } from './styles/primitives'
 import { useThemeMode } from './styles/useThemeMode'
+import { useIngestionActions, usePinActions, usePromptActions } from './hooks/useChatActions'
 import { buildDefaultSaveAbstract } from './utils/chat'
 
 const PROJECT_ID_STORAGE_KEY = 'engram.lastProjectId'
@@ -377,94 +373,34 @@ function AppScreen() {
     }
   }
 
-  const sendPrompt = async (prompt: string) => {
-    if (!selectedSessionId) {
-      return
-    }
+  const { handleSend, handleRetry } = usePromptActions({
+    composerText,
+    lastPrompt,
+    selectedSessionId,
+    refreshFromSession,
+    setLastPrompt,
+    setPendingUserText,
+    setComposerText,
+    setStreamingAssistantText,
+    setSourceReferences,
+    setChatDebugTrace,
+    setChatError,
+    setChatSending,
+    describeError,
+  })
 
-    const content = prompt.trim()
-    if (!content) {
-      return
-    }
-
-    setLastPrompt(content)
-    setPendingUserText(content)
-    setComposerText('')
-    setStreamingAssistantText('')
-    setSourceReferences([])
-    setChatDebugTrace(null)
-    setChatError(null)
-    setChatSending(true)
-
-    try {
-      for await (const event of streamChatMessage(selectedSessionId, content)) {
-        if (event.event === 'meta') {
-          setSourceReferences(event.data.source_references)
-          if (event.data.debug_trace) {
-            setChatDebugTrace(event.data.debug_trace)
-          }
-        }
-        if (event.event === 'chunk') {
-          setStreamingAssistantText((current) => current + event.data.text)
-        }
-        if (event.event === 'done') {
-          setStreamingAssistantText(event.data.assistant_text)
-          setSourceReferences(event.data.source_references)
-          setChatDebugTrace(event.data.debug_trace ?? null)
-        }
-        if (event.event === 'error') {
-          throw new Error(event.data.detail)
-        }
-      }
-      await refreshFromSession(selectedSessionId)
-      setPendingUserText(null)
-      setStreamingAssistantText('')
-    } catch (error) {
-      setChatError(describeError(error))
-      setComposerText(content)
-      setPendingUserText(null)
-      setStreamingAssistantText('')
-      setChatDebugTrace(null)
-    } finally {
-      setChatSending(false)
-    }
-  }
-
-  const handleSend = async () => sendPrompt(composerText)
-
-  const handleRetry = async () => {
-    if (!lastPrompt.trim()) {
-      setChatError('No previous prompt available to retry.')
-      return
-    }
-    await sendPrompt(lastPrompt)
-  }
-
-  const handlePin = async (engramId: string) => {
-    if (!selectedSessionId) {
-      return
-    }
-    try {
-      await pinEngramToSession(selectedSessionId, engramId)
-      await refreshFromSession(selectedSessionId)
-      setNotice(`Pinned engram ${engramId}`)
-    } catch (error) {
-      setChatError(describeError(error))
-    }
-  }
-
-  const handleUnpin = async (engramId: string) => {
-    if (!selectedSessionId) {
-      return
-    }
-    try {
-      await unpinEngramFromSession(selectedSessionId, engramId)
-      await refreshFromSession(selectedSessionId)
-      setNotice(`Unpinned engram ${engramId}`)
-    } catch (error) {
-      setChatError(describeError(error))
-    }
-  }
+  const {
+    handlePin,
+    handleUnpin,
+    handlePinDocument,
+    handleUnpinDocument,
+  } = usePinActions({
+    selectedSessionId,
+    refreshFromSession,
+    setNotice,
+    setChatError,
+    describeError,
+  })
 
   const handleCopyEngramId = async (engramId: string) => {
     try {
@@ -482,84 +418,19 @@ function AppScreen() {
     await refreshFromSession(selectedSessionId)
   }
 
-  const handleRefreshDocuments = async () => {
-    await loadProjectDocuments(projectId)
-  }
-
-  const handlePinDocument = async (documentId: string) => {
-    if (!selectedSessionId) {
-      setChatError('Select a session before pinning a document.')
-      return
-    }
-    try {
-      await pinDocumentToSession(selectedSessionId, documentId)
-      await refreshFromSession(selectedSessionId)
-      setNotice(`Pinned document ${documentId}`)
-    } catch (error) {
-      setChatError(describeError(error))
-    }
-  }
-
-  const handleUnpinDocument = async (documentId: string) => {
-    if (!selectedSessionId) {
-      return
-    }
-    try {
-      await unpinDocumentFromSession(selectedSessionId, documentId)
-      await refreshFromSession(selectedSessionId)
-      setNotice(`Unpinned document ${documentId}`)
-    } catch (error) {
-      setChatError(describeError(error))
-    }
-  }
-
-  const handleIngestText = async (payload: {
-    title: string
-    text: string
-    visibility_scope: 'private' | 'project'
-    chunk_size_chars: number
-    chunk_overlap_chars: number
-  }) => {
-    setDocumentsSubmitting(true)
-    setDocumentsError(null)
-    const normalizedProjectId = normalizeProjectId(projectId)
-    try {
-      const created = await ingestTextDocument({
-        project_id: normalizedProjectId,
-        ...payload,
-      })
-      setNotice(`Ingested text document ${created.title} (${created.chunk_count} chunks)`)
-      await loadProjectDocuments(normalizedProjectId)
-    } catch (error) {
-      setDocumentsError(describeError(error))
-    } finally {
-      setDocumentsSubmitting(false)
-    }
-  }
-
-  const handleIngestFile = async (payload: {
-    title: string
-    file: File
-    visibility_scope: 'private' | 'project'
-    chunk_size_chars: number
-    chunk_overlap_chars: number
-  }) => {
-    setDocumentsSubmitting(true)
-    setDocumentsError(null)
-    const normalizedProjectId = normalizeProjectId(projectId)
-    try {
-      const created = await ingestFileDocument({
-        project_id: normalizedProjectId,
-        ...payload,
-      })
-      setNotice(`Ingested file ${created.source_name || created.title} (${created.chunk_count} chunks)`)
-      await loadProjectDocuments(normalizedProjectId)
-    } catch (error) {
-      setDocumentsError(describeError(error))
-    } finally {
-      setDocumentsSubmitting(false)
-    }
-  }
+  const {
+    handleRefreshDocuments,
+    handleIngestText,
+    handleIngestFile,
+  } = useIngestionActions({
+    projectId,
+    normalizeProjectId,
+    loadProjectDocuments,
+    setDocumentsSubmitting,
+    setDocumentsError,
+    setNotice,
+    describeError,
+  })
 
   const handleContinueSession = async () => {
     if (!selectedSessionId) {
