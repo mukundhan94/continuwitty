@@ -8,8 +8,8 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from app.models import ChatProvider
 from app.providers.anthropic_provider import AnthropicProvider
 from app.providers.base import ProviderGenerateRequest, ProviderMessage
-from app.providers.bedrock_provider import BedrockProvider
-from app.providers.errors import ProviderAuthError, ProviderRequestError
+from app.providers.bedrock_provider import AwsCredentials, BedrockProvider
+from app.providers.errors import ProviderAuthError, ProviderRateLimitError, ProviderRequestError
 from app.providers.openai_provider import OpenAIProvider
 
 
@@ -112,7 +112,10 @@ def test_bedrock_provider_generate_normalizes_response() -> None:
             "usage": {"input_tokens": 13, "output_tokens": 8},
         }
     )
-    provider = BedrockProvider(region_name="us-east-1", client=client)
+    provider = BedrockProvider(
+        credentials=AwsCredentials(region_name="us-east-1"),
+        client=client,
+    )
 
     result = provider.generate(_request())
 
@@ -135,7 +138,7 @@ def test_anthropic_healthcheck_requires_api_key() -> None:
 
 
 def test_bedrock_healthcheck_requires_region() -> None:
-    provider = BedrockProvider(region_name="")
+    provider = BedrockProvider(credentials=AwsCredentials(region_name=""))
     with pytest.raises(ProviderAuthError):
         provider.healthcheck()
 
@@ -150,7 +153,10 @@ def test_bedrock_provider_surfaces_validation_error_details() -> None:
         },
         operation_name="InvokeModel",
     )
-    provider = BedrockProvider(region_name="us-east-1", client=_FailingBedrockClient(err))
+    provider = BedrockProvider(
+        credentials=AwsCredentials(region_name="us-east-1"),
+        client=_FailingBedrockClient(err),
+    )
 
     with pytest.raises(ProviderRequestError) as exc_info:
         provider.generate(_request())
@@ -161,7 +167,7 @@ def test_bedrock_provider_surfaces_validation_error_details() -> None:
 
 def test_bedrock_provider_reports_missing_credentials() -> None:
     provider = BedrockProvider(
-        region_name="us-east-1",
+        credentials=AwsCredentials(region_name="us-east-1"),
         client=_FailingBedrockClient(NoCredentialsError()),
     )
 
@@ -169,3 +175,62 @@ def test_bedrock_provider_reports_missing_credentials() -> None:
         provider.generate(_request())
 
     assert "credentials not found" in str(exc_info.value)
+
+
+def test_bedrock_provider_surfaces_throttling_errors() -> None:
+    err = ClientError(
+        error_response={
+            "Error": {
+                "Code": "ThrottlingException",
+                "Message": "Rate exceeded",
+            }
+        },
+        operation_name="InvokeModel",
+    )
+    provider = BedrockProvider(
+        credentials=AwsCredentials(region_name="us-east-1"),
+        client=_FailingBedrockClient(err),
+    )
+
+    with pytest.raises(ProviderRateLimitError) as exc_info:
+        provider.generate(_request())
+
+    assert "ThrottlingException" in str(exc_info.value)
+
+
+def test_bedrock_provider_surfaces_auth_errors() -> None:
+    err = ClientError(
+        error_response={
+            "Error": {
+                "Code": "ExpiredTokenException",
+                "Message": "The security token included in the request is expired",
+            }
+        },
+        operation_name="InvokeModel",
+    )
+    provider = BedrockProvider(
+        credentials=AwsCredentials(region_name="us-east-1"),
+        client=_FailingBedrockClient(err),
+    )
+
+    with pytest.raises(ProviderAuthError) as exc_info:
+        provider.generate(_request())
+
+    assert "ExpiredTokenException" in str(exc_info.value)
+
+
+def test_bedrock_provider_extract_text_ignores_non_text_content() -> None:
+    client = _DummyBedrockClient(
+        {
+            "content": [{"type": "tool_use", "name": "x"}, {"type": "text", "text": 7}],
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        }
+    )
+    provider = BedrockProvider(
+        credentials=AwsCredentials(region_name="us-east-1"),
+        client=client,
+    )
+
+    result = provider.generate(_request())
+
+    assert result.text == ""

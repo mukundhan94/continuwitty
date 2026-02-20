@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from app.models import ChatProvider
@@ -25,22 +26,43 @@ except Exception:  # pragma: no cover
     NoCredentialsError = None  # type: ignore[assignment]
     PartialCredentialsError = None  # type: ignore[assignment]
 
+_AWS_AUTH_ERROR_CODES = {
+    "UnrecognizedClientException",
+    "InvalidSignatureException",
+    "ExpiredTokenException",
+    "IncompleteSignatureException",
+}
+_AWS_RATE_LIMIT_ERROR_CODES = {"ThrottlingException", "TooManyRequestsException"}
+_AWS_REQUEST_ERROR_CODES = {"ValidationException"}
+
+
+@dataclass(frozen=True)
+class AwsCredentials:
+    region_name: str
+    access_key_id: str | None = None
+    secret_access_key: str | None = None
+    session_token: str | None = None
+
+    def runtime_client_kwargs(self) -> dict[str, Any]:
+        client_kwargs: dict[str, Any] = {"region_name": self.region_name}
+        if self.access_key_id:
+            client_kwargs["aws_access_key_id"] = self.access_key_id
+        if self.secret_access_key:
+            client_kwargs["aws_secret_access_key"] = self.secret_access_key
+        if self.session_token:
+            client_kwargs["aws_session_token"] = self.session_token
+        return client_kwargs
+
 
 class BedrockProvider:
     provider = ChatProvider.bedrock
 
     def __init__(
         self,
-        region_name: str,
-        access_key_id: str | None = None,
-        secret_access_key: str | None = None,
-        session_token: str | None = None,
+        credentials: AwsCredentials,
         client: Any | None = None,
     ) -> None:
-        self._region_name = region_name
-        self._access_key_id = access_key_id
-        self._secret_access_key = secret_access_key
-        self._session_token = session_token
+        self._credentials = credentials
         self._client = client
 
     def _runtime_client(self):
@@ -48,14 +70,7 @@ class BedrockProvider:
             return self._client
         if boto3 is None:
             raise ProviderAPIError("boto3 is not available for Bedrock provider")
-        client_kwargs: dict[str, Any] = {"region_name": self._region_name}
-        if self._access_key_id:
-            client_kwargs["aws_access_key_id"] = self._access_key_id
-        if self._secret_access_key:
-            client_kwargs["aws_secret_access_key"] = self._secret_access_key
-        if self._session_token:
-            client_kwargs["aws_session_token"] = self._session_token
-        return boto3.client("bedrock-runtime", **client_kwargs)
+        return boto3.client("bedrock-runtime", **self._credentials.runtime_client_kwargs())
 
     def _request_body(self, request: ProviderGenerateRequest) -> dict[str, Any]:
         return {
@@ -72,15 +87,23 @@ class BedrockProvider:
             ],
         }
 
+    @staticmethod
+    def _extract_text_part(item: Any) -> str:
+        if not isinstance(item, dict):
+            return ""
+        if item.get("type") != "text":
+            return ""
+        text_value = item.get("text")
+        if isinstance(text_value, str):
+            return text_value
+        return ""
+
     def _extract_text(self, body: dict[str, Any]) -> str:
         content = body.get("content", [])
-        if isinstance(content, list):
-            parts: list[str] = []
-            for item in content:
-                if isinstance(item, dict) and item.get("type") == "text":
-                    text_value = item.get("text")
-                    if isinstance(text_value, str):
-                        parts.append(text_value)
+        if not isinstance(content, list):
+            return ""
+        parts = [self._extract_text_part(item) for item in content]
+        if parts:
             return "".join(parts)
         return ""
 
@@ -96,29 +119,39 @@ class BedrockProvider:
             return str(exc.response.get("Error", {}).get("Message") or "")
         return str(exc)
 
+    @staticmethod
+    def _is_missing_credentials_error(exc: Exception) -> bool:
+        return NoCredentialsError is not None and isinstance(exc, NoCredentialsError)
+
+    @staticmethod
+    def _is_partial_credentials_error(exc: Exception) -> bool:
+        return PartialCredentialsError is not None and isinstance(exc, PartialCredentialsError)
+
+    @staticmethod
+    def _invocation_error_from_code(*, code: str, message: str) -> ProviderAPIError | None:
+        if not code:
+            return None
+        if code in _AWS_RATE_LIMIT_ERROR_CODES:
+            return ProviderRateLimitError(f"Bedrock {code}: {message}")
+        if code in _AWS_REQUEST_ERROR_CODES:
+            return ProviderRequestError(f"Bedrock {code}: {message}")
+        if code in _AWS_AUTH_ERROR_CODES:
+            return ProviderAuthError(f"Bedrock {code}: {message}")
+        return ProviderAPIError(f"Bedrock {code}: {message}")
+
     def _raise_invocation_error(self, exc: Exception) -> None:
-        if NoCredentialsError is not None and isinstance(exc, NoCredentialsError):
+        if self._is_missing_credentials_error(exc):
             raise ProviderAuthError(
                 "Bedrock credentials not found in environment or AWS profile"
             ) from exc
-        if PartialCredentialsError is not None and isinstance(exc, PartialCredentialsError):
+        if self._is_partial_credentials_error(exc):
             raise ProviderAuthError("Bedrock credentials are incomplete") from exc
 
         code = self._client_error_code(exc)
         message = self._client_error_message(exc)
-        if code in {"ThrottlingException", "TooManyRequestsException"}:
-            raise ProviderRateLimitError(f"Bedrock {code}: {message}") from exc
-        if code == "ValidationException":
-            raise ProviderRequestError(f"Bedrock {code}: {message}") from exc
-        if code in {
-            "UnrecognizedClientException",
-            "InvalidSignatureException",
-            "ExpiredTokenException",
-            "IncompleteSignatureException",
-        }:
-            raise ProviderAuthError(f"Bedrock {code}: {message}") from exc
-        if code:
-            raise ProviderAPIError(f"Bedrock {code}: {message}") from exc
+        mapped_error = self._invocation_error_from_code(code=code, message=message)
+        if mapped_error is not None:
+            raise mapped_error from exc
         raise ProviderAPIError(f"Bedrock invocation failed: {exc}") from exc
 
     def generate(self, request: ProviderGenerateRequest) -> ProviderGenerateResult:
@@ -158,6 +191,6 @@ class BedrockProvider:
         yield result.text
 
     def healthcheck(self) -> dict[str, str]:
-        if not self._region_name:
+        if not self._credentials.region_name:
             raise ProviderAuthError("AWS_REGION is not configured")
         return {"provider": self.provider.value, "status": "configured"}

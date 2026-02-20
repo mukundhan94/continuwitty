@@ -167,6 +167,31 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 9 - Bedrock Provider Phase 8.1/8.2/8.3)
+
+- [x] Step 8.1 — Reduced `_raise_invocation_error(...)` complexity with explicit AWS error-code groups and helper dispatch:
+  - Added `_AWS_AUTH_ERROR_CODES`, `_AWS_RATE_LIMIT_ERROR_CODES`, `_AWS_REQUEST_ERROR_CODES`
+  - Added `_invocation_error_from_code(...)`, `_is_missing_credentials_error(...)`, `_is_partial_credentials_error(...)`
+- [x] Step 8.2 — Simplified `_extract_text(...)` nesting depth:
+  - Added `_extract_text_part(...)` and flattened content extraction flow
+- [x] Step 8.3 — Introduced `AwsCredentials` dataclass and reduced `BedrockProvider.__init__` argument footprint
+- [x] Updated provider registry wiring to pass `AwsCredentials(...)`
+- [x] Test updates:
+  - Expanded `api/tests/test_provider_adapters.py` with throttling/auth/empty-content Bedrock coverage
+  - Updated `api/tests/test_provider_registry.py` Bedrock credential assertions
+- [x] Validation run:
+  - `api/tests/test_provider_adapters.py`
+  - `api/tests/test_provider_registry.py`
+  - Aggregate: `13 passed`
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/providers/bedrock_provider.py` score improved from **8.17** to **10.0**
+  - fixed: complex method, deep nested complexity, excess arguments, and overall complexity thresholds
+  - pre-commit quality gate passed
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -178,7 +203,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/oauth/api.py` | 7.54 | YELLOW |
 | `api/app/main.py` | 7.66 | YELLOW |
 | `api/app/repository.py` | 9.05 | GREEN |
-| `api/app/providers/bedrock_provider.py` | 8.17 | YELLOW |
+| `api/app/providers/bedrock_provider.py` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 8.38 | YELLOW |
 | `api/app/ingestion/repository.py` | 8.64 | YELLOW |

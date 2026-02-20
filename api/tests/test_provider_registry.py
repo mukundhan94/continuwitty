@@ -31,10 +31,10 @@ def test_build_provider_registry_creates_all_adapters() -> None:
     assert isinstance(registry[ChatProvider.anthropic], AnthropicProvider)
     assert isinstance(registry[ChatProvider.bedrock], BedrockProvider)
     bedrock = registry[ChatProvider.bedrock]
-    assert bedrock._region_name == "us-east-1"
-    assert bedrock._access_key_id == "access-key"
-    assert bedrock._secret_access_key == "secret-key"
-    assert bedrock._session_token == "session-token"
+    assert bedrock._credentials.region_name == "us-east-1"
+    assert bedrock._credentials.access_key_id == "access-key"
+    assert bedrock._credentials.secret_access_key == "secret-key"
+    assert bedrock._credentials.session_token == "session-token"
 
 
 def test_get_provider_adapter_returns_requested_provider() -> None:

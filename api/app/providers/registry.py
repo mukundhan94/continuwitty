@@ -5,7 +5,7 @@ from app.models import ChatProvider
 
 from .anthropic_provider import AnthropicProvider
 from .base import ChatProviderAdapter
-from .bedrock_provider import BedrockProvider
+from .bedrock_provider import AwsCredentials, BedrockProvider
 from .openai_provider import OpenAIProvider
 
 
@@ -24,10 +24,12 @@ def build_provider_registry(
             anthropic_version=cfg.anthropic_version,
         ),
         ChatProvider.bedrock: BedrockProvider(
-            region_name=cfg.aws_region,
-            access_key_id=cfg.aws_access_key_id,
-            secret_access_key=cfg.aws_secret_access_key,
-            session_token=cfg.aws_session_token,
+            credentials=AwsCredentials(
+                region_name=cfg.aws_region,
+                access_key_id=cfg.aws_access_key_id,
+                secret_access_key=cfg.aws_secret_access_key,
+                session_token=cfg.aws_session_token,
+            ),
         ),
     }
 
