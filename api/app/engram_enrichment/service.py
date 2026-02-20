@@ -120,6 +120,67 @@ def _non_empty_trimmed(values: list[str]) -> list[str]:
     return [item.strip() for item in values if item.strip()]
 
 
+def _is_keyword_candidate(token: str) -> bool:
+    if token in _STOPWORDS:
+        return False
+    if token.isdigit():
+        return False
+    return any(ch.isalpha() for ch in token)
+
+
+def _ordered_keyword_candidates(text: str) -> tuple[list[str], dict[str, int]]:
+    ordered_tokens: list[str] = []
+    seen_index: dict[str, int] = {}
+    for match in _TOKEN_PATTERN.finditer(text):
+        token = match.group(0)
+        if not _is_keyword_candidate(token):
+            continue
+        if token not in seen_index:
+            seen_index[token] = len(ordered_tokens)
+            ordered_tokens.append(token)
+    return ordered_tokens, seen_index
+
+
+def _token_frequency(text: str, candidates: set[str]) -> Counter:
+    counts = Counter()
+    for match in _TOKEN_PATTERN.finditer(text):
+        token = match.group(0)
+        if token in candidates:
+            counts[token] += 1
+    return counts
+
+
+def _extract_from_assistant_sections(text: str) -> list[str]:
+    extracted: list[str] = []
+    for match in _ASSISTANT_SECTION_PATTERN.finditer(text or ""):
+        section_text = _strip_markdown_noise(match.group("body")).lower()
+        section_tokens, _ = _ordered_keyword_candidates(section_text)
+        extracted.extend(section_tokens)
+    return extracted
+
+
+def _extract_from_tag_keyword_map(text: str) -> list[str]:
+    lowered = (text or "").lower()
+    extracted: list[str] = []
+    for mapping in _TAG_KEYWORD_MAP.values():
+        for keyword in sorted(mapping):
+            if keyword in lowered:
+                extracted.append(keyword)
+    return extracted
+
+
+def _deduplicate_keywords(keywords: list[str], max_keywords: int) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for keyword in keywords:
+        token = keyword.strip()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        deduped.append(token)
+    return deduped[: max(max_keywords, 1)]
+
+
 def derive_abstract_from_markdown_or_retrieval_text(
     conversation_markdown: str,
     retrieval_text: str | None = None,
@@ -153,34 +214,22 @@ def extract_keywords(text: str, max_keywords: int = 12) -> list[str]:
     if not lowered.strip():
         return []
 
-    ordered_tokens: list[str] = []
-    seen_index: dict[str, int] = {}
-    for match in _TOKEN_PATTERN.finditer(lowered):
-        token = match.group(0)
-        if token in _STOPWORDS:
-            continue
-        if token.isdigit():
-            continue
-        if not any(ch.isalpha() for ch in token):
-            continue
-        if token not in seen_index:
-            seen_index[token] = len(ordered_tokens)
-            ordered_tokens.append(token)
-
+    ordered_tokens, seen_index = _ordered_keyword_candidates(lowered)
     if not ordered_tokens:
         return []
 
-    counts = Counter()
-    for match in _TOKEN_PATTERN.finditer(lowered):
-        token = match.group(0)
-        if token in seen_index:
-            counts[token] += 1
+    counts = _token_frequency(lowered, set(seen_index.keys()))
 
     ranked = sorted(
         ordered_tokens,
         key=lambda token: (-counts[token], seen_index[token], token),
     )
-    return ranked[: max(max_keywords, 1)]
+    assistant_keywords = _extract_from_assistant_sections(text)
+    mapped_keywords = _extract_from_tag_keyword_map(text)
+    return _deduplicate_keywords(
+        [*ranked, *assistant_keywords, *mapped_keywords],
+        max_keywords=max_keywords,
+    )
 
 
 def map_keywords_to_tags(keywords: list[str], max_tags: int = 8) -> list[str]:

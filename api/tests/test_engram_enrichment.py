@@ -87,3 +87,27 @@ def test_enrich_if_missing_does_not_override_caller_metadata() -> None:
     assert result.payload.abstract == "Keep this exact abstract"
     assert result.payload.tags == ["custom-tag"]
     assert result.payload.keywords == ["custom-keyword"]
+
+
+def test_extract_keywords_pulls_terms_from_assistant_sections() -> None:
+    markdown = (
+        "## USER\nWhat happened?\n\n"
+        "## ASSISTANT\nQueue drain reduced latency and support confirmed mitigation.\n\n"
+        "## USER\nAny follow-up?"
+    )
+
+    keywords = extract_keywords(markdown)
+
+    assert "latency" in keywords
+    assert "support" in keywords
+    assert "mitigation" in keywords
+
+
+def test_extract_keywords_deduplicates_and_honors_max_keywords() -> None:
+    text = "incident incident support support rollback rollback"
+
+    keywords = extract_keywords(text, max_keywords=2)
+
+    assert len(keywords) == 2
+    assert keywords[0] == "incident"
+    assert keywords[1] == "support"

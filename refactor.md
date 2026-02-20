@@ -254,6 +254,32 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 12 - Engram Enrichment Phase 12.1)
+
+- [x] Step 12.1 — Decomposed `extract_keywords(...)` bumpy-road logic
+- [x] Added helper extractions:
+  - `_extract_from_assistant_sections(...)`
+  - `_extract_from_tag_keyword_map(...)`
+  - `_deduplicate_keywords(...)`
+  - `_ordered_keyword_candidates(...)`
+  - `_token_frequency(...)`
+  - `_is_keyword_candidate(...)`
+- [x] Preserved deterministic ranking behavior while layering assistant-section and tag-map keyword seeds through helper pipeline
+- [x] Test updates in `api/tests/test_engram_enrichment.py`:
+  - assistant-section keyword extraction coverage
+  - deduplication + max-keyword limit coverage
+- [x] Validation run:
+  - `api/tests/test_engram_enrichment.py`
+  - Aggregate: `7 passed`
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/engram_enrichment/service.py` score improved from **8.93** to **10.0**
+  - fixed: `extract_keywords` bumpy-road and complex-method findings
+  - pre-commit quality gate passed
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -269,7 +295,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |
-| `api/app/engram_enrichment/service.py` | 8.93 | YELLOW |
+| `api/app/engram_enrichment/service.py` | 10.0 | GREEN |
 | `api/app/memory_admin/service.py` | 9.09 | GREEN |
 | `api/app/ingestion/service.py` | 9.33 | GREEN |
 | `api/app/mcp/auth.py` | 9.66 | GREEN |
