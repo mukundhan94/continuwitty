@@ -5,10 +5,8 @@ import styled from 'styled-components'
 import { getSessionProfile, loginWithPassword, logoutCurrentUser } from './api/auth'
 import {
   getDefaultProject,
-  setDefaultProject,
 } from './api/projects'
 import {
-  createChatSession,
   listChatSessions,
   listEngrams,
   listPinnedDocuments,
@@ -21,7 +19,6 @@ import { listProjectDocuments } from './api/ingestion'
 import type {
   ChatMessage,
   ChatDebugTrace,
-  ChatSessionFormPayload,
   ChatSession,
   ChatSourceReference,
   ChatTimelineEvent,
@@ -52,6 +49,7 @@ import { useThemeMode } from './styles/useThemeMode'
 import { useIngestionActions, usePinActions, usePromptActions } from './hooks/useChatActions'
 import { useAdminTokenActions } from './hooks/useAdminTokenActions'
 import { useSessionActions } from './hooks/useSessionActions'
+import { useWorkspaceActions } from './hooks/useWorkspaceActions'
 import { buildDefaultSaveAbstract } from './utils/chat'
 
 const PROJECT_ID_STORAGE_KEY = 'engram.lastProjectId'
@@ -327,35 +325,22 @@ function AppScreen() {
     resetAdminTokenState()
   }
 
-  const handleCreateSession = async (payload: ChatSessionFormPayload) => {
-    setCreatingSession(true)
-    setChatError(null)
-    try {
-      const created = await createChatSession(payload)
-      setSessions((current) => [created, ...current])
-      setSelectedSessionId(created.session_id)
-      setComposerText('')
-    } catch (error) {
-      setChatError(describeError(error))
-    } finally {
-      setCreatingSession(false)
-    }
-  }
-
-  const handleSetDefaultProject = async () => {
-    const normalized = normalizeProjectId(projectId)
-    setSettingDefaultProject(true)
-    setChatError(null)
-    try {
-      const updated = await setDefaultProject(normalized)
-      setDefaultProjectId(updated.default_project_id)
-      setNotice(`Default project set to ${updated.default_project_id}`)
-    } catch (error) {
-      setChatError(describeError(error))
-    } finally {
-      setSettingDefaultProject(false)
-    }
-  }
+  const {
+    handleCreateSession,
+    handleSetDefaultProject,
+  } = useWorkspaceActions({
+    projectId,
+    normalizeProjectId,
+    describeError,
+    setCreatingSession,
+    setChatError,
+    setSessions,
+    setSelectedSessionId,
+    setComposerText,
+    setSettingDefaultProject,
+    setDefaultProjectId,
+    setNotice,
+  })
 
   const { handleSend, handleRetry } = usePromptActions({
     composerText,
