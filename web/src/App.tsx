@@ -21,6 +21,7 @@ import { listProjectDocuments } from './api/ingestion'
 import type {
   ChatMessage,
   ChatDebugTrace,
+  ChatSessionFormPayload,
   ChatSession,
   ChatSourceReference,
   ChatTimelineEvent,
@@ -326,20 +327,7 @@ function AppScreen() {
     resetAdminTokenState()
   }
 
-  const handleCreateSession = async (payload: {
-    project_id: string
-    title: string
-    provider: 'openai' | 'anthropic' | 'bedrock'
-    model_id: string
-    system_prompt: string
-    visibility_scope: 'private' | 'project'
-    autosave_enabled: boolean
-    autosave_strategy: 'off' | 'interval' | 'message_count'
-    autosave_interval_minutes: number
-    autosave_min_messages: number
-    retention_days: number
-    retention_max_snapshots: number
-  }) => {
+  const handleCreateSession = async (payload: ChatSessionFormPayload) => {
     setCreatingSession(true)
     setChatError(null)
     try {

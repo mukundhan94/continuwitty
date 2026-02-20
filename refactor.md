@@ -886,6 +886,34 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 33 - Shared Session Payload Type Phase 10.3/14 Hardening)
+
+- [x] Continued App/API type refactor by introducing shared session-create payload shape in `web/src/api/types.ts`
+- [x] Added new shared type: `ChatSessionFormPayload`
+- [x] Updated `ChatSession` to extend the shared form payload type and avoid duplicated field declarations
+- [x] Updated call sites to consume shared payload type:
+  - `web/src/App.tsx` `handleCreateSession(...)`
+  - `web/src/api/chatTypes.ts` now exports `CreateSessionPayload` as alias of `ChatSessionFormPayload`
+- [x] Expanded `web/src/components/SessionSidebar.test.tsx` with payload assertion coverage:
+  - verifies normalized create-session payload shape (trimmed title/model/system prompt, default autosave off policy)
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/components/SessionSidebar.test.tsx src/api/chat.test.ts`
+  - `make test`
+  - `make web-check`
+  - aggregate: `9 passed` (targeted web), `274 passed` (backend), `85 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+  - first attempt failed due transient Docker snapshot extraction cache error; rerun passed cleanly
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/App.tsx` score: **9.68**
+  - `web/src/components/SessionSidebar.test.tsx` score: **10.0**
+  - `web/src/api/types.ts` score: **N/A** (type-definition-only file; CodeScene returns `null`)
+  - `web/src/api/chatTypes.ts` score: **N/A** (type-definition-only file; CodeScene returns `null`)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -921,6 +949,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `web/src/hooks/useAdminTokenActions.test.ts` | 10.0 | GREEN |
 | `web/src/hooks/useSessionActions.ts` | 10.0 | GREEN |
 | `web/src/hooks/useSessionActions.test.ts` | 10.0 | GREEN |
+| `web/src/components/SessionSidebar.test.tsx` | 10.0 | GREEN |
 | `web/src/App.tsx` | 9.68 | GREEN |
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |

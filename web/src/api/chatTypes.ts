@@ -1,24 +1,11 @@
 import type {
-  ChatAutosaveStrategy,
   ChatDebugTrace,
+  ChatSessionFormPayload,
   ChatSourceReference,
   VisibilityScope,
 } from './types'
 
-export interface CreateSessionPayload {
-  project_id: string
-  title: string
-  provider: 'openai' | 'anthropic' | 'bedrock'
-  model_id: string
-  system_prompt: string
-  visibility_scope: VisibilityScope
-  autosave_enabled: boolean
-  autosave_strategy: ChatAutosaveStrategy
-  autosave_interval_minutes: number
-  autosave_min_messages: number
-  retention_days: number
-  retention_max_snapshots: number
-}
+export type CreateSessionPayload = ChatSessionFormPayload
 
 export interface SaveEngramPayload {
   title: string

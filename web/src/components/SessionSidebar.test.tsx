@@ -1,9 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from 'styled-components'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { ChatSession } from '../api/types'
+import type { ChatSession, ChatSessionFormPayload } from '../api/types'
 import { lightTheme } from '../styles/theme'
 import { SessionSidebar } from './SessionSidebar'
 
@@ -29,7 +29,12 @@ function buildSession(overrides: Partial<ChatSession>): ChatSession {
   }
 }
 
-function renderSidebar() {
+function renderSidebar(
+  overrides: Partial<{
+    onCreateSession: (payload: ChatSessionFormPayload) => Promise<void>
+  }> = {},
+) {
+  const onCreateSession = overrides.onCreateSession ?? vi.fn(async () => {})
   render(
     <ThemeProvider theme={lightTheme}>
       <SessionSidebar
@@ -52,10 +57,11 @@ function renderSidebar() {
         onProjectChange={vi.fn()}
         onSetDefaultProject={vi.fn(async () => {})}
         onSelectSession={vi.fn()}
-        onCreateSession={vi.fn(async () => {})}
+        onCreateSession={onCreateSession}
       />
     </ThemeProvider>,
   )
+  return { onCreateSession }
 }
 
 describe('SessionSidebar', () => {
@@ -79,5 +85,40 @@ describe('SessionSidebar', () => {
     renderSidebar()
     const activeSessionButton = screen.getByRole('button', { name: /current session/i })
     expect(activeSessionButton).toHaveAttribute('aria-current', 'true')
+  })
+
+  it('submits normalized create-session payload', async () => {
+    const user = userEvent.setup()
+    const onCreateSession = vi.fn(async () => {})
+    renderSidebar({ onCreateSession })
+
+    const titleInput = screen.getByLabelText(/title/i)
+    const modelInput = screen.getByLabelText(/model/i)
+    const systemPromptInput = screen.getByLabelText(/system prompt/i)
+    await user.clear(titleInput)
+    await user.type(titleInput, '  Incident Analysis  ')
+    await user.clear(modelInput)
+    await user.type(modelInput, '  gpt-4o-mini  ')
+    await user.type(systemPromptInput, '  keep concise  ')
+    await user.click(screen.getByRole('button', { name: /create session/i }))
+
+    await waitFor(() => {
+      expect(onCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          project_id: 'engram-vault',
+          title: 'Incident Analysis',
+          provider: 'openai',
+          model_id: 'gpt-4o-mini',
+          system_prompt: 'keep concise',
+          visibility_scope: 'private',
+          autosave_enabled: false,
+          autosave_strategy: 'off',
+          autosave_interval_minutes: 30,
+          autosave_min_messages: 6,
+          retention_days: 30,
+          retention_max_snapshots: 60,
+        }),
+      )
+    })
   })
 })

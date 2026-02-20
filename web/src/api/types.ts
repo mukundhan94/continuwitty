@@ -37,9 +37,7 @@ export interface DocumentRecord {
   updated_at: string
 }
 
-export interface ChatSession {
-  session_id: string
-  owner_user_id: string
+export interface ChatSessionFormPayload {
   project_id: string
   title: string
   provider: ChatProvider
@@ -52,6 +50,11 @@ export interface ChatSession {
   autosave_min_messages: number
   retention_days: number
   retention_max_snapshots: number
+}
+
+export interface ChatSession extends ChatSessionFormPayload {
+  session_id: string
+  owner_user_id: string
   created_at: string
   updated_at: string
 }
