@@ -446,6 +446,44 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 18 - OAuth API Phase 6.4)
+
+- [x] Continued refactor of `api/app/oauth/api.py` authorization/token handlers with request-object contracts
+- [x] Added request dataclasses:
+  - `OAuthAuthorizeRequest`
+  - `OAuthTokenRequest`
+- [x] Decomposed authorization flow helpers:
+  - `_validate_authorize_request(...)`
+  - `_create_authorization_code(...)`
+  - `_oauth_authorize_success_redirect(...)`
+- [x] Decomposed token exchange flow helpers:
+  - `_validate_token_grant_type(...)`
+  - `_resolve_oauth_client_for_token(...)`
+  - `_validate_oauth_token_client_secret(...)`
+  - `_resolve_authorization_code_for_token(...)`
+  - `_validate_authorization_code_exchange(...)`
+  - `_consume_authorization_code(...)`
+  - `_issue_token_from_authorization_code(...)`
+- [x] Updated router endpoints to construct and pass request objects into `_handle_oauth_authorize(...)` and `_handle_oauth_token(...)`
+- [x] Test updates in `api/tests/test_oauth_api_unit.py`:
+  - authorize-request PKCE requirement validation
+  - authorization-code exchange redirect mismatch validation
+  - token handler unknown-client rejection
+  - confidential-client missing-secret rejection
+- [x] Validation run:
+  - `uv run ruff check app/oauth/api.py tests/test_oauth_api_unit.py`
+  - `uv run pytest -q tests/test_oauth_api_unit.py tests/test_oauth_service.py tests/test_mcp_oauth_integration.py`
+  - `make test`
+  - aggregate: `13 passed, 6 skipped` (targeted), `245 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/oauth/api.py` score improved from **7.54** to **8.96**
+  - fixed: excess-arguments smells for `_handle_oauth_authorize` and `_handle_oauth_token`
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -454,7 +492,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
-| `api/app/oauth/api.py` | 7.54 | YELLOW |
+| `api/app/oauth/api.py` | 8.96 | GREEN |
 | `api/app/main.py` | 7.66 | YELLOW |
 | `api/app/repository.py` | 9.05 | GREEN |
 | `api/app/providers/bedrock_provider.py` | 10.0 | GREEN |

@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.oauth import api as oauth_api
-from app.oauth.models import OAuthClientRecord
+from app.oauth.models import OAuthAuthorizationCodeRecord, OAuthClientRecord
 
 
 def _settings() -> SimpleNamespace:
@@ -38,6 +39,30 @@ def _oauth_client_record(
         else None,
         metadata_json={},
         created_at=datetime.now(UTC),
+    )
+
+
+def _oauth_code_record(
+    *,
+    client_id: str = "engram_client_test",
+    redirect_uri: str = "https://example.com/callback",
+    code_challenge: str = "challenge",
+    code_challenge_method: str = "plain",
+) -> OAuthAuthorizationCodeRecord:
+    now = datetime.now(UTC)
+    return OAuthAuthorizationCodeRecord(
+        code_id=uuid4(),
+        code_hash="hash",
+        client_id=client_id,
+        user_id=uuid4(),
+        redirect_uri=redirect_uri,
+        code_challenge=code_challenge,
+        code_challenge_method=code_challenge_method,
+        requested_scope="mcp:read",
+        resource=None,
+        expires_at=now.replace(year=now.year + 1),
+        consumed_at=None,
+        created_at=now,
     )
 
 
@@ -157,3 +182,89 @@ def test_oauth_authorize_redirects_to_login_when_session_missing(monkeypatch) ->
 
     assert response.status_code == 303
     assert response.headers["location"].startswith("/login?next=")
+
+
+def test_validate_authorize_request_requires_pkce_for_public_client() -> None:
+    method, error = oauth_api._validate_authorize_request(
+        client=_oauth_client_record(token_endpoint_auth_method="none"),
+        payload=oauth_api.OAuthAuthorizeRequest(
+            response_type="code",
+            client_id="engram_client_test",
+            redirect_uri="https://example.com/callback",
+            state="state-1",
+            scope="mcp:read",
+            code_challenge=None,
+            code_challenge_method="S256",
+            resource=None,
+        ),
+    )
+
+    assert method is None
+    assert error is not None
+    assert error.status_code == 303
+    assert "code_challenge+is+required+for+public+clients" in error.headers["location"]
+
+
+def test_validate_authorization_code_exchange_rejects_redirect_mismatch() -> None:
+    error = oauth_api._validate_authorization_code_exchange(
+        payload=oauth_api.OAuthTokenRequest(
+            grant_type="authorization_code",
+            code="code",
+            redirect_uri="https://example.com/other",
+            client_id="engram_client_test",
+            code_verifier="verifier",
+            client_secret=None,
+        ),
+        client=_oauth_client_record(),
+        code_record=_oauth_code_record(),
+    )
+
+    assert error is not None
+    assert error.status_code == 400
+    payload = json.loads(error.body)
+    assert payload["error"] == "invalid_grant"
+    assert "redirect_uri mismatch" in payload["error_description"]
+
+
+def test_handle_oauth_token_rejects_unknown_client(monkeypatch) -> None:
+    monkeypatch.setattr("app.oauth.api.get_oauth_client", lambda *, client_id: None)
+
+    response = oauth_api._handle_oauth_token(
+        settings=_settings(),
+        payload=oauth_api.OAuthTokenRequest(
+            grant_type="authorization_code",
+            code="code",
+            redirect_uri="https://example.com/callback",
+            client_id="missing",
+            code_verifier="verifier",
+            client_secret=None,
+        ),
+    )
+
+    assert response.status_code == 401
+    payload = json.loads(response.body)
+    assert payload["error"] == "invalid_client"
+
+
+def test_handle_oauth_token_confidential_client_requires_secret(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.oauth.api.get_oauth_client",
+        lambda *, client_id: _oauth_client_record(token_endpoint_auth_method="client_secret_post"),
+    )
+
+    response = oauth_api._handle_oauth_token(
+        settings=_settings(),
+        payload=oauth_api.OAuthTokenRequest(
+            grant_type="authorization_code",
+            code="code",
+            redirect_uri="https://example.com/callback",
+            client_id="engram_client_test",
+            code_verifier="verifier",
+            client_secret=None,
+        ),
+    )
+
+    assert response.status_code == 401
+    payload = json.loads(response.body)
+    assert payload["error"] == "invalid_client"
+    assert "client_secret is required" in payload["error_description"]
