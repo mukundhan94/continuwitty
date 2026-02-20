@@ -69,7 +69,7 @@ from app.providers.errors import (
 from app.providers.registry import get_provider_adapter
 from app.repository import create_engram
 
-from .context import AssembledChatContext, assemble_chat_context
+from .context import AssembledChatContext, ChatContextRequest, assemble_chat_context
 from .errors import (
     ChatProviderExecutionError,
     ChatServiceError,
@@ -93,7 +93,6 @@ _GENERIC_SNAPSHOT_ABSTRACTS = {
     "chat snapshot",
     "session snapshot",
 }
-
 _AUTOSAVE_SNAPSHOT_TAGS = [
     "autosave_snapshot",
     "session-lifecycle",
@@ -549,10 +548,12 @@ class ChatService:
         context_started_at = perf_counter()
         with bind_chat_debug_collector(debug_collector):
             context = assemble_chat_context(
-                session=session,
-                actor_user_id=actor_user_id,
-                user_query=payload.content_text,
-                embedding_dim=self._embedding_dim,
+                request=ChatContextRequest(
+                    session=session,
+                    actor_user_id=actor_user_id,
+                    user_query=payload.content_text,
+                    embedding_dim=self._embedding_dim,
+                ),
             )
         context_duration_ms = _duration_ms(context_started_at)
 
@@ -622,15 +623,17 @@ class ChatService:
         if not self._chat_debug_enabled:
             return None
 
-        response_output_text = (
-            context.result.text if self._chat_debug_include_raw_text else ""
+        response_output_text = context.result.text if self._chat_debug_include_raw_text else ""
+        provider_message_debug = _build_provider_message_debug(
+            context.prepared.provider_request.messages
         )
-        provider_message_debug = _build_provider_message_debug(context.prepared.provider_request.messages)
-        embedding_calls = _build_embedding_call_debug(context.prepared.debug_collector.embedding_calls)
+        embedding_calls = _build_embedding_call_debug(
+            context.prepared.debug_collector.embedding_calls
+        )
 
-        input_chars = sum(len(item.content) for item in context.prepared.provider_request.messages) + len(
-            context.prepared.provider_request.system_prompt
-        )
+        input_chars = sum(
+            len(item.content) for item in context.prepared.provider_request.messages
+        ) + len(context.prepared.provider_request.system_prompt)
         output_chars = len(context.result.text)
         token_usage, token_usage_is_estimated = _resolve_token_usage(
             token_usage=context.result.token_usage,
@@ -663,7 +666,9 @@ class ChatService:
             model_id=context.prepared.session.model_id,
             request_input_text=context.prepared.user_message.content_text,
             response_output_text=response_output_text,
-            provider_system_prompt_preview=_preview_text(context.prepared.provider_request.system_prompt),
+            provider_system_prompt_preview=_preview_text(
+                context.prepared.provider_request.system_prompt
+            ),
             provider_messages=provider_message_debug,
             embedding_calls=embedding_calls,
             llm_calls=[llm_call],

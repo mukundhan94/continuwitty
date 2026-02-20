@@ -192,6 +192,34 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 10 - Chat Context Phase 9.1/9.2)
+
+- [x] Step 9.1 — Introduced `ChatContextRequest` dataclass and extracted context assembly helpers:
+  - Added `_select_context_engram_ids(...)`
+  - Added `_collect_rehydration_bundles(...)`
+  - Added `_split_document_chunks(...)`
+  - Added `_build_context_sections(...)`
+  - Updated call sites to pass request object (`chat/service.py`, `test_chat_context.py`)
+- [x] Step 9.2 — Reduced `_bundle_section(...)` complexity:
+  - Added `_format_list_section(...)`
+  - Added `_truncate_detailed_excerpt(...)`
+  - Added `_citation_line(...)`
+- [x] Test updates:
+  - Expanded `api/tests/test_chat_context.py` with truncation and empty-source behavior coverage
+  - Reduced oversized test-method growth by introducing shared `_context_request(...)` helper
+- [x] Validation run:
+  - `api/tests/test_chat_context.py`
+  - `api/tests/test_chat_service.py`
+  - Aggregate: `24 passed`
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/chat/context.py` score improved from **8.38** to **10.0**
+  - fixed: `assemble_chat_context` complexity + excess-args, `_bundle_section` complexity
+  - pre-commit quality gate passed
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -205,7 +233,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/repository.py` | 9.05 | GREEN |
 | `api/app/providers/bedrock_provider.py` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
-| `api/app/chat/context.py` | 8.38 | YELLOW |
+| `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 8.64 | YELLOW |
 | `api/app/engram_enrichment/service.py` | 8.93 | YELLOW |
 | `api/app/memory_admin/service.py` | 9.09 | GREEN |

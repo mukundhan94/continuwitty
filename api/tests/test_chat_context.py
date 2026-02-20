@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from app.chat.context import assemble_chat_context
+from app.chat.context import ChatContextRequest, _bundle_section, assemble_chat_context
 from app.ingestion.models import DocumentChunkQueryResult
 from app.models import (
     ChatSessionRecord,
@@ -28,6 +28,22 @@ def _session() -> ChatSessionRecord:
         autosave_enabled=False,
         created_at=now,
         updated_at=now,
+    )
+
+
+def _context_request(
+    session: ChatSessionRecord,
+    *,
+    query: str,
+    embedding_dim: int = 256,
+    document_top_k: int = 4,
+) -> ChatContextRequest:
+    return ChatContextRequest(
+        session=session,
+        actor_user_id=session.owner_user_id,
+        user_query=query,
+        embedding_dim=embedding_dim,
+        document_top_k=document_top_k,
     )
 
 
@@ -163,10 +179,7 @@ def test_assemble_chat_context_merges_pinned_and_retrieved(monkeypatch) -> None:
     monkeypatch.setattr("app.chat.context.query_document_chunks", _fake_query_document_chunks)
 
     assembled = assemble_chat_context(
-        session=session,
-        actor_user_id=session.owner_user_id,
-        user_query="what should we do",
-        embedding_dim=256,
+        request=_context_request(session, query="what should we do"),
     )
 
     assert assembled.used_engram_ids == [pinned_id, retrieved_id]
@@ -230,10 +243,7 @@ def test_assemble_chat_context_dedupes_duplicate_source_urls(monkeypatch) -> Non
     monkeypatch.setattr("app.chat.context.query_document_chunks", lambda *args, **kwargs: [])
 
     assembled = assemble_chat_context(
-        session=session,
-        actor_user_id=session.owner_user_id,
-        user_query="what should we do",
-        embedding_dim=256,
+        request=_context_request(session, query="what should we do"),
     )
 
     assert assembled.used_engram_ids == [pinned_id, retrieved_id]
@@ -301,11 +311,7 @@ def test_assemble_chat_context_dedupes_multiple_chunks_from_same_document(monkey
     monkeypatch.setattr("app.chat.context.query_document_chunks", _fake_query_document_chunks)
 
     assembled = assemble_chat_context(
-        session=session,
-        actor_user_id=session.owner_user_id,
-        user_query="agent workflow",
-        embedding_dim=256,
-        document_top_k=4,
+        request=_context_request(session, query="agent workflow", document_top_k=4),
     )
 
     document_refs = [
@@ -380,11 +386,7 @@ def test_assemble_chat_context_uses_all_pinned_documents(monkeypatch) -> None:
     monkeypatch.setattr("app.chat.context.query_document_chunks", _fake_query_document_chunks)
 
     assembled = assemble_chat_context(
-        session=session,
-        actor_user_id=session.owner_user_id,
-        user_query="run checks",
-        embedding_dim=256,
-        document_top_k=1,
+        request=_context_request(session, query="run checks", document_top_k=1),
     )
 
     assert assembled.used_document_chunk_ids == [chunk_a, chunk_b]
@@ -393,3 +395,35 @@ def test_assemble_chat_context_uses_all_pinned_documents(monkeypatch) -> None:
         ref for ref in assembled.source_references if ref.source_type == "document_chunk"
     ]
     assert {ref.document_id for ref in document_refs} == {pinned_document_a, pinned_document_b}
+
+
+def test_bundle_section_truncates_detailed_excerpt() -> None:
+    engram_id = uuid4()
+    bundle = _bundle(engram_id=engram_id, title="Long")
+    bundle = bundle.model_copy(
+        update={
+            "detailed_summary_markdown": "x" * 1300,
+        }
+    )
+
+    section = _bundle_section(bundle)
+
+    assert "Detailed notes excerpt:\n" in section
+    assert ("x" * 1200) not in section
+    assert "..." in section
+
+
+def test_assemble_chat_context_returns_empty_when_no_sources(monkeypatch) -> None:
+    session = _session()
+    monkeypatch.setattr("app.chat.context.list_pinned_engram_summaries", lambda *args, **kwargs: [])
+    monkeypatch.setattr("app.chat.context.list_pinned_documents", lambda *args, **kwargs: [])
+    monkeypatch.setattr("app.chat.context.query_engrams", lambda *args, **kwargs: [])
+    monkeypatch.setattr("app.chat.context.get_rehydration_bundle", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.chat.context.query_document_chunks", lambda *args, **kwargs: [])
+
+    assembled = assemble_chat_context(request=_context_request(session, query="no data"))
+
+    assert assembled.context_markdown == ""
+    assert assembled.used_engram_ids == []
+    assert assembled.used_document_chunk_ids == []
+    assert assembled.source_references == []

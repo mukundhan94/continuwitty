@@ -6,7 +6,14 @@ from uuid import UUID
 from app.chat_repository import list_pinned_documents, list_pinned_engram_summaries
 from app.ingestion.models import DocumentChunkQueryRequest, DocumentChunkQueryResult
 from app.ingestion.repository import query_document_chunks
-from app.models import ChatSessionRecord, ChatSourceReference, EngramQueryRequest, RehydrationBundle
+from app.models import (
+    ChatSessionRecord,
+    ChatSourceReference,
+    EngramQueryRequest,
+    EngramQueryResult,
+    EngramSummary,
+    RehydrationBundle,
+)
 from app.repository import get_rehydration_bundle, query_engrams
 
 
@@ -16,6 +23,17 @@ class AssembledChatContext:
     used_engram_ids: list[UUID]
     used_document_chunk_ids: list[UUID]
     source_references: list[ChatSourceReference]
+
+
+@dataclass(frozen=True)
+class ChatContextRequest:
+    session: ChatSessionRecord
+    actor_user_id: UUID
+    user_query: str
+    embedding_dim: int
+    max_engrams: int = 6
+    retrieval_top_k: int = 4
+    document_top_k: int = 4
 
 
 def _dedupe_preserve_order(ids: list[UUID]) -> list[UUID]:
@@ -44,10 +62,7 @@ def _dedupe_chunks_preserve_order(
 
 def _collect_pinned_document_chunks(
     *,
-    actor_user_id: UUID,
-    project_id: str,
-    user_query: str,
-    embedding_dim: int,
+    request: ChatContextRequest,
     pinned_document_ids: list[UUID],
 ) -> list[DocumentChunkQueryResult]:
     """Return one representative chunk per pinned document.
@@ -59,37 +74,46 @@ def _collect_pinned_document_chunks(
     chunks: list[DocumentChunkQueryResult] = []
     for document_id in _dedupe_preserve_order(pinned_document_ids):
         scoped = query_document_chunks(
-            actor_user_id=actor_user_id,
+            actor_user_id=request.actor_user_id,
             request=DocumentChunkQueryRequest(
-                query=user_query,
-                project_id=project_id,
+                query=request.user_query,
+                project_id=request.session.project_id,
                 document_ids=[document_id],
                 top_k=1,
             ),
-            embedding_dim=embedding_dim,
+            embedding_dim=request.embedding_dim,
         )
         if scoped:
             chunks.append(scoped[0])
     return chunks
 
 
-def _bundle_section(bundle: RehydrationBundle) -> str:
-    detailed_excerpt = bundle.detailed_summary_markdown.strip()
-    if detailed_excerpt and len(detailed_excerpt) > 1200:
-        detailed_excerpt = detailed_excerpt[:1197].rstrip() + "..."
+def _format_list_section(lines: list[str], *, fallback: str = "- None") -> str:
+    return "\n".join(lines) or fallback
+
+
+def _truncate_detailed_excerpt(detailed_summary_markdown: str, max_chars: int = 1200) -> str:
+    detailed_excerpt = detailed_summary_markdown.strip()
     if not detailed_excerpt:
-        detailed_excerpt = "- None"
-    decisions = (
-        "\n".join(f"- {item.decision}: {item.rationale}" for item in bundle.key_decisions[:3])
-        or "- None"
+        return "- None"
+    if len(detailed_excerpt) > max_chars:
+        return detailed_excerpt[: max_chars - 3].rstrip() + "..."
+    return detailed_excerpt
+
+
+def _citation_line(bundle: RehydrationBundle, index: int) -> str:
+    citation = bundle.top_citations[index]
+    return f"- {citation.title or citation.url} ({citation.url}): {citation.snippet[:140]}"
+
+
+def _bundle_section(bundle: RehydrationBundle) -> str:
+    detailed_excerpt = _truncate_detailed_excerpt(bundle.detailed_summary_markdown)
+    decisions = _format_list_section(
+        [f"- {item.decision}: {item.rationale}" for item in bundle.key_decisions[:3]]
     )
-    questions = "\n".join(f"- {item}" for item in bundle.open_questions[:3]) or "- None"
-    citations = (
-        "\n".join(
-            f"- {item.title or item.url} ({item.url}): {item.snippet[:140]}"
-            for item in bundle.top_citations[:3]
-        )
-        or "- None"
+    questions = _format_list_section([f"- {item}" for item in bundle.open_questions[:3]])
+    citations = _format_list_section(
+        [_citation_line(bundle, index) for index in range(min(3, len(bundle.top_citations)))]
     )
     return (
         f"## {bundle.title} ({bundle.engram_id})\n"
@@ -194,82 +218,58 @@ def _document_chunk_section(chunk: DocumentChunkQueryResult) -> str:
     )
 
 
-def assemble_chat_context(
+def _select_context_engram_ids(
     *,
-    session: ChatSessionRecord,
-    actor_user_id: UUID,
-    user_query: str,
-    embedding_dim: int,
-    max_engrams: int = 6,
-    retrieval_top_k: int = 4,
-    document_top_k: int = 4,
-) -> AssembledChatContext:
-    pinned = list_pinned_engram_summaries(session.session_id, actor_user_id=actor_user_id)
-    pinned_documents = list_pinned_documents(session.session_id, actor_user_id=actor_user_id)
-    retrieved = query_engrams(
-        EngramQueryRequest(
-            query=user_query,
-            project_id=session.project_id,
-            top_k=retrieval_top_k,
-        ),
-        embedding_dim=embedding_dim,
-        actor_user_id=actor_user_id,
-    )
-
+    request: ChatContextRequest,
+    pinned: list[EngramSummary],
+    retrieved: list[EngramQueryResult],
+) -> list[UUID]:
     candidate_ids = [item.engram_id for item in pinned] + [item.engram_id for item in retrieved]
-    selected_ids = _dedupe_preserve_order(candidate_ids)[:max_engrams]
+    return _dedupe_preserve_order(candidate_ids)[: request.max_engrams]
 
+
+def _collect_rehydration_bundles(
+    *,
+    engram_ids: list[UUID],
+    actor_user_id: UUID,
+) -> list[RehydrationBundle]:
     bundles: list[RehydrationBundle] = []
-    for engram_id in selected_ids:
+    for engram_id in engram_ids:
         bundle = get_rehydration_bundle(engram_id, actor_user_id=actor_user_id)
         if bundle is not None:
             bundles.append(bundle)
+    return bundles
 
-    used_engram_ids = [item.engram_id for item in bundles]
 
-    pinned_document_ids = [item.document_id for item in pinned_documents]
-    pinned_chunks = _collect_pinned_document_chunks(
-        actor_user_id=actor_user_id,
-        project_id=session.project_id,
-        user_query=user_query,
-        embedding_dim=embedding_dim,
-        pinned_document_ids=pinned_document_ids,
-    )
-
-    retrieved_chunks = query_document_chunks(
-        actor_user_id=actor_user_id,
-        request=DocumentChunkQueryRequest(
-            query=user_query,
-            project_id=session.project_id,
-            top_k=document_top_k,
-        ),
-        embedding_dim=embedding_dim,
-    )
-
-    chunk_budget = min(max(document_top_k, len(pinned_chunks)), 12)
-    selected_chunks = _dedupe_chunks_preserve_order(pinned_chunks + retrieved_chunks)[:chunk_budget]
-    used_document_chunk_ids = [item.chunk_id for item in selected_chunks]
-
-    if not bundles and not selected_chunks:
-        return AssembledChatContext(
-            context_markdown="",
-            used_engram_ids=used_engram_ids,
-            used_document_chunk_ids=used_document_chunk_ids,
-            source_references=[],
-        )
-
-    context_sections = []
-    if bundles:
-        context_sections.extend(
-            ["# Engram Retrieval Context", *[_bundle_section(item) for item in bundles]]
-        )
-
+def _split_document_chunks(
+    *,
+    selected_chunks: list[DocumentChunkQueryResult],
+    pinned_chunks: list[DocumentChunkQueryResult],
+) -> tuple[list[DocumentChunkQueryResult], list[DocumentChunkQueryResult]]:
     pinned_chunk_ids = {item.chunk_id for item in pinned_chunks}
     pinned_context_chunks = [item for item in selected_chunks if item.chunk_id in pinned_chunk_ids]
     retrieved_context_chunks = [
         item for item in selected_chunks if item.chunk_id not in pinned_chunk_ids
     ]
+    return pinned_context_chunks, retrieved_context_chunks
 
+
+def _build_context_sections(
+    *,
+    bundles: list[RehydrationBundle],
+    selected_chunks: list[DocumentChunkQueryResult],
+    pinned_chunks: list[DocumentChunkQueryResult],
+) -> list[str]:
+    context_sections: list[str] = []
+    if bundles:
+        context_sections.extend(
+            ["# Engram Retrieval Context", *[_bundle_section(item) for item in bundles]]
+        )
+
+    pinned_context_chunks, retrieved_context_chunks = _split_document_chunks(
+        selected_chunks=selected_chunks,
+        pinned_chunks=pinned_chunks,
+    )
     if pinned_context_chunks:
         context_sections.extend(
             [
@@ -284,6 +284,71 @@ def assemble_chat_context(
                 *[_document_chunk_section(item) for item in retrieved_context_chunks],
             ]
         )
+    return context_sections
+
+
+def assemble_chat_context(
+    *,
+    request: ChatContextRequest,
+) -> AssembledChatContext:
+    pinned = list_pinned_engram_summaries(
+        request.session.session_id,
+        actor_user_id=request.actor_user_id,
+    )
+    pinned_documents = list_pinned_documents(
+        request.session.session_id,
+        actor_user_id=request.actor_user_id,
+    )
+    retrieved = query_engrams(
+        EngramQueryRequest(
+            query=request.user_query,
+            project_id=request.session.project_id,
+            top_k=request.retrieval_top_k,
+        ),
+        embedding_dim=request.embedding_dim,
+        actor_user_id=request.actor_user_id,
+    )
+
+    selected_ids = _select_context_engram_ids(request=request, pinned=pinned, retrieved=retrieved)
+    bundles = _collect_rehydration_bundles(
+        engram_ids=selected_ids,
+        actor_user_id=request.actor_user_id,
+    )
+    used_engram_ids = [item.engram_id for item in bundles]
+
+    pinned_document_ids = [item.document_id for item in pinned_documents]
+    pinned_chunks = _collect_pinned_document_chunks(
+        request=request,
+        pinned_document_ids=pinned_document_ids,
+    )
+
+    retrieved_chunks = query_document_chunks(
+        actor_user_id=request.actor_user_id,
+        request=DocumentChunkQueryRequest(
+            query=request.user_query,
+            project_id=request.session.project_id,
+            top_k=request.document_top_k,
+        ),
+        embedding_dim=request.embedding_dim,
+    )
+
+    chunk_budget = min(max(request.document_top_k, len(pinned_chunks)), 12)
+    selected_chunks = _dedupe_chunks_preserve_order(pinned_chunks + retrieved_chunks)[:chunk_budget]
+    used_document_chunk_ids = [item.chunk_id for item in selected_chunks]
+
+    if not bundles and not selected_chunks:
+        return AssembledChatContext(
+            context_markdown="",
+            used_engram_ids=used_engram_ids,
+            used_document_chunk_ids=used_document_chunk_ids,
+            source_references=[],
+        )
+
+    context_sections = _build_context_sections(
+        bundles=bundles,
+        selected_chunks=selected_chunks,
+        pinned_chunks=pinned_chunks,
+    )
 
     source_references = _dedupe_source_references(
         _collect_source_references(bundles) + _collect_document_source_references(selected_chunks)
