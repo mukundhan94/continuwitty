@@ -23,7 +23,7 @@ NC = \033[0m
 
 WEB_PORT ?= 5173
 
-.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api cli consolidate lint format format-check check test test-unit test-integration eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api cli consolidate lint format format-check check test test-unit test-integration coverage eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
 help: ## Print all Makefile commands with categorized descriptions and usage hints
 	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
@@ -45,7 +45,7 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 			if (target ~ /^acceptance-/) return "Acceptance"; \
 			if (target ~ /^web-/ || target == "web") return "Web"; \
 			if (target ~ /^diagram-/) return "Diagrams"; \
-			if (target == "sync" || target == "api" || target == "cli" || target == "consolidate" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "eval" || target == "check") return "API/Backend"; \
+			if (target == "sync" || target == "api" || target == "cli" || target == "consolidate" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "coverage" || target == "eval" || target == "check") return "API/Backend"; \
 			return "Other"; \
 		} \
 		/^[a-zA-Z0-9_.-]+:.*## / { \
@@ -256,6 +256,11 @@ test-integration: ## Run API integration tests only
 	@printf '$(PROGRESS)Running API integration tests...$(NC)\n'
 	@cd api && uv run pytest -q -m integration
 	@printf '$(SUCCESS)✓ API integration tests passed$(NC)\n'
+
+coverage: ## Run API coverage gate with pytest-cov (minimum 60%)
+	@printf '$(PROGRESS)Running API coverage gate (>=60%%)...$(NC)\n'
+	@cd api && uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=60
+	@printf '$(SUCCESS)✓ API coverage gate passed$(NC)\n'
 
 eval: ## Run eval harness and write evals/last_eval.json
 	@printf '$(PROGRESS)Running evaluation harness...$(NC)\n'

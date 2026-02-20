@@ -703,6 +703,25 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 27 - Coverage Gate Setup Phase 14.1)
+
+- [x] Implemented Phase 14.1 coverage infrastructure updates
+- [x] Added `pytest-cov` to API dev dependencies:
+  - `api/pyproject.toml` (`pytest-cov==6.0.0`)
+  - regenerated `api/uv.lock` via `uv lock`
+- [x] Added `coverage` Makefile target:
+  - `make coverage` now runs `pytest --cov=app --cov-report=term-missing --cov-fail-under=60`
+  - added `coverage` to `Makefile` API/backend help grouping and `.PHONY`
+- [x] Validation run:
+  - `make test` → `274 passed`
+  - `make coverage` → `274 passed`, total coverage **88.17%** (gate `>=60%` passed)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
