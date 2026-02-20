@@ -822,6 +822,39 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 31 - Admin Token Hook Extraction Phase 10.3/14 Hardening)
+
+- [x] Continued App refactor by extracting admin token panel state and actions from `web/src/App.tsx`
+- [x] Added new hook module `web/src/hooks/useAdminTokenActions.ts` with dedicated admin token flows:
+  - panel loading/refresh lifecycle (`openAdminTokenPanel`, `handleRefreshAdminTokenPanel`)
+  - token create/revoke mutations with notice + error handling
+  - centralized reset path (`resetAdminTokenState`) reused by logout cleanup
+- [x] Split internal hook responsibilities to keep CodeScene quality above the enforced `>= 9.5` threshold:
+  - `useAdminTokenState(...)`
+  - `useAdminTokenLoaders(...)`
+  - `useAdminTokenMutations(...)`
+- [x] Updated `web/src/App.tsx` to consume the extracted admin hook and removed duplicate inline admin-token handlers
+- [x] Added direct hook tests in `web/src/hooks/useAdminTokenActions.test.ts`:
+  - non-admin guard behavior
+  - admin panel open + option/token loading
+  - token creation + refresh + notice behavior
+  - revoke failure error state behavior
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/hooks/useAdminTokenActions.test.ts src/hooks/useChatActions.test.ts src/components/AdminMcpTokenPanel.test.tsx src/api/mcpTokens.test.ts`
+  - `make test`
+  - `make web-check`
+  - aggregate: `18 passed` (targeted web), `274 passed` (backend), `79 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/App.tsx` score: **9.68**
+  - `web/src/hooks/useAdminTokenActions.ts` score: **10.0**
+  - `web/src/hooks/useAdminTokenActions.test.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -853,6 +886,8 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `web/src/api/chatMessagesApi.ts` | 10.0 | GREEN |
 | `web/src/hooks/useChatActions.ts` | 10.0 | GREEN |
 | `web/src/hooks/useChatActions.test.ts` | 10.0 | GREEN |
+| `web/src/hooks/useAdminTokenActions.ts` | 10.0 | GREEN |
+| `web/src/hooks/useAdminTokenActions.test.ts` | 10.0 | GREEN |
 | `web/src/App.tsx` | 9.68 | GREEN |
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |

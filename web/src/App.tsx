@@ -8,13 +8,6 @@ import {
   setDefaultProject,
 } from './api/projects'
 import {
-  createMcpToken,
-  listAvailableMcpProjects,
-  listAvailableMcpTools,
-  listMcpTokens,
-  revokeMcpToken,
-} from './api/mcpTokens'
-import {
   continueSession,
   createChatSession,
   listChatSessions,
@@ -35,9 +28,6 @@ import type {
   ChatTimelineEvent,
   DocumentRecord,
   EngramSummary,
-  McpTokenCreateRequest,
-  McpTokenCreateResponse,
-  McpTokenSummary,
   PinnedDocumentRecord,
   UserProfile,
 } from './api/types'
@@ -61,6 +51,7 @@ import {
 } from './styles/primitives'
 import { useThemeMode } from './styles/useThemeMode'
 import { useIngestionActions, usePinActions, usePromptActions } from './hooks/useChatActions'
+import { useAdminTokenActions } from './hooks/useAdminTokenActions'
 import { buildDefaultSaveAbstract } from './utils/chat'
 
 const PROJECT_ID_STORAGE_KEY = 'engram.lastProjectId'
@@ -155,15 +146,6 @@ function AppScreen() {
   const [saveSubmitting, setSaveSubmitting] = useState(false)
 
   const [notice, setNotice] = useState<string | null>(null)
-  const [adminTokenPanelOpen, setAdminTokenPanelOpen] = useState(false)
-  const [adminTokensLoading, setAdminTokensLoading] = useState(false)
-  const [adminTokensCreating, setAdminTokensCreating] = useState(false)
-  const [adminTokens, setAdminTokens] = useState<McpTokenSummary[]>([])
-  const [adminLatestToken, setAdminLatestToken] = useState<McpTokenCreateResponse | null>(null)
-  const [adminTokenError, setAdminTokenError] = useState<string | null>(null)
-  const [adminTokenOptionsLoading, setAdminTokenOptionsLoading] = useState(false)
-  const [adminAvailableTools, setAdminAvailableTools] = useState<string[]>([])
-  const [adminAvailableProjects, setAdminAvailableProjects] = useState<string[]>([])
 
   const selectedSession = useMemo(
     () => sessions.find((item) => item.session_id === selectedSessionId) || null,
@@ -171,6 +153,27 @@ function AppScreen() {
   )
   const defaultSaveAbstract = useMemo(() => buildDefaultSaveAbstract(messages), [messages])
   const isAdmin = user?.role === 'admin'
+  const {
+    adminTokenPanelOpen,
+    adminTokensLoading,
+    adminTokensCreating,
+    adminTokens,
+    adminLatestToken,
+    adminTokenError,
+    adminTokenOptionsLoading,
+    adminAvailableTools,
+    adminAvailableProjects,
+    openAdminTokenPanel,
+    closeAdminTokenPanel,
+    handleRefreshAdminTokenPanel,
+    handleCreateAdminToken,
+    handleRevokeAdminToken,
+    resetAdminTokenState,
+  } = useAdminTokenActions({
+    isAdmin,
+    setNotice,
+    describeError,
+  })
 
   const loadDefaultProject = async () => {
     const response = await getDefaultProject()
@@ -321,13 +324,7 @@ function AppScreen() {
     setTimelineEvents([])
     setNotice(null)
     setAuthError(null)
-    setAdminTokenPanelOpen(false)
-    setAdminTokens([])
-    setAdminLatestToken(null)
-    setAdminTokenError(null)
-    setAdminTokenOptionsLoading(false)
-    setAdminAvailableTools([])
-    setAdminAvailableProjects([])
+    resetAdminTokenState()
   }
 
   const handleCreateSession = async (payload: {
@@ -467,88 +464,6 @@ function AppScreen() {
     } finally {
       setSaveSubmitting(false)
     }
-  }
-
-  // Token management is intentionally lazy-loaded and admin-gated to keep
-  // normal analyst/viewer startup calls unchanged.
-  const loadAdminTokens = async () => {
-    if (!isAdmin) {
-      return
-    }
-    setAdminTokensLoading(true)
-    setAdminTokenError(null)
-    try {
-      const tokens = await listMcpTokens()
-      setAdminTokens(tokens)
-    } catch (error) {
-      setAdminTokenError(describeError(error))
-    } finally {
-      setAdminTokensLoading(false)
-    }
-  }
-
-  const loadAdminTokenOptions = async () => {
-    if (!isAdmin) {
-      return
-    }
-    setAdminTokenOptionsLoading(true)
-    try {
-      const [tools, projects] = await Promise.all([
-        listAvailableMcpTools(),
-        listAvailableMcpProjects(),
-      ])
-      setAdminAvailableTools(tools)
-      setAdminAvailableProjects(projects)
-    } catch (error) {
-      setAdminTokenError(describeError(error))
-    } finally {
-      setAdminTokenOptionsLoading(false)
-    }
-  }
-
-  const openAdminTokenPanel = async () => {
-    if (!isAdmin) {
-      return
-    }
-    setAdminTokenPanelOpen(true)
-    setAdminLatestToken(null)
-    await Promise.all([loadAdminTokens(), loadAdminTokenOptions()])
-  }
-
-  const handleCreateAdminToken = async (payload: McpTokenCreateRequest) => {
-    if (!isAdmin) {
-      return
-    }
-    setAdminTokensCreating(true)
-    setAdminTokenError(null)
-    try {
-      const created = await createMcpToken(payload)
-      setAdminLatestToken(created)
-      setNotice(`Created MCP token ${created.name}.`)
-      await loadAdminTokens()
-    } catch (error) {
-      setAdminTokenError(describeError(error))
-    } finally {
-      setAdminTokensCreating(false)
-    }
-  }
-
-  const handleRevokeAdminToken = async (tokenId: string) => {
-    if (!isAdmin) {
-      return
-    }
-    setAdminTokenError(null)
-    try {
-      await revokeMcpToken(tokenId)
-      setNotice(`Revoked MCP token ${tokenId}.`)
-      await loadAdminTokens()
-    } catch (error) {
-      setAdminTokenError(describeError(error))
-    }
-  }
-
-  const handleRefreshAdminTokenPanel = async () => {
-    await Promise.all([loadAdminTokens(), loadAdminTokenOptions()])
   }
 
   if (authChecking) {
@@ -694,7 +609,7 @@ function AppScreen() {
           error={adminTokenError}
           availableTools={adminAvailableTools}
           availableProjects={adminAvailableProjects}
-          onClose={() => setAdminTokenPanelOpen(false)}
+          onClose={closeAdminTokenPanel}
           onRefresh={handleRefreshAdminTokenPanel}
           onCreate={handleCreateAdminToken}
           onRevoke={handleRevokeAdminToken}
