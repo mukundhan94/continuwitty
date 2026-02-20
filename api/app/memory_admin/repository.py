@@ -61,6 +61,30 @@ class _EngramUpdateFields(TypedDict):
     visibility_scope: str
 
 
+@dataclass(frozen=True)
+class AdminEngramUpdateRepositoryRequest:
+    actor_user_id: UUID
+    title: str | None
+    abstract: str | None
+    detailed_summary_markdown: str | None
+    tags: list[str] | None
+    keywords: list[str] | None
+    visibility_scope: VisibilityScope | None
+    sources: list[AdminEngramSourceInput] | None
+    embedding_dim: int
+
+
+@dataclass(frozen=True)
+class _EngramPersistPayload:
+    engram_id: UUID
+    actor_user_id: UUID
+    update_fields: _EngramUpdateFields
+    retrieval_text: str
+    embedding_provider_id: str
+    embedding_literal: str
+    engram_json: dict[str, object]
+
+
 def list_admin_sessions(
     *,
     project_id: str | None = None,
@@ -389,20 +413,16 @@ def get_admin_engram(*, engram_id: UUID, include_deleted: bool = True) -> AdminE
 
 def _build_retrieval_text(
     *,
-    title: str,
-    abstract: str,
-    detailed_summary_markdown: str,
-    tags: list[str],
-    keywords: list[str],
+    fields: _EngramUpdateFields,
 ) -> str:
     return " ".join(
         part
         for part in [
-            title.strip(),
-            abstract.strip(),
-            detailed_summary_markdown.strip(),
-            " ".join(tags),
-            " ".join(keywords),
+            fields["title"].strip(),
+            fields["abstract"].strip(),
+            fields["detailed_summary_markdown"].strip(),
+            " ".join(fields["tags"]),
+            " ".join(fields["keywords"]),
         ]
         if part
     )
@@ -467,45 +487,11 @@ def _replace_engram_sources(*, cur, engram_id: UUID, sources: list[AdminEngramSo
         )
 
 
-def update_admin_engram(
+def _build_engram_json_payload(
     *,
-    engram_id: UUID,
-    actor_user_id: UUID,
-    title: str | None,
-    abstract: str | None,
-    detailed_summary_markdown: str | None,
-    tags: list[str] | None,
-    keywords: list[str] | None,
-    visibility_scope: VisibilityScope | None,
-    sources: list[AdminEngramSourceInput] | None,
-    embedding_dim: int,
-) -> AdminEngramRecord | None:
-    current = get_admin_engram(engram_id=engram_id, include_deleted=False)
-    if not current:
-        return None
-
-    update_payload = _AdminEngramUpdatePayload(
-        title=title,
-        abstract=abstract,
-        detailed_summary_markdown=detailed_summary_markdown,
-        tags=tags,
-        keywords=keywords,
-        visibility_scope=visibility_scope,
-    )
-    update_fields = _build_engram_update_fields(current=current, payload=update_payload)
-
-    retrieval_text = _build_retrieval_text(
-        title=update_fields["title"],
-        abstract=update_fields["abstract"],
-        detailed_summary_markdown=update_fields["detailed_summary_markdown"],
-        tags=update_fields["tags"],
-        keywords=update_fields["keywords"],
-    )
-    embedding_provider_id, embedding_literal = _compute_engram_embedding(
-        retrieval_text=retrieval_text,
-        embedding_dim=embedding_dim,
-    )
-
+    current: AdminEngramRecord,
+    update_fields: _EngramUpdateFields,
+) -> dict[str, object]:
     engram_json = dict(current.model_dump(mode="json"))
     engram_json["title"] = update_fields["title"]
     engram_json["abstract"] = update_fields["abstract"]
@@ -514,50 +500,93 @@ def update_admin_engram(
     engram_json["keywords"] = update_fields["keywords"]
     engram_json["visibility_scope"] = update_fields["visibility_scope"]
     engram_json["updated_at"] = datetime.now(UTC).isoformat()
+    return engram_json
+
+
+def _persist_engram_update(*, cur, payload: _EngramPersistPayload) -> bool:
+    cur.execute(
+        """
+        UPDATE engrams
+        SET
+            title = %s,
+            abstract = %s,
+            engram_markdown = %s,
+            tags = %s,
+            keywords = %s,
+            visibility_scope = %s,
+            retrieval_text = %s,
+            embedding_model = %s,
+            embed = %s::vector,
+            engram_json = %s,
+            updated_at = now(),
+            updated_by_user_id = %s
+        WHERE
+            engram_id = %s
+            AND deleted_at IS NULL
+        RETURNING engram_id
+        """,
+        (
+            payload.update_fields["title"],
+            payload.update_fields["abstract"],
+            payload.update_fields["detailed_summary_markdown"],
+            payload.update_fields["tags"],
+            payload.update_fields["keywords"],
+            payload.update_fields["visibility_scope"],
+            payload.retrieval_text,
+            payload.embedding_provider_id,
+            payload.embedding_literal,
+            Jsonb(payload.engram_json),
+            payload.actor_user_id,
+            payload.engram_id,
+        ),
+    )
+    return bool(cur.fetchone())
+
+
+def update_admin_engram(
+    *,
+    engram_id: UUID,
+    request: AdminEngramUpdateRepositoryRequest,
+) -> AdminEngramRecord | None:
+    current = get_admin_engram(engram_id=engram_id, include_deleted=False)
+    if not current:
+        return None
+
+    update_payload = _AdminEngramUpdatePayload(
+        title=request.title,
+        abstract=request.abstract,
+        detailed_summary_markdown=request.detailed_summary_markdown,
+        tags=request.tags,
+        keywords=request.keywords,
+        visibility_scope=request.visibility_scope,
+    )
+    update_fields = _build_engram_update_fields(current=current, payload=update_payload)
+
+    retrieval_text = _build_retrieval_text(fields=update_fields)
+    embedding_provider_id, embedding_literal = _compute_engram_embedding(
+        retrieval_text=retrieval_text,
+        embedding_dim=request.embedding_dim,
+    )
+    engram_json = _build_engram_json_payload(current=current, update_fields=update_fields)
 
     with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE engrams
-            SET
-                title = %s,
-                abstract = %s,
-                engram_markdown = %s,
-                tags = %s,
-                keywords = %s,
-                visibility_scope = %s,
-                retrieval_text = %s,
-                embedding_model = %s,
-                embed = %s::vector,
-                engram_json = %s,
-                updated_at = now(),
-                updated_by_user_id = %s
-            WHERE
-                engram_id = %s
-                AND deleted_at IS NULL
-            RETURNING engram_id
-            """,
-            (
-                update_fields["title"],
-                update_fields["abstract"],
-                update_fields["detailed_summary_markdown"],
-                update_fields["tags"],
-                update_fields["keywords"],
-                update_fields["visibility_scope"],
-                retrieval_text,
-                embedding_provider_id,
-                embedding_literal,
-                Jsonb(engram_json),
-                actor_user_id,
-                engram_id,
+        updated = _persist_engram_update(
+            cur=cur,
+            payload=_EngramPersistPayload(
+                engram_id=engram_id,
+                actor_user_id=request.actor_user_id,
+                update_fields=update_fields,
+                retrieval_text=retrieval_text,
+                embedding_provider_id=embedding_provider_id,
+                embedding_literal=embedding_literal,
+                engram_json=engram_json,
             ),
         )
-        updated = cur.fetchone()
         if not updated:
             return None
 
-        if sources is not None:
-            _replace_engram_sources(cur=cur, engram_id=engram_id, sources=sources)
+        if request.sources is not None:
+            _replace_engram_sources(cur=cur, engram_id=engram_id, sources=request.sources)
 
     return get_admin_engram(engram_id=engram_id, include_deleted=False)
 

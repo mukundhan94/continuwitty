@@ -27,6 +27,7 @@ from app.models import (
 from app.projects import ProjectService
 
 from .repository import (
+    AdminEngramUpdateRepositoryRequest,
     add_collection_items,
     create_collection,
     get_admin_engram,
@@ -187,15 +188,17 @@ class MemoryAdminService:
 
         updated = update_admin_engram(
             engram_id=engram_id,
-            actor_user_id=actor_user_id,
-            title=payload.title,
-            abstract=payload.abstract,
-            detailed_summary_markdown=payload.detailed_summary_markdown,
-            tags=payload.tags,
-            keywords=payload.keywords,
-            visibility_scope=payload.visibility_scope,
-            sources=payload.sources,
-            embedding_dim=self._embedding_dim,
+            request=AdminEngramUpdateRepositoryRequest(
+                actor_user_id=actor_user_id,
+                title=payload.title,
+                abstract=payload.abstract,
+                detailed_summary_markdown=payload.detailed_summary_markdown,
+                tags=payload.tags,
+                keywords=payload.keywords,
+                visibility_scope=payload.visibility_scope,
+                sources=payload.sources,
+                embedding_dim=self._embedding_dim,
+            ),
         )
         if not updated:
             raise HTTPException(status_code=404, detail="Engram not found")

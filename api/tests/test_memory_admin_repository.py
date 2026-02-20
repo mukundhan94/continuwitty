@@ -81,6 +81,43 @@ def test_compute_engram_embedding_formats_vector_literal(monkeypatch) -> None:
     assert vector_literal == "[1.000000,-2.345679]"
 
 
+def test_build_retrieval_text_uses_update_fields() -> None:
+    fields = {
+        "title": "Updated title",
+        "abstract": "Updated abstract",
+        "detailed_summary_markdown": "## details",
+        "tags": ["tag-one", "tag-two"],
+        "keywords": ["queue", "latency"],
+        "visibility_scope": "project",
+    }
+
+    retrieval_text = memory_repo._build_retrieval_text(fields=fields)
+
+    assert retrieval_text == "Updated title Updated abstract ## details tag-one tag-two queue latency"
+
+
+def test_build_engram_json_payload_overrides_mutable_fields() -> None:
+    current = _sample_admin_engram()
+    fields = {
+        "title": "Updated title",
+        "abstract": "Updated abstract",
+        "detailed_summary_markdown": "Updated markdown",
+        "tags": ["new-tag"],
+        "keywords": ["updated-keyword"],
+        "visibility_scope": "project",
+    }
+
+    payload = memory_repo._build_engram_json_payload(current=current, update_fields=fields)
+
+    assert payload["title"] == "Updated title"
+    assert payload["abstract"] == "Updated abstract"
+    assert payload["detailed_summary_markdown"] == "Updated markdown"
+    assert payload["tags"] == ["new-tag"]
+    assert payload["keywords"] == ["updated-keyword"]
+    assert payload["visibility_scope"] == "project"
+    assert "updated_at" in payload
+
+
 def test_replace_engram_sources_replaces_all_rows() -> None:
     class _CursorSpy:
         def __init__(self) -> None:

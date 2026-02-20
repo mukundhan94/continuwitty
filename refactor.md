@@ -376,12 +376,46 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 16 - Memory Admin Repository Phase 2.3)
+
+- [x] Refactored `update_admin_engram(...)` in `api/app/memory_admin/repository.py` to reduce method size and argument count
+- [x] Introduced repository request object:
+  - `AdminEngramUpdateRepositoryRequest`
+- [x] Introduced persistence helper payload:
+  - `_EngramPersistPayload`
+- [x] Extracted update helpers:
+  - `_build_engram_json_payload(...)`
+  - `_persist_engram_update(...)`
+  - updated `_build_retrieval_text(...)` to consume a single `fields` object
+- [x] Updated service call site to pass repository request object:
+  - `api/app/memory_admin/service.py`
+- [x] Test updates:
+  - `api/tests/test_memory_admin_repository.py`
+    - added retrieval-text helper coverage
+    - added engram-json payload builder coverage
+  - `api/tests/test_memory_admin_service.py`
+    - added update flow assertion that repository receives `AdminEngramUpdateRepositoryRequest`
+    - consolidated duplicated list-forwarding tests into parametrized coverage
+- [x] Validation run:
+  - `uv run ruff check app/memory_admin/repository.py app/memory_admin/service.py tests/test_memory_admin_repository.py tests/test_memory_admin_service.py`
+  - `uv run pytest -q tests/test_memory_admin_repository.py tests/test_memory_admin_service.py tests/test_memory_admin_api_integration.py tests/test_mcp_service_unit.py`
+  - `make test`
+  - aggregate: `22 passed` (targeted), `238 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/memory_admin/repository.py` score improved from **7.42** to **7.78**
+  - fixed in change set: `update_admin_engram` large-method + excess-args findings
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
 | `api/app/mcp/service.py` | **4.56** | YELLOW |
-| `api/app/memory_admin/repository.py` | 7.42 | YELLOW |
+| `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.10 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
 | `api/app/oauth/api.py` | 7.54 | YELLOW |
