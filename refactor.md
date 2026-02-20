@@ -347,6 +347,35 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 15 - MCP Auth Phase 13c)
+
+- [x] Step 13c — Refactored MCP bearer-token actor resolution in `api/app/mcp/auth.py`
+- [x] Extracted auth-resolution helpers from `resolve_mcp_actor(...)`:
+  - `_parse_plaintext_token_or_unauthorized(...)`
+  - `_resolve_mcp_token_record(...)`
+  - `_resolve_active_token_owner(...)`
+  - `_resolve_token_auth_context(...)`
+- [x] Preserved existing auth behavior for session fallback and token-path unauthorized responses
+- [x] New test file added: `api/tests/test_mcp_auth.py`
+  - session actor fallback without bearer token
+  - non-bearer authorization rejection
+  - OAuth-enabled `WWW-Authenticate` header emission
+  - invalid plaintext token rejection
+  - inactive owner rejection
+  - valid token actor + token-auth context resolution path
+- [x] Validation run:
+  - `uv run ruff check app/mcp/auth.py tests/test_mcp_auth.py`
+  - `uv run pytest -q tests/test_mcp_auth.py tests/test_mcp_service_unit.py tests/test_mcp_api_integration.py`
+  - `make test`
+  - aggregate: `40 passed` (targeted), `235 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/auth.py` score improved from **9.66** to **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -365,7 +394,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/engram_enrichment/service.py` | 10.0 | GREEN |
 | `api/app/memory_admin/service.py` | 10.0 | GREEN |
 | `api/app/ingestion/service.py` | 10.0 | GREEN |
-| `api/app/mcp/auth.py` | 9.66 | GREEN |
+| `api/app/mcp/auth.py` | 10.0 | GREEN |
 
 ---
 
