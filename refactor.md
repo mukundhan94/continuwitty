@@ -655,6 +655,32 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 25 - Repository and DB Coverage Phase 14.2)
+
+- [x] Continued Phase 14.2 by adding remaining backend test modules for repository and DB layers
+- [x] Added new backend test module `api/tests/test_user_repository.py`:
+  - verifies username lookup query parameters
+  - verifies list paging behavior and model mapping
+  - verifies user creation role serialization + duplicate-username error handling
+  - verifies update flow for both missing and existing users
+- [x] Added new backend test module `api/tests/test_db.py`:
+  - verifies `get_conn()` commit/close behavior on success
+  - verifies `get_conn()` rollback/close behavior on exceptions
+  - verifies `ensure_schema_initialized()` reads SQL and executes it via DB cursor
+- [x] Validation run:
+  - `uv run ruff check tests/test_user_repository.py tests/test_db.py`
+  - `uv run pytest -q tests/test_user_repository.py tests/test_db.py`
+  - `make test`
+  - aggregate: `9 passed` (targeted), `266 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/tests/test_user_repository.py` score: **10.0**
+  - `api/tests/test_db.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -673,6 +699,8 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_oauth_api_unit.py` | 10.0 | GREEN |
 | `api/tests/test_audit.py` | 10.0 | GREEN |
 | `api/tests/test_login_guard.py` | 10.0 | GREEN |
+| `api/tests/test_user_repository.py` | 10.0 | GREEN |
+| `api/tests/test_db.py` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |
