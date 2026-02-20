@@ -61,22 +61,24 @@ def test_ingest_text_persists_chunked_document(monkeypatch) -> None:
     captured: dict = {}
 
     def _fake_upsert(**kwargs):  # noqa: ANN003
+        payload = kwargs["payload"]
         captured.update(kwargs)
         return {
-            "document_id": kwargs["document_id"],
+            "document_id": payload.document_id,
             "owner_user_id": actor_id,
-            "project_id": kwargs["project_id"],
-            "title": kwargs["title"],
+            "project_id": payload.project_id,
+            "title": payload.title,
             "source_type": DocumentSourceType.text.value,
             "source_name": None,
             "mime_type": "text/plain",
-            "visibility_scope": kwargs["visibility_scope"],
-            "content_hash": kwargs["content_hash"],
-            "chunk_count": len(kwargs["chunks"]),
+            "visibility_scope": payload.visibility_scope,
+            "content_hash": payload.content_hash,
+            "chunk_count": len(payload.chunks),
             "created_at": datetime.now(UTC),
             "updated_at": datetime.now(UTC),
         }
 
+    monkeypatch.setattr("app.ingestion.service.ensure_project_exists", lambda **_: None)
     monkeypatch.setattr("app.ingestion.service.upsert_document_with_chunks", _fake_upsert)
 
     response = service.ingest_text(
@@ -92,4 +94,4 @@ def test_ingest_text_persists_chunked_document(monkeypatch) -> None:
 
     assert response.document.title == "Incident Notes"
     assert response.document.chunk_count >= 2
-    assert captured["project_id"] == "engram-vault"
+    assert captured["payload"].project_id == "engram-vault"

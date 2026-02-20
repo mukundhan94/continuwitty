@@ -22,6 +22,7 @@ from app.ingestion.models import (
     DocumentSourceType,
 )
 from app.ingestion.repository import (
+    DocumentUpsertPayload,
     list_documents,
     query_document_chunks,
     upsert_document_with_chunks,
@@ -92,18 +93,20 @@ class DocumentIngestionService:
             raise IngestionServiceError("No chunks were produced from document text")
 
         document = upsert_document_with_chunks(
-            document_id=document_id,
             actor_user_id=actor_user_id,
-            project_id=payload.project_id,
-            title=payload.title.strip(),
-            source_type=DocumentSourceType.text.value,
-            source_name=None,
-            mime_type="text/plain",
-            visibility_scope=payload.visibility_scope.value,
-            content_text=normalized_text,
-            content_hash=content_hash,
-            metadata=payload.metadata,
-            chunks=chunks,
+            payload=DocumentUpsertPayload(
+                document_id=document_id,
+                project_id=payload.project_id,
+                title=payload.title.strip(),
+                source_type=DocumentSourceType.text.value,
+                source_name=None,
+                mime_type="text/plain",
+                visibility_scope=payload.visibility_scope.value,
+                content_text=normalized_text,
+                content_hash=content_hash,
+                metadata=payload.metadata,
+                chunks=chunks,
+            ),
             embedding_dim=self._embedding_dim,
         )
         return DocumentIngestResponse(document=document)
@@ -167,18 +170,20 @@ class DocumentIngestionService:
         }
 
         document = upsert_document_with_chunks(
-            document_id=document_id,
             actor_user_id=actor_user_id,
-            project_id=payload.project_id,
-            title=resolved_title,
-            source_type=DocumentSourceType.file.value,
-            source_name=filename,
-            mime_type=mime_type,
-            visibility_scope=payload.visibility_scope.value,
-            content_text=normalized_text,
-            content_hash=content_hash,
-            metadata=merged_metadata,
-            chunks=chunks,
+            payload=DocumentUpsertPayload(
+                document_id=document_id,
+                project_id=payload.project_id,
+                title=resolved_title,
+                source_type=DocumentSourceType.file.value,
+                source_name=filename,
+                mime_type=mime_type,
+                visibility_scope=payload.visibility_scope.value,
+                content_text=normalized_text,
+                content_hash=content_hash,
+                metadata=merged_metadata,
+                chunks=chunks,
+            ),
             embedding_dim=self._embedding_dim,
         )
         return DocumentIngestResponse(document=document)

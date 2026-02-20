@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from psycopg.types.json import Jsonb
@@ -12,6 +14,128 @@ from app.ingestion.chunking import ChunkDraft
 from app.ingestion.models import DocumentChunkQueryRequest, DocumentChunkQueryResult, DocumentRecord
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]{2,}")
+_UPSERT_DOCUMENT_SQL = """
+INSERT INTO documents (
+    document_id,
+    owner_user_id,
+    project_id,
+    title,
+    source_type,
+    source_name,
+    mime_type,
+    visibility_scope,
+    content_text,
+    content_hash,
+    metadata,
+    chunk_count,
+    created_at,
+    updated_at
+)
+VALUES (
+    %(document_id)s,
+    %(owner_user_id)s,
+    %(project_id)s,
+    %(title)s,
+    %(source_type)s,
+    %(source_name)s,
+    %(mime_type)s,
+    %(visibility_scope)s,
+    %(content_text)s,
+    %(content_hash)s,
+    %(metadata)s,
+    %(chunk_count)s,
+    %(created_at)s,
+    %(updated_at)s
+)
+ON CONFLICT (document_id)
+DO UPDATE SET
+    title = EXCLUDED.title,
+    source_type = EXCLUDED.source_type,
+    source_name = EXCLUDED.source_name,
+    mime_type = EXCLUDED.mime_type,
+    visibility_scope = EXCLUDED.visibility_scope,
+    content_text = EXCLUDED.content_text,
+    content_hash = EXCLUDED.content_hash,
+    metadata = EXCLUDED.metadata,
+    chunk_count = EXCLUDED.chunk_count,
+    updated_at = EXCLUDED.updated_at
+RETURNING
+    document_id,
+    owner_user_id,
+    project_id,
+    title,
+    source_type,
+    source_name,
+    mime_type,
+    visibility_scope,
+    content_hash,
+    chunk_count,
+    created_at,
+    updated_at
+"""
+_INSERT_DOCUMENT_CHUNK_SQL = """
+INSERT INTO document_chunks (
+    chunk_id,
+    document_id,
+    chunk_index,
+    chunk_text,
+    snippet,
+    char_start,
+    char_end,
+    token_estimate,
+    metadata,
+    embedding_model,
+    embed,
+    created_at
+) VALUES (
+    %(chunk_id)s,
+    %(document_id)s,
+    %(chunk_index)s,
+    %(chunk_text)s,
+    %(snippet)s,
+    %(char_start)s,
+    %(char_end)s,
+    %(token_estimate)s,
+    %(metadata)s,
+    %(embedding_model)s,
+    %(embed)s::vector,
+    %(created_at)s
+)
+"""
+_QUERY_DOCUMENT_CHUNKS_SELECT_TEMPLATE = """
+SELECT
+    dc.chunk_id,
+    dc.document_id,
+    d.project_id,
+    d.title,
+    d.source_name,
+    dc.chunk_index,
+    dc.snippet,
+    dc.created_at,
+    d.visibility_scope,
+    dc.chunk_text,
+    dc.embed <=> %s::vector AS distance
+FROM document_chunks dc
+JOIN documents d ON d.document_id = dc.document_id
+WHERE {where_sql}
+ORDER BY distance ASC, d.created_at DESC, dc.chunk_index ASC
+LIMIT %s
+"""
+
+
+@dataclass(frozen=True)
+class DocumentUpsertPayload:
+    document_id: UUID
+    project_id: str
+    title: str
+    source_type: str
+    source_name: str | None
+    mime_type: str | None
+    visibility_scope: str
+    content_text: str
+    content_hash: str
+    metadata: dict
+    chunks: list[ChunkDraft]
 
 
 def _vector_literal(values: list[float]) -> str:
@@ -41,155 +165,124 @@ def _lexical_overlap_score(query: str, candidate_parts: list[str]) -> float:
     return len(query_tokens & chunk_tokens) / len(query_tokens)
 
 
+def _upsert_document_record(
+    *,
+    cur: Any,
+    actor_user_id: UUID,
+    payload: DocumentUpsertPayload,
+    now: datetime,
+) -> dict[str, Any]:
+    cur.execute(
+        _UPSERT_DOCUMENT_SQL,
+        {
+            "document_id": payload.document_id,
+            "owner_user_id": actor_user_id,
+            "project_id": payload.project_id,
+            "title": payload.title,
+            "source_type": payload.source_type,
+            "source_name": payload.source_name,
+            "mime_type": payload.mime_type,
+            "visibility_scope": payload.visibility_scope,
+            "content_text": payload.content_text,
+            "content_hash": payload.content_hash,
+            "metadata": Jsonb(payload.metadata),
+            "chunk_count": len(payload.chunks),
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+    return cur.fetchone()
+
+
+def _replace_document_chunks(
+    *,
+    cur: Any,
+    payload: DocumentUpsertPayload,
+    now: datetime,
+    chunk_embeddings: list[Any],
+) -> None:
+    cur.execute("DELETE FROM document_chunks WHERE document_id = %s", (payload.document_id,))
+    for chunk, embedded in zip(payload.chunks, chunk_embeddings, strict=True):
+        cur.execute(
+            _INSERT_DOCUMENT_CHUNK_SQL,
+            {
+                "chunk_id": chunk.chunk_id,
+                "document_id": payload.document_id,
+                "chunk_index": chunk.chunk_index,
+                "chunk_text": chunk.chunk_text,
+                "snippet": chunk.snippet,
+                "char_start": chunk.char_start,
+                "char_end": chunk.char_end,
+                "token_estimate": chunk.token_estimate,
+                "metadata": Jsonb(chunk.metadata),
+                "embedding_model": embedded.provider_id,
+                "embed": _vector_literal(embedded.vector),
+                "created_at": now,
+            },
+        )
+
+
+def _build_document_chunk_where(
+    *,
+    actor_user_id: UUID,
+    request: DocumentChunkQueryRequest,
+) -> tuple[str, list[Any]]:
+    where_clauses: list[str] = ["(d.owner_user_id = %s OR d.visibility_scope = 'project')"]
+    where_params: list[Any] = [actor_user_id]
+
+    if request.project_id:
+        where_clauses.append("d.project_id = %s")
+        where_params.append(request.project_id)
+    if request.document_ids:
+        # Limit retrieval to a caller-selected document subset (for session-pinned docs).
+        where_clauses.append("d.document_id = ANY(%s::uuid[])")
+        where_params.append(request.document_ids)
+
+    return " AND ".join(where_clauses), where_params
+
+
+def _rerank_document_chunk_rows(
+    *,
+    rows: list[dict[str, Any]],
+    query: str,
+    top_k: int,
+) -> list[dict[str, Any]]:
+    ranked: list[tuple[float, dict[str, Any]]] = []
+    for row in rows:
+        lexical = _lexical_overlap_score(
+            query,
+            [row.get("title") or "", row.get("snippet") or "", row.get("chunk_text") or ""],
+        )
+        ranked.append((_combined_rank_score(float(row["distance"]), lexical), row))
+
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return [row for _, row in ranked[:top_k]]
+
+
 def upsert_document_with_chunks(
     *,
-    document_id: UUID,
     actor_user_id: UUID,
-    project_id: str,
-    title: str,
-    source_type: str,
-    source_name: str | None,
-    mime_type: str | None,
-    visibility_scope: str,
-    content_text: str,
-    content_hash: str,
-    metadata: dict,
-    chunks: list[ChunkDraft],
+    payload: DocumentUpsertPayload,
     embedding_dim: int,
 ) -> DocumentRecord:
     """Persist document metadata and atomically replace all associated chunks."""
 
     now = datetime.now(UTC)
-    chunk_embeddings = embed_many([item.chunk_text for item in chunks], dim=embedding_dim)
+    chunk_embeddings = embed_many([item.chunk_text for item in payload.chunks], dim=embedding_dim)
 
     with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO documents (
-                document_id,
-                owner_user_id,
-                project_id,
-                title,
-                source_type,
-                source_name,
-                mime_type,
-                visibility_scope,
-                content_text,
-                content_hash,
-                metadata,
-                chunk_count,
-                created_at,
-                updated_at
-            )
-            VALUES (
-                %(document_id)s,
-                %(owner_user_id)s,
-                %(project_id)s,
-                %(title)s,
-                %(source_type)s,
-                %(source_name)s,
-                %(mime_type)s,
-                %(visibility_scope)s,
-                %(content_text)s,
-                %(content_hash)s,
-                %(metadata)s,
-                %(chunk_count)s,
-                %(created_at)s,
-                %(updated_at)s
-            )
-            ON CONFLICT (document_id)
-            DO UPDATE SET
-                title = EXCLUDED.title,
-                source_type = EXCLUDED.source_type,
-                source_name = EXCLUDED.source_name,
-                mime_type = EXCLUDED.mime_type,
-                visibility_scope = EXCLUDED.visibility_scope,
-                content_text = EXCLUDED.content_text,
-                content_hash = EXCLUDED.content_hash,
-                metadata = EXCLUDED.metadata,
-                chunk_count = EXCLUDED.chunk_count,
-                updated_at = EXCLUDED.updated_at
-            RETURNING
-                document_id,
-                owner_user_id,
-                project_id,
-                title,
-                source_type,
-                source_name,
-                mime_type,
-                visibility_scope,
-                content_hash,
-                chunk_count,
-                created_at,
-                updated_at
-            """,
-            {
-                "document_id": document_id,
-                "owner_user_id": actor_user_id,
-                "project_id": project_id,
-                "title": title,
-                "source_type": source_type,
-                "source_name": source_name,
-                "mime_type": mime_type,
-                "visibility_scope": visibility_scope,
-                "content_text": content_text,
-                "content_hash": content_hash,
-                "metadata": Jsonb(metadata),
-                "chunk_count": len(chunks),
-                "created_at": now,
-                "updated_at": now,
-            },
+        row = _upsert_document_record(
+            cur=cur,
+            actor_user_id=actor_user_id,
+            payload=payload,
+            now=now,
         )
-        row = cur.fetchone()
-
-        cur.execute("DELETE FROM document_chunks WHERE document_id = %s", (document_id,))
-
-        for chunk, embedded in zip(chunks, chunk_embeddings, strict=True):
-            cur.execute(
-                """
-                INSERT INTO document_chunks (
-                    chunk_id,
-                    document_id,
-                    chunk_index,
-                    chunk_text,
-                    snippet,
-                    char_start,
-                    char_end,
-                    token_estimate,
-                    metadata,
-                    embedding_model,
-                    embed,
-                    created_at
-                ) VALUES (
-                    %(chunk_id)s,
-                    %(document_id)s,
-                    %(chunk_index)s,
-                    %(chunk_text)s,
-                    %(snippet)s,
-                    %(char_start)s,
-                    %(char_end)s,
-                    %(token_estimate)s,
-                    %(metadata)s,
-                    %(embedding_model)s,
-                    %(embed)s::vector,
-                    %(created_at)s
-                )
-                """,
-                {
-                    "chunk_id": chunk.chunk_id,
-                    "document_id": document_id,
-                    "chunk_index": chunk.chunk_index,
-                    "chunk_text": chunk.chunk_text,
-                    "snippet": chunk.snippet,
-                    "char_start": chunk.char_start,
-                    "char_end": chunk.char_end,
-                    "token_estimate": chunk.token_estimate,
-                    "metadata": Jsonb(chunk.metadata),
-                    "embedding_model": embedded.provider_id,
-                    "embed": _vector_literal(embedded.vector),
-                    "created_at": now,
-                },
-            )
+        _replace_document_chunks(
+            cur=cur,
+            payload=payload,
+            now=now,
+            chunk_embeddings=chunk_embeddings,
+        )
 
     return DocumentRecord(**row)
 
@@ -241,58 +334,24 @@ def query_document_chunks(
 ) -> list[DocumentChunkQueryResult]:
     query_embedding = embed_text(request.query, dim=embedding_dim)
     query_literal = _vector_literal(query_embedding.vector)
-
-    where_clauses: list[str] = ["(d.owner_user_id = %s OR d.visibility_scope = 'project')"]
-    where_params: list = [actor_user_id]
-
-    if request.project_id:
-        where_clauses.append("d.project_id = %s")
-        where_params.append(request.project_id)
-
-    if request.document_ids:
-        # Limit retrieval to a caller-selected document subset (for session-pinned docs).
-        where_clauses.append("d.document_id = ANY(%s::uuid[])")
-        where_params.append(request.document_ids)
-
-    where_sql = " AND ".join(where_clauses)
+    where_sql, where_params = _build_document_chunk_where(
+        actor_user_id=actor_user_id,
+        request=request,
+    )
     candidate_limit = min(max(request.top_k * 4, request.top_k), 200)
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            f"""
-            SELECT
-                dc.chunk_id,
-                dc.document_id,
-                d.project_id,
-                d.title,
-                d.source_name,
-                dc.chunk_index,
-                dc.snippet,
-                dc.created_at,
-                d.visibility_scope,
-                dc.chunk_text,
-                dc.embed <=> %s::vector AS distance
-            FROM document_chunks dc
-            JOIN documents d ON d.document_id = dc.document_id
-            WHERE {where_sql}
-            ORDER BY distance ASC, d.created_at DESC, dc.chunk_index ASC
-            LIMIT %s
-            """,
+            _QUERY_DOCUMENT_CHUNKS_SELECT_TEMPLATE.format(where_sql=where_sql),
             [query_literal, *where_params, candidate_limit],
         )
         rows = cur.fetchall()
 
-    # Rerank with a light lexical overlap signal so exact intent terms keep weight.
-    ranked: list[tuple[float, dict]] = []
-    for row in rows:
-        lexical = _lexical_overlap_score(
-            request.query,
-            [row.get("title") or "", row.get("snippet") or "", row.get("chunk_text") or ""],
-        )
-        ranked.append((_combined_rank_score(float(row["distance"]), lexical), row))
-
-    ranked.sort(key=lambda item: item[0], reverse=True)
-    trimmed = [row for _, row in ranked[: request.top_k]]
+    trimmed = _rerank_document_chunk_rows(
+        rows=rows,
+        query=request.query,
+        top_k=request.top_k,
+    )
 
     return [
         DocumentChunkQueryResult(

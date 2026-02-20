@@ -220,6 +220,40 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 11 - Ingestion Repository Phase 11.1)
+
+- [x] Step 11.1 — Introduced `DocumentUpsertPayload` dataclass for document persistence input
+- [x] Refactored `upsert_document_with_chunks(...)` call shape from many scalar args to:
+  - `actor_user_id`
+  - `payload: DocumentUpsertPayload`
+  - `embedding_dim`
+- [x] Extracted persistence helpers:
+  - `_upsert_document_record(...)`
+  - `_replace_document_chunks(...)`
+  - `_build_document_chunk_where(...)`
+  - `_rerank_document_chunk_rows(...)`
+- [x] Moved SQL literals to module constants to reduce method size and improve scanability:
+  - `_UPSERT_DOCUMENT_SQL`
+  - `_INSERT_DOCUMENT_CHUNK_SQL`
+  - `_QUERY_DOCUMENT_CHUNKS_SELECT_TEMPLATE`
+- [x] Updated service + integration call sites for new payload contract:
+  - `api/app/ingestion/service.py`
+  - `api/tests/test_ingestion_service.py`
+  - `api/tests/test_chat_repository.py`
+- [x] Validation run:
+  - `api/tests/test_ingestion_service.py`
+  - `api/tests/test_chat_repository.py::test_pin_and_unpin_document`
+  - `api/tests/test_ingestion_api_integration.py::test_ingestion_text_and_query_flow`
+  - Aggregate: `3 passed, 2 skipped`
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/ingestion/repository.py` score improved from **8.64** to **10.0**
+  - fixed: `upsert_document_with_chunks` argument-count and large-method smells
+  - pre-commit quality gate passed
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -234,7 +268,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/providers/bedrock_provider.py` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 10.0 | GREEN |
-| `api/app/ingestion/repository.py` | 8.64 | YELLOW |
+| `api/app/ingestion/repository.py` | 10.0 | GREEN |
 | `api/app/engram_enrichment/service.py` | 8.93 | YELLOW |
 | `api/app/memory_admin/service.py` | 9.09 | GREEN |
 | `api/app/ingestion/service.py` | 9.33 | GREEN |

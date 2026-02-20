@@ -23,7 +23,7 @@ from app.chat_repository import (
 )
 from app.config import get_settings
 from app.ingestion.chunking import build_content_hash, build_document_id, chunk_document_text
-from app.ingestion.repository import upsert_document_with_chunks
+from app.ingestion.repository import DocumentUpsertPayload, upsert_document_with_chunks
 from app.models import (
     ChatSessionCreateRequest,
     ChatSessionUpdateRequest,
@@ -202,18 +202,20 @@ def test_pin_and_unpin_document(clean_db) -> None:
         chunk_overlap_chars=80,
     )
     upsert_document_with_chunks(
-        document_id=document_id,
         actor_user_id=admin["user_id"],
-        project_id="project-doc-pin",
-        title="Runbook Document",
-        source_type="text",
-        source_name=None,
-        mime_type="text/plain",
-        visibility_scope="project",
-        content_text=text,
-        content_hash=content_hash,
-        metadata={},
-        chunks=chunks,
+        payload=DocumentUpsertPayload(
+            document_id=document_id,
+            project_id="project-doc-pin",
+            title="Runbook Document",
+            source_type="text",
+            source_name=None,
+            mime_type="text/plain",
+            visibility_scope="project",
+            content_text=text,
+            content_hash=content_hash,
+            metadata={},
+            chunks=chunks,
+        ),
         embedding_dim=settings.embedding_dim,
     )
 
