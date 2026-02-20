@@ -8,7 +8,6 @@ import {
   setDefaultProject,
 } from './api/projects'
 import {
-  continueSession,
   createChatSession,
   listChatSessions,
   listEngrams,
@@ -16,7 +15,6 @@ import {
   listPinnedEngrams,
   listSessionMessages,
   listSessionTimeline,
-  saveSessionAsEngram,
 } from './api/chat'
 import { ApiError } from './api/http'
 import { listProjectDocuments } from './api/ingestion'
@@ -52,6 +50,7 @@ import {
 import { useThemeMode } from './styles/useThemeMode'
 import { useIngestionActions, usePinActions, usePromptActions } from './hooks/useChatActions'
 import { useAdminTokenActions } from './hooks/useAdminTokenActions'
+import { useSessionActions } from './hooks/useSessionActions'
 import { buildDefaultSaveAbstract } from './utils/chat'
 
 const PROJECT_ID_STORAGE_KEY = 'engram.lastProjectId'
@@ -399,22 +398,6 @@ function AppScreen() {
     describeError,
   })
 
-  const handleCopyEngramId = async (engramId: string) => {
-    try {
-      await navigator.clipboard.writeText(engramId)
-      setNotice(`Copied engram id: ${engramId}`)
-    } catch {
-      setChatError('Clipboard access failed. Copy manually from the card.')
-    }
-  }
-
-  const handleRefreshEngrams = async () => {
-    if (!selectedSessionId) {
-      return
-    }
-    await refreshFromSession(selectedSessionId)
-  }
-
   const {
     handleRefreshDocuments,
     handleIngestText,
@@ -429,42 +412,22 @@ function AppScreen() {
     describeError,
   })
 
-  const handleContinueSession = async () => {
-    if (!selectedSessionId) {
-      return
-    }
-    try {
-      const continued = await continueSession(selectedSessionId)
-      setSessions((current) => [continued.session, ...current])
-      setSelectedSessionId(continued.session.session_id)
-      setNotice(`Created continuation with ${continued.carried_engram_ids.length} carried engrams.`)
-    } catch (error) {
-      setChatError(describeError(error))
-    }
-  }
-
-  const handleSaveEngram = async (payload: {
-    title: string
-    abstract: string
-    visibility_scope: 'private' | 'project'
-    tags: string[]
-    keywords: string[]
-  }) => {
-    if (!selectedSessionId) {
-      return
-    }
-    setSaveSubmitting(true)
-    try {
-      const created = await saveSessionAsEngram(selectedSessionId, payload)
-      setNotice(`Saved session as engram ${created.engram_id}`)
-      setSaveModalOpen(false)
-      await refreshFromSession(selectedSessionId)
-    } catch (error) {
-      setChatError(describeError(error))
-    } finally {
-      setSaveSubmitting(false)
-    }
-  }
+  const {
+    handleCopyEngramId,
+    handleRefreshEngrams,
+    handleContinueSession,
+    handleSaveEngram,
+  } = useSessionActions({
+    selectedSessionId,
+    refreshFromSession,
+    setSessions,
+    setSelectedSessionId,
+    setSaveModalOpen,
+    setSaveSubmitting,
+    setNotice,
+    setChatError,
+    describeError,
+  })
 
   if (authChecking) {
     return <LoadingScreen>Loading local workspace...</LoadingScreen>

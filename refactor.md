@@ -855,6 +855,37 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 32 - Session Action Hook Extraction Phase 10.4/14 Hardening)
+
+- [x] Continued App refactor by extracting session-side action handlers from `web/src/App.tsx`
+- [x] Added new hook module `web/src/hooks/useSessionActions.ts` with isolated handlers:
+  - `handleContinueSession(...)` for continuation creation + session list update
+  - `handleSaveEngram(...)` for snapshot save + refresh flow
+  - `handleRefreshEngrams(...)` for selected-session refresh behavior
+  - `handleCopyEngramId(...)` for clipboard + user notice/error behavior
+- [x] Updated `web/src/App.tsx` to consume `useSessionActions(...)` and removed inline duplicate logic
+- [x] Added direct hook tests in `web/src/hooks/useSessionActions.test.ts`:
+  - no-session refresh guard behavior
+  - continuation prepends and updates selected session
+  - save-as-engram success/refresh/submitting lifecycle
+  - clipboard success notice
+  - clipboard failure error
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/hooks/useSessionActions.test.ts src/hooks/useAdminTokenActions.test.ts src/hooks/useChatActions.test.ts src/components/PinnedEngramPanel.test.tsx`
+  - `make test`
+  - `make web-check`
+  - aggregate: `16 passed` (targeted web), `274 passed` (backend), `84 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/App.tsx` score: **9.68**
+  - `web/src/hooks/useSessionActions.ts` score: **10.0**
+  - `web/src/hooks/useSessionActions.test.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -888,6 +919,8 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `web/src/hooks/useChatActions.test.ts` | 10.0 | GREEN |
 | `web/src/hooks/useAdminTokenActions.ts` | 10.0 | GREEN |
 | `web/src/hooks/useAdminTokenActions.test.ts` | 10.0 | GREEN |
+| `web/src/hooks/useSessionActions.ts` | 10.0 | GREEN |
+| `web/src/hooks/useSessionActions.test.ts` | 10.0 | GREEN |
 | `web/src/App.tsx` | 9.68 | GREEN |
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |
