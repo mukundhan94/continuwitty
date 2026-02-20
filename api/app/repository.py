@@ -49,6 +49,28 @@ class _RehydrationContent:
     context_markdown: str
 
 
+@dataclass(frozen=True)
+class _RehydrationContextParts:
+    title: str
+    compact_summary: str
+    detailed_excerpt: str
+    decisions: list[dict[str, Any]]
+    open_questions: list[str]
+    citations: list[RehydrationCitation]
+
+
+@dataclass(frozen=True)
+class _EngramInsertRowRequest:
+    engram_id: UUID
+    payload: MemoryEngramCreate
+    created_at: datetime
+    owner_user_id: UUID | None
+    retrieval_text: str
+    embedding_model: str
+    embedding_literal: str
+    engram_json: dict[str, Any]
+
+
 def _vector_literal(values: list[float]) -> str:
     return "[" + ",".join(f"{value:.6f}" for value in values) + "]"
 
@@ -292,24 +314,19 @@ def _format_open_questions(open_questions: list[str]) -> str:
 
 def _build_rehydration_context_markdown(
     *,
-    title: str,
-    compact_summary: str,
-    detailed_excerpt: str,
-    decisions: list[dict[str, Any]],
-    open_questions: list[str],
-    citations: list[RehydrationCitation],
+    parts: _RehydrationContextParts,
 ) -> str:
     sections = [
-        f"# Rehydration Context: {title}",
-        f"## Compact Summary\n{compact_summary}",
+        f"# Rehydration Context: {parts.title}",
+        f"## Compact Summary\n{parts.compact_summary}",
     ]
-    if detailed_excerpt:
-        sections.append(f"## Detailed Notes Excerpt\n{detailed_excerpt}")
+    if parts.detailed_excerpt:
+        sections.append(f"## Detailed Notes Excerpt\n{parts.detailed_excerpt}")
     sections.extend(
         [
-            f"## Key Decisions\n{_format_decisions(decisions)}",
-            f"## Open Questions\n{_format_open_questions(open_questions)}",
-            f"## Top Citations\n{_format_citations(citations)}",
+            f"## Key Decisions\n{_format_decisions(parts.decisions)}",
+            f"## Open Questions\n{_format_open_questions(parts.open_questions)}",
+            f"## Top Citations\n{_format_citations(parts.citations)}",
         ]
     )
     return "\n\n".join(sections)
@@ -377,14 +394,7 @@ def _build_engram_json_payload(
 def _insert_engram_row(
     *,
     cur: Any,
-    engram_id: UUID,
-    payload: MemoryEngramCreate,
-    created_at: datetime,
-    owner_user_id: UUID | None,
-    retrieval_text: str,
-    embedding_model: str,
-    embedding_literal: str,
-    engram_json: dict[str, Any],
+    request: _EngramInsertRowRequest,
 ) -> None:
     cur.execute(
         """
@@ -400,23 +410,23 @@ def _insert_engram_row(
             )
             """,
         {
-            "engram_id": engram_id,
-            "project_id": payload.project_id,
-            "thread_id": payload.thread_id,
-            "created_at": created_at,
-            "updated_at": created_at,
-            "title": payload.title,
-            "abstract": payload.abstract,
-            "engram_json": Jsonb(engram_json),
-            "engram_markdown": payload.detailed_summary_markdown,
-            "tags": payload.tags,
-            "keywords": payload.keywords,
-            "owner_user_id": owner_user_id,
-            "visibility_scope": payload.visibility_scope,
-            "source_session_id": payload.source_session_id,
-            "retrieval_text": retrieval_text,
-            "embedding_model": embedding_model,
-            "embed": embedding_literal,
+            "engram_id": request.engram_id,
+            "project_id": request.payload.project_id,
+            "thread_id": request.payload.thread_id,
+            "created_at": request.created_at,
+            "updated_at": request.created_at,
+            "title": request.payload.title,
+            "abstract": request.payload.abstract,
+            "engram_json": Jsonb(request.engram_json),
+            "engram_markdown": request.payload.detailed_summary_markdown,
+            "tags": request.payload.tags,
+            "keywords": request.payload.keywords,
+            "owner_user_id": request.owner_user_id,
+            "visibility_scope": request.payload.visibility_scope,
+            "source_session_id": request.payload.source_session_id,
+            "retrieval_text": request.retrieval_text,
+            "embedding_model": request.embedding_model,
+            "embed": request.embedding_literal,
         },
     )
 
@@ -510,12 +520,14 @@ def _build_rehydration_content(
     )
     detailed_excerpt = _extract_detailed_excerpt(detailed_summary_markdown, max_chars=2400)
     context_markdown = _build_rehydration_context_markdown(
-        title=row["title"],
-        compact_summary=compact_summary,
-        detailed_excerpt=detailed_excerpt,
-        decisions=decisions,
-        open_questions=open_questions,
-        citations=packed_citations,
+        parts=_RehydrationContextParts(
+            title=row["title"],
+            compact_summary=compact_summary,
+            detailed_excerpt=detailed_excerpt,
+            decisions=decisions,
+            open_questions=open_questions,
+            citations=packed_citations,
+        ),
     )
     return _RehydrationContent(
         compact_summary=compact_summary,
@@ -551,14 +563,16 @@ def create_engram_with_report(
     with get_conn() as conn, conn.cursor() as cur:
         _insert_engram_row(
             cur=cur,
-            engram_id=engram_id,
-            payload=resolved_payload,
-            created_at=now,
-            owner_user_id=owner_user_id,
-            retrieval_text=retrieval_text,
-            embedding_model=embedding_result.provider_id,
-            embedding_literal=embedding_literal,
-            engram_json=engram_json,
+            request=_EngramInsertRowRequest(
+                engram_id=engram_id,
+                payload=resolved_payload,
+                created_at=now,
+                owner_user_id=owner_user_id,
+                retrieval_text=retrieval_text,
+                embedding_model=embedding_result.provider_id,
+                embedding_literal=embedding_literal,
+                engram_json=engram_json,
+            ),
         )
         _insert_claim_sources(cur=cur, engram_id=engram_id, payload=resolved_payload)
         _insert_artifacts(cur=cur, engram_id=engram_id, payload=resolved_payload)

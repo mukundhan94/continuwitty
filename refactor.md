@@ -579,6 +579,37 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 22 - Repository Request Objects Phase 6.8)
+
+- [x] Continued repository refactor to eliminate newly introduced excess-argument smells
+- [x] Added request/context dataclasses in `api/app/repository.py`:
+  - `_RehydrationContextParts`
+  - `_EngramInsertRowRequest`
+- [x] Refactored helper contracts to use these objects:
+  - `_build_rehydration_context_markdown(parts=...)`
+  - `_insert_engram_row(request=...)`
+- [x] Updated orchestrators to construct and pass request objects:
+  - `_build_rehydration_content(...)`
+  - `create_engram_with_report(...)`
+- [x] Test updates in `api/tests/test_repository_unit.py`:
+  - adapted rehydration-markdown test to use `_RehydrationContextParts`
+  - retained helper coverage for context formatting and engram JSON serialization
+- [x] Validation run:
+  - `uv run ruff check app/repository.py tests/test_repository_unit.py`
+  - `uv run pytest -q tests/test_repository_unit.py`
+  - `make test`
+  - aggregate: `9 passed` (targeted), `251 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/repository.py` score improved from **9.68** to **10.0**
+  - fixed: excess-arguments smell in `_build_rehydration_context_markdown(...)`
+  - fixed: excess-arguments smell in `_insert_engram_row(...)`
+  - `api/tests/test_repository_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -592,7 +623,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/oauth/registration.py` | 10.0 | GREEN |
 | `api/app/oauth/router.py` | 10.0 | GREEN |
 | `api/app/main.py` | 7.90 | YELLOW |
-| `api/app/repository.py` | 9.68 | GREEN |
+| `api/app/repository.py` | 10.0 | GREEN |
 | `api/app/providers/bedrock_provider.py` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 10.0 | GREEN |

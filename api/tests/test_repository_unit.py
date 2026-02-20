@@ -13,6 +13,7 @@ from app.repository import (
     _format_citations,
     _format_decisions,
     _format_open_questions,
+    _RehydrationContextParts,
     _rerank_by_combined_score,
 )
 
@@ -142,19 +143,21 @@ def test_build_rehydration_context_markdown_includes_expected_sections(
     expects_detailed_section: bool,
 ) -> None:
     markdown = _build_rehydration_context_markdown(
-        title="Checkpoint Summary",
-        compact_summary="Compact summary body.",
-        detailed_excerpt=detailed_excerpt,
-        decisions=[{"decision": "Use snapshots", "rationale": "Improves continuity"}],
-        open_questions=["Need retention policy?"],
-        citations=[
-            RehydrationCitation(
-                url="https://example.com/source",
-                title="Source",
-                snippet="Key evidence.",
-                captured_at=datetime(2026, 2, 20, tzinfo=UTC),
-            )
-        ],
+        parts=_RehydrationContextParts(
+            title="Checkpoint Summary",
+            compact_summary="Compact summary body.",
+            detailed_excerpt=detailed_excerpt,
+            decisions=[{"decision": "Use snapshots", "rationale": "Improves continuity"}],
+            open_questions=["Need retention policy?"],
+            citations=[
+                RehydrationCitation(
+                    url="https://example.com/source",
+                    title="Source",
+                    snippet="Key evidence.",
+                    captured_at=datetime(2026, 2, 20, tzinfo=UTC),
+                )
+            ],
+        ),
     )
 
     assert markdown.startswith("# Rehydration Context: Checkpoint Summary")
