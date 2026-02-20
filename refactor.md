@@ -722,6 +722,45 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 28 - Frontend API Test Coverage Phase 14.3)
+
+- [x] Continued Phase 14.3 by adding the planned missing frontend API-layer test modules
+- [x] Added `web/src/api/chat.test.ts`:
+  - query-string coverage for session listing
+  - create-session payload coverage
+  - streaming event filtering coverage (meta/chunk/done/error)
+  - stream error handling coverage (`ApiError`, missing stream body)
+- [x] Added `web/src/api/http.test.ts`:
+  - header/credentials behavior for `apiJson`
+  - JSON and text error parsing fallback behavior
+- [x] Added `web/src/api/ingestion.test.ts`:
+  - document list query coverage
+  - text ingestion payload coverage
+  - multipart file ingestion payload/metadata/title handling coverage
+  - ingestion error propagation coverage
+- [x] Added `web/src/api/mcpTokens.test.ts`:
+  - token list/create/revoke request coverage
+  - MCP stream-derived tools/projects result filtering+sorting coverage
+  - MCP error-frame propagation coverage
+- [x] Fixed discovered frontend API bug in `web/src/api/http.ts`:
+  - `apiJson` now merges caller headers safely while preserving default `Content-Type`
+- [x] Validation run:
+  - `npm run test -- src/api/http.test.ts src/api/chat.test.ts src/api/ingestion.test.ts src/api/mcpTokens.test.ts`
+  - `make test`
+  - `make web-check`
+  - aggregate: `19 passed` (targeted web), `274 passed` (backend), `71 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/api/http.ts` score: **10.0**
+  - `web/src/api/http.test.ts` score: **10.0**
+  - `web/src/api/chat.test.ts` score: **10.0**
+  - `web/src/api/ingestion.test.ts` score: **10.0**
+  - `web/src/api/mcpTokens.test.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -743,6 +782,11 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_user_repository.py` | 10.0 | GREEN |
 | `api/tests/test_db.py` | 10.0 | GREEN |
 | `api/tests/test_oauth_repository.py` | 10.0 | GREEN |
+| `web/src/api/http.ts` | 10.0 | GREEN |
+| `web/src/api/http.test.ts` | 10.0 | GREEN |
+| `web/src/api/chat.test.ts` | 10.0 | GREEN |
+| `web/src/api/ingestion.test.ts` | 10.0 | GREEN |
+| `web/src/api/mcpTokens.test.ts` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |

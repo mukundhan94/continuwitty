@@ -31,13 +31,15 @@ async function parseError(response: Response): Promise<ApiError> {
 }
 
 export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers)
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
   const response = await fetch(path, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers || {}),
-    },
     ...init,
+    credentials: 'include',
+    headers,
   })
 
   if (!response.ok) {
