@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
@@ -12,6 +13,15 @@ from fastapi.testclient import TestClient
 from app.oauth import api as oauth_api
 from app.oauth import registration as oauth_registration
 from app.oauth.models import OAuthAuthorizationCodeRecord, OAuthClientRecord
+
+
+@dataclass(frozen=True)
+class _RedirectValidationCase:
+    resolved_client: OAuthClientRecord | None
+    client_id: str
+    redirect_uri: str
+    status_code: int
+    error_code: str
 
 
 def _settings() -> SimpleNamespace:
@@ -76,38 +86,43 @@ def test_dedup_string_list_trims_and_deduplicates() -> None:
 
 
 @pytest.mark.parametrize(
-    ("resolved_client", "client_id", "redirect_uri", "status_code", "error_code"),
+    "case",
     [
-        (None, "missing-client", "https://example.com/callback", 401, "invalid_client"),
-        (
-            _oauth_client_record(),
-            "engram_client_test",
-            "https://evil.example.com/callback",
-            400,
-            "invalid_request",
+        _RedirectValidationCase(
+            resolved_client=None,
+            client_id="missing-client",
+            redirect_uri="https://example.com/callback",
+            status_code=401,
+            error_code="invalid_client",
+        ),
+        _RedirectValidationCase(
+            resolved_client=_oauth_client_record(),
+            client_id="engram_client_test",
+            redirect_uri="https://evil.example.com/callback",
+            status_code=400,
+            error_code="invalid_request",
         ),
     ],
 )
 def test_validate_oauth_client_and_redirect_rejects_invalid_inputs(
     monkeypatch,
-    resolved_client: OAuthClientRecord | None,
-    client_id: str,
-    redirect_uri: str,
-    status_code: int,
-    error_code: str,
+    case: _RedirectValidationCase,
 ) -> None:
-    monkeypatch.setattr("app.oauth.api.get_oauth_client", lambda *, client_id: resolved_client)
+    monkeypatch.setattr(
+        "app.oauth.api.get_oauth_client",
+        lambda *, client_id: case.resolved_client,
+    )
 
     client, error = oauth_api._validate_oauth_client_and_redirect(
-        client_id=client_id,
-        redirect_uri=redirect_uri,
+        client_id=case.client_id,
+        redirect_uri=case.redirect_uri,
     )
 
     assert client is None
     assert error is not None
-    assert error.status_code == status_code
+    assert error.status_code == case.status_code
     payload = json.loads(error.body)
-    assert payload["error"] == error_code
+    assert payload["error"] == case.error_code
 
 
 def test_handle_oauth_register_normalizes_lists_and_issues_secret(monkeypatch) -> None:
