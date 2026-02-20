@@ -541,6 +541,44 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 21 - Repository Flow Split Phase 6.7)
+
+- [x] Continued refactor of `api/app/repository.py` to satisfy the enforced `>= 9.5` CodeScene bar for touched files
+- [x] Decomposed create flow helpers:
+  - `_default_enrichment_report(...)`
+  - `_resolve_enriched_payload(...)`
+  - `_build_engram_json_payload(...)`
+  - `_insert_engram_row(...)`
+  - `_insert_claim_sources(...)`
+  - `_insert_artifacts(...)`
+- [x] Decomposed rehydration flow helpers:
+  - `_fetch_rehydration_rows(...)`
+  - `_build_rehydration_content(...)`
+  - `_format_open_questions(...)`
+  - `_build_rehydration_context_markdown(...)`
+  - `_RehydrationContent` dataclass
+- [x] `create_engram_with_report(...)` reduced from a large persistence method to a thin orchestrator
+- [x] `get_rehydration_bundle(...)` reduced from a complex formatter/query method to a thin orchestrator
+- [x] Test updates in `api/tests/test_repository_unit.py`:
+  - open-question formatter coverage
+  - rehydration-context markdown section coverage (with/without detailed excerpt)
+  - engram JSON payload serialization coverage (including auto metadata and source session id)
+- [x] Validation run:
+  - `uv run ruff check app/repository.py tests/test_repository_unit.py`
+  - `uv run pytest -q tests/test_repository_unit.py`
+  - `make test`
+  - aggregate: `9 passed` (targeted), `251 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/repository.py` score improved from **9.05** to **9.68**
+  - fixed: `create_engram_with_report(...)` large-method smell
+  - fixed: `get_rehydration_bundle(...)` complex-method smell
+  - `api/tests/test_repository_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -554,7 +592,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/oauth/registration.py` | 10.0 | GREEN |
 | `api/app/oauth/router.py` | 10.0 | GREEN |
 | `api/app/main.py` | 7.90 | YELLOW |
-| `api/app/repository.py` | 9.05 | GREEN |
+| `api/app/repository.py` | 9.68 | GREEN |
 | `api/app/providers/bedrock_provider.py` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 10.0 | GREEN |

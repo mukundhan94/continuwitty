@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -36,6 +37,16 @@ _GENERIC_CHAT_ABSTRACTS = {
     "chat snapshot",
     "session snapshot",
 }
+
+
+@dataclass(frozen=True)
+class _RehydrationContent:
+    compact_summary: str
+    detailed_summary_markdown: str
+    decisions: list[dict[str, Any]]
+    open_questions: list[str]
+    packed_citations: list[RehydrationCitation]
+    context_markdown: str
 
 
 def _vector_literal(values: list[float]) -> str:
@@ -275,17 +286,37 @@ def _format_decisions(decisions: list[dict[str, Any]]) -> str:
     return formatted or "- None"
 
 
-def create_engram_with_report(
-    payload: MemoryEngramCreate,
-    embedding_dim: int,
-    owner_user_id: UUID | None = None,
-    enrichment_origin: str = "unknown",
-) -> tuple[EngramCreateResponse, dict]:
-    # Fill-empty-only enrichment keeps explicit caller metadata untouched while
-    # enabling low-friction persistence workflows (for example MCP conversation
-    # snapshots that omit tags/keywords/abstract).
-    resolved_payload = payload
-    enrichment_report: dict = {
+def _format_open_questions(open_questions: list[str]) -> str:
+    return "\n".join(f"- {question}" for question in open_questions) or "- None"
+
+
+def _build_rehydration_context_markdown(
+    *,
+    title: str,
+    compact_summary: str,
+    detailed_excerpt: str,
+    decisions: list[dict[str, Any]],
+    open_questions: list[str],
+    citations: list[RehydrationCitation],
+) -> str:
+    sections = [
+        f"# Rehydration Context: {title}",
+        f"## Compact Summary\n{compact_summary}",
+    ]
+    if detailed_excerpt:
+        sections.append(f"## Detailed Notes Excerpt\n{detailed_excerpt}")
+    sections.extend(
+        [
+            f"## Key Decisions\n{_format_decisions(decisions)}",
+            f"## Open Questions\n{_format_open_questions(open_questions)}",
+            f"## Top Citations\n{_format_citations(citations)}",
+        ]
+    )
+    return "\n\n".join(sections)
+
+
+def _default_enrichment_report(*, enrichment_origin: str) -> dict[str, Any]:
+    return {
         "schema_version": "1.0",
         "origin": enrichment_origin,
         "enrichment_applied": False,
@@ -296,113 +327,241 @@ def create_engram_with_report(
         "auto_keywords": [],
         "abstract_source": None,
     }
+
+
+def _resolve_enriched_payload(
+    *,
+    payload: MemoryEngramCreate,
+    enrichment_origin: str,
+) -> tuple[MemoryEngramCreate, dict[str, Any]]:
+    enrichment_report = _default_enrichment_report(enrichment_origin=enrichment_origin)
     try:
         enrichment_result = enrich_if_missing(payload=payload, origin=enrichment_origin)
-        resolved_payload = enrichment_result.payload
-        enrichment_report = enrichment_result.report.model_dump(mode="json")
     except Exception:
         # Enrichment must remain best-effort and never block writes.
         logger.warning(
             "engram auto metadata enrichment failed; persisting original caller payload",
             exc_info=True,
         )
+        return payload, enrichment_report
+    return enrichment_result.payload, enrichment_result.report.model_dump(mode="json")
 
+
+def _build_engram_json_payload(
+    *,
+    payload: MemoryEngramCreate,
+    enrichment_report: dict[str, Any],
+    created_at: datetime,
+) -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "project_id": payload.project_id,
+        "thread_id": payload.thread_id,
+        "title": payload.title,
+        "abstract": payload.abstract,
+        "detailed_summary_markdown": payload.detailed_summary_markdown,
+        "decisions": [item.model_dump(mode="json") for item in payload.decisions],
+        "assumptions": payload.assumptions,
+        "open_questions": payload.open_questions,
+        "claims": [item.model_dump(mode="json") for item in payload.claims],
+        "tags": payload.tags,
+        "keywords": payload.keywords,
+        "artifacts": [item.model_dump(mode="json") for item in payload.artifacts],
+        "visibility_scope": payload.visibility_scope,
+        "source_session_id": str(payload.source_session_id) if payload.source_session_id else None,
+        "auto_metadata": enrichment_report,
+        "created_at": created_at.isoformat(),
+    }
+
+
+def _insert_engram_row(
+    *,
+    cur: Any,
+    engram_id: UUID,
+    payload: MemoryEngramCreate,
+    created_at: datetime,
+    owner_user_id: UUID | None,
+    retrieval_text: str,
+    embedding_model: str,
+    embedding_literal: str,
+    engram_json: dict[str, Any],
+) -> None:
+    cur.execute(
+        """
+            INSERT INTO engrams (
+                engram_id, project_id, thread_id, created_at, updated_at, schema_version,
+                title, abstract, engram_json, engram_markdown, tags, keywords, owner_user_id,
+                visibility_scope, source_session_id, retrieval_text, embedding_model, embed
+            )
+            VALUES (
+                %(engram_id)s, %(project_id)s, %(thread_id)s, %(created_at)s, %(updated_at)s, '1.0',
+                %(title)s, %(abstract)s, %(engram_json)s, %(engram_markdown)s, %(tags)s, %(keywords)s, %(owner_user_id)s,
+                %(visibility_scope)s, %(source_session_id)s, %(retrieval_text)s, %(embedding_model)s, %(embed)s::vector
+            )
+            """,
+        {
+            "engram_id": engram_id,
+            "project_id": payload.project_id,
+            "thread_id": payload.thread_id,
+            "created_at": created_at,
+            "updated_at": created_at,
+            "title": payload.title,
+            "abstract": payload.abstract,
+            "engram_json": Jsonb(engram_json),
+            "engram_markdown": payload.detailed_summary_markdown,
+            "tags": payload.tags,
+            "keywords": payload.keywords,
+            "owner_user_id": owner_user_id,
+            "visibility_scope": payload.visibility_scope,
+            "source_session_id": payload.source_session_id,
+            "retrieval_text": retrieval_text,
+            "embedding_model": embedding_model,
+            "embed": embedding_literal,
+        },
+    )
+
+
+def _insert_claim_sources(
+    *,
+    cur: Any,
+    engram_id: UUID,
+    payload: MemoryEngramCreate,
+) -> None:
+    for claim in payload.claims:
+        for source in claim.supporting_sources:
+            cur.execute(
+                """
+                    INSERT INTO sources (
+                        source_id, engram_id, captured_at, url, title, snippet, content_text, content_hash
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, NULL, NULL)
+                    """,
+                (
+                    uuid4(),
+                    engram_id,
+                    source.captured_at,
+                    source.url,
+                    source.title,
+                    source.snippet,
+                ),
+            )
+
+
+def _insert_artifacts(
+    *,
+    cur: Any,
+    engram_id: UUID,
+    payload: MemoryEngramCreate,
+) -> None:
+    for artifact in payload.artifacts:
+        cur.execute(
+            """
+                INSERT INTO artifacts (artifact_id, engram_id, artifact_type, storage_uri, metadata)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+            (
+                uuid4(),
+                engram_id,
+                artifact.artifact_type,
+                artifact.storage_uri,
+                Jsonb(artifact.metadata),
+            ),
+        )
+
+
+def _fetch_rehydration_rows(
+    *,
+    engram_id: UUID,
+    actor_user_id: UUID | None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+    with get_conn() as conn, conn.cursor() as cur:
+        row = _fetch_engram_row(
+            cur=cur,
+            engram_id=engram_id,
+            actor_user_id=actor_user_id,
+        )
+        if not row:
+            return None
+        source_rows = _fetch_source_rows(
+            cur=cur,
+            engram_id=engram_id,
+            limit=25,
+        )
+    return row, source_rows
+
+
+def _build_rehydration_content(
+    *,
+    row: dict[str, Any],
+    source_rows: list[dict[str, Any]],
+) -> _RehydrationContent:
+    engram_json = row["engram_json"] or {}
+    decisions = engram_json.get("decisions", [])
+    open_questions = engram_json.get("open_questions", [])
+    citations = [RehydrationCitation(**source_row) for source_row in source_rows]
+    packed_citations = _pack_citations(citations, limit=5)
+
+    detailed_summary_markdown = str(
+        engram_json.get("detailed_summary_markdown") or row.get("engram_markdown") or ""
+    ).strip()
+    compact_summary = _resolve_compact_summary(
+        abstract=str(row.get("abstract") or ""),
+        detailed_summary_markdown=detailed_summary_markdown,
+    )
+    detailed_excerpt = _extract_detailed_excerpt(detailed_summary_markdown, max_chars=2400)
+    context_markdown = _build_rehydration_context_markdown(
+        title=row["title"],
+        compact_summary=compact_summary,
+        detailed_excerpt=detailed_excerpt,
+        decisions=decisions,
+        open_questions=open_questions,
+        citations=packed_citations,
+    )
+    return _RehydrationContent(
+        compact_summary=compact_summary,
+        detailed_summary_markdown=detailed_summary_markdown,
+        decisions=decisions,
+        open_questions=open_questions,
+        packed_citations=packed_citations,
+        context_markdown=context_markdown,
+    )
+
+
+def create_engram_with_report(
+    payload: MemoryEngramCreate,
+    embedding_dim: int,
+    owner_user_id: UUID | None = None,
+    enrichment_origin: str = "unknown",
+) -> tuple[EngramCreateResponse, dict]:
+    resolved_payload, enrichment_report = _resolve_enriched_payload(
+        payload=payload,
+        enrichment_origin=enrichment_origin,
+    )
     engram_id = uuid4()
     now = datetime.now(UTC)
     retrieval_text = _build_retrieval_text(resolved_payload)
     embedding_result = embed_text(retrieval_text, dim=embedding_dim)
     embedding_literal = _vector_literal(embedding_result.vector)
-
-    engram_json = {
-        "schema_version": "1.0",
-        "project_id": resolved_payload.project_id,
-        "thread_id": resolved_payload.thread_id,
-        "title": resolved_payload.title,
-        "abstract": resolved_payload.abstract,
-        "detailed_summary_markdown": resolved_payload.detailed_summary_markdown,
-        "decisions": [item.model_dump(mode="json") for item in resolved_payload.decisions],
-        "assumptions": resolved_payload.assumptions,
-        "open_questions": resolved_payload.open_questions,
-        "claims": [item.model_dump(mode="json") for item in resolved_payload.claims],
-        "tags": resolved_payload.tags,
-        "keywords": resolved_payload.keywords,
-        "artifacts": [item.model_dump(mode="json") for item in resolved_payload.artifacts],
-        "visibility_scope": resolved_payload.visibility_scope,
-        "source_session_id": (
-            str(resolved_payload.source_session_id) if resolved_payload.source_session_id else None
-        ),
-        "auto_metadata": enrichment_report,
-        "created_at": now.isoformat(),
-    }
+    engram_json = _build_engram_json_payload(
+        payload=resolved_payload,
+        enrichment_report=enrichment_report,
+        created_at=now,
+    )
 
     with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-                INSERT INTO engrams (
-                    engram_id, project_id, thread_id, created_at, updated_at, schema_version,
-                    title, abstract, engram_json, engram_markdown, tags, keywords, owner_user_id,
-                    visibility_scope, source_session_id, retrieval_text, embedding_model, embed
-                )
-                VALUES (
-                    %(engram_id)s, %(project_id)s, %(thread_id)s, %(created_at)s, %(updated_at)s, '1.0',
-                    %(title)s, %(abstract)s, %(engram_json)s, %(engram_markdown)s, %(tags)s, %(keywords)s, %(owner_user_id)s,
-                    %(visibility_scope)s, %(source_session_id)s, %(retrieval_text)s, %(embedding_model)s, %(embed)s::vector
-                )
-                """,
-            {
-                "engram_id": engram_id,
-                "project_id": resolved_payload.project_id,
-                "thread_id": resolved_payload.thread_id,
-                "created_at": now,
-                "updated_at": now,
-                "title": resolved_payload.title,
-                "abstract": resolved_payload.abstract,
-                "engram_json": Jsonb(engram_json),
-                "engram_markdown": resolved_payload.detailed_summary_markdown,
-                "tags": resolved_payload.tags,
-                "keywords": resolved_payload.keywords,
-                "owner_user_id": owner_user_id,
-                "visibility_scope": resolved_payload.visibility_scope,
-                "source_session_id": resolved_payload.source_session_id,
-                "retrieval_text": retrieval_text,
-                "embedding_model": embedding_result.provider_id,
-                "embed": embedding_literal,
-            },
+        _insert_engram_row(
+            cur=cur,
+            engram_id=engram_id,
+            payload=resolved_payload,
+            created_at=now,
+            owner_user_id=owner_user_id,
+            retrieval_text=retrieval_text,
+            embedding_model=embedding_result.provider_id,
+            embedding_literal=embedding_literal,
+            engram_json=engram_json,
         )
-
-        for claim in resolved_payload.claims:
-            for source in claim.supporting_sources:
-                cur.execute(
-                    """
-                        INSERT INTO sources (
-                            source_id, engram_id, captured_at, url, title, snippet, content_text, content_hash
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s, NULL, NULL)
-                        """,
-                    (
-                        uuid4(),
-                        engram_id,
-                        source.captured_at,
-                        source.url,
-                        source.title,
-                        source.snippet,
-                    ),
-                )
-
-        for artifact in resolved_payload.artifacts:
-            cur.execute(
-                """
-                    INSERT INTO artifacts (artifact_id, engram_id, artifact_type, storage_uri, metadata)
-                    VALUES (%s, %s, %s, %s, %s)
-                    """,
-                (
-                    uuid4(),
-                    engram_id,
-                    artifact.artifact_type,
-                    artifact.storage_uri,
-                    Jsonb(artifact.metadata),
-                ),
-            )
+        _insert_claim_sources(cur=cur, engram_id=engram_id, payload=resolved_payload)
+        _insert_artifacts(cur=cur, engram_id=engram_id, payload=resolved_payload)
 
     return EngramCreateResponse(engram_id=engram_id, created_at=now), enrichment_report
 
@@ -521,62 +680,25 @@ def get_rehydration_bundle(
     engram_id: UUID,
     actor_user_id: UUID | None = None,
 ) -> RehydrationBundle | None:
-    with get_conn() as conn, conn.cursor() as cur:
-        row = _fetch_engram_row(
-            cur=cur,
-            engram_id=engram_id,
-            actor_user_id=actor_user_id,
-        )
-        if not row:
-            return None
-        source_rows = _fetch_source_rows(
-            cur=cur,
-            engram_id=engram_id,
-            limit=25,
-        )
-
-    engram_json = row["engram_json"] or {}
-    decisions = engram_json.get("decisions", [])
-    open_questions = engram_json.get("open_questions", [])
-    citations = [RehydrationCitation(**source_row) for source_row in source_rows]
-    packed_citations = _pack_citations(citations, limit=5)
-
-    detailed_summary_markdown = str(
-        engram_json.get("detailed_summary_markdown") or row.get("engram_markdown") or ""
-    ).strip()
-    compact_summary = _resolve_compact_summary(
-        abstract=str(row.get("abstract") or ""),
-        detailed_summary_markdown=detailed_summary_markdown,
+    rehydration_rows = _fetch_rehydration_rows(
+        engram_id=engram_id,
+        actor_user_id=actor_user_id,
     )
-    detailed_excerpt = _extract_detailed_excerpt(detailed_summary_markdown, max_chars=2400)
-    citation_text = _format_citations(packed_citations)
-    decisions_text = _format_decisions(decisions)
-    questions_text = "\n".join(f"- {question}" for question in open_questions) or "- None"
-    sections = [
-        f"# Rehydration Context: {row['title']}",
-        f"## Compact Summary\n{compact_summary}",
-    ]
-    if detailed_excerpt:
-        sections.append(f"## Detailed Notes Excerpt\n{detailed_excerpt}")
-    sections.extend(
-        [
-            f"## Key Decisions\n{decisions_text}",
-            f"## Open Questions\n{questions_text}",
-            f"## Top Citations\n{citation_text}",
-        ]
-    )
-    context_markdown = "\n\n".join(sections)
+    if rehydration_rows is None:
+        return None
+    row, source_rows = rehydration_rows
+    content = _build_rehydration_content(row=row, source_rows=source_rows)
 
     return RehydrationBundle(
         engram_id=row["engram_id"],
         project_id=row["project_id"],
         title=row["title"],
-        compact_summary=compact_summary,
-        detailed_summary_markdown=detailed_summary_markdown,
-        key_decisions=decisions,
-        open_questions=open_questions,
-        top_citations=packed_citations,
-        context_markdown=context_markdown,
+        compact_summary=content.compact_summary,
+        detailed_summary_markdown=content.detailed_summary_markdown,
+        key_decisions=content.decisions,
+        open_questions=content.open_questions,
+        top_citations=content.packed_citations,
+        context_markdown=content.context_markdown,
         owner_user_id=row.get("owner_user_id"),
         visibility_scope=row.get("visibility_scope") or "private",
     )

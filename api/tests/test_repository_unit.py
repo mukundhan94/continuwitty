@@ -3,11 +3,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from app.models import EngramQueryRequest, RehydrationCitation
+import pytest
+
+from app.models import EngramQueryRequest, MemoryEngramCreate, RehydrationCitation
 from app.repository import (
+    _build_engram_json_payload,
     _build_engram_query_where,
+    _build_rehydration_context_markdown,
     _format_citations,
     _format_decisions,
+    _format_open_questions,
     _rerank_by_combined_score,
 )
 
@@ -118,3 +123,66 @@ def test_format_decisions_formats_entries_and_defaults() -> None:
     )
     assert decisions_text == "- Use durable checkpoints: Prevents context loss"
     assert _format_decisions([]) == "- None"
+
+
+def test_format_open_questions_formats_entries_and_defaults() -> None:
+    assert _format_open_questions(["What caused drift?"]) == "- What caused drift?"
+    assert _format_open_questions([]) == "- None"
+
+
+@pytest.mark.parametrize(
+    ("detailed_excerpt", "expects_detailed_section"),
+    [
+        ("Detailed analysis excerpt.", True),
+        ("", False),
+    ],
+)
+def test_build_rehydration_context_markdown_includes_expected_sections(
+    detailed_excerpt: str,
+    expects_detailed_section: bool,
+) -> None:
+    markdown = _build_rehydration_context_markdown(
+        title="Checkpoint Summary",
+        compact_summary="Compact summary body.",
+        detailed_excerpt=detailed_excerpt,
+        decisions=[{"decision": "Use snapshots", "rationale": "Improves continuity"}],
+        open_questions=["Need retention policy?"],
+        citations=[
+            RehydrationCitation(
+                url="https://example.com/source",
+                title="Source",
+                snippet="Key evidence.",
+                captured_at=datetime(2026, 2, 20, tzinfo=UTC),
+            )
+        ],
+    )
+
+    assert markdown.startswith("# Rehydration Context: Checkpoint Summary")
+    assert "## Compact Summary\nCompact summary body." in markdown
+    assert ("## Detailed Notes Excerpt" in markdown) is expects_detailed_section
+    assert "## Key Decisions\n- Use snapshots: Improves continuity" in markdown
+    assert "## Open Questions\n- Need retention policy?" in markdown
+    assert "## Top Citations\n- Source (https://example.com/source): Key evidence." in markdown
+
+
+def test_build_engram_json_payload_serializes_report_and_source_session_id() -> None:
+    source_session_id = uuid4()
+    payload = _build_engram_json_payload(
+        payload=MemoryEngramCreate(
+            project_id="project-1",
+            thread_id="thread-1",
+            title="Checkpoint",
+            abstract="Summary",
+            detailed_summary_markdown="Detailed body",
+            source_session_id=source_session_id,
+        ),
+        enrichment_report={"enrichment_applied": True, "schema_version": "1.0"},
+        created_at=datetime(2026, 2, 20, 12, 0, tzinfo=UTC),
+    )
+
+    assert payload["project_id"] == "project-1"
+    assert payload["thread_id"] == "thread-1"
+    assert payload["title"] == "Checkpoint"
+    assert payload["source_session_id"] == str(source_session_id)
+    assert payload["auto_metadata"]["enrichment_applied"] is True
+    assert payload["created_at"] == "2026-02-20T12:00:00+00:00"
