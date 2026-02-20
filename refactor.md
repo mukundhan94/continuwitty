@@ -681,6 +681,28 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 26 - OAuth Repository Coverage Phase 14.4)
+
+- [x] Continued testing phase with a dedicated OAuth repository unit suite
+- [x] Added new backend test module `api/tests/test_oauth_repository.py`:
+  - client creation coverage with metadata JSONB serialization assertion
+  - client lookup coverage for both found and missing records
+  - authorization-code creation coverage for parameter mapping
+  - authorization-code lookup coverage (including default empty scope normalization)
+  - authorization-code consume coverage for both success and already-consumed paths
+- [x] Validation run:
+  - `uv run ruff check tests/test_oauth_repository.py`
+  - `uv run pytest -q tests/test_oauth_repository.py`
+  - `make test`
+  - aggregate: `8 passed` (targeted), `274 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/tests/test_oauth_repository.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -701,6 +723,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_login_guard.py` | 10.0 | GREEN |
 | `api/tests/test_user_repository.py` | 10.0 | GREEN |
 | `api/tests/test_db.py` | 10.0 | GREEN |
+| `api/tests/test_oauth_repository.py` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |
