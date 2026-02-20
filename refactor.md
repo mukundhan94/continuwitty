@@ -512,6 +512,35 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 20 - OAuth Module Split Phase 6.6)
+
+- [x] Continued OAuth refactor to satisfy the enforced `>= 9.5` CodeScene bar for all touched files
+- [x] Split shared OAuth helpers out of `api/app/oauth/api.py` into:
+  - `api/app/oauth/common.py`
+  - `api/app/oauth/router.py`
+  - `api/app/oauth/registration.py`
+- [x] Kept `api/app/oauth/api.py` focused on authorization-code/token exchange flow
+- [x] Preserved compatibility by keeping `create_oauth_router(...)` in `api.py` as a delegating entry point
+- [x] Updated tests in `api/tests/test_oauth_api_unit.py` for registration monkeypatch paths:
+  - moved patch targets from `app.oauth.api.*` to `app.oauth.registration.*`
+  - switched registration payload/handler references to `oauth_registration`
+- [x] Validation run:
+  - `uv run ruff check app/oauth/api.py app/oauth/common.py app/oauth/registration.py app/oauth/router.py tests/test_oauth_api_unit.py`
+  - `uv run pytest -q tests/test_oauth_api_unit.py tests/test_oauth_service.py tests/test_mcp_oauth_integration.py`
+  - `make test`
+  - aggregate: `13 passed, 6 skipped` (targeted), `247 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/oauth/api.py` improved from **8.96** to **10.0**
+  - `api/app/oauth/common.py` score: **10.0**
+  - `api/app/oauth/registration.py` score: **10.0**
+  - `api/app/oauth/router.py` score: **10.0**
+  - `api/tests/test_oauth_api_unit.py` score: **9.68**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -520,7 +549,10 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
-| `api/app/oauth/api.py` | 8.96 | GREEN |
+| `api/app/oauth/api.py` | 10.0 | GREEN |
+| `api/app/oauth/common.py` | 10.0 | GREEN |
+| `api/app/oauth/registration.py` | 10.0 | GREEN |
+| `api/app/oauth/router.py` | 10.0 | GREEN |
 | `api/app/main.py` | 7.90 | YELLOW |
 | `api/app/repository.py` | 9.05 | GREEN |
 | `api/app/providers/bedrock_provider.py` | 10.0 | GREEN |

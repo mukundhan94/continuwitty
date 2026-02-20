@@ -5,10 +5,12 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.oauth import api as oauth_api
+from app.oauth import registration as oauth_registration
 from app.oauth.models import OAuthAuthorizationCodeRecord, OAuthClientRecord
 
 
@@ -67,43 +69,45 @@ def _oauth_code_record(
 
 
 def test_dedup_string_list_trims_and_deduplicates() -> None:
-    assert oauth_api._dedup_string_list(["  one  ", "", "one", " two ", "two"]) == [
+    assert oauth_registration._dedup_string_list(["  one  ", "", "one", " two ", "two"]) == [
         "one",
         "two",
     ]
 
 
-def test_validate_oauth_client_and_redirect_rejects_unknown_client(monkeypatch) -> None:
-    monkeypatch.setattr("app.oauth.api.get_oauth_client", lambda *, client_id: None)
+@pytest.mark.parametrize(
+    ("resolved_client", "client_id", "redirect_uri", "status_code", "error_code"),
+    [
+        (None, "missing-client", "https://example.com/callback", 401, "invalid_client"),
+        (
+            _oauth_client_record(),
+            "engram_client_test",
+            "https://evil.example.com/callback",
+            400,
+            "invalid_request",
+        ),
+    ],
+)
+def test_validate_oauth_client_and_redirect_rejects_invalid_inputs(
+    monkeypatch,
+    resolved_client: OAuthClientRecord | None,
+    client_id: str,
+    redirect_uri: str,
+    status_code: int,
+    error_code: str,
+) -> None:
+    monkeypatch.setattr("app.oauth.api.get_oauth_client", lambda *, client_id: resolved_client)
 
     client, error = oauth_api._validate_oauth_client_and_redirect(
-        client_id="missing-client",
-        redirect_uri="https://example.com/callback",
+        client_id=client_id,
+        redirect_uri=redirect_uri,
     )
 
     assert client is None
     assert error is not None
-    assert error.status_code == 401
+    assert error.status_code == status_code
     payload = json.loads(error.body)
-    assert payload["error"] == "invalid_client"
-
-
-def test_validate_oauth_client_and_redirect_rejects_unregistered_redirect(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "app.oauth.api.get_oauth_client",
-        lambda *, client_id: _oauth_client_record(),
-    )
-
-    client, error = oauth_api._validate_oauth_client_and_redirect(
-        client_id="engram_client_test",
-        redirect_uri="https://evil.example.com/callback",
-    )
-
-    assert client is None
-    assert error is not None
-    assert error.status_code == 400
-    payload = json.loads(error.body)
-    assert payload["error"] == "invalid_request"
+    assert payload["error"] == error_code
 
 
 def test_handle_oauth_register_normalizes_lists_and_issues_secret(monkeypatch) -> None:
@@ -123,12 +127,12 @@ def test_handle_oauth_register_normalizes_lists_and_issues_secret(monkeypatch) -
             created_at=datetime(2026, 2, 19, tzinfo=UTC),
         )
 
-    monkeypatch.setattr("app.oauth.api.build_oauth_client_id", lambda: "engram_client_static")
-    monkeypatch.setattr("app.oauth.api.issue_oauth_client_secret", lambda: "secret-value")
-    monkeypatch.setattr("app.oauth.api.oauth_secret_hash", lambda **_: "hashed-secret")
-    monkeypatch.setattr("app.oauth.api.create_oauth_client", _fake_create_oauth_client)
+    monkeypatch.setattr("app.oauth.registration.build_oauth_client_id", lambda: "engram_client_static")
+    monkeypatch.setattr("app.oauth.registration.issue_oauth_client_secret", lambda: "secret-value")
+    monkeypatch.setattr("app.oauth.registration.oauth_secret_hash", lambda **_: "hashed-secret")
+    monkeypatch.setattr("app.oauth.registration.create_oauth_client", _fake_create_oauth_client)
 
-    payload = oauth_api.OAuthClientRegistrationRequest(
+    payload = oauth_registration.OAuthClientRegistrationRequest(
         client_name="  Test Client  ",
         redirect_uris=[" https://example.com/callback ", "", "https://example.com/callback"],
         grant_types=[],
@@ -136,7 +140,7 @@ def test_handle_oauth_register_normalizes_lists_and_issues_secret(monkeypatch) -
         token_endpoint_auth_method="client_secret_post",
     )
 
-    response = oauth_api._handle_oauth_register(settings=_settings(), payload=payload)
+    response = oauth_registration._handle_oauth_register(settings=_settings(), payload=payload)
 
     assert response.status_code == 201
     response_payload = json.loads(response.body)
@@ -226,8 +230,20 @@ def test_validate_authorization_code_exchange_rejects_redirect_mismatch() -> Non
     assert "redirect_uri mismatch" in payload["error_description"]
 
 
-def test_handle_oauth_token_rejects_unknown_client(monkeypatch) -> None:
-    monkeypatch.setattr("app.oauth.api.get_oauth_client", lambda *, client_id: None)
+@pytest.mark.parametrize(
+    ("resolved_client", "client_id", "error_description"),
+    [
+        (None, "missing", None),
+        (_oauth_client_record(token_endpoint_auth_method="client_secret_post"), "engram_client_test", "client_secret is required"),
+    ],
+)
+def test_handle_oauth_token_rejects_invalid_clients(
+    monkeypatch,
+    resolved_client: OAuthClientRecord | None,
+    client_id: str,
+    error_description: str | None,
+) -> None:
+    monkeypatch.setattr("app.oauth.api.get_oauth_client", lambda *, client_id: resolved_client)
 
     response = oauth_api._handle_oauth_token(
         settings=_settings(),
@@ -235,7 +251,7 @@ def test_handle_oauth_token_rejects_unknown_client(monkeypatch) -> None:
             grant_type="authorization_code",
             code="code",
             redirect_uri="https://example.com/callback",
-            client_id="missing",
+            client_id=client_id,
             code_verifier="verifier",
             client_secret=None,
         ),
@@ -244,27 +260,5 @@ def test_handle_oauth_token_rejects_unknown_client(monkeypatch) -> None:
     assert response.status_code == 401
     payload = json.loads(response.body)
     assert payload["error"] == "invalid_client"
-
-
-def test_handle_oauth_token_confidential_client_requires_secret(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "app.oauth.api.get_oauth_client",
-        lambda *, client_id: _oauth_client_record(token_endpoint_auth_method="client_secret_post"),
-    )
-
-    response = oauth_api._handle_oauth_token(
-        settings=_settings(),
-        payload=oauth_api.OAuthTokenRequest(
-            grant_type="authorization_code",
-            code="code",
-            redirect_uri="https://example.com/callback",
-            client_id="engram_client_test",
-            code_verifier="verifier",
-            client_secret=None,
-        ),
-    )
-
-    assert response.status_code == 401
-    payload = json.loads(response.body)
-    assert payload["error"] == "invalid_client"
-    assert "client_secret is required" in payload["error_description"]
+    if error_description is not None:
+        assert error_description in payload["error_description"]
