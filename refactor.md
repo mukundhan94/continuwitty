@@ -761,6 +761,35 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 29 - Chat API Module Split Phase 10/14 Hardening)
+
+- [x] Continued frontend refactor by decomposing `web/src/api/chat.ts` into focused modules
+- [x] Added new chat API modules:
+  - `web/src/api/chatTypes.ts` (shared payload/event types)
+  - `web/src/api/chatSessionsApi.ts` (session and listing routes)
+  - `web/src/api/chatPinsApi.ts` (pin/unpin and pinned-list routes)
+  - `web/src/api/chatMessagesApi.ts` (send/stream/continue/save routes)
+- [x] Converted `web/src/api/chat.ts` into a stable barrel export to preserve existing import paths
+- [x] Reduced stream-event branching complexity by extracting helpers:
+  - `isChatStreamEventName(...)`
+  - `toChatStreamEvent(...)`
+- [x] Preserved all call sites (`App.tsx`, tests, components) without interface changes
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/api/chat.test.ts src/api/http.test.ts src/api/ingestion.test.ts src/api/mcpTokens.test.ts`
+  - `make test`
+  - `make web-check`
+  - aggregate: `19 passed` (targeted web), `274 passed` (backend), `71 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/api/chatSessionsApi.ts` score: **10.0**
+  - `web/src/api/chatPinsApi.ts` score: **10.0**
+  - `web/src/api/chatMessagesApi.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -787,6 +816,9 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `web/src/api/chat.test.ts` | 10.0 | GREEN |
 | `web/src/api/ingestion.test.ts` | 10.0 | GREEN |
 | `web/src/api/mcpTokens.test.ts` | 10.0 | GREEN |
+| `web/src/api/chatSessionsApi.ts` | 10.0 | GREEN |
+| `web/src/api/chatPinsApi.ts` | 10.0 | GREEN |
+| `web/src/api/chatMessagesApi.ts` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |
