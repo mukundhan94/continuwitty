@@ -158,6 +158,28 @@ async def _parse_mcp_token_form_payload(
 MCP_TOKEN_FORM_PAYLOAD_DEPENDENCY = Depends(_parse_mcp_token_form_payload)
 
 
+@dataclass(frozen=True)
+class _LoginFormPayload:
+    username: str
+    password: str
+    csrf_token: str
+    next_path: str
+
+
+async def _parse_login_form_payload(request: Request) -> _LoginFormPayload:
+    form = await request.form()
+    return _LoginFormPayload(
+        username=str(form.get("username", "")),
+        password=str(form.get("password", "")),
+        csrf_token=str(form.get("csrf_token", "")),
+        next_path=str(form.get("next_path", "")),
+    )
+
+
+# FastAPI dependency object kept at module scope to satisfy lint rule B008.
+LOGIN_FORM_PAYLOAD_DEPENDENCY = Depends(_parse_login_form_payload)
+
+
 def _session_user(request: Request) -> dict[str, Any] | None:
     user = request.session.get("user")
     if isinstance(user, dict) and user.get("user_id") and user.get("username") and user.get("role"):
@@ -365,18 +387,15 @@ def login_page(request: Request, next: str | None = Query(default=None)) -> Resp
 @app.post("/login", response_class=HTMLResponse, include_in_schema=False)
 def login_submit(
     request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
-    csrf_token: str = Form(...),
-    next_path: str = Form(default=""),
+    payload: _LoginFormPayload = LOGIN_FORM_PAYLOAD_DEPENDENCY,
 ) -> Response:
     attempt_key = _validate_login_preconditions(
         request=request,
-        username=username,
-        csrf_token=csrf_token,
+        username=payload.username,
+        csrf_token=payload.csrf_token,
     )
 
-    authenticated_user = _authenticate_user(username, password)
+    authenticated_user = _authenticate_user(payload.username, payload.password)
     if authenticated_user:
         login_attempt_guard.register_success(attempt_key)
         request.session["user"] = authenticated_user
@@ -387,14 +406,14 @@ def login_submit(
             success=True,
             username=authenticated_user["username"],
         )
-        return RedirectResponse(url=_safe_next_path(next_path) or "/ui", status_code=303)
+        return RedirectResponse(url=_safe_next_path(payload.next_path) or "/ui", status_code=303)
 
     login_attempt_guard.register_failure(attempt_key)
     log_audit_event(
         request=request,
         event_type="login_failed",
         success=False,
-        username=username,
+        username=payload.username,
     )
     return templates.TemplateResponse(
         request,
@@ -403,7 +422,7 @@ def login_submit(
             "request": request,
             "error": "Invalid username or password.",
             "csrf_token": _csrf_token_for_request(request),
-            "next_path": _safe_next_path(next_path) or "",
+            "next_path": _safe_next_path(payload.next_path) or "",
         },
         status_code=401,
     )

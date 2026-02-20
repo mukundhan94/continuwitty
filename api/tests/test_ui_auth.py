@@ -1,5 +1,6 @@
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
@@ -116,6 +117,34 @@ def test_login_and_logout_workflow() -> None:
     blocked_dashboard = client.get("/ui", follow_redirects=False)
     assert blocked_dashboard.status_code == 303
     assert blocked_dashboard.headers["location"] == "/login"
+
+
+@pytest.mark.parametrize(
+    ("next_path", "expected_location"),
+    [
+        ("/ui/admin", "/ui/admin"),
+        ("https://malicious.example/phish", "/ui"),
+    ],
+)
+def test_login_redirect_path_sanitization(next_path: str, expected_location: str) -> None:
+    client = TestClient(app)
+    settings = get_settings()
+
+    login_page = client.get("/login")
+    csrf_token = _extract_csrf_token(login_page.text)
+    login_response = client.post(
+        "/login",
+        data={
+            "username": settings.ui_demo_username,
+            "password": settings.ui_demo_password,
+            "csrf_token": csrf_token,
+            "next_path": next_path,
+        },
+        follow_redirects=False,
+    )
+
+    assert login_response.status_code == 303
+    assert login_response.headers["location"] == expected_location
 
 
 def test_logout_rejects_invalid_csrf() -> None:

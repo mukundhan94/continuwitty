@@ -484,6 +484,34 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 19 - Main Login Flow Phase 6.5)
+
+- [x] Continued refactor of `api/app/main.py` login endpoint to remove excess-arguments smell
+- [x] Added request dataclass + parser dependency:
+  - `_LoginFormPayload`
+  - `_parse_login_form_payload(...)`
+  - `LOGIN_FORM_PAYLOAD_DEPENDENCY`
+- [x] Updated `login_submit(...)` to consume `_LoginFormPayload` instead of separate form arguments
+- [x] Preserved login behavior:
+  - CSRF validation and rate-limit guard unchanged
+  - successful login still rotates CSRF token
+  - redirect continues to use `_safe_next_path(...)` fallback to `/ui`
+- [x] Test updates in `api/tests/test_ui_auth.py`:
+  - added parametrized test `test_login_redirect_path_sanitization` for safe and unsafe `next_path` inputs
+- [x] Validation run:
+  - `uv run ruff check app/main.py tests/test_ui_auth.py`
+  - `uv run pytest -q tests/test_ui_auth.py tests/test_api_integration.py`
+  - `make test`
+  - aggregate: `18 passed` (targeted), `247 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/main.py` score improved from **7.66** to **7.90**
+  - fixed: excess-arguments smell for `login_submit(...)`
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -493,7 +521,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
 | `api/app/oauth/api.py` | 8.96 | GREEN |
-| `api/app/main.py` | 7.66 | YELLOW |
+| `api/app/main.py` | 7.90 | YELLOW |
 | `api/app/repository.py` | 9.05 | GREEN |
 | `api/app/providers/bedrock_provider.py` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
