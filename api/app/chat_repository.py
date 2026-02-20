@@ -36,19 +36,59 @@ _CHAT_SESSION_COLUMNS = """
                 updated_at
 """
 
+@dataclass(frozen=True)
+class _PinnedResourceConfig:
+    resource_table: str
+    resource_access_clause: str
+
+
+@dataclass(frozen=True)
+class _PinnedResourceMutationRequest:
+    table: str
+    id_column: str
+    resource_id: UUID
+    session_id: UUID
+    actor_user_id: UUID
+
+
+@dataclass(frozen=True)
+class _PinnedResourceListConfig:
+    id_column: str
+    join_sql: str
+    resource_access_clause: str
+    include_resource_actor_param: bool = False
+
+
 _PINNED_RESOURCE_CONFIG = {
-    "session_pinned_engrams": (
-        "engrams",
-        """
+    "session_pinned_engrams": _PinnedResourceConfig(
+        resource_table="engrams",
+        resource_access_clause="""
                     r.deleted_at IS NULL
                     AND (r.owner_user_id = %s OR r.visibility_scope = 'project' OR r.owner_user_id IS NULL)
         """,
     ),
-    "session_pinned_documents": (
-        "documents",
-        """
+    "session_pinned_documents": _PinnedResourceConfig(
+        resource_table="documents",
+        resource_access_clause="""
                     (r.owner_user_id = %s OR r.visibility_scope = 'project')
         """,
+    ),
+}
+
+_PINNED_RESOURCE_LIST_CONFIG = {
+    "session_pinned_engrams": _PinnedResourceListConfig(
+        id_column="engram_id",
+        join_sql="",
+        resource_access_clause="1=1",
+    ),
+    "session_pinned_documents": _PinnedResourceListConfig(
+        id_column="document_id",
+        join_sql="""
+            JOIN documents d
+              ON d.document_id = p.document_id
+        """,
+        resource_access_clause="(d.owner_user_id = %s OR d.visibility_scope = 'project')",
+        include_resource_actor_param=True,
     ),
 }
 
@@ -337,14 +377,10 @@ def list_chat_messages(
 
 def _pin_resource_to_session(
     *,
-    table: str,
-    id_column: str,
-    resource_id: UUID,
-    session_id: UUID,
-    actor_user_id: UUID,
+    request: _PinnedResourceMutationRequest,
     conn,
 ):
-    resource_table, resource_access_clause = _PINNED_RESOURCE_CONFIG[table]
+    config = _PINNED_RESOURCE_CONFIG[request.table]
     with conn.cursor() as cur:
         cur.execute(
             f"""
@@ -357,39 +393,39 @@ def _pin_resource_to_session(
                     AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             ),
             accessible_resource AS (
-                SELECT r.{id_column}
-                FROM {resource_table} r
+                SELECT r.{request.id_column}
+                FROM {config.resource_table} r
                 WHERE
-                    r.{id_column} = %s
-                    AND {resource_access_clause}
+                    r.{request.id_column} = %s
+                    AND {config.resource_access_clause}
             )
-            INSERT INTO {table} (
+            INSERT INTO {request.table} (
                 session_id,
-                {id_column},
+                {request.id_column},
                 pinned_by_user_id,
                 created_at
             )
             SELECT
                 s.session_id,
-                r.{id_column},
+                r.{request.id_column},
                 %s,
                 %s
             FROM accessible_session s
             CROSS JOIN accessible_resource r
-            ON CONFLICT (session_id, {id_column}) DO UPDATE
+            ON CONFLICT (session_id, {request.id_column}) DO UPDATE
                 SET pinned_by_user_id = EXCLUDED.pinned_by_user_id
             RETURNING
                 session_id,
-                {id_column},
+                {request.id_column},
                 pinned_by_user_id,
                 created_at
             """,
             (
-                session_id,
-                actor_user_id,
-                resource_id,
-                actor_user_id,
-                actor_user_id,
+                request.session_id,
+                request.actor_user_id,
+                request.resource_id,
+                request.actor_user_id,
+                request.actor_user_id,
                 datetime.now(UTC),
             ),
         )
@@ -398,30 +434,71 @@ def _pin_resource_to_session(
 
 def _unpin_resource_from_session(
     *,
-    table: str,
-    id_column: str,
-    resource_id: UUID,
-    session_id: UUID,
-    actor_user_id: UUID,
+    request: _PinnedResourceMutationRequest,
     conn,
 ) -> bool:
     with conn.cursor() as cur:
         cur.execute(
             f"""
-            DELETE FROM {table} p
+            DELETE FROM {request.table} p
             USING chat_sessions s
             WHERE
                 p.session_id = s.session_id
                 AND p.session_id = %s
-                AND p.{id_column} = %s
+                AND p.{request.id_column} = %s
                 AND s.deleted_at IS NULL
                 AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
             RETURNING p.session_id
             """,
-            (session_id, resource_id, actor_user_id),
+            (request.session_id, request.resource_id, request.actor_user_id),
         )
         row = cur.fetchone()
     return row is not None
+
+
+def _pin_to_session(*, request: _PinnedResourceMutationRequest):
+    with get_conn() as conn:
+        return _pin_resource_to_session(request=request, conn=conn)
+
+
+def _unpin_from_session(*, request: _PinnedResourceMutationRequest) -> bool:
+    with get_conn() as conn:
+        return _unpin_resource_from_session(request=request, conn=conn)
+
+
+def _list_pinned_resources(
+    *,
+    table: str,
+    session_id: UUID,
+    actor_user_id: UUID,
+) -> list[dict]:
+    config = _PINNED_RESOURCE_LIST_CONFIG[table]
+    params: list[object] = [session_id, actor_user_id]
+    if config.include_resource_actor_param:
+        params.append(actor_user_id)
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                p.session_id,
+                p.{config.id_column},
+                p.pinned_by_user_id,
+                p.created_at
+            FROM {table} p
+            JOIN chat_sessions s
+              ON s.session_id = p.session_id
+            {config.join_sql}
+            WHERE
+                p.session_id = %s
+                AND s.deleted_at IS NULL
+                AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
+                AND {config.resource_access_clause}
+            ORDER BY p.created_at ASC
+            """,
+            params,
+        )
+        return cur.fetchall()
 
 
 def pin_engram_to_session(
@@ -429,15 +506,15 @@ def pin_engram_to_session(
     engram_id: UUID,
     actor_user_id: UUID,
 ) -> PinnedEngramRecord | None:
-    with get_conn() as conn:
-        row = _pin_resource_to_session(
+    row = _pin_to_session(
+        request=_PinnedResourceMutationRequest(
             table="session_pinned_engrams",
             id_column="engram_id",
             resource_id=engram_id,
             session_id=session_id,
             actor_user_id=actor_user_id,
-            conn=conn,
         )
+    )
     if not row:
         return None
     return PinnedEngramRecord(**row)
@@ -448,38 +525,23 @@ def unpin_engram_from_session(
     engram_id: UUID,
     actor_user_id: UUID,
 ) -> bool:
-    with get_conn() as conn:
-        return _unpin_resource_from_session(
+    return _unpin_from_session(
+        request=_PinnedResourceMutationRequest(
             table="session_pinned_engrams",
             id_column="engram_id",
             resource_id=engram_id,
             session_id=session_id,
             actor_user_id=actor_user_id,
-            conn=conn,
         )
+    )
 
 
 def list_pinned_engrams(session_id: UUID, actor_user_id: UUID) -> list[PinnedEngramRecord]:
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                p.session_id,
-                p.engram_id,
-                p.pinned_by_user_id,
-                p.created_at
-            FROM session_pinned_engrams p
-            JOIN chat_sessions s
-              ON s.session_id = p.session_id
-            WHERE
-                p.session_id = %s
-                AND s.deleted_at IS NULL
-                AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
-            ORDER BY p.created_at ASC
-            """,
-            (session_id, actor_user_id),
-        )
-        rows = cur.fetchall()
+    rows = _list_pinned_resources(
+        table="session_pinned_engrams",
+        session_id=session_id,
+        actor_user_id=actor_user_id,
+    )
     return [PinnedEngramRecord(**row) for row in rows]
 
 
@@ -624,15 +686,15 @@ def pin_document_to_session(
     document_id: UUID,
     actor_user_id: UUID,
 ) -> PinnedDocumentRecord | None:
-    with get_conn() as conn:
-        row = _pin_resource_to_session(
+    row = _pin_to_session(
+        request=_PinnedResourceMutationRequest(
             table="session_pinned_documents",
             id_column="document_id",
             resource_id=document_id,
             session_id=session_id,
             actor_user_id=actor_user_id,
-            conn=conn,
         )
+    )
     if not row:
         return None
     return PinnedDocumentRecord(**row)
@@ -643,39 +705,21 @@ def unpin_document_from_session(
     document_id: UUID,
     actor_user_id: UUID,
 ) -> bool:
-    with get_conn() as conn:
-        return _unpin_resource_from_session(
+    return _unpin_from_session(
+        request=_PinnedResourceMutationRequest(
             table="session_pinned_documents",
             id_column="document_id",
             resource_id=document_id,
             session_id=session_id,
             actor_user_id=actor_user_id,
-            conn=conn,
         )
+    )
 
 
 def list_pinned_documents(session_id: UUID, actor_user_id: UUID) -> list[PinnedDocumentRecord]:
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                p.session_id,
-                p.document_id,
-                p.pinned_by_user_id,
-                p.created_at
-            FROM session_pinned_documents p
-            JOIN chat_sessions s
-              ON s.session_id = p.session_id
-            JOIN documents d
-              ON d.document_id = p.document_id
-            WHERE
-                p.session_id = %s
-                AND s.deleted_at IS NULL
-                AND (s.owner_user_id = %s OR s.visibility_scope = 'project')
-                AND (d.owner_user_id = %s OR d.visibility_scope = 'project')
-            ORDER BY p.created_at ASC
-            """,
-            (session_id, actor_user_id, actor_user_id),
-        )
-        rows = cur.fetchall()
+    rows = _list_pinned_resources(
+        table="session_pinned_documents",
+        session_id=session_id,
+        actor_user_id=actor_user_id,
+    )
     return [PinnedDocumentRecord(**row) for row in rows]

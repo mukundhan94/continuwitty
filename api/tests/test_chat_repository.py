@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
 
+from app import chat_repository as chat_repo
 from app.auth import hash_password
 from app.chat_repository import (
     MessageMetadata,
@@ -32,6 +34,90 @@ from app.models import (
 )
 from app.repository import create_engram
 from app.user_repository import create_user, get_user_auth_record
+
+
+def test_pin_document_uses_shared_pin_request(monkeypatch) -> None:
+    session_id = uuid4()
+    document_id = uuid4()
+    actor_user_id = uuid4()
+    captured: dict[str, object] = {}
+
+    def _fake_pin_to_session(*, request):  # noqa: ANN001
+        captured["request"] = request
+        return {
+            "session_id": session_id,
+            "document_id": document_id,
+            "pinned_by_user_id": actor_user_id,
+            "created_at": datetime.now(UTC),
+        }
+
+    monkeypatch.setattr(chat_repo, "_pin_to_session", _fake_pin_to_session)
+
+    pinned = chat_repo.pin_document_to_session(
+        session_id=session_id,
+        document_id=document_id,
+        actor_user_id=actor_user_id,
+    )
+
+    assert pinned is not None
+    assert pinned.document_id == document_id
+    request = captured["request"]
+    assert request.table == "session_pinned_documents"
+    assert request.id_column == "document_id"
+    assert request.resource_id == document_id
+
+
+def test_unpin_engram_uses_shared_unpin_request(monkeypatch) -> None:
+    session_id = uuid4()
+    engram_id = uuid4()
+    actor_user_id = uuid4()
+    captured: dict[str, object] = {}
+
+    def _fake_unpin_from_session(*, request):  # noqa: ANN001
+        captured["request"] = request
+        return True
+
+    monkeypatch.setattr(chat_repo, "_unpin_from_session", _fake_unpin_from_session)
+
+    removed = chat_repo.unpin_engram_from_session(
+        session_id=session_id,
+        engram_id=engram_id,
+        actor_user_id=actor_user_id,
+    )
+
+    assert removed is True
+    request = captured["request"]
+    assert request.table == "session_pinned_engrams"
+    assert request.id_column == "engram_id"
+    assert request.resource_id == engram_id
+
+
+def test_list_pinned_documents_uses_shared_list_helper(monkeypatch) -> None:
+    session_id = uuid4()
+    actor_user_id = uuid4()
+    document_id = uuid4()
+    now = datetime.now(UTC)
+
+    monkeypatch.setattr(
+        chat_repo,
+        "_list_pinned_resources",
+        lambda **kwargs: [  # noqa: ARG005
+            {
+                "session_id": session_id,
+                "document_id": document_id,
+                "pinned_by_user_id": actor_user_id,
+                "created_at": now,
+            }
+        ],
+    )
+
+    listed = chat_repo.list_pinned_documents(
+        session_id=session_id,
+        actor_user_id=actor_user_id,
+    )
+
+    assert len(listed) == 1
+    assert listed[0].document_id == document_id
 
 
 @pytest.mark.integration

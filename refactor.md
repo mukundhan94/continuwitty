@@ -410,13 +410,49 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 17 - Chat Repository Phase 3.4)
+
+- [x] Refactored pinned-resource internals in `api/app/chat_repository.py` to reduce helper argument counts and duplication
+- [x] Added request/config abstractions for pin/unpin/list internals:
+  - `_PinnedResourceConfig`
+  - `_PinnedResourceMutationRequest`
+  - `_PinnedResourceListConfig`
+  - `_PINNED_RESOURCE_LIST_CONFIG`
+- [x] Added shared helper paths:
+  - `_pin_to_session(...)`
+  - `_unpin_from_session(...)`
+  - `_list_pinned_resources(...)`
+- [x] Updated public pin/unpin/list functions to route through shared helpers:
+  - `pin_engram_to_session(...)`
+  - `unpin_engram_from_session(...)`
+  - `list_pinned_engrams(...)`
+  - `pin_document_to_session(...)`
+  - `unpin_document_from_session(...)`
+  - `list_pinned_documents(...)`
+- [x] New unit tests added in `api/tests/test_chat_repository.py`:
+  - `test_pin_document_uses_shared_pin_request`
+  - `test_unpin_engram_uses_shared_unpin_request`
+  - `test_list_pinned_documents_uses_shared_list_helper`
+- [x] Validation run:
+  - `uv run ruff check app/chat_repository.py tests/test_chat_repository.py`
+  - `uv run pytest -q tests/test_chat_repository.py tests/test_chat_service.py`
+  - `make test`
+  - aggregate: `21 passed, 7 skipped` (targeted), `241 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/chat_repository.py` score improved from **7.10** to **7.78**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
 | `api/app/mcp/service.py` | **4.56** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
-| `api/app/chat_repository.py` | 7.10 | YELLOW |
+| `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
 | `api/app/oauth/api.py` | 7.54 | YELLOW |
 | `api/app/main.py` | 7.66 | YELLOW |
