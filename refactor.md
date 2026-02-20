@@ -630,6 +630,31 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 24 - Backend Coverage Expansion Phase 14.2)
+
+- [x] Continued Phase 14.2 by adding missing backend tests without lowering the `>= 9.5` CodeScene bar
+- [x] Added new backend test module `api/tests/test_audit.py`:
+  - validates audit JSONL payload with required and optional fields
+  - validates fallback IP behavior when request client metadata is missing
+- [x] Added new backend test module `api/tests/test_login_guard.py`:
+  - lockout activation after max failures
+  - lockout expiry recovery
+  - stale-window failure eviction behavior
+  - success-path reset behavior
+- [x] Validation run:
+  - `uv run ruff check tests/test_audit.py tests/test_login_guard.py`
+  - `uv run pytest -q tests/test_audit.py tests/test_login_guard.py`
+  - `make test`
+  - aggregate: `6 passed` (targeted), `257 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/tests/test_audit.py` score: **10.0**
+  - `api/tests/test_login_guard.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -646,6 +671,8 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/repository.py` | 10.0 | GREEN |
 | `api/app/providers/bedrock_provider.py` | 10.0 | GREEN |
 | `api/tests/test_oauth_api_unit.py` | 10.0 | GREEN |
+| `api/tests/test_audit.py` | 10.0 | GREEN |
+| `api/tests/test_login_guard.py` | 10.0 | GREEN |
 | `web/src/App.tsx` | 8.28 | YELLOW |
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |
