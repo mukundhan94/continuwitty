@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { getSessionProfile, loginWithPassword, logoutCurrentUser } from './api/auth'
+import { getSessionProfile } from './api/auth'
 import {
   getDefaultProject,
 } from './api/projects'
@@ -46,6 +46,7 @@ import {
   WorkspaceGrid,
 } from './styles/primitives'
 import { useThemeMode } from './styles/useThemeMode'
+import { useAuthActions } from './hooks/useAuthActions'
 import { useIngestionActions, usePinActions, usePromptActions } from './hooks/useChatActions'
 import { useAdminTokenActions } from './hooks/useAdminTokenActions'
 import { useSessionActions } from './hooks/useSessionActions'
@@ -283,31 +284,7 @@ function AppScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSessionId])
 
-  const handleLogin = async (username: string, password: string) => {
-    setAuthSubmitting(true)
-    setAuthError(null)
-    try {
-      await loginWithPassword(username, password)
-      const profile = await getSessionProfile()
-      setUser(profile)
-      await Promise.all([
-        loadDefaultProject(),
-        loadSessions(projectId, null),
-        loadProjectDocuments(projectId),
-      ])
-    } catch (error) {
-      setAuthError(describeError(error))
-    } finally {
-      setAuthSubmitting(false)
-    }
-  }
-
-  const handleLogout = async () => {
-    try {
-      await logoutCurrentUser()
-    } catch {
-      // Ignore local logout errors and reset state.
-    }
+  const resetWorkspaceState = () => {
     setUser(null)
     setSessions([])
     setSelectedSessionId(null)
@@ -324,6 +301,18 @@ function AppScreen() {
     setAuthError(null)
     resetAdminTokenState()
   }
+
+  const { handleLogin, handleLogout } = useAuthActions({
+    projectId,
+    loadDefaultProject,
+    loadSessions,
+    loadProjectDocuments,
+    setUser,
+    setAuthSubmitting,
+    setAuthError,
+    describeError,
+    resetWorkspaceState,
+  })
 
   const {
     handleCreateSession,

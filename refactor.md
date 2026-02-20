@@ -942,6 +942,37 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 35 - Auth Action Hook Extraction Phase 10.1/10.2 Hardening)
+
+- [x] Continued App refactor by extracting authentication handlers from `web/src/App.tsx`
+- [x] Added new hook module `web/src/hooks/useAuthActions.ts`:
+  - `handleLogin(...)` for login + workspace bootstrap orchestration
+  - `handleLogout(...)` for logout request and deterministic workspace reset
+- [x] Added internal helper in hook: `hydrateWorkspaceAfterLogin(...)` to keep login flow cohesive and testable
+- [x] Updated `web/src/App.tsx`:
+  - replaced inline `handleLogin`/`handleLogout` handlers with `useAuthActions(...)`
+  - centralized logout cleanup into `resetWorkspaceState(...)`
+- [x] Added direct hook tests in `web/src/hooks/useAuthActions.test.ts`:
+  - login success and loader fan-out behavior
+  - login error mapping behavior
+  - logout success reset behavior
+  - logout failure still resets workspace state
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/hooks/useAuthActions.test.ts src/hooks/useWorkspaceActions.test.ts src/hooks/useSessionActions.test.ts src/components/LoginView.test.tsx src/api/auth.test.ts`
+  - `make test`
+  - `make web-check`
+  - aggregate: `19 passed` (targeted web), `274 passed` (backend), `93 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/App.tsx` score improved to **10.0**
+  - `web/src/hooks/useAuthActions.ts` score: **10.0**
+  - `web/src/hooks/useAuthActions.test.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -979,8 +1010,10 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `web/src/hooks/useSessionActions.test.ts` | 10.0 | GREEN |
 | `web/src/hooks/useWorkspaceActions.ts` | 10.0 | GREEN |
 | `web/src/hooks/useWorkspaceActions.test.ts` | 10.0 | GREEN |
+| `web/src/hooks/useAuthActions.ts` | 10.0 | GREEN |
+| `web/src/hooks/useAuthActions.test.ts` | 10.0 | GREEN |
 | `web/src/components/SessionSidebar.test.tsx` | 10.0 | GREEN |
-| `web/src/App.tsx` | 9.68 | GREEN |
+| `web/src/App.tsx` | 10.0 | GREEN |
 | `api/app/chat/context.py` | 10.0 | GREEN |
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |
 | `api/app/engram_enrichment/service.py` | 10.0 | GREEN |
