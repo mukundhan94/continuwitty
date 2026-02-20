@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any
 from uuid import UUID
@@ -17,7 +18,7 @@ from app.ingestion.models import (
     DocumentIngestTextRequest,
     DocumentRecord,
 )
-from app.ingestion.service import DocumentIngestionService
+from app.ingestion.service import DocumentIngestionService, FileIngestRequest
 from app.models import VisibilityScope
 
 _FORM_DEFAULT_VISIBILITY = Form(default=VisibilityScope.private)
@@ -27,6 +28,27 @@ _FORM_DEFAULT_CHUNK_OVERLAP = Form(default=180)
 
 def _to_http_exception(exc: IngestionServiceError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
+def _parse_metadata_json(metadata_json: str | None) -> dict[str, Any]:
+    if not metadata_json:
+        return {}
+
+    try:
+        parsed = json.loads(metadata_json)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail="metadata_json must be valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=422, detail="metadata_json must be a JSON object")
+    return parsed
+
+
+def _build_file_ingest_request(*, upload: UploadFile, content_bytes: bytes) -> FileIngestRequest:
+    return FileIngestRequest(
+        filename=upload.filename or "uploaded.txt",
+        mime_type=upload.content_type,
+        content_bytes=content_bytes,
+    )
 
 
 def create_ingestion_router(
@@ -62,20 +84,7 @@ def create_ingestion_router(
         if file is None:
             raise HTTPException(status_code=422, detail="file is required")
 
-        metadata: dict[str, Any] = {}
-        if metadata_json:
-            import json
-
-            try:
-                parsed = json.loads(metadata_json)
-            except json.JSONDecodeError as exc:
-                raise HTTPException(
-                    status_code=422, detail="metadata_json must be valid JSON"
-                ) from exc
-            if not isinstance(parsed, dict):
-                raise HTTPException(status_code=422, detail="metadata_json must be a JSON object")
-            metadata = parsed
-
+        metadata = _parse_metadata_json(metadata_json)
         payload = DocumentIngestFileRequest(
             project_id=project_id,
             title=title,
@@ -90,9 +99,7 @@ def create_ingestion_router(
             return ingestion_service.ingest_file(
                 actor_user_id=UUID(actor["user_id"]),
                 payload=payload,
-                filename=file.filename or "uploaded.txt",
-                mime_type=file.content_type,
-                content_bytes=content,
+                file_request=_build_file_ingest_request(upload=file, content_bytes=content),
             )
         except IngestionServiceError as exc:
             raise _to_http_exception(exc) from exc

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
 from app.ingestion.chunking import (
+    ChunkDraft,
     build_content_hash,
     build_document_id,
     chunk_document_text,
@@ -30,6 +32,24 @@ from app.ingestion.repository import (
 from app.models import EngramQueryRequest
 from app.projects.repository import ensure_project_exists
 from app.repository import query_engrams
+
+
+@dataclass(frozen=True)
+class FileIngestRequest:
+    filename: str
+    mime_type: str | None
+    content_bytes: bytes
+
+
+@dataclass(frozen=True)
+class ChunkBuildRequest:
+    actor_user_id: UUID
+    project_id: str
+    title: str
+    normalized_text: str
+    chunk_size_chars: int
+    chunk_overlap_chars: int
+    empty_chunks_detail: str
 
 
 class DocumentIngestionService:
@@ -61,6 +81,79 @@ class DocumentIngestionService:
                 status_code=413,
             )
 
+    def _validate_file_size(self, *, content_bytes: bytes) -> None:
+        if not content_bytes:
+            raise IngestionServiceError("Uploaded file is empty")
+        if len(content_bytes) > self._max_file_bytes:
+            raise IngestionServiceError(
+                f"Uploaded file exceeds max allowed size of {self._max_file_bytes} bytes",
+                status_code=413,
+            )
+
+    @staticmethod
+    def _decode_file_text(*, content_bytes: bytes) -> str:
+        try:
+            return content_bytes.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise IngestionServiceError(
+                "Only UTF-8 text files are supported in this phase",
+                status_code=415,
+            ) from exc
+
+    def _validate_file_input(self, *, request: FileIngestRequest) -> str:
+        self._validate_file_size(content_bytes=request.content_bytes)
+        decoded = self._decode_file_text(content_bytes=request.content_bytes)
+        normalized_text = normalize_document_text(decoded)
+        if not normalized_text:
+            raise IngestionServiceError("Uploaded file does not contain readable text")
+        self._validate_text_size(normalized_text)
+        return normalized_text
+
+    @staticmethod
+    def _resolve_file_title(*, requested_title: str | None, filename: str) -> str:
+        return (requested_title or Path(filename).stem or "Untitled Document").strip()
+
+    @staticmethod
+    def _merge_file_metadata(
+        *,
+        metadata: dict,
+        filename: str,
+        mime_type: str | None,
+        byte_size: int,
+    ) -> dict:
+        return {
+            **metadata,
+            "filename": filename,
+            "mime_type": mime_type,
+            "byte_size": byte_size,
+        }
+
+    def _build_chunks_for_document(
+        self,
+        *,
+        request: ChunkBuildRequest,
+    ) -> tuple[str, UUID, list[ChunkDraft]]:
+        content_hash = build_content_hash(request.normalized_text)
+        ensure_project_exists(
+            project_id=request.project_id,
+            owner_user_id=request.actor_user_id,
+        )
+        document_id = build_document_id(
+            owner_user_id=request.actor_user_id,
+            project_id=request.project_id,
+            title=request.title,
+            content_hash=content_hash,
+        )
+        chunks = chunk_document_text(
+            content_hash=content_hash,
+            text=request.normalized_text,
+            chunk_size_chars=request.chunk_size_chars,
+            chunk_overlap_chars=request.chunk_overlap_chars,
+        )
+        if not chunks:
+            raise IngestionServiceError(request.empty_chunks_detail)
+        return content_hash, document_id, chunks
+
     def ingest_text(
         self,
         *,
@@ -74,23 +167,17 @@ class DocumentIngestionService:
             raise IngestionServiceError("Document text cannot be empty")
         self._validate_text_size(normalized_text)
 
-        content_hash = build_content_hash(normalized_text)
-        ensure_project_exists(project_id=payload.project_id, owner_user_id=actor_user_id)
-        document_id = build_document_id(
-            owner_user_id=actor_user_id,
-            project_id=payload.project_id,
-            title=payload.title,
-            content_hash=content_hash,
+        content_hash, document_id, chunks = self._build_chunks_for_document(
+            request=ChunkBuildRequest(
+                actor_user_id=actor_user_id,
+                project_id=payload.project_id,
+                title=payload.title,
+                normalized_text=normalized_text,
+                chunk_size_chars=payload.chunk_size_chars,
+                chunk_overlap_chars=payload.chunk_overlap_chars,
+                empty_chunks_detail="No chunks were produced from document text",
+            )
         )
-
-        chunks = chunk_document_text(
-            content_hash=content_hash,
-            text=normalized_text,
-            chunk_size_chars=payload.chunk_size_chars,
-            chunk_overlap_chars=payload.chunk_overlap_chars,
-        )
-        if not chunks:
-            raise IngestionServiceError("No chunks were produced from document text")
 
         document = upsert_document_with_chunks(
             actor_user_id=actor_user_id,
@@ -116,58 +203,32 @@ class DocumentIngestionService:
         *,
         actor_user_id: UUID,
         payload: DocumentIngestFileRequest,
-        filename: str,
-        mime_type: str | None,
-        content_bytes: bytes,
+        file_request: FileIngestRequest,
     ) -> DocumentIngestResponse:
-        if not content_bytes:
-            raise IngestionServiceError("Uploaded file is empty")
-        if len(content_bytes) > self._max_file_bytes:
-            raise IngestionServiceError(
-                f"Uploaded file exceeds max allowed size of {self._max_file_bytes} bytes",
-                status_code=413,
-            )
-
         self._validate_chunk_shape(payload.chunk_size_chars, payload.chunk_overlap_chars)
-
-        try:
-            decoded = content_bytes.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise IngestionServiceError(
-                "Only UTF-8 text files are supported in this phase",
-                status_code=415,
-            ) from exc
-
-        normalized_text = normalize_document_text(decoded)
-        if not normalized_text:
-            raise IngestionServiceError("Uploaded file does not contain readable text")
-        self._validate_text_size(normalized_text)
-
-        resolved_title = (payload.title or Path(filename).stem or "Untitled Document").strip()
-        content_hash = build_content_hash(normalized_text)
-        ensure_project_exists(project_id=payload.project_id, owner_user_id=actor_user_id)
-        document_id = build_document_id(
-            owner_user_id=actor_user_id,
-            project_id=payload.project_id,
-            title=resolved_title,
-            content_hash=content_hash,
+        normalized_text = self._validate_file_input(request=file_request)
+        resolved_title = self._resolve_file_title(
+            requested_title=payload.title,
+            filename=file_request.filename,
+        )
+        content_hash, document_id, chunks = self._build_chunks_for_document(
+            request=ChunkBuildRequest(
+                actor_user_id=actor_user_id,
+                project_id=payload.project_id,
+                title=resolved_title,
+                normalized_text=normalized_text,
+                chunk_size_chars=payload.chunk_size_chars,
+                chunk_overlap_chars=payload.chunk_overlap_chars,
+                empty_chunks_detail="No chunks were produced from file contents",
+            )
         )
 
-        chunks = chunk_document_text(
-            content_hash=content_hash,
-            text=normalized_text,
-            chunk_size_chars=payload.chunk_size_chars,
-            chunk_overlap_chars=payload.chunk_overlap_chars,
+        merged_metadata = self._merge_file_metadata(
+            metadata=payload.metadata,
+            filename=file_request.filename,
+            mime_type=file_request.mime_type,
+            byte_size=len(file_request.content_bytes),
         )
-        if not chunks:
-            raise IngestionServiceError("No chunks were produced from file contents")
-
-        merged_metadata = {
-            **payload.metadata,
-            "filename": filename,
-            "mime_type": mime_type,
-            "byte_size": len(content_bytes),
-        }
 
         document = upsert_document_with_chunks(
             actor_user_id=actor_user_id,
@@ -176,8 +237,8 @@ class DocumentIngestionService:
                 project_id=payload.project_id,
                 title=resolved_title,
                 source_type=DocumentSourceType.file.value,
-                source_name=filename,
-                mime_type=mime_type,
+                source_name=file_request.filename,
+                mime_type=file_request.mime_type,
                 visibility_scope=payload.visibility_scope.value,
                 content_text=normalized_text,
                 content_hash=content_hash,

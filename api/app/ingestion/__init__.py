@@ -9,7 +9,7 @@ from .models import (
     DocumentIngestTextRequest,
     DocumentRecord,
 )
-from .service import DocumentIngestionService
+from .service import DocumentIngestionService, FileIngestRequest
 
 __all__ = [
     "BlendedRetrievalQueryRequest",
@@ -21,5 +21,6 @@ __all__ = [
     "DocumentIngestTextRequest",
     "DocumentRecord",
     "DocumentIngestionService",
+    "FileIngestRequest",
     "create_ingestion_router",
 ]

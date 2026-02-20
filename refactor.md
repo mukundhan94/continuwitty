@@ -312,6 +312,41 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-20 (Checkpoint 14 - Ingestion Service Phase 13b)
+
+- [x] Step 13b — Refactored file ingestion call shape with parameter object:
+  - added `FileIngestRequest` in `api/app/ingestion/service.py`
+  - updated `DocumentIngestionService.ingest_file(...)` to accept `file_request`
+  - updated `api/app/ingestion/api.py` call site to construct and pass `FileIngestRequest`
+- [x] Extracted file validation helpers to reduce complexity and improve testability:
+  - `_validate_file_size(...)`
+  - `_decode_file_text(...)`
+  - `_validate_file_input(...)`
+  - `_resolve_file_title(...)`
+  - `_merge_file_metadata(...)`
+- [x] Deduplicated text/file chunking lifecycle:
+  - added `ChunkBuildRequest`
+  - added `_build_chunks_for_document(...)`
+  - reused in both `ingest_text(...)` and `ingest_file(...)`
+- [x] Simplified ingestion API route helper logic:
+  - added `_parse_metadata_json(...)`
+  - added `_build_file_ingest_request(...)`
+- [x] Test updates in `api/tests/test_ingestion_service.py`:
+  - added parametrized file-validation error coverage (UTF-8, empty file, oversized file)
+  - added metadata + title fallback persistence coverage for file ingestion
+- [x] Validation run:
+  - `uv run ruff check app/ingestion/service.py app/ingestion/api.py tests/test_ingestion_service.py`
+  - `uv run pytest -q tests/test_ingestion_service.py tests/test_ingestion_api_integration.py`
+  - `make test`
+  - aggregate: `8 passed` (targeted), `229 passed` (full backend suite)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/ingestion/service.py` score improved from **9.33** to **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -329,7 +364,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/ingestion/repository.py` | 10.0 | GREEN |
 | `api/app/engram_enrichment/service.py` | 10.0 | GREEN |
 | `api/app/memory_admin/service.py` | 10.0 | GREEN |
-| `api/app/ingestion/service.py` | 9.33 | GREEN |
+| `api/app/ingestion/service.py` | 10.0 | GREEN |
 | `api/app/mcp/auth.py` | 9.66 | GREEN |
 
 ---
