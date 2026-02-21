@@ -149,6 +149,52 @@ def test_dispatch_tool_routes_engram_and_project_domains() -> None:
     assert project_result == {"default_project_id": "project-alpha"}
 
 
+def test_dispatch_tool_routes_engram_get_with_include_deleted_flag() -> None:
+    service, _, _, memory_admin_service = _build_service()
+    actor_user_id = uuid4()
+    actor = {"user_id": str(actor_user_id), "role": "user"}
+    engram_id = uuid4()
+    memory_admin_service.find_engram.return_value = _Dumpable(
+        payload={"engram_id": str(engram_id)},
+        owner_user_id=actor_user_id,
+        project_id="project-alpha",
+    )
+
+    result = service._dispatch_tool(
+        actor=actor,
+        actor_user_id=actor_user_id,
+        method="engram.get",
+        params={"engram_id": str(engram_id), "include_deleted": False},
+        token_auth=None,
+    )
+
+    assert result == {"engram": {"engram_id": str(engram_id)}}
+    memory_admin_service.find_engram.assert_called_once_with(
+        engram_id=engram_id,
+        include_deleted=False,
+    )
+
+
+def test_dispatch_tool_rehydrate_returns_not_found_when_bundle_missing(monkeypatch) -> None:
+    service, _, _, _ = _build_service()
+    actor_user_id = uuid4()
+    actor = {"user_id": str(actor_user_id), "role": "user"}
+    engram_id = uuid4()
+    monkeypatch.setattr("app.mcp.service.get_rehydration_bundle", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(McpRpcError) as exc_info:
+        service._dispatch_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method="engram.rehydrate",
+            params={"engram_id": str(engram_id)},
+            token_auth=None,
+        )
+
+    assert exc_info.value.code == -32004
+    assert exc_info.value.data == {"engram_id": str(engram_id)}
+
+
 def test_dispatch_tool_routes_user_domain() -> None:
     service, _, _, _ = _build_service()
     actor_user_id = uuid4()

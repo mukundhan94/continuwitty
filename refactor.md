@@ -1419,11 +1419,37 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 52 - MCP Engram Read Dispatch Split Phase 1.2 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition by extracting engram read routes:
+  - added `_dispatch_engram_read_tool(...)` for:
+    - `engram.query`
+    - `engram.rehydrate`
+    - `engram.list`
+    - `engram.get`
+    - `engram.collection_list`
+  - reduced `_dispatch_engram_tool(...)` to orchestrate read/mutation helpers
+- [x] Expanded unit tests in `api/tests/test_mcp_service_unit.py`:
+  - `engram.get` dispatch path verifies `include_deleted` propagation
+  - `engram.rehydrate` not-found path returns expected MCP error payload
+- [x] Validation run:
+  - `uv run pytest tests/test_mcp_service_unit.py -q` (`31 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`298 passed`)
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py` (passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **6.49** (improved from **6.17**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **6.17** | YELLOW |
+| `api/app/mcp/service.py` | **6.49** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |

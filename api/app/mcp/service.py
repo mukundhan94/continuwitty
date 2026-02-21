@@ -1219,47 +1219,14 @@ class McpService:
         restored = self._memory_admin_service.restore_engram(engram_id=engram_id)
         return {"result": restored.model_dump(mode="json")}
 
-    def _dispatch_engram_tool(
+    def _dispatch_engram_read_tool(
         self,
         *,
         actor: dict[str, Any],
         actor_user_id: UUID,
         method: str,
         params: dict[str, Any],
-        token_auth: McpTokenAuthContext | None,
     ) -> dict[str, Any] | None:
-        actor_role = str(actor.get("role", ""))
-
-        if method == "engram.create":
-            resolved_payload, resolved_project_id, used_default_project = (
-                self._create_engram_payload_with_project_resolution(
-                    actor_user_id=actor_user_id,
-                    actor_role=actor_role,
-                    token_auth=token_auth,
-                    payload=MemoryEngramCreate(**params),
-                )
-            )
-            created = create_engram(
-                payload=resolved_payload,
-                embedding_dim=self._embedding_dim,
-                owner_user_id=actor_user_id,
-                enrichment_origin="mcp.engram.create",
-            )
-            engram = created.model_dump(mode="json")
-            engram["resolved_project_id"] = resolved_project_id
-            engram["used_default_project"] = used_default_project
-            return {"engram": engram}
-
-        if method == "engram.create_from_conversation":
-            created, report = self._create_engram_from_conversation(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                token_auth=token_auth,
-                params=params,
-                enrichment_origin="mcp.engram.create_from_conversation",
-            )
-            return {"engram": created, "enrichment_report": report}
-
         if method == "engram.query":
             results = query_engrams(
                 request=EngramQueryRequest(**params),
@@ -1304,6 +1271,66 @@ class McpService:
             )
             return {"engram": engram.model_dump(mode="json")}
 
+        if method == "engram.collection_list":
+            collections = self._list_collections_for_actor(
+                actor=actor,
+                actor_user_id=actor_user_id,
+                params=params,
+            )
+            return {"collections": [item.model_dump(mode="json") for item in collections]}
+
+        return None
+
+    def _dispatch_engram_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> dict[str, Any] | None:
+        actor_role = str(actor.get("role", ""))
+
+        if method == "engram.create":
+            resolved_payload, resolved_project_id, used_default_project = (
+                self._create_engram_payload_with_project_resolution(
+                    actor_user_id=actor_user_id,
+                    actor_role=actor_role,
+                    token_auth=token_auth,
+                    payload=MemoryEngramCreate(**params),
+                )
+            )
+            created = create_engram(
+                payload=resolved_payload,
+                embedding_dim=self._embedding_dim,
+                owner_user_id=actor_user_id,
+                enrichment_origin="mcp.engram.create",
+            )
+            engram = created.model_dump(mode="json")
+            engram["resolved_project_id"] = resolved_project_id
+            engram["used_default_project"] = used_default_project
+            return {"engram": engram}
+
+        if method == "engram.create_from_conversation":
+            created, report = self._create_engram_from_conversation(
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                token_auth=token_auth,
+                params=params,
+                enrichment_origin="mcp.engram.create_from_conversation",
+            )
+            return {"engram": created, "enrichment_report": report}
+
+        engram_read_result = self._dispatch_engram_read_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+        )
+        if engram_read_result is not None:
+            return engram_read_result
+
         if method == "engram.update":
             engram_id = self._parse_uuid(params, "engram_id")
             self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
@@ -1330,14 +1357,6 @@ class McpService:
                 params=params,
                 token_auth=token_auth,
             )
-
-        if method == "engram.collection_list":
-            collections = self._list_collections_for_actor(
-                actor=actor,
-                actor_user_id=actor_user_id,
-                params=params,
-            )
-            return {"collections": [item.model_dump(mode="json") for item in collections]}
 
         if method == "engram.collection_create":
             return self._dispatch_engram_collection_create_tool(
