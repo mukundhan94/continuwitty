@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, cast
 from uuid import UUID
 
@@ -54,6 +55,15 @@ from .session_lifecycle import (
     run_session_lifecycle_maintenance,
     transcript_markdown,
 )
+
+
+@dataclass(frozen=True)
+class _PinResourceRequest:
+    actor_user_id: UUID
+    session_id: UUID
+    resource_id: UUID
+    pin_resource: Callable[[UUID, UUID, UUID], Any]
+    resource_name: str
 
 
 class ChatSessionOperationsMixin:
@@ -274,19 +284,17 @@ class ChatSessionOperationsMixin:
     def _pin_resource(
         self,
         *,
-        actor_user_id: UUID,
-        session_id: UUID,
-        resource_id: UUID,
-        pin_resource: Callable[[UUID, UUID, UUID], Any],
-        resource_name: str,
+        request: _PinResourceRequest,
     ) -> Any:
-        pinned = pin_resource(
-            session_id,
-            resource_id,
-            actor_user_id,
+        pinned = request.pin_resource(
+            request.session_id,
+            request.resource_id,
+            request.actor_user_id,
         )
         if not pinned:
-            raise ChatValidationError(f"Session or {resource_name} is not accessible for pinning")
+            raise ChatValidationError(
+                f"Session or {request.resource_name} is not accessible for pinning"
+            )
         return pinned
 
     def pin_engram(
@@ -296,11 +304,13 @@ class ChatSessionOperationsMixin:
         payload: PinEngramRequest,
     ):
         return self._pin_resource(
-            actor_user_id=actor_user_id,
-            session_id=session_id,
-            resource_id=payload.engram_id,
-            pin_resource=pin_engram_to_session,
-            resource_name="engram",
+            request=_PinResourceRequest(
+                actor_user_id=actor_user_id,
+                session_id=session_id,
+                resource_id=payload.engram_id,
+                pin_resource=pin_engram_to_session,
+                resource_name="engram",
+            ),
         )
 
     def pin_document(
@@ -312,11 +322,13 @@ class ChatSessionOperationsMixin:
         return cast(
             PinnedDocumentRecord,
             self._pin_resource(
-                actor_user_id=actor_user_id,
-                session_id=session_id,
-                resource_id=payload.document_id,
-                pin_resource=pin_document_to_session,
-                resource_name="document",
+                request=_PinResourceRequest(
+                    actor_user_id=actor_user_id,
+                    session_id=session_id,
+                    resource_id=payload.document_id,
+                    pin_resource=pin_document_to_session,
+                    resource_name="document",
+                ),
             ),
         )
 

@@ -2223,6 +2223,24 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 83 - Chat Session Operations Pin Request Object Extraction)
+
+- [x] Continued Phase 4 hardening in `api/app/chat/session_operations.py` by removing excess-argument internal helper usage:
+  - added `_PinResourceRequest` dataclass for pinning inputs (`actor_user_id`, `session_id`, `resource_id`, pin callback, resource name)
+  - updated `_pin_resource(...)` to consume a request object instead of 5 individual arguments
+  - updated `pin_engram(...)` and `pin_document(...)` call sites to construct `_PinResourceRequest`
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`251 passed, 4 skipped, 81 deselected`)
+  - `make test` (`251 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/chat/session_operations.py` score: **10.0** (improved from **9.68**)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2238,7 +2256,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/chat_repository_pinning.py` | 10.0 | GREEN |
 | `api/app/chat/service.py` | 10.0 | GREEN |
 | `api/app/chat/message_runtime.py` | 9.68 | GREEN |
-| `api/app/chat/session_operations.py` | 9.68 | GREEN |
+| `api/app/chat/session_operations.py` | 10.0 | GREEN |
 | `api/app/chat/session_lifecycle.py` | 9.68 | GREEN |
 | `api/app/oauth/api.py` | 10.0 | GREEN |
 | `api/app/oauth/common.py` | 10.0 | GREEN |
