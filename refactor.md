@@ -6,7 +6,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 **Business case for the worst file (`mcp/service.py`):** Improving from 3.0 to 5.15 (industry average) predicts 24–48% defect reduction and 3–20% development speed improvement (90% confidence interval).
 
-## Phase Completion Status (as of 2026-02-21, Checkpoint 89)
+## Phase Completion Status (as of 2026-02-21, Checkpoint 90)
 
 - [x] Phase 1 — `api/app/mcp/service.py` refactor and hardening completed (checkpoints 1, 44-68, 80-84, 87)
 - [x] Phase 2 — `api/app/memory_admin/repository.py` refactor completed (checkpoints 2, 16)
@@ -21,7 +21,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 - [x] Phase 11 — `api/app/ingestion/repository.py` refactor completed (checkpoint 11)
 - [x] Phase 12 — `api/app/engram_enrichment/service.py` refactor completed (checkpoint 12)
 - [x] Phase 13 — Green-zone files promoted and stabilized (checkpoints 13-15)
-- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-89)
+- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-90)
 
 ## Execution Checkpoints
 
@@ -2399,6 +2399,33 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 90 - Chat API Integration Flow Decomposition and Lifecycle Coverage Expansion)
+
+- [x] Continued Phase 14 hardening in backend integration coverage:
+  - refactored `api/tests/test_chat_api_integration.py` to eliminate large-method and duplicate-lifecycle patterns
+  - introduced cohesive helper abstractions:
+    - `_PinnedContext`
+    - `_create_seed_engram(...)`
+    - `_ingest_seed_documents(...)`
+    - `_pin_context_to_session(...)`
+    - `_assert_context_carried_to_continued_session(...)`
+    - `_unpin_context_from_session(...)`
+    - `_update_lifecycle_policy(...)`
+    - `_autosave_timeline_events(...)`
+- [x] Added new lifecycle acceptance-style integration coverage:
+  - `test_chat_lifecycle_policy_message_count_min_one_autosaves_first_message`
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`255 passed, 4 skipped, 82 deselected`)
+  - `make test` (`255 passed, 86 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/tests/test_chat_api_integration.py` score: **10.0** (improved from **8.74**)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2430,6 +2457,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_user_repository.py` | 10.0 | GREEN |
 | `api/tests/test_db.py` | 10.0 | GREEN |
 | `api/tests/test_oauth_repository.py` | 10.0 | GREEN |
+| `api/tests/test_chat_api_integration.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_api_integration.py` | 10.0 | GREEN |
@@ -2733,6 +2761,6 @@ After each commit:
 - `make web-check` passes (frontend, when applicable)
 - `pre_commit_code_health_safeguard` confirms improvement
 - No regression in `test_mcp_api_integration.py` (26 tests)
-- No regression in `test_chat_api_integration.py` (9 tests)
+- No regression in `test_chat_api_integration.py` (10 tests)
 
 Full quality gate at end of each phase: `make check && make web-check`

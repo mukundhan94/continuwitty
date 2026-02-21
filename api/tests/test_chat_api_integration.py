@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import re
 import uuid
+from dataclasses import dataclass
 
 import pytest
 
 from app.config import get_settings
 from app.models import ChatProvider
 from app.providers.base import ProviderGenerateResult
+
+
+@dataclass(frozen=True)
+class _PinnedContext:
+    engram_id: str
+    document_ids: tuple[str, str]
 
 
 def _extract_csrf_token(html: str) -> str:
@@ -87,6 +94,139 @@ def _send_long_message(client, session_id: str, content_text: str) -> dict:  # n
     return response.json()
 
 
+def _create_seed_engram(client, project_id: str) -> str:  # noqa: ANN001
+    response = client.post(
+        "/api/v1/engrams",
+        json={
+            "project_id": project_id,
+            "thread_id": "seed-thread",
+            "title": "Pinned context",
+            "abstract": "Important context",
+            "detailed_summary_markdown": "Pinned context details",
+        },
+    )
+    assert response.status_code == 200
+    return str(response.json()["engram_id"])
+
+
+def _ingest_seed_documents(client, project_id: str) -> tuple[str, str]:  # noqa: ANN001
+    first = client.post(
+        "/api/v1/ingestion/text",
+        json={
+            "project_id": project_id,
+            "title": "Incident Runbook",
+            "text": "Queue depth crossed 5k for 20 minutes. Drain policy: prioritize webhook retries.",
+            "visibility_scope": "project",
+        },
+    )
+    assert first.status_code == 201
+    second = client.post(
+        "/api/v1/ingestion/text",
+        json={
+            "project_id": project_id,
+            "title": "Escalation Matrix",
+            "text": "Escalate to DB oncall after 15 minutes and notify support incident commander.",
+            "visibility_scope": "project",
+        },
+    )
+    assert second.status_code == 201
+    return (
+        str(first.json()["document"]["document_id"]),
+        str(second.json()["document"]["document_id"]),
+    )
+
+
+def _pin_context_to_session(client, session_id: str, context: _PinnedContext) -> None:  # noqa: ANN001
+    pinned_engram = client.post(
+        f"/api/v1/chat/sessions/{session_id}/engrams/pin",
+        json={"engram_id": context.engram_id},
+    )
+    assert pinned_engram.status_code == 200
+    assert pinned_engram.json()["engram_id"] == context.engram_id
+
+    listed_engrams = client.get(f"/api/v1/chat/sessions/{session_id}/engrams")
+    assert listed_engrams.status_code == 200
+    assert [item["engram_id"] for item in listed_engrams.json()] == [context.engram_id]
+
+    for document_id in context.document_ids:
+        pinned_document = client.post(
+            f"/api/v1/chat/sessions/{session_id}/documents/pin",
+            json={"document_id": document_id},
+        )
+        assert pinned_document.status_code == 200
+        assert pinned_document.json()["document_id"] == document_id
+
+    listed_documents = client.get(f"/api/v1/chat/sessions/{session_id}/documents")
+    assert listed_documents.status_code == 200
+    assert {item["document_id"] for item in listed_documents.json()} == set(context.document_ids)
+
+
+def _assert_context_carried_to_continued_session(
+    client, session_id: str, context: _PinnedContext
+) -> None:  # noqa: ANN001
+    saved = client.post(
+        f"/api/v1/chat/sessions/{session_id}/save-engram",
+        json={
+            "title": "Saved session snapshot",
+            "abstract": "Captured from chat flow",
+            "visibility_scope": "private",
+            "tags": ["chat"],
+            "keywords": ["continuity"],
+        },
+    )
+    assert saved.status_code == 201
+    assert saved.json()["session_id"] == session_id
+
+    continued = client.post(
+        f"/api/v1/chat/sessions/{session_id}/continue",
+        json={"title": "Session A Continued"},
+    )
+    assert continued.status_code == 201
+    body = continued.json()
+    continued_session_id = body["session"]["session_id"]
+    assert continued_session_id != session_id
+    assert context.engram_id in body["carried_engram_ids"]
+
+    continued_documents = client.get(f"/api/v1/chat/sessions/{continued_session_id}/documents")
+    assert continued_documents.status_code == 200
+    assert {item["document_id"] for item in continued_documents.json()} == set(context.document_ids)
+
+    continued_messages = client.get(f"/api/v1/chat/sessions/{continued_session_id}/messages")
+    assert continued_messages.status_code == 200
+    assert continued_messages.json() == []
+
+
+def _unpin_context_from_session(client, session_id: str, context: _PinnedContext) -> None:  # noqa: ANN001
+    unpinned_engram = client.delete(f"/api/v1/chat/sessions/{session_id}/engrams/{context.engram_id}")
+    assert unpinned_engram.status_code == 200
+    assert unpinned_engram.json() == {"removed": True}
+
+    listed_engrams = client.get(f"/api/v1/chat/sessions/{session_id}/engrams")
+    assert listed_engrams.status_code == 200
+    assert listed_engrams.json() == []
+
+    for document_id in context.document_ids:
+        unpinned_document = client.delete(f"/api/v1/chat/sessions/{session_id}/documents/{document_id}")
+        assert unpinned_document.status_code == 200
+        assert unpinned_document.json() == {"removed": True}
+
+    listed_documents = client.get(f"/api/v1/chat/sessions/{session_id}/documents")
+    assert listed_documents.status_code == 200
+    assert listed_documents.json() == []
+
+
+def _update_lifecycle_policy(client, session_id: str, payload: dict) -> dict:  # noqa: ANN001
+    updated = client.patch(f"/api/v1/chat/sessions/{session_id}/lifecycle-policy", json=payload)
+    assert updated.status_code == 200
+    return updated.json()
+
+
+def _autosave_timeline_events(client, session_id: str) -> list[dict]:  # noqa: ANN001
+    timeline = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
+    assert timeline.status_code == 200
+    return [item for item in timeline.json() if item["event_type"] == "autosave_snapshot"]
+
+
 @pytest.mark.integration
 def test_chat_api_requires_authentication(client, clean_db) -> None:
     response = client.get("/api/v1/chat/sessions")
@@ -150,141 +290,26 @@ def test_chat_api_pin_save_and_continue_flow(client, clean_db, monkeypatch) -> N
     _install_fake_provider(monkeypatch)
     session = _create_session(client)
     session_id = session["session_id"]
-
-    engram_response = client.post(
-        "/api/v1/engrams",
-        json={
-            "project_id": "project-chat",
-            "thread_id": "seed-thread",
-            "title": "Pinned context",
-            "abstract": "Important context",
-            "detailed_summary_markdown": "Pinned context details",
-        },
+    context = _PinnedContext(
+        engram_id=_create_seed_engram(client, "project-chat"),
+        document_ids=_ingest_seed_documents(client, "project-chat"),
     )
-    assert engram_response.status_code == 200
-    engram_id = engram_response.json()["engram_id"]
-
-    document_response = client.post(
-        "/api/v1/ingestion/text",
-        json={
-            "project_id": "project-chat",
-            "title": "Incident Runbook",
-            "text": "Queue depth crossed 5k for 20 minutes. Drain policy: prioritize webhook retries.",
-            "visibility_scope": "project",
-        },
-    )
-    assert document_response.status_code == 201
-    document_id = document_response.json()["document"]["document_id"]
-    second_document_response = client.post(
-        "/api/v1/ingestion/text",
-        json={
-            "project_id": "project-chat",
-            "title": "Escalation Matrix",
-            "text": "Escalate to DB oncall after 15 minutes and notify support incident commander.",
-            "visibility_scope": "project",
-        },
-    )
-    assert second_document_response.status_code == 201
-    second_document_id = second_document_response.json()["document"]["document_id"]
-
-    pinned = client.post(
-        f"/api/v1/chat/sessions/{session_id}/engrams/pin",
-        json={"engram_id": engram_id},
-    )
-    assert pinned.status_code == 200
-    assert pinned.json()["engram_id"] == engram_id
-
-    listed_pins = client.get(f"/api/v1/chat/sessions/{session_id}/engrams")
-    assert listed_pins.status_code == 200
-    assert [item["engram_id"] for item in listed_pins.json()] == [engram_id]
-
-    pinned_document = client.post(
-        f"/api/v1/chat/sessions/{session_id}/documents/pin",
-        json={"document_id": document_id},
-    )
-    assert pinned_document.status_code == 200
-    assert pinned_document.json()["document_id"] == document_id
-    pinned_second_document = client.post(
-        f"/api/v1/chat/sessions/{session_id}/documents/pin",
-        json={"document_id": second_document_id},
-    )
-    assert pinned_second_document.status_code == 200
-    assert pinned_second_document.json()["document_id"] == second_document_id
-
-    listed_documents = client.get(f"/api/v1/chat/sessions/{session_id}/documents")
-    assert listed_documents.status_code == 200
-    assert {item["document_id"] for item in listed_documents.json()} == {
-        document_id,
-        second_document_id,
-    }
+    _pin_context_to_session(client, session_id, context)
 
     sent = client.post(
         f"/api/v1/chat/sessions/{session_id}/messages",
         json={"content_text": "use prior context"},
     )
     assert sent.status_code == 201
-    assert engram_id in sent.json()["used_engram_ids"]
+    assert context.engram_id in sent.json()["used_engram_ids"]
     assert len(sent.json()["used_document_chunk_ids"]) >= 2
     assert any(
         ref.get("source_type") == "document_chunk" for ref in sent.json()["source_references"]
     )
     assert isinstance(sent.json()["source_references"], list)
 
-    saved = client.post(
-        f"/api/v1/chat/sessions/{session_id}/save-engram",
-        json={
-            "title": "Saved session snapshot",
-            "abstract": "Captured from chat flow",
-            "visibility_scope": "private",
-            "tags": ["chat"],
-            "keywords": ["continuity"],
-        },
-    )
-    assert saved.status_code == 201
-    saved_body = saved.json()
-    assert saved_body["session_id"] == session_id
-
-    continued = client.post(
-        f"/api/v1/chat/sessions/{session_id}/continue",
-        json={"title": "Session A Continued"},
-    )
-    assert continued.status_code == 201
-    body = continued.json()
-    continued_session_id = body["session"]["session_id"]
-    assert continued_session_id != session_id
-    assert engram_id in body["carried_engram_ids"]
-
-    continued_documents = client.get(f"/api/v1/chat/sessions/{continued_session_id}/documents")
-    assert continued_documents.status_code == 200
-    assert {item["document_id"] for item in continued_documents.json()} == {
-        document_id,
-        second_document_id,
-    }
-
-    continued_messages = client.get(f"/api/v1/chat/sessions/{continued_session_id}/messages")
-    assert continued_messages.status_code == 200
-    assert continued_messages.json() == []
-
-    unpinned = client.delete(f"/api/v1/chat/sessions/{session_id}/engrams/{engram_id}")
-    assert unpinned.status_code == 200
-    assert unpinned.json() == {"removed": True}
-
-    listed_after = client.get(f"/api/v1/chat/sessions/{session_id}/engrams")
-    assert listed_after.status_code == 200
-    assert listed_after.json() == []
-
-    unpinned_document = client.delete(f"/api/v1/chat/sessions/{session_id}/documents/{document_id}")
-    assert unpinned_document.status_code == 200
-    assert unpinned_document.json() == {"removed": True}
-    unpinned_second_document = client.delete(
-        f"/api/v1/chat/sessions/{session_id}/documents/{second_document_id}"
-    )
-    assert unpinned_second_document.status_code == 200
-    assert unpinned_second_document.json() == {"removed": True}
-
-    listed_documents_after = client.get(f"/api/v1/chat/sessions/{session_id}/documents")
-    assert listed_documents_after.status_code == 200
-    assert listed_documents_after.json() == []
+    _assert_context_carried_to_continued_session(client, session_id, context)
+    _unpin_context_from_session(client, session_id, context)
 
 
 @pytest.mark.integration
@@ -404,9 +429,10 @@ def test_chat_lifecycle_policy_and_timeline_flow(client, clean_db, monkeypatch) 
     assert policy.json()["autosave_strategy"] == "off"
     assert policy.json()["autosave_enabled"] is False
 
-    updated_policy = client.patch(
-        f"/api/v1/chat/sessions/{session_id}/lifecycle-policy",
-        json={
+    updated_policy = _update_lifecycle_policy(
+        client,
+        session_id,
+        {
             "autosave_enabled": True,
             "autosave_strategy": "interval",
             "autosave_interval_minutes": 1,
@@ -414,10 +440,9 @@ def test_chat_lifecycle_policy_and_timeline_flow(client, clean_db, monkeypatch) 
             "retention_max_snapshots": 10,
         },
     )
-    assert updated_policy.status_code == 200
-    assert updated_policy.json()["autosave_enabled"] is True
-    assert updated_policy.json()["autosave_strategy"] == "interval"
-    assert updated_policy.json()["autosave_interval_minutes"] == 1
+    assert updated_policy["autosave_enabled"] is True
+    assert updated_policy["autosave_strategy"] == "interval"
+    assert updated_policy["autosave_interval_minutes"] == 1
 
     sent = client.post(
         f"/api/v1/chat/sessions/{session_id}/messages",
@@ -429,10 +454,7 @@ def test_chat_lifecycle_policy_and_timeline_flow(client, clean_db, monkeypatch) 
     )
     assert sent.status_code == 201
 
-    timeline = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
-    assert timeline.status_code == 200
-    events = timeline.json()
-    assert any(item["event_type"] == "autosave_snapshot" for item in events)
+    assert _autosave_timeline_events(client, session_id) != []
 
 
 @pytest.mark.integration
@@ -451,12 +473,7 @@ def test_chat_lifecycle_policy_off_does_not_autosave(client, clean_db, monkeypat
         ),
     )
 
-    timeline = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
-    assert timeline.status_code == 200
-    autosave_events = [
-        item for item in timeline.json() if item["event_type"] == "autosave_snapshot"
-    ]
-    assert autosave_events == []
+    assert _autosave_timeline_events(client, session_id) == []
 
 
 @pytest.mark.integration
@@ -470,9 +487,10 @@ def test_chat_lifecycle_policy_message_count_autosaves_on_threshold(
     created = _create_session(client, project_id="project-lifecycle-message-count")
     session_id = created["session_id"]
 
-    updated_policy = client.patch(
-        f"/api/v1/chat/sessions/{session_id}/lifecycle-policy",
-        json={
+    _update_lifecycle_policy(
+        client,
+        session_id,
+        {
             "autosave_enabled": True,
             "autosave_strategy": "message_count",
             "autosave_min_messages": 2,
@@ -480,7 +498,6 @@ def test_chat_lifecycle_policy_message_count_autosaves_on_threshold(
             "retention_max_snapshots": 10,
         },
     )
-    assert updated_policy.status_code == 200
 
     _send_long_message(
         client,
@@ -490,12 +507,7 @@ def test_chat_lifecycle_policy_message_count_autosaves_on_threshold(
             "regional spread, and first-pass mitigation notes."
         ),
     )
-    timeline_after_first = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
-    assert timeline_after_first.status_code == 200
-    first_autosave_events = [
-        item for item in timeline_after_first.json() if item["event_type"] == "autosave_snapshot"
-    ]
-    assert first_autosave_events == []
+    assert _autosave_timeline_events(client, session_id) == []
 
     _send_long_message(
         client,
@@ -505,12 +517,7 @@ def test_chat_lifecycle_policy_message_count_autosaves_on_threshold(
             "and monitoring verification criteria."
         ),
     )
-    timeline_after_second = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
-    assert timeline_after_second.status_code == 200
-    second_autosave_events = [
-        item for item in timeline_after_second.json() if item["event_type"] == "autosave_snapshot"
-    ]
-    assert len(second_autosave_events) >= 1
+    assert len(_autosave_timeline_events(client, session_id)) >= 1
 
 
 @pytest.mark.integration
@@ -520,9 +527,10 @@ def test_chat_lifecycle_policy_interval_autosaves_then_waits(client, clean_db, m
     created = _create_session(client, project_id="project-lifecycle-interval")
     session_id = created["session_id"]
 
-    updated_policy = client.patch(
-        f"/api/v1/chat/sessions/{session_id}/lifecycle-policy",
-        json={
+    _update_lifecycle_policy(
+        client,
+        session_id,
+        {
             "autosave_enabled": True,
             "autosave_strategy": "interval",
             "autosave_interval_minutes": 60,
@@ -530,7 +538,6 @@ def test_chat_lifecycle_policy_interval_autosaves_then_waits(client, clean_db, m
             "retention_max_snapshots": 10,
         },
     )
-    assert updated_policy.status_code == 200
 
     _send_long_message(
         client,
@@ -540,12 +547,7 @@ def test_chat_lifecycle_policy_interval_autosaves_then_waits(client, clean_db, m
             "validation tasks for on-call handoff."
         ),
     )
-    timeline_after_first = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
-    assert timeline_after_first.status_code == 200
-    first_autosave_events = [
-        item for item in timeline_after_first.json() if item["event_type"] == "autosave_snapshot"
-    ]
-    assert len(first_autosave_events) == 1
+    assert len(_autosave_timeline_events(client, session_id)) == 1
 
     _send_long_message(
         client,
@@ -555,9 +557,38 @@ def test_chat_lifecycle_policy_interval_autosaves_then_waits(client, clean_db, m
             "for incident communication."
         ),
     )
-    timeline_after_second = client.get(f"/api/v1/chat/sessions/{session_id}/timeline")
-    assert timeline_after_second.status_code == 200
-    second_autosave_events = [
-        item for item in timeline_after_second.json() if item["event_type"] == "autosave_snapshot"
-    ]
-    assert len(second_autosave_events) == 1
+    assert len(_autosave_timeline_events(client, session_id)) == 1
+
+
+@pytest.mark.integration
+def test_chat_lifecycle_policy_message_count_min_one_autosaves_first_message(
+    client,
+    clean_db,
+    monkeypatch,
+) -> None:
+    _login(client)
+    _install_fake_provider(monkeypatch)
+    created = _create_session(client, project_id="project-lifecycle-message-count-min-one")
+    session_id = created["session_id"]
+
+    _update_lifecycle_policy(
+        client,
+        session_id,
+        {
+            "autosave_enabled": True,
+            "autosave_strategy": "message_count",
+            "autosave_min_messages": 1,
+            "retention_days": 7,
+            "retention_max_snapshots": 10,
+        },
+    )
+
+    _send_long_message(
+        client,
+        session_id,
+        (
+            "Draft a full post-incident summary with impact, customer communications, "
+            "remediation actions, and owner assignments."
+        ),
+    )
+    assert len(_autosave_timeline_events(client, session_id)) >= 1
