@@ -1,11 +1,11 @@
-import type { EngramSummary } from '../api/types'
-import { useCallback, useEffect, useRef, useState, type FocusEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent } from 'react'
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import styled, { css } from 'styled-components'
 
+import type { EngramSummary } from '../api/types'
 import {
   EngramCard,
   EngramTitle,
@@ -17,6 +17,14 @@ import {
   SectionDivider,
 } from '../styles/primitives'
 import { normalizeTooltipMarkdown } from '../utils/markdownTooltip'
+
+const TOOLTIP_HIDE_DELAY_MS = 140
+const TOOLTIP_EDGE_PADDING_PX = 10
+const TOOLTIP_ANCHOR_OFFSET_PX = 6
+const TOOLTIP_MIN_WIDTH_PX = 420
+const TOOLTIP_MAX_WIDTH_RATIO = 0.68
+const TOOLTIP_MIN_HEIGHT_PX = 320
+const TOOLTIP_MAX_HEIGHT_RATIO = 0.82
 
 const SectionTitle = styled.h3`
   font-family: var(--font-display);
@@ -222,6 +230,40 @@ interface PinnedEngramPanelProps {
   onCopyId: (engramId: string) => Promise<void>
 }
 
+interface TooltipHandlers {
+  handleCardMouseEnter: (engram: EngramSummary) => (event: MouseEvent<HTMLElement>) => void
+  handleCardFocus: (engram: EngramSummary) => (event: FocusEvent<HTMLElement>) => void
+  scheduleHideTooltip: () => void
+}
+
+interface EngramListCardProps {
+  engram: EngramSummary
+  isPinned: boolean
+  actionLabel: string
+  actionDisabled?: boolean
+  onAction: () => void
+  onCopyId: (engramId: string) => Promise<void>
+  tooltipHandlers: TooltipHandlers
+}
+
+interface PinnedSectionProps {
+  pinnedEngrams: EngramSummary[]
+  onUnpin: (engramId: string) => Promise<void>
+  onCopyId: (engramId: string) => Promise<void>
+  tooltipHandlers: TooltipHandlers
+}
+
+interface SearchSectionProps {
+  search: string
+  filteredAvailable: EngramSummary[]
+  pinnedIds: Set<string>
+  selectedSessionId: string | null
+  onSearchChange: (value: string) => void
+  onPin: (engramId: string) => Promise<void>
+  onCopyId: (engramId: string) => Promise<void>
+  tooltipHandlers: TooltipHandlers
+}
+
 const markdownComponents: Components = {
   a: ({ node, ...props }) => {
     void node
@@ -229,20 +271,67 @@ const markdownComponents: Components = {
   },
 }
 
-export function PinnedEngramPanel({
-  selectedSessionId,
-  pinnedEngrams,
-  availableEngrams,
-  search,
-  loading,
-  onSearchChange,
-  onRefresh,
-  onPin,
-  onUnpin,
-  onCopyId,
-}: PinnedEngramPanelProps) {
-  const pinnedIds = new Set(pinnedEngrams.map((item) => item.engram_id))
-  const normalized = search.trim().toLowerCase()
+function normalizeSearchQuery(search: string): string {
+  return search.trim().toLowerCase()
+}
+
+function filterAvailableEngrams(availableEngrams: EngramSummary[], normalizedSearch: string): EngramSummary[] {
+  if (!normalizedSearch) {
+    return availableEngrams
+  }
+  return availableEngrams.filter((item) => {
+    return (
+      item.title.toLowerCase().includes(normalizedSearch) ||
+      item.abstract.toLowerCase().includes(normalizedSearch) ||
+      item.engram_id.toLowerCase().includes(normalizedSearch)
+    )
+  })
+}
+
+function buildPinnedIdSet(pinnedEngrams: EngramSummary[]): Set<string> {
+  return new Set(pinnedEngrams.map((item) => item.engram_id))
+}
+
+function computeTooltipLayout(target: HTMLElement): Omit<TooltipState, 'engram'> {
+  const rect = target.getBoundingClientRect()
+  const viewportWidth = window.innerWidth || 1280
+  const viewportHeight = window.innerHeight || 800
+  const tooltipWidth = Math.max(
+    TOOLTIP_MIN_WIDTH_PX,
+    Math.min(viewportWidth * TOOLTIP_MAX_WIDTH_RATIO, viewportWidth - TOOLTIP_EDGE_PADDING_PX * 2),
+  )
+  const tooltipHeight = Math.max(
+    TOOLTIP_MIN_HEIGHT_PX,
+    Math.min(viewportHeight * TOOLTIP_MAX_HEIGHT_RATIO, viewportHeight - TOOLTIP_EDGE_PADDING_PX * 2),
+  )
+
+  let left = rect.left - tooltipWidth - TOOLTIP_ANCHOR_OFFSET_PX
+  if (left < TOOLTIP_EDGE_PADDING_PX) {
+    left = rect.right + TOOLTIP_ANCHOR_OFFSET_PX
+  }
+  left = Math.max(TOOLTIP_EDGE_PADDING_PX, Math.min(left, viewportWidth - tooltipWidth - TOOLTIP_EDGE_PADDING_PX))
+
+  const minTop = TOOLTIP_EDGE_PADDING_PX
+  const maxTop = viewportHeight - tooltipHeight - TOOLTIP_EDGE_PADDING_PX
+  const topAligned = rect.top + 2
+  const bottomAligned = rect.bottom - tooltipHeight - 2
+
+  let top = topAligned
+  if (topAligned > maxTop) {
+    const candidates = [maxTop]
+    if (bottomAligned >= minTop && bottomAligned <= maxTop) {
+      candidates.push(bottomAligned)
+    }
+    top = candidates.reduce((closest, candidate) =>
+      Math.abs(candidate - rect.top) < Math.abs(closest - rect.top) ? candidate : closest,
+    )
+  }
+  top = Math.max(minTop, Math.min(top, maxTop))
+
+  return { left, top, width: tooltipWidth, maxHeight: tooltipHeight }
+}
+
+function useEngramTooltip() {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
   const hideTimerRef = useRef<number | null>(null)
 
@@ -257,7 +346,7 @@ export function PinnedEngramPanel({
     clearHideTimer()
     hideTimerRef.current = window.setTimeout(() => {
       setTooltip(null)
-    }, 140)
+    }, TOOLTIP_HIDE_DELAY_MS)
   }, [clearHideTimer])
 
   useEffect(
@@ -275,40 +364,8 @@ export function PinnedEngramPanel({
         setTooltip(null)
         return
       }
-
       clearHideTimer()
-      const rect = target.getBoundingClientRect()
-      const viewportWidth = window.innerWidth || 1280
-      const viewportHeight = window.innerHeight || 800
-      const edgePadding = 10
-      const anchorOffset = 6
-      const tooltipWidth = Math.max(420, Math.min(viewportWidth * 0.68, viewportWidth - edgePadding * 2))
-      const tooltipHeight = Math.max(320, Math.min(viewportHeight * 0.82, viewportHeight - edgePadding * 2))
-
-      let left = rect.left - tooltipWidth - anchorOffset
-      if (left < edgePadding) {
-        left = rect.right + anchorOffset
-      }
-      left = Math.max(edgePadding, Math.min(left, viewportWidth - tooltipWidth - edgePadding))
-
-      const minTop = edgePadding
-      const maxTop = viewportHeight - tooltipHeight - edgePadding
-      const topAligned = rect.top + 2
-      const bottomAligned = rect.bottom - tooltipHeight - 2
-
-      let top = topAligned
-      if (topAligned > maxTop) {
-        const candidates = [maxTop]
-        if (bottomAligned >= minTop && bottomAligned <= maxTop) {
-          candidates.push(bottomAligned)
-        }
-        top = candidates.reduce((closest, candidate) =>
-          Math.abs(candidate - rect.top) < Math.abs(closest - rect.top) ? candidate : closest,
-        )
-      }
-      top = Math.max(minTop, Math.min(top, maxTop))
-
-      setTooltip({ engram, left, top, width: tooltipWidth, maxHeight: tooltipHeight })
+      setTooltip({ engram, ...computeTooltipLayout(target) })
     },
     [clearHideTimer],
   )
@@ -327,16 +384,166 @@ export function PinnedEngramPanel({
     [showTooltip],
   )
 
-  const filteredAvailable = availableEngrams.filter((item) => {
-    if (!normalized) {
-      return true
-    }
-    return (
-      item.title.toLowerCase().includes(normalized) ||
-      item.abstract.toLowerCase().includes(normalized) ||
-      item.engram_id.toLowerCase().includes(normalized)
-    )
-  })
+  return {
+    tooltip,
+    clearHideTimer,
+    scheduleHideTooltip,
+    handleCardMouseEnter,
+    handleCardFocus,
+  }
+}
+
+function EngramListCard({
+  engram,
+  isPinned,
+  actionLabel,
+  actionDisabled,
+  onAction,
+  onCopyId,
+  tooltipHandlers,
+}: EngramListCardProps) {
+  return (
+    <EngramCardSelectable
+      key={engram.engram_id}
+      $pinned={isPinned}
+      aria-selected={isPinned ? 'true' : 'false'}
+      data-testid={`engram-card-${engram.engram_id}`}
+      onMouseEnter={tooltipHandlers.handleCardMouseEnter(engram)}
+      onMouseLeave={tooltipHandlers.scheduleHideTooltip}
+      onFocus={tooltipHandlers.handleCardFocus(engram)}
+      onBlur={tooltipHandlers.scheduleHideTooltip}
+    >
+      <EngramTitle>{engram.title}</EngramTitle>
+      <EngramActions>
+        <CardActionButton type="button" onClick={() => onCopyId(engram.engram_id)}>
+          Copy ID
+        </CardActionButton>
+        <CardActionButton type="button" onClick={onAction} disabled={actionDisabled}>
+          {actionLabel}
+        </CardActionButton>
+      </EngramActions>
+    </EngramCardSelectable>
+  )
+}
+
+function PinnedSection({ pinnedEngrams, onUnpin, onCopyId, tooltipHandlers }: PinnedSectionProps) {
+  return (
+    <SectionPanel $hasBodyScroll={pinnedEngrams.length > 0} data-testid="pinned-section">
+      <SectionTitle>Session Pins</SectionTitle>
+      {pinnedEngrams.length === 0 ? <MutedText>No pinned engrams yet.</MutedText> : null}
+
+      {pinnedEngrams.length > 0 ? (
+        <SectionScroll>
+          {pinnedEngrams.map((engram) => (
+            <EngramListCard
+              key={engram.engram_id}
+              engram={engram}
+              isPinned={true}
+              actionLabel="Unpin"
+              onAction={() => void onUnpin(engram.engram_id)}
+              onCopyId={onCopyId}
+              tooltipHandlers={tooltipHandlers}
+            />
+          ))}
+        </SectionScroll>
+      ) : null}
+    </SectionPanel>
+  )
+}
+
+function SearchSection({
+  search,
+  filteredAvailable,
+  pinnedIds,
+  selectedSessionId,
+  onSearchChange,
+  onPin,
+  onCopyId,
+  tooltipHandlers,
+}: SearchSectionProps) {
+  return (
+    <SearchPanel data-testid="unpinned-section">
+      <SectionTitle>Search Project Engrams ({filteredAvailable.length})</SectionTitle>
+      <input
+        value={search}
+        onChange={(event) => onSearchChange(event.target.value)}
+        placeholder="Search title, abstract, or engram id"
+      />
+
+      <SectionScroll>
+        {filteredAvailable.map((engram) => {
+          const isPinned = pinnedIds.has(engram.engram_id)
+          return (
+            <EngramListCard
+              key={engram.engram_id}
+              engram={engram}
+              isPinned={isPinned}
+              actionLabel={isPinned ? 'Pinned' : 'Pin to Session'}
+              actionDisabled={!selectedSessionId || isPinned}
+              onAction={() => void onPin(engram.engram_id)}
+              onCopyId={onCopyId}
+              tooltipHandlers={tooltipHandlers}
+            />
+          )
+        })}
+
+        {filteredAvailable.length === 0 ? <MutedText>No matching engrams found.</MutedText> : null}
+      </SectionScroll>
+    </SearchPanel>
+  )
+}
+
+function TooltipPreview({
+  tooltip,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  tooltip: TooltipState
+  onMouseEnter: () => void
+  onMouseLeave: () => void
+}) {
+  return (
+    <FloatingTooltip
+      data-testid="engram-tooltip"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      style={{ left: `${tooltip.left}px`, top: `${tooltip.top}px`, width: `${tooltip.width}px` }}
+    >
+      <TooltipTitle>Abstract Preview</TooltipTitle>
+      <TooltipBody style={{ maxHeight: `${tooltip.maxHeight}px` }}>
+        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm, remarkBreaks]}>
+          {normalizeTooltipMarkdown(tooltip.engram.abstract)}
+        </ReactMarkdown>
+      </TooltipBody>
+    </FloatingTooltip>
+  )
+}
+
+export function PinnedEngramPanel({
+  selectedSessionId,
+  pinnedEngrams,
+  availableEngrams,
+  search,
+  loading,
+  onSearchChange,
+  onRefresh,
+  onPin,
+  onUnpin,
+  onCopyId,
+}: PinnedEngramPanelProps) {
+  const normalizedSearch = normalizeSearchQuery(search)
+  const pinnedIds = useMemo(() => buildPinnedIdSet(pinnedEngrams), [pinnedEngrams])
+  const filteredAvailable = useMemo(
+    () => filterAvailableEngrams(availableEngrams, normalizedSearch),
+    [availableEngrams, normalizedSearch],
+  )
+  const tooltipState = useEngramTooltip()
+
+  const tooltipHandlers: TooltipHandlers = {
+    handleCardMouseEnter: tooltipState.handleCardMouseEnter,
+    handleCardFocus: tooltipState.handleCardFocus,
+    scheduleHideTooltip: tooltipState.scheduleHideTooltip,
+  }
 
   return (
     <GlassPane as="aside" className="overflow-hidden" data-testid="pinned-engrams-panel">
@@ -351,98 +558,33 @@ export function PinnedEngramPanel({
 
       <SectionDivider />
       <SplitSections $hasPins={pinnedEngrams.length > 0}>
-        <SectionPanel $hasBodyScroll={pinnedEngrams.length > 0} data-testid="pinned-section">
-          <SectionTitle>Session Pins</SectionTitle>
-          {pinnedEngrams.length === 0 ? <MutedText>No pinned engrams yet.</MutedText> : null}
-
-          {pinnedEngrams.length > 0 ? (
-            <SectionScroll>
-              {pinnedEngrams.map((engram) => (
-                <EngramCardSelectable
-                  key={engram.engram_id}
-                  $pinned={true}
-                  aria-selected="true"
-                  data-testid={`engram-card-${engram.engram_id}`}
-                  onMouseEnter={handleCardMouseEnter(engram)}
-                  onMouseLeave={scheduleHideTooltip}
-                  onFocus={handleCardFocus(engram)}
-                  onBlur={scheduleHideTooltip}
-                >
-                  <EngramTitle>{engram.title}</EngramTitle>
-                  <EngramActions>
-                    <CardActionButton type="button" onClick={() => onCopyId(engram.engram_id)}>
-                      Copy ID
-                    </CardActionButton>
-                    <CardActionButton type="button" onClick={() => onUnpin(engram.engram_id)}>
-                      Unpin
-                    </CardActionButton>
-                  </EngramActions>
-                </EngramCardSelectable>
-              ))}
-            </SectionScroll>
-          ) : null}
-        </SectionPanel>
+        <PinnedSection
+          pinnedEngrams={pinnedEngrams}
+          onUnpin={onUnpin}
+          onCopyId={onCopyId}
+          tooltipHandlers={tooltipHandlers}
+        />
 
         <MidDottedDivider data-testid="engram-mid-divider" />
 
-        <SearchPanel data-testid="unpinned-section">
-          <SectionTitle>Search Project Engrams ({filteredAvailable.length})</SectionTitle>
-          <input
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search title, abstract, or engram id"
-          />
-
-          <SectionScroll>
-            {filteredAvailable.map((engram) => {
-              const isPinned = pinnedIds.has(engram.engram_id)
-              return (
-                <EngramCardSelectable
-                  key={engram.engram_id}
-                  $pinned={isPinned}
-                  aria-selected={isPinned ? 'true' : 'false'}
-                  data-testid={`engram-card-${engram.engram_id}`}
-                  onMouseEnter={handleCardMouseEnter(engram)}
-                  onMouseLeave={scheduleHideTooltip}
-                  onFocus={handleCardFocus(engram)}
-                  onBlur={scheduleHideTooltip}
-                >
-                  <EngramTitle>{engram.title}</EngramTitle>
-                  <EngramActions>
-                    <CardActionButton type="button" onClick={() => onCopyId(engram.engram_id)}>
-                      Copy ID
-                    </CardActionButton>
-                    <CardActionButton
-                      type="button"
-                      onClick={() => onPin(engram.engram_id)}
-                      disabled={!selectedSessionId || isPinned}
-                    >
-                      {isPinned ? 'Pinned' : 'Pin to Session'}
-                    </CardActionButton>
-                  </EngramActions>
-                </EngramCardSelectable>
-              )
-            })}
-
-            {filteredAvailable.length === 0 ? <MutedText>No matching engrams found.</MutedText> : null}
-          </SectionScroll>
-        </SearchPanel>
+        <SearchSection
+          search={search}
+          filteredAvailable={filteredAvailable}
+          pinnedIds={pinnedIds}
+          selectedSessionId={selectedSessionId}
+          onSearchChange={onSearchChange}
+          onPin={onPin}
+          onCopyId={onCopyId}
+          tooltipHandlers={tooltipHandlers}
+        />
       </SplitSections>
 
-      {tooltip ? (
-        <FloatingTooltip
-          data-testid="engram-tooltip"
-          onMouseEnter={clearHideTimer}
-          onMouseLeave={scheduleHideTooltip}
-          style={{ left: `${tooltip.left}px`, top: `${tooltip.top}px`, width: `${tooltip.width}px` }}
-        >
-          <TooltipTitle>Abstract Preview</TooltipTitle>
-          <TooltipBody style={{ maxHeight: `${tooltip.maxHeight}px` }}>
-            <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm, remarkBreaks]}>
-              {normalizeTooltipMarkdown(tooltip.engram.abstract)}
-            </ReactMarkdown>
-          </TooltipBody>
-        </FloatingTooltip>
+      {tooltipState.tooltip ? (
+        <TooltipPreview
+          tooltip={tooltipState.tooltip}
+          onMouseEnter={tooltipState.clearHideTimer}
+          onMouseLeave={tooltipState.scheduleHideTooltip}
+        />
       ) : null}
     </GlassPane>
   )

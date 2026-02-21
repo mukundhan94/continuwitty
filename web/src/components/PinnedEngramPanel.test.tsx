@@ -81,4 +81,38 @@ describe('PinnedEngramPanel', () => {
     expect(markdownLink).toHaveAttribute('target', '_blank')
     expect(markdownLink).toHaveAttribute('rel', 'noreferrer')
   })
+
+  it('invokes refresh and pin actions from toolbar and search list', async () => {
+    const user = userEvent.setup()
+    const onRefresh = vi.fn(async () => {})
+    const onPin = vi.fn(async () => {})
+    const available = buildEngram({
+      engram_id: 'engram-available',
+      title: 'Available Engram',
+      abstract: '### Context\\nUse **memory** carry-forward.',
+    })
+
+    render(
+      <ThemeProvider theme={lightTheme}>
+        <PinnedEngramPanel
+          selectedSessionId="session-1"
+          pinnedEngrams={[]}
+          availableEngrams={[available]}
+          search=""
+          loading={false}
+          onSearchChange={vi.fn()}
+          onRefresh={onRefresh}
+          onPin={onPin}
+          onUnpin={vi.fn(async () => {})}
+          onCopyId={vi.fn(async () => {})}
+        />
+      </ThemeProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByRole('button', { name: 'Pin to Session' }))
+    expect(onPin).toHaveBeenCalledWith('engram-available')
+  })
 })
