@@ -1009,6 +1009,39 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 37 - Workspace Loader Integration Phase 10.1/10.2 Hardening)
+
+- [x] Completed integration of the extracted workspace loader hook into `web/src/App.tsx`
+- [x] Replaced inline workspace loader implementations with `useWorkspaceDataLoaders(...)` outputs:
+  - `loadDefaultProject(...)`
+  - `loadSessions(...)`
+  - `loadSessionData(...)`
+  - `loadProjectDocuments(...)`
+  - `refreshFromSession(...)`
+- [x] Preserved the enforced `>= 9.5` quality bar by decomposing App render paths into focused local render helpers:
+  - `renderTopNav(...)`
+  - `renderWorkspace(...)`
+  - `renderBody(...)`
+  - `renderSaveModal(...)`
+  - `renderAdminTokenPanel(...)`
+- [x] Added test coverage in `web/src/hooks/useWorkspaceDataLoaders.test.ts`:
+  - fallback selection behavior when a preferred session is missing
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/hooks/useWorkspaceDataLoaders.test.ts src/hooks/useAuthActions.test.ts src/hooks/useWorkspaceActions.test.ts src/hooks/useSessionActions.test.ts src/components/SessionSidebar.test.tsx`
+  - `make web-check`
+  - aggregate: `22 passed` (targeted web), `98 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/App.tsx` score: **10.0**
+  - `web/src/hooks/useWorkspaceDataLoaders.test.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+- [x] Full backend suite attempted via `make test` before commit:
+  - currently failing in local environment with 6 unrelated failures (`test_ui_auth`/`test_api_integration` login 401s and `test_eval_harness` DB connection refusal)
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |

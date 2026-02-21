@@ -152,6 +152,23 @@ describe('useWorkspaceDataLoaders', () => {
     expect(updater('session-z')).toBe('session-b')
   })
 
+  it('falls back to first session when preferred session is missing', async () => {
+    const setSelectedSessionId = vi.fn()
+    const sessions = [buildSession('session-a'), buildSession('session-b')]
+    chatMocks.listChatSessions.mockResolvedValue(sessions)
+    const config = buildConfig({
+      setSelectedSessionId,
+    })
+    const { result } = renderHook(() => useWorkspaceDataLoaders(config))
+
+    await act(async () => {
+      await result.current.loadSessions('engram-vault', 'missing-session')
+    })
+
+    const updater = setSelectedSessionId.mock.calls[0][0] as (current: string | null) => string | null
+    expect(updater('session-b')).toBe('session-a')
+  })
+
   it('loads session data and timeline details for selected session', async () => {
     const setEngramLoading = vi.fn()
     const setMessages = vi.fn()

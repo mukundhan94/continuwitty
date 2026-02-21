@@ -3,19 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import styled from 'styled-components'
 
 import { getSessionProfile } from './api/auth'
-import {
-  getDefaultProject,
-} from './api/projects'
-import {
-  listChatSessions,
-  listEngrams,
-  listPinnedDocuments,
-  listPinnedEngrams,
-  listSessionMessages,
-  listSessionTimeline,
-} from './api/chat'
 import { ApiError } from './api/http'
-import { listProjectDocuments } from './api/ingestion'
 import type {
   ChatMessage,
   ChatDebugTrace,
@@ -50,6 +38,7 @@ import { useAuthActions } from './hooks/useAuthActions'
 import { useIngestionActions, usePinActions, usePromptActions } from './hooks/useChatActions'
 import { useAdminTokenActions } from './hooks/useAdminTokenActions'
 import { useSessionActions } from './hooks/useSessionActions'
+import { useWorkspaceDataLoaders } from './hooks/useWorkspaceDataLoaders'
 import { useWorkspaceActions } from './hooks/useWorkspaceActions'
 import { buildDefaultSaveAbstract } from './utils/chat'
 
@@ -91,13 +80,6 @@ function describeError(error: unknown): string {
 
 function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401
-}
-
-function pickSession(sessions: ChatSession[], previousId: string | null): string | null {
-  if (previousId && sessions.some((item) => item.session_id === previousId)) {
-    return previousId
-  }
-  return sessions.length > 0 ? sessions[0].session_id : null
 }
 
 function AppScreen() {
@@ -174,65 +156,32 @@ function AppScreen() {
     describeError,
   })
 
-  const loadDefaultProject = async () => {
-    const response = await getDefaultProject()
-    setDefaultProjectId(response.default_project_id)
-    if (response.default_project_id && !projectId.trim()) {
-      setProjectId(response.default_project_id)
-    }
-  }
-
-  const loadSessions = async (nextProjectId: string, preferredSessionId: string | null) => {
-    setSessionsLoading(true)
-    try {
-      const loaded = await listChatSessions(normalizeProjectId(nextProjectId))
-      setSessions(loaded)
-      setSelectedSessionId((current) => pickSession(loaded, preferredSessionId ?? current))
-    } catch (error) {
-      setChatError(describeError(error))
-    } finally {
-      setSessionsLoading(false)
-    }
-  }
-
-  const loadSessionData = async (sessionId: string, currentProjectId: string) => {
-    setEngramLoading(true)
-    try {
-      const [loadedMessages, loadedPinned, loadedPinnedDocuments, loadedEngrams, loadedTimeline] = await Promise.all([
-        listSessionMessages(sessionId),
-        listPinnedEngrams(sessionId),
-        listPinnedDocuments(sessionId),
-        listEngrams(normalizeProjectId(currentProjectId)),
-        listSessionTimeline(sessionId),
-      ])
-      setMessages(loadedMessages)
-      setPinnedEngrams(loadedPinned)
-      setPinnedDocuments(loadedPinnedDocuments)
-      setAvailableEngrams(loadedEngrams)
-      setTimelineEvents(loadedTimeline)
-    } catch (error) {
-      setChatError(describeError(error))
-    } finally {
-      setEngramLoading(false)
-    }
-  }
-
-  const loadProjectDocuments = async (currentProjectId: string) => {
-    setDocumentsLoading(true)
-    setDocumentsError(null)
-    try {
-      const loaded = await listProjectDocuments(normalizeProjectId(currentProjectId))
-      setDocuments(loaded)
-    } catch (error) {
-      setDocumentsError(describeError(error))
-    } finally {
-      setDocumentsLoading(false)
-    }
-  }
-
-  const refreshFromSession = async (sessionId: string) => {
-    await loadSessionData(sessionId, projectId)
-  }
+  const {
+    loadDefaultProject,
+    loadSessions,
+    loadSessionData,
+    loadProjectDocuments,
+    refreshFromSession,
+  } = useWorkspaceDataLoaders({
+    projectId,
+    normalizeProjectId,
+    describeError,
+    setProjectId,
+    setDefaultProjectId,
+    setSessionsLoading,
+    setSessions,
+    setSelectedSessionId,
+    setChatError,
+    setEngramLoading,
+    setMessages,
+    setPinnedEngrams,
+    setPinnedDocuments,
+    setAvailableEngrams,
+    setTimelineEvents,
+    setDocumentsLoading,
+    setDocumentsError,
+    setDocuments,
+  })
 
   useEffect(() => {
     // Keep the current project scope sticky across hard refreshes.
@@ -391,6 +340,159 @@ function AppScreen() {
     describeError,
   })
 
+  const renderTopNav = (activeUser: UserProfile) => (
+    <TopNavShell>
+      <TopNavTitleBlock>
+        <h1 className="font-display text-lg font-semibold tracking-tight text-ink">Memory Continuity Workbench</h1>
+      </TopNavTitleBlock>
+
+      <TopNavUserBlock>
+        <p className="text-sm text-inkMuted">
+          {activeUser.username} · {activeUser.role}
+        </p>
+        {isAdmin ? (
+          <button type="button" data-testid="open-admin-token-panel" onClick={() => void openAdminTokenPanel()}>
+            MCP Tokens
+          </button>
+        ) : null}
+        {isAdmin ? (
+          <button
+            type="button"
+            onClick={() => navigate(isAdminMemoryRoute ? '/' : '/admin/memory')}
+          >
+            {isAdminMemoryRoute ? 'Chat Workspace' : 'Memory Admin'}
+          </button>
+        ) : null}
+        <button type="button" onClick={toggleMode}>
+          {mode === 'dark' ? 'Light Theme' : 'Dark Theme'}
+        </button>
+        <button type="button" onClick={handleLogout}>
+          Logout
+        </button>
+      </TopNavUserBlock>
+    </TopNavShell>
+  )
+
+  const renderWorkspace = () => (
+    <WorkspaceGrid>
+      <SessionSidebar
+        sessions={sessions}
+        selectedSessionId={selectedSessionId}
+        projectId={projectId}
+        defaultProjectId={defaultProjectId}
+        settingDefaultProject={settingDefaultProject}
+        defaultProvider={WEB_CONFIG.defaultProvider}
+        defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
+        modelDefaults={WEB_CONFIG.defaultModelByProvider}
+        loading={sessionsLoading}
+        creating={creatingSession}
+        onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
+        onSetDefaultProject={handleSetDefaultProject}
+        onSelectSession={setSelectedSessionId}
+        onCreateSession={handleCreateSession}
+      />
+
+      <ChatPanel
+        session={selectedSession}
+        messages={messages}
+        pendingUserText={pendingUserText}
+        streamingAssistantText={streamingAssistantText}
+        composerText={composerText}
+        sending={chatSending}
+        error={chatError}
+        sourceReferences={sourceReferences}
+        debugTrace={chatDebugTrace}
+        timelineEvents={timelineEvents}
+        onComposerChange={setComposerText}
+        onSend={handleSend}
+        onRetry={handleRetry}
+        onOpenSaveModal={() => setSaveModalOpen(true)}
+        onContinueSession={handleContinueSession}
+      />
+
+      <RightRail>
+        <DocumentIngestionPanel
+          projectId={projectId}
+          selectedSessionId={selectedSessionId}
+          documents={documents}
+          pinnedDocumentIds={pinnedDocuments.map((item) => item.document_id)}
+          loading={documentsLoading}
+          submitting={documentsSubmitting}
+          error={documentsError}
+          onRefresh={handleRefreshDocuments}
+          onIngestText={handleIngestText}
+          onIngestFile={handleIngestFile}
+          onPinDocument={handlePinDocument}
+          onUnpinDocument={handleUnpinDocument}
+        />
+
+        <PinnedEngramPanel
+          selectedSessionId={selectedSessionId}
+          pinnedEngrams={pinnedEngrams}
+          availableEngrams={availableEngrams}
+          search={engramSearch}
+          loading={engramLoading}
+          onSearchChange={setEngramSearch}
+          onRefresh={handleRefreshEngrams}
+          onPin={handlePin}
+          onUnpin={handleUnpin}
+          onCopyId={handleCopyEngramId}
+        />
+      </RightRail>
+    </WorkspaceGrid>
+  )
+
+  const renderBody = () => {
+    if (isAdminMemoryRoute) {
+      return (
+        <AdminMemoryPage
+          projectId={projectId}
+          onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
+          onNotice={(message) => setNotice(message)}
+        />
+      )
+    }
+    return renderWorkspace()
+  }
+
+  const renderSaveModal = () => {
+    if (isAdminMemoryRoute || !saveModalOpen) {
+      return null
+    }
+    return (
+      <SaveEngramModal
+        defaultTitle={selectedSession ? `${selectedSession.title} Snapshot` : 'Chat Snapshot'}
+        defaultAbstract={defaultSaveAbstract}
+        saving={saveSubmitting}
+        onClose={() => setSaveModalOpen(false)}
+        onSave={handleSaveEngram}
+      />
+    )
+  }
+
+  const renderAdminTokenPanel = () => {
+    if (!isAdmin) {
+      return null
+    }
+    return (
+      <AdminMcpTokenPanel
+        isOpen={adminTokenPanelOpen}
+        loading={adminTokensLoading}
+        optionsLoading={adminTokenOptionsLoading}
+        creating={adminTokensCreating}
+        tokens={adminTokens}
+        latestToken={adminLatestToken}
+        error={adminTokenError}
+        availableTools={adminAvailableTools}
+        availableProjects={adminAvailableProjects}
+        onClose={closeAdminTokenPanel}
+        onRefresh={handleRefreshAdminTokenPanel}
+        onCreate={handleCreateAdminToken}
+        onRevoke={handleRevokeAdminToken}
+      />
+    )
+  }
+
   if (authChecking) {
     return <LoadingScreen>Loading local workspace...</LoadingScreen>
   }
@@ -405,141 +507,11 @@ function AppScreen() {
 
   return (
     <AppShell>
-      <TopNavShell>
-        <TopNavTitleBlock>
-          <h1 className="font-display text-lg font-semibold tracking-tight text-ink">Memory Continuity Workbench</h1>
-        </TopNavTitleBlock>
-
-        <TopNavUserBlock>
-          <p className="text-sm text-inkMuted">
-            {user.username} · {user.role}
-          </p>
-          {isAdmin ? (
-            <button type="button" data-testid="open-admin-token-panel" onClick={() => void openAdminTokenPanel()}>
-              MCP Tokens
-            </button>
-          ) : null}
-          {isAdmin ? (
-            <button
-              type="button"
-              onClick={() => navigate(isAdminMemoryRoute ? '/' : '/admin/memory')}
-            >
-              {isAdminMemoryRoute ? 'Chat Workspace' : 'Memory Admin'}
-            </button>
-          ) : null}
-          <button type="button" onClick={toggleMode}>
-            {mode === 'dark' ? 'Light Theme' : 'Dark Theme'}
-          </button>
-          <button type="button" onClick={handleLogout}>
-            Logout
-          </button>
-        </TopNavUserBlock>
-      </TopNavShell>
-
+      {renderTopNav(user)}
       {notice ? <NoticeBanner>{notice}</NoticeBanner> : null}
-
-      {isAdminMemoryRoute ? (
-        <AdminMemoryPage
-          projectId={projectId}
-          onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
-          onNotice={(message) => setNotice(message)}
-        />
-      ) : (
-        <WorkspaceGrid>
-          <SessionSidebar
-            sessions={sessions}
-            selectedSessionId={selectedSessionId}
-            projectId={projectId}
-            defaultProjectId={defaultProjectId}
-            settingDefaultProject={settingDefaultProject}
-            defaultProvider={WEB_CONFIG.defaultProvider}
-            defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
-            modelDefaults={WEB_CONFIG.defaultModelByProvider}
-            loading={sessionsLoading}
-            creating={creatingSession}
-            onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
-            onSetDefaultProject={handleSetDefaultProject}
-            onSelectSession={setSelectedSessionId}
-            onCreateSession={handleCreateSession}
-          />
-
-          <ChatPanel
-            session={selectedSession}
-            messages={messages}
-            pendingUserText={pendingUserText}
-            streamingAssistantText={streamingAssistantText}
-            composerText={composerText}
-            sending={chatSending}
-            error={chatError}
-            sourceReferences={sourceReferences}
-            debugTrace={chatDebugTrace}
-            timelineEvents={timelineEvents}
-            onComposerChange={setComposerText}
-            onSend={handleSend}
-            onRetry={handleRetry}
-            onOpenSaveModal={() => setSaveModalOpen(true)}
-            onContinueSession={handleContinueSession}
-          />
-
-          <RightRail>
-            <DocumentIngestionPanel
-              projectId={projectId}
-              selectedSessionId={selectedSessionId}
-              documents={documents}
-              pinnedDocumentIds={pinnedDocuments.map((item) => item.document_id)}
-              loading={documentsLoading}
-              submitting={documentsSubmitting}
-              error={documentsError}
-              onRefresh={handleRefreshDocuments}
-              onIngestText={handleIngestText}
-              onIngestFile={handleIngestFile}
-              onPinDocument={handlePinDocument}
-              onUnpinDocument={handleUnpinDocument}
-            />
-
-            <PinnedEngramPanel
-              selectedSessionId={selectedSessionId}
-              pinnedEngrams={pinnedEngrams}
-              availableEngrams={availableEngrams}
-              search={engramSearch}
-              loading={engramLoading}
-              onSearchChange={setEngramSearch}
-              onRefresh={handleRefreshEngrams}
-              onPin={handlePin}
-              onUnpin={handleUnpin}
-              onCopyId={handleCopyEngramId}
-            />
-          </RightRail>
-        </WorkspaceGrid>
-      )}
-
-      {!isAdminMemoryRoute && saveModalOpen ? (
-        <SaveEngramModal
-          defaultTitle={selectedSession ? `${selectedSession.title} Snapshot` : 'Chat Snapshot'}
-          defaultAbstract={defaultSaveAbstract}
-          saving={saveSubmitting}
-          onClose={() => setSaveModalOpen(false)}
-          onSave={handleSaveEngram}
-        />
-      ) : null}
-
-      {isAdmin ? (
-        <AdminMcpTokenPanel
-          isOpen={adminTokenPanelOpen}
-          loading={adminTokensLoading}
-          optionsLoading={adminTokenOptionsLoading}
-          creating={adminTokensCreating}
-          tokens={adminTokens}
-          latestToken={adminLatestToken}
-          error={adminTokenError}
-          availableTools={adminAvailableTools}
-          availableProjects={adminAvailableProjects}
-          onClose={closeAdminTokenPanel}
-          onRefresh={handleRefreshAdminTokenPanel}
-          onCreate={handleCreateAdminToken}
-          onRevoke={handleRevokeAdminToken}
-        />
-      ) : null}
+      {renderBody()}
+      {renderSaveModal()}
+      {renderAdminTokenPanel()}
     </AppShell>
   )
 }
