@@ -7,7 +7,12 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.memory_admin.repository import AdminEngramUpdateRepositoryRequest
+from app.memory_admin.repository import (
+    AdminEngramListRepositoryRequest,
+    AdminEngramUpdateRepositoryRequest,
+    AdminSessionListRepositoryRequest,
+    CollectionListRepositoryRequest,
+)
 from app.memory_admin.service import (
     MemoryAdminEngramListRequest,
     MemoryAdminListRequest,
@@ -42,8 +47,8 @@ def test_list_methods_forward_shared_request_object(
 ) -> None:
     captured: dict[str, object] = {}
 
-    def _fake_list_records(**kwargs):  # noqa: ANN003
-        captured.update(kwargs)
+    def _fake_list_records(*, request):  # noqa: ANN001
+        captured["request"] = request
         return []
 
     monkeypatch.setattr(f"app.memory_admin.service.{repository_method}", _fake_list_records)
@@ -59,20 +64,25 @@ def test_list_methods_forward_shared_request_object(
 
     listed = getattr(service, service_method)(request=request)
     assert listed == []
-    assert captured == {
-        "project_id": request.project_id,
-        "owner_user_id": request.owner_user_id,
-        "include_deleted": False,
-        "limit": 50,
-        "offset": 10,
-    }
+    repository_request = captured["request"]
+    expected_type = (
+        AdminSessionListRepositoryRequest
+        if service_method == "list_sessions"
+        else CollectionListRepositoryRequest
+    )
+    assert isinstance(repository_request, expected_type)
+    assert repository_request.project_id == request.project_id
+    assert repository_request.owner_user_id == request.owner_user_id
+    assert repository_request.include_deleted is False
+    assert repository_request.limit == 50
+    assert repository_request.offset == 10
 
 
 def test_list_engrams_uses_request_object(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    def _fake_list_admin_engrams(**kwargs):  # noqa: ANN003
-        captured.update(kwargs)
+    def _fake_list_admin_engrams(*, request):  # noqa: ANN001
+        captured["request"] = request
         return []
 
     monkeypatch.setattr("app.memory_admin.service.list_admin_engrams", _fake_list_admin_engrams)
@@ -89,10 +99,12 @@ def test_list_engrams_uses_request_object(monkeypatch) -> None:
     )
 
     assert service.list_engrams(request=request) == []
-    assert captured["project_id"] == "engram-vault"
-    assert captured["session_id"] == request.session_id
-    assert captured["query_text"] == "incident"
-    assert captured["include_deleted"] is True
+    repository_request = captured["request"]
+    assert isinstance(repository_request, AdminEngramListRepositoryRequest)
+    assert repository_request.project_id == "engram-vault"
+    assert repository_request.session_id == request.session_id
+    assert repository_request.query_text == "incident"
+    assert repository_request.include_deleted is True
 
 
 def test_update_collection_rejects_stale_expected_updated_at(monkeypatch) -> None:

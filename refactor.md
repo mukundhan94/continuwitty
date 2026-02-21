@@ -1957,12 +1957,44 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 73 - Memory Admin Repository Request Objects and Duplication Cleanup)
+
+- [x] Continued Phase 2 refactor in `api/app/memory_admin/repository.py` by introducing request objects for list queries and soft-delete internals:
+  - added `AdminSessionListRepositoryRequest`
+  - added `AdminEngramListRepositoryRequest`
+  - added `CollectionListRepositoryRequest`
+  - added `_SoftDeleteRecordRequest`
+  - updated `list_admin_sessions(...)`, `list_admin_engrams(...)`, and `list_collections(...)` to consume request objects
+- [x] Reduced lifecycle wrapper duplication in repository:
+  - moved connection ownership into `_soft_delete_record(...)`
+  - added `_soft_delete_record_exists(...)`
+  - simplified `soft_delete_engram(...)` and `soft_delete_collection(...)` to use the shared existence helper
+- [x] Updated `api/app/memory_admin/service.py` to map service request DTOs to repository request DTOs:
+  - added `_repository_list_request_kwargs(...)`
+  - updated `list_sessions(...)`, `list_engrams(...)`, and `list_collections(...)` to construct repository request objects
+- [x] Updated tests for the new call shape:
+  - `api/tests/test_memory_admin_service.py` now asserts repository request object forwarding for session/engram/collection list operations
+- [x] Validation run (using `make` commands):
+  - `make test-unit` (`237 passed, 4 skipped, 81 deselected`)
+  - `make test` (`237 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] Additional targeted validation:
+  - `uv run pytest tests/test_memory_admin_service.py tests/test_memory_admin_repository.py -q` (`11 passed, 1 skipped`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/memory_admin/repository.py` score: **8.03** (improved from **7.78**)
+  - `api/app/memory_admin/service.py` score: **10.0** (stable)
+  - `api/tests/test_memory_admin_service.py` score: **10.0** (stable)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
 | `api/app/mcp/service.py` | **9.68** | GREEN |
-| `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
+| `api/app/memory_admin/repository.py` | 8.03 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
 | `api/app/oauth/api.py` | 10.0 | GREEN |

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TypeVar
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -27,7 +25,10 @@ from app.models import (
 from app.projects import ProjectService
 
 from .repository import (
+    AdminEngramListRepositoryRequest,
     AdminEngramUpdateRepositoryRequest,
+    AdminSessionListRepositoryRequest,
+    CollectionListRepositoryRequest,
     add_collection_items,
     create_collection,
     get_admin_engram,
@@ -47,8 +48,6 @@ from .repository import (
     update_admin_engram,
     update_collection,
 )
-
-TRecord = TypeVar("TRecord")
 
 
 @dataclass(frozen=True)
@@ -72,18 +71,17 @@ class MemoryAdminService:
         self._project_service = project_service
 
     @staticmethod
-    def _list_project_scoped_records(
+    def _repository_list_request_kwargs(
         *,
         request: MemoryAdminListRequest,
-        fetcher: Callable[..., list[TRecord]],
-    ) -> list[TRecord]:
-        return fetcher(
-            project_id=request.project_id,
-            owner_user_id=request.owner_user_id,
-            include_deleted=request.include_deleted,
-            limit=request.limit,
-            offset=request.offset,
-        )
+    ) -> dict[str, object]:
+        return {
+            "project_id": request.project_id,
+            "owner_user_id": request.owner_user_id,
+            "include_deleted": request.include_deleted,
+            "limit": request.limit,
+            "offset": request.offset,
+        }
 
     @staticmethod
     def _raise_if_stale_update(
@@ -100,9 +98,10 @@ class MemoryAdminService:
         *,
         request: MemoryAdminListRequest,
     ) -> list[AdminChatSessionRecord]:
-        return self._list_project_scoped_records(
-            request=request,
-            fetcher=list_admin_sessions,
+        return list_admin_sessions(
+            request=AdminSessionListRepositoryRequest(
+                **self._repository_list_request_kwargs(request=request)
+            ),
         )
 
     def get_session(
@@ -152,13 +151,11 @@ class MemoryAdminService:
         request: MemoryAdminEngramListRequest,
     ) -> list[AdminEngramRecord]:
         return list_admin_engrams(
-            project_id=request.project_id,
-            session_id=request.session_id,
-            owner_user_id=request.owner_user_id,
-            query_text=request.query_text,
-            include_deleted=request.include_deleted,
-            limit=request.limit,
-            offset=request.offset,
+            request=AdminEngramListRepositoryRequest(
+                **self._repository_list_request_kwargs(request=request),
+                session_id=request.session_id,
+                query_text=request.query_text,
+            ),
         )
 
     def find_engram(
@@ -260,9 +257,10 @@ class MemoryAdminService:
         *,
         request: MemoryAdminListRequest,
     ) -> list[EngramCollectionRecord]:
-        return self._list_project_scoped_records(
-            request=request,
-            fetcher=list_collections,
+        return list_collections(
+            request=CollectionListRepositoryRequest(
+                **self._repository_list_request_kwargs(request=request)
+            ),
         )
 
     def find_collection(

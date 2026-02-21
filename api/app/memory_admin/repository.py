@@ -85,24 +85,51 @@ class _EngramPersistPayload:
     engram_json: dict[str, object]
 
 
+@dataclass(frozen=True)
+class AdminSessionListRepositoryRequest:
+    project_id: str | None = None
+    owner_user_id: UUID | None = None
+    include_deleted: bool = False
+    limit: int = 200
+    offset: int = 0
+
+
+@dataclass(frozen=True)
+class AdminEngramListRepositoryRequest(AdminSessionListRepositoryRequest):
+    session_id: UUID | None = None
+    query_text: str | None = None
+
+
+@dataclass(frozen=True)
+class CollectionListRepositoryRequest(AdminSessionListRepositoryRequest):
+    pass
+
+
+@dataclass(frozen=True)
+class _SoftDeleteRecordRequest:
+    table: str
+    id_column: str
+    id_value: UUID
+    deleted_by_user_id: UUID
+    reason: str | None
+    returning_columns: str
+    updated_by_column: str | None = None
+
+
 def list_admin_sessions(
     *,
-    project_id: str | None = None,
-    owner_user_id: UUID | None = None,
-    include_deleted: bool = False,
-    limit: int = 200,
-    offset: int = 0,
+    request: AdminSessionListRepositoryRequest,
 ) -> list[AdminChatSessionRecord]:
     where_clauses = ["1=1"]
     params: list[object] = []
-    if not include_deleted:
+    if not request.include_deleted:
         where_clauses.append("deleted_at IS NULL")
-    if project_id:
+    if request.project_id:
         where_clauses.append("project_id = %s")
-        params.append(project_id)
-    if owner_user_id:
+        params.append(request.project_id)
+    if request.owner_user_id:
         where_clauses.append("owner_user_id = %s")
-        params.append(owner_user_id)
+        params.append(request.owner_user_id)
 
     sql = f"""
         SELECT
@@ -130,7 +157,7 @@ def list_admin_sessions(
         ORDER BY created_at DESC
         LIMIT %s OFFSET %s
     """
-    params.extend([limit, offset])
+    params.extend([request.limit, request.offset])
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(sql, params)
@@ -178,14 +205,7 @@ def get_admin_session(
 
 def _soft_delete_record(
     *,
-    conn,
-    table: str,
-    id_column: str,
-    id_value: UUID,
-    deleted_by_user_id: UUID,
-    reason: str | None,
-    returning_columns: str,
-    updated_by_column: str | None = None,
+    request: _SoftDeleteRecordRequest,
 ):
     assignments = [
         "deleted_at = COALESCE(deleted_at, now())",
@@ -193,24 +213,28 @@ def _soft_delete_record(
         "delete_reason = %s",
         "updated_at = now()",
     ]
-    params: list[object] = [deleted_by_user_id, reason]
-    if updated_by_column is not None:
-        assignments.append(f"{updated_by_column} = %s")
-        params.append(deleted_by_user_id)
-    params.append(id_value)
+    params: list[object] = [request.deleted_by_user_id, request.reason]
+    if request.updated_by_column is not None:
+        assignments.append(f"{request.updated_by_column} = %s")
+        params.append(request.deleted_by_user_id)
+    params.append(request.id_value)
 
-    with conn.cursor() as cur:
+    with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             f"""
-            UPDATE {table}
+            UPDATE {request.table}
             SET
                 {", ".join(assignments)}
-            WHERE {id_column} = %s
-            RETURNING {returning_columns}
+            WHERE {request.id_column} = %s
+            RETURNING {request.returning_columns}
             """,
             tuple(params),
         )
         return cur.fetchone()
+
+
+def _soft_delete_record_exists(*, request: _SoftDeleteRecordRequest) -> bool:
+    return bool(_soft_delete_record(request=request))
 
 
 def _restore_record(*, conn, table: str, id_column: str, id_value: UUID) -> bool:
@@ -238,16 +262,16 @@ def soft_delete_session(
     deleted_by_user_id: UUID,
     reason: str | None,
 ) -> AdminChatSessionRecord | None:
-    with get_conn() as conn:
-        row = _soft_delete_record(
-            conn=conn,
+    row = _soft_delete_record(
+        request=_SoftDeleteRecordRequest(
             table="chat_sessions",
             id_column="session_id",
             id_value=session_id,
             deleted_by_user_id=deleted_by_user_id,
             reason=reason,
             returning_columns=_ADMIN_SESSION_COLUMNS,
-        )
+        ),
+    )
     return AdminChatSessionRecord(**row) if row else None
 
 
@@ -290,32 +314,26 @@ def soft_delete_linked_engrams(
 
 def list_admin_engrams(
     *,
-    project_id: str | None = None,
-    session_id: UUID | None = None,
-    owner_user_id: UUID | None = None,
-    query_text: str | None = None,
-    include_deleted: bool = False,
-    limit: int = 200,
-    offset: int = 0,
+    request: AdminEngramListRepositoryRequest,
 ) -> list[AdminEngramRecord]:
     where_clauses = ["1=1"]
     params: list[object] = []
-    if not include_deleted:
+    if not request.include_deleted:
         where_clauses.append("e.deleted_at IS NULL")
-    if project_id:
+    if request.project_id:
         where_clauses.append("e.project_id = %s")
-        params.append(project_id)
-    if session_id:
+        params.append(request.project_id)
+    if request.session_id:
         where_clauses.append("e.source_session_id = %s")
-        params.append(session_id)
-    if owner_user_id:
+        params.append(request.session_id)
+    if request.owner_user_id:
         where_clauses.append("e.owner_user_id = %s")
-        params.append(owner_user_id)
-    if query_text:
+        params.append(request.owner_user_id)
+    if request.query_text:
         where_clauses.append(
             "(e.title ILIKE %s OR e.abstract ILIKE %s OR e.engram_markdown ILIKE %s)"
         )
-        like = f"%{query_text}%"
+        like = f"%{request.query_text}%"
         params.extend([like, like, like])
 
     sql = f"""
@@ -341,7 +359,7 @@ def list_admin_engrams(
         ORDER BY e.created_at DESC
         LIMIT %s OFFSET %s
     """
-    params.extend([limit, offset])
+    params.extend([request.limit, request.offset])
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
@@ -633,9 +651,8 @@ def move_admin_engram_project(
 
 
 def soft_delete_engram(*, engram_id: UUID, deleted_by_user_id: UUID, reason: str | None) -> bool:
-    with get_conn() as conn:
-        row = _soft_delete_record(
-            conn=conn,
+    return _soft_delete_record_exists(
+        request=_SoftDeleteRecordRequest(
             table="engrams",
             id_column="engram_id",
             id_value=engram_id,
@@ -644,7 +661,7 @@ def soft_delete_engram(*, engram_id: UUID, deleted_by_user_id: UUID, reason: str
             updated_by_column="updated_by_user_id",
             returning_columns="engram_id",
         )
-    return bool(row)
+    )
 
 
 def restore_engram(*, engram_id: UUID) -> bool:
@@ -659,21 +676,17 @@ def restore_engram(*, engram_id: UUID) -> bool:
 
 def list_collections(
     *,
-    project_id: str | None = None,
-    owner_user_id: UUID | None = None,
-    include_deleted: bool = False,
-    limit: int = 200,
-    offset: int = 0,
+    request: CollectionListRepositoryRequest,
 ) -> list[EngramCollectionRecord]:
     where_clauses = ["1=1"]
     params: list[object] = []
-    if project_id:
+    if request.project_id:
         where_clauses.append("project_id = %s")
-        params.append(project_id)
-    if owner_user_id:
+        params.append(request.project_id)
+    if request.owner_user_id:
         where_clauses.append("owner_user_id = %s")
-        params.append(owner_user_id)
-    if not include_deleted:
+        params.append(request.owner_user_id)
+    if not request.include_deleted:
         where_clauses.append("deleted_at IS NULL")
 
     sql = f"""
@@ -693,7 +706,7 @@ def list_collections(
         ORDER BY created_at DESC
         LIMIT %s OFFSET %s
     """
-    params.extend([limit, offset])
+    params.extend([request.limit, request.offset])
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
@@ -809,9 +822,8 @@ def soft_delete_collection(
     deleted_by_user_id: UUID,
     reason: str | None,
 ) -> bool:
-    with get_conn() as conn:
-        row = _soft_delete_record(
-            conn=conn,
+    return _soft_delete_record_exists(
+        request=_SoftDeleteRecordRequest(
             table="engram_collections",
             id_column="collection_id",
             id_value=collection_id,
@@ -819,7 +831,7 @@ def soft_delete_collection(
             reason=reason,
             returning_columns="collection_id",
         )
-    return bool(row)
+    )
 
 
 def add_collection_items(
