@@ -1613,11 +1613,33 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 60 - MCP Chat Primary Routing and Move Guard Simplification Phase 1.2/1.4 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition by flattening two remaining hotspot branches:
+  - converted `_dispatch_chat_primary_tool(...)` from sequential branch-chain to handler-map routing
+  - simplified `_dispatch_engram_move_project_tool(...)` allowlist gate by reducing nested conditional expression
+- [x] Expanded `api/tests/test_mcp_service_unit.py`:
+  - added `test_dispatch_engram_move_project_allows_source_project_in_token_allowlist` to validate allowed token policy path
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py tests/test_mcp_service_stream_unit.py tests/test_mcp_service_engram_dispatch_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_service_stream_unit.py tests/test_mcp_service_engram_dispatch_unit.py -q` (`48 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`315 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **8.81** (improved from **8.28**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `api/tests/test_mcp_service_stream_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+  - remaining dominant smells: low cohesion, high function count in module, and excess argument counts
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **8.28** | YELLOW |
+| `api/app/mcp/service.py` | **8.81** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |

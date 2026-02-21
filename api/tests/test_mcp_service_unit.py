@@ -754,3 +754,29 @@ def test_dispatch_engram_move_project_routes_memory_admin_service() -> None:
     assert payload.target_project_id == "project-target"
     assert payload.expected_updated_at == datetime(2026, 2, 21, 0, 0, tzinfo=UTC)
     assert payload.reason == "reorg"
+
+
+def test_dispatch_engram_move_project_allows_source_project_in_token_allowlist() -> None:
+    service, _, _, memory_admin_service = _build_service()
+    actor_user_id = uuid4()
+    actor = {"user_id": str(actor_user_id), "role": "user"}
+    engram_id = uuid4()
+    _mock_owned_engram(
+        memory_admin_service,
+        actor_user_id=actor_user_id,
+        engram_id=engram_id,
+        project_id="source-project",
+    )
+    memory_admin_service.move_engram.return_value = _Dumpable(payload={"engram_id": str(engram_id)})
+    token_auth = _token_auth(scope="write", allowed_project_ids={"source-project", "target-project"})
+
+    result = service._dispatch_tool(
+        actor=actor,
+        actor_user_id=actor_user_id,
+        method="engram.move_project",
+        params={"engram_id": str(engram_id), "target_project_id": "target-project"},
+        token_auth=token_auth,
+    )
+
+    assert result == {"engram": {"engram_id": str(engram_id)}}
+    memory_admin_service.move_engram.assert_called_once()

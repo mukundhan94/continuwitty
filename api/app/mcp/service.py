@@ -1011,22 +1011,7 @@ class McpService:
         params: dict[str, Any],
         token_auth: McpTokenAuthContext | None,
     ) -> dict[str, Any] | None:
-        if method == "chat.create_session":
-            created = self._chat_service.create_session(
-                actor_user_id=actor_user_id,
-                payload=ChatSessionCreateRequest(**params),
-            )
-            return {"session": created.model_dump(mode="json")}
-
-        if method == "chat.send_message":
-            message = self._chat_service.send_message(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                payload=ChatMessageCreateRequest(content_text=params.get("content_text", "")),
-            )
-            return {"message": message.model_dump(mode="json")}
-
-        if method == "chat.list_project_documents":
+        def _list_project_documents() -> dict[str, Any]:
             if self._ingestion_service is None:
                 raise McpRpcError(
                     code=-32000,
@@ -1041,23 +1026,37 @@ class McpService:
             )
             return {"documents": [item.model_dump(mode="json") for item in documents]}
 
-        if method == "chat.save_as_engram":
-            return self._dispatch_chat_save_as_engram_tool(
+        handlers = {
+            "chat.create_session": lambda: {
+                "session": self._chat_service.create_session(
+                    actor_user_id=actor_user_id,
+                    payload=ChatSessionCreateRequest(**params),
+                ).model_dump(mode="json")
+            },
+            "chat.send_message": lambda: {
+                "message": self._chat_service.send_message(
+                    actor_user_id=actor_user_id,
+                    session_id=self._parse_uuid(params, "session_id"),
+                    payload=ChatMessageCreateRequest(content_text=params.get("content_text", "")),
+                ).model_dump(mode="json")
+            },
+            "chat.list_project_documents": _list_project_documents,
+            "chat.save_as_engram": lambda: self._dispatch_chat_save_as_engram_tool(
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
                 params=params,
                 token_auth=token_auth,
-            )
-
-        if method == "chat.continue_session":
-            continued = self._chat_service.continue_session(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                payload=ContinueSessionRequest(title=params.get("title")),
-            )
-            return {"continuation": continued.model_dump(mode="json")}
-
-        return None
+            ),
+            "chat.continue_session": lambda: {
+                "continuation": self._chat_service.continue_session(
+                    actor_user_id=actor_user_id,
+                    session_id=self._parse_uuid(params, "session_id"),
+                    payload=ContinueSessionRequest(title=params.get("title")),
+                ).model_dump(mode="json")
+            },
+        }
+        handler = handlers.get(method)
+        return handler() if handler else None
 
     def _dispatch_chat_tool(
         self,
@@ -1202,11 +1201,8 @@ class McpService:
         actor_role = str(actor.get("role", ""))
         engram_id = self._parse_uuid(params, "engram_id")
         current = self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
-        if (
-            token_auth
-            and token_auth.allowed_project_ids
-            and current.project_id not in token_auth.allowed_project_ids
-        ):
+        allowed_project_ids = token_auth.allowed_project_ids if token_auth else set()
+        if allowed_project_ids and current.project_id not in allowed_project_ids:
             raise McpRpcError(
                 code=-32003,
                 message="Project not allowed by token policy",
