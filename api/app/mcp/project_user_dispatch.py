@@ -1,11 +1,21 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 from uuid import UUID
 
 from app.models import ProjectCreateRequest
 
 from .errors import McpRpcError
+
+
+class _UserDispatchContext(Protocol):
+    actor: dict[str, Any]
+    actor_user_id: UUID
+    method: str
+
+
+class _ProjectDispatchContext(_UserDispatchContext, Protocol):
+    params: dict[str, Any]
 
 
 def projects_for_user(
@@ -26,32 +36,29 @@ def projects_for_user(
 def dispatch_project_tool(
     *,
     project_service: Any,
-    actor: dict[str, Any],
-    actor_user_id: UUID,
-    method: str,
-    params: dict[str, Any],
+    context: _ProjectDispatchContext,
 ) -> dict[str, Any] | None:
-    actor_role = str(actor.get("role", ""))
+    actor_role = str(context.actor.get("role", ""))
 
-    if method == "project.list":
+    if context.method == "project.list":
         projects = project_service.list_projects(
-            actor_user_id=actor_user_id,
+            actor_user_id=context.actor_user_id,
             actor_role=actor_role,
-            include_archived=bool(params.get("include_archived", False)),
-            limit=int(params.get("limit", 500)),
-            offset=int(params.get("offset", 0)),
+            include_archived=bool(context.params.get("include_archived", False)),
+            limit=int(context.params.get("limit", 500)),
+            offset=int(context.params.get("offset", 0)),
         )
         return {"projects": [item.model_dump(mode="json") for item in projects]}
 
-    if method == "project.create":
+    if context.method == "project.create":
         try:
             payload = ProjectCreateRequest(
-                project_id=str(params.get("project_id", "")),
-                name=str(params.get("name", "")),
-                description=str(params.get("description", "")),
+                project_id=str(context.params.get("project_id", "")),
+                name=str(context.params.get("name", "")),
+                description=str(context.params.get("description", "")),
                 owner_user_id=(
-                    UUID(str(params["owner_user_id"]))
-                    if params.get("owner_user_id") is not None
+                    UUID(str(context.params["owner_user_id"]))
+                    if context.params.get("owner_user_id") is not None
                     else None
                 ),
             )
@@ -62,24 +69,24 @@ def dispatch_project_tool(
                 data={"invalid": "owner_user_id"},
             ) from exc
         created = project_service.create_project(
-            actor_user_id=actor_user_id,
+            actor_user_id=context.actor_user_id,
             actor_role=actor_role,
             payload=payload,
         )
         return {"project": created.model_dump(mode="json")}
 
-    if method == "project.get_default":
+    if context.method == "project.get_default":
         return {
             "default_project_id": project_service.get_default_project_id(
-                actor_user_id=actor_user_id
+                actor_user_id=context.actor_user_id
             )
         }
 
-    if method == "project.set_default":
+    if context.method == "project.set_default":
         project_id = project_service.set_default_project_id(
-            actor_user_id=actor_user_id,
+            actor_user_id=context.actor_user_id,
             actor_role=actor_role,
-            project_id=str(params.get("project_id", "")),
+            project_id=str(context.params.get("project_id", "")),
         )
         return {"default_project_id": project_id}
 
@@ -88,17 +95,15 @@ def dispatch_project_tool(
 
 def dispatch_user_tool(
     *,
-    actor: dict[str, Any],
-    actor_user_id: UUID,
-    method: str,
+    context: _UserDispatchContext,
     chat_service: Any,
 ) -> dict[str, Any] | None:
-    if method == "user.get_profile":
-        return {"profile": actor}
-    if method == "user.list_projects":
+    if context.method == "user.get_profile":
+        return {"profile": context.actor}
+    if context.method == "user.list_projects":
         return {
             "project_ids": projects_for_user(
-                actor_user_id=actor_user_id,
+                actor_user_id=context.actor_user_id,
                 chat_service=chat_service,
             )
         }

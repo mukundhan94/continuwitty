@@ -2154,6 +2154,28 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 80 - MCP Project/User Dispatch Context Object Adoption)
+
+- [x] Continued Phase 1 hardening by removing excess-argument smells in `api/app/mcp/project_user_dispatch.py`:
+  - introduced typed dispatch context protocols (`_ProjectDispatchContext`, `_UserDispatchContext`)
+  - updated `dispatch_project_tool(...)` to consume `context` instead of separate actor/method/params arguments
+  - updated `dispatch_user_tool(...)` to consume `context` for actor/method/user-id access
+- [x] Updated service integration in `api/app/mcp/service.py`:
+  - `_dispatch_tool(...)` now passes existing `_ToolDispatchContext` directly into project/user dispatch helpers
+  - preserved behavior and payload semantics while reducing argument fan-out
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`247 passed, 4 skipped, 81 deselected`)
+  - `make test` (`247 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/project_user_dispatch.py` score: **10.0** (improved from **9.68**)
+  - `api/app/mcp/service.py` score: **9.68** (unchanged; remaining low-cohesion/constructor-args slice tracked for a future checkpoint)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2189,7 +2211,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |
 | `api/app/mcp/chat_dispatch.py` | 9.68 | GREEN |
 | `api/app/mcp/engram_dispatch.py` | 10.0 | GREEN |
-| `api/app/mcp/project_user_dispatch.py` | 9.68 | GREEN |
+| `api/app/mcp/project_user_dispatch.py` | 10.0 | GREEN |
 | `api/app/mcp/service_access.py` | 10.0 | GREEN |
 | `api/app/mcp/streaming.py` | 9.68 | GREEN |
 | `api/app/mcp/token_authorization.py` | 9.53 | GREEN |

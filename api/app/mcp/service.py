@@ -642,18 +642,13 @@ class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
 
         project_result = dispatch_project_tool(
             project_service=self._project_service,
-            actor=context.actor,
-            actor_user_id=context.actor_user_id,
-            method=context.method,
-            params=context.params,
+            context=context,
         )
         if project_result is not None:
             return project_result
 
         user_result = dispatch_user_tool(
-            actor=context.actor,
-            actor_user_id=context.actor_user_id,
-            method=context.method,
+            context=context,
             chat_service=self._chat_service,
         )
         if user_result is not None:
