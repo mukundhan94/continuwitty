@@ -998,6 +998,90 @@ class McpService:
 
         return None
 
+    def _dispatch_engram_collection_create_tool(
+        self,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> dict[str, Any]:
+        resolved_project_id, used_default_project = self._resolve_project_for_write(
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            requested_project_id=params.get("project_id"),
+            token_auth=token_auth,
+        )
+        created = self._memory_admin_service.create_collection(
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            payload=EngramCollectionCreateRequest(
+                project_id=resolved_project_id,
+                name=str(params.get("name", "")),
+                description=str(params.get("description", "")),
+            ),
+        )
+        return {
+            "collection": created.model_dump(mode="json"),
+            "resolved_project_id": resolved_project_id,
+            "used_default_project": used_default_project,
+        }
+
+    def _dispatch_engram_collection_mutation_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        collection_mutation_tools = {
+            "engram.collection_update",
+            "engram.collection_delete",
+            "engram.collection_add_items",
+            "engram.collection_remove_items",
+        }
+        if method not in collection_mutation_tools:
+            return None
+
+        collection_id = self._parse_uuid(params, "collection_id")
+        self._require_collection_access(actor=actor, collection_id=collection_id)
+
+        if method == "engram.collection_update":
+            updated_collection = self._memory_admin_service.update_collection(
+                collection_id=collection_id,
+                payload=EngramCollectionUpdateRequest(
+                    name=params.get("name"),
+                    description=params.get("description"),
+                    expected_updated_at=params.get("expected_updated_at"),
+                ),
+            )
+            return {"collection": updated_collection.model_dump(mode="json")}
+
+        if method == "engram.collection_delete":
+            result = self._memory_admin_service.delete_collection(
+                collection_id=collection_id,
+                actor_user_id=actor_user_id,
+                payload=EngramCollectionDeleteRequest(reason=params.get("reason")),
+            )
+            return {"result": result}
+
+        if method == "engram.collection_add_items":
+            result = self._memory_admin_service.add_collection_items(
+                collection_id=collection_id,
+                actor_user_id=actor_user_id,
+                payload=EngramCollectionItemsUpdateRequest(
+                    engram_ids=self._parse_uuid_list(params, "engram_ids")
+                ),
+            )
+            return {"result": result}
+
+        result = self._memory_admin_service.remove_collection_item(
+            collection_id=collection_id,
+            engram_id=self._parse_uuid(params, "engram_id"),
+        )
+        return {"result": result}
+
     def _dispatch_engram_tool(
         self,
         *,
@@ -1158,70 +1242,21 @@ class McpService:
             return {"collections": [item.model_dump(mode="json") for item in collections]}
 
         if method == "engram.collection_create":
-            resolved_project_id, used_default_project = self._resolve_project_for_write(
+            return self._dispatch_engram_collection_create_tool(
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
-                requested_project_id=params.get("project_id"),
+                params=params,
                 token_auth=token_auth,
             )
-            created = self._memory_admin_service.create_collection(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                payload=EngramCollectionCreateRequest(
-                    project_id=resolved_project_id,
-                    name=str(params.get("name", "")),
-                    description=str(params.get("description", "")),
-                ),
-            )
-            return {
-                "collection": created.model_dump(mode="json"),
-                "resolved_project_id": resolved_project_id,
-                "used_default_project": used_default_project,
-            }
 
-        if method == "engram.collection_update":
-            collection_id = self._parse_uuid(params, "collection_id")
-            self._require_collection_access(actor=actor, collection_id=collection_id)
-            updated_collection = self._memory_admin_service.update_collection(
-                collection_id=collection_id,
-                payload=EngramCollectionUpdateRequest(
-                    name=params.get("name"),
-                    description=params.get("description"),
-                    expected_updated_at=params.get("expected_updated_at"),
-                ),
-            )
-            return {"collection": updated_collection.model_dump(mode="json")}
-
-        if method == "engram.collection_delete":
-            collection_id = self._parse_uuid(params, "collection_id")
-            self._require_collection_access(actor=actor, collection_id=collection_id)
-            result = self._memory_admin_service.delete_collection(
-                collection_id=collection_id,
-                actor_user_id=actor_user_id,
-                payload=EngramCollectionDeleteRequest(reason=params.get("reason")),
-            )
-            return {"result": result}
-
-        if method == "engram.collection_add_items":
-            collection_id = self._parse_uuid(params, "collection_id")
-            self._require_collection_access(actor=actor, collection_id=collection_id)
-            result = self._memory_admin_service.add_collection_items(
-                collection_id=collection_id,
-                actor_user_id=actor_user_id,
-                payload=EngramCollectionItemsUpdateRequest(
-                    engram_ids=self._parse_uuid_list(params, "engram_ids")
-                ),
-            )
-            return {"result": result}
-
-        if method == "engram.collection_remove_items":
-            collection_id = self._parse_uuid(params, "collection_id")
-            self._require_collection_access(actor=actor, collection_id=collection_id)
-            result = self._memory_admin_service.remove_collection_item(
-                collection_id=collection_id,
-                engram_id=self._parse_uuid(params, "engram_id"),
-            )
-            return {"result": result}
+        collection_mutation_result = self._dispatch_engram_collection_mutation_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+        )
+        if collection_mutation_result is not None:
+            return collection_mutation_result
 
         return None
 

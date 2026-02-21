@@ -47,6 +47,35 @@ def _token_auth(
     )
 
 
+def _dispatch_for_user(
+    service: McpService,
+    *,
+    actor_user_id: object,
+    method: str,
+    params: dict[str, object],
+) -> dict[str, object]:
+    actor = {"user_id": str(actor_user_id), "role": "user"}
+    return service._dispatch_tool(
+        actor=actor,
+        actor_user_id=actor_user_id,
+        method=method,
+        params=params,
+        token_auth=None,
+    )
+
+
+def _mock_owned_collection(
+    memory_admin_service: MagicMock,
+    *,
+    actor_user_id: object,
+    collection_id: object,
+) -> None:
+    memory_admin_service.find_collection.return_value = _Dumpable(
+        payload={"collection_id": str(collection_id)},
+        owner_user_id=actor_user_id,
+    )
+
+
 def test_dispatch_tool_routes_chat_domain() -> None:
     service, chat_service, _, _ = _build_service()
     actor_user_id = uuid4()
@@ -345,7 +374,6 @@ def test_project_id_for_tool_resolves_collection_scoped_tool() -> None:
 def test_dispatch_chat_delete_session_routes_memory_admin_service() -> None:
     service, _, _, memory_admin_service = _build_service()
     actor_user_id = uuid4()
-    actor = {"user_id": str(actor_user_id), "role": "user"}
     session_id = uuid4()
     memory_admin_service.get_session.return_value = _Dumpable(
         payload={"session_id": str(session_id)},
@@ -353,8 +381,8 @@ def test_dispatch_chat_delete_session_routes_memory_admin_service() -> None:
     )
     memory_admin_service.delete_session.return_value = _Dumpable(payload={"deleted": True})
 
-    result = service._dispatch_tool(
-        actor=actor,
+    result = _dispatch_for_user(
+        service,
         actor_user_id=actor_user_id,
         method="chat.delete_session",
         params={
@@ -362,7 +390,6 @@ def test_dispatch_chat_delete_session_routes_memory_admin_service() -> None:
             "delete_linked_engrams": True,
             "reason": "cleanup",
         },
-        token_auth=None,
     )
 
     assert result == {"result": {"deleted": True}}
@@ -371,3 +398,58 @@ def test_dispatch_chat_delete_session_routes_memory_admin_service() -> None:
     assert call_kwargs["actor_user_id"] == actor_user_id
     assert call_kwargs["payload"].delete_linked_engrams is True
     assert call_kwargs["payload"].reason == "cleanup"
+
+
+def test_dispatch_engram_collection_delete_routes_memory_admin_service() -> None:
+    service, _, _, memory_admin_service = _build_service()
+    actor_user_id = uuid4()
+    collection_id = uuid4()
+    _mock_owned_collection(
+        memory_admin_service,
+        actor_user_id=actor_user_id,
+        collection_id=collection_id,
+    )
+    memory_admin_service.delete_collection.return_value = {"deleted": True}
+
+    result = _dispatch_for_user(
+        service,
+        actor_user_id=actor_user_id,
+        method="engram.collection_delete",
+        params={"collection_id": str(collection_id), "reason": "cleanup"},
+    )
+
+    assert result == {"result": {"deleted": True}}
+    call_kwargs = memory_admin_service.delete_collection.call_args.kwargs
+    assert call_kwargs["collection_id"] == collection_id
+    assert call_kwargs["actor_user_id"] == actor_user_id
+    assert call_kwargs["payload"].reason == "cleanup"
+
+
+def test_dispatch_engram_collection_add_items_parses_uuid_list_payload() -> None:
+    service, _, _, memory_admin_service = _build_service()
+    actor_user_id = uuid4()
+    collection_id = uuid4()
+    engram_id_a = uuid4()
+    engram_id_b = uuid4()
+    _mock_owned_collection(
+        memory_admin_service,
+        actor_user_id=actor_user_id,
+        collection_id=collection_id,
+    )
+    memory_admin_service.add_collection_items.return_value = {"updated": True}
+
+    result = _dispatch_for_user(
+        service,
+        actor_user_id=actor_user_id,
+        method="engram.collection_add_items",
+        params={
+            "collection_id": str(collection_id),
+            "engram_ids": [str(engram_id_a), str(engram_id_b)],
+        },
+    )
+
+    assert result == {"result": {"updated": True}}
+    call_kwargs = memory_admin_service.add_collection_items.call_args.kwargs
+    assert call_kwargs["collection_id"] == collection_id
+    assert call_kwargs["actor_user_id"] == actor_user_id
+    assert call_kwargs["payload"].engram_ids == [engram_id_a, engram_id_b]
