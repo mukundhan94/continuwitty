@@ -1758,6 +1758,38 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 66 - MCP Token Authorization Module Split Phase 1.3/1.4 Hardening)
+
+- [x] Continued decomposition by extracting token-authorization and project-scope resolution logic into new `api/app/mcp/token_authorization.py`:
+  - moved token-aware project resolution helpers and `resolve_project_for_write(...)`
+  - moved token-scoped visible catalog filtering to `visible_tool_catalog(...)`
+  - moved tool-to-project inference routing to `project_id_for_tool(...)`
+  - moved scope/tool/project policy enforcement to `enforce_token_authorization(...)`
+  - introduced `TokenAuthorizationDependencies` to provide required MCP service dependencies to module functions
+- [x] Updated `api/app/mcp/service.py` to use thin wrappers:
+  - `_authorization_dependencies(...)`
+  - `_resolve_project_for_write(...)`
+  - `_visible_tool_catalog(...)`
+  - `_project_id_for_tool(...)`
+  - `_enforce_token_authorization(...)`
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py app/mcp/token_authorization.py app/mcp/chat_dispatch.py app/mcp/engram_dispatch.py app/mcp/project_user_dispatch.py app/mcp/streaming.py tests/test_mcp_service_unit.py tests/test_mcp_service_stream_unit.py tests/test_mcp_service_engram_dispatch_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_service_stream_unit.py tests/test_mcp_service_engram_dispatch_unit.py -q` (`48 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`315 passed`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **9.09** (stable; reduced to ~1041 LoC)
+  - `api/app/mcp/token_authorization.py` score: **9.12**
+  - `api/app/mcp/project_user_dispatch.py` score: **9.68**
+  - `api/app/mcp/engram_dispatch.py` score: **10.0**
+  - `api/app/mcp/chat_dispatch.py` score: **9.68**
+  - `api/app/mcp/streaming.py` score: **9.68**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -1785,6 +1817,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/mcp/engram_dispatch.py` | 10.0 | GREEN |
 | `api/app/mcp/project_user_dispatch.py` | 9.68 | GREEN |
 | `api/app/mcp/streaming.py` | 9.68 | GREEN |
+| `api/app/mcp/token_authorization.py` | 9.12 | GREEN |
 | `web/src/api/http.ts` | 10.0 | GREEN |
 | `web/src/api/http.test.ts` | 10.0 | GREEN |
 | `web/src/api/chat.test.ts` | 10.0 | GREEN |

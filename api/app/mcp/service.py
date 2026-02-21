@@ -40,16 +40,8 @@ from app.repository import (
 )
 
 from .catalog import (
-    _ENGRAM_SCOPED_TOOLS,
-    _OPTIONAL_PROJECT_TOOLS,
-    _PROJECT_FALLBACK_TOOLS,
-    _READ_TOOL_NAMES,
-    _SESSION_SCOPED_TOOLS,
     _TOOL_ALIASES,
-    _WRITE_TOOL_NAMES,
     _to_dotted_tool_name,
-    _to_public_tool_name,
-    build_tool_catalog,
 )
 from .chat_dispatch import (
     dispatch_chat_pinning_tool,
@@ -68,6 +60,13 @@ from .streaming import (
     chat_send_message_success_frame,
     stream_chat_send_message_error_frame,
     stream_chat_send_message_events,
+)
+from .token_authorization import (
+    TokenAuthorizationDependencies,
+    enforce_token_authorization,
+    project_id_for_tool,
+    resolve_project_for_write,
+    visible_tool_catalog,
 )
 
 _COLLECTION_SCOPED_TOOLS = {
@@ -221,37 +220,6 @@ class McpService:
     def _is_admin(actor: dict[str, Any]) -> bool:
         return str(actor.get("role", "")).lower() == "admin"
 
-    @staticmethod
-    def _normalize_project_id(value: str | None) -> str | None:
-        normalized = (value or "").strip()
-        return normalized or None
-
-    @staticmethod
-    def _single_allowed_token_project_id(token_auth: McpTokenAuthContext | None) -> str | None:
-        if token_auth is None or not token_auth.allowed_project_ids:
-            return None
-        if len(token_auth.allowed_project_ids) > 1:
-            raise McpRpcError(
-                code=-32602,
-                message="Invalid params",
-                data={"missing": "project_id", "reason": "token_has_multiple_allowed_projects"},
-            )
-        return next(iter(token_auth.allowed_project_ids))
-
-    def _resolve_project_input_for_write(
-        self,
-        *,
-        requested_project_id: str | None,
-        token_auth: McpTokenAuthContext | None,
-    ) -> tuple[str | None, bool]:
-        explicit_project_id = self._normalize_project_id(requested_project_id)
-        if explicit_project_id is not None:
-            return explicit_project_id, False
-        token_project_id = self._single_allowed_token_project_id(token_auth)
-        if token_project_id is not None:
-            return token_project_id, False
-        return None, True
-
     def _require_owner_or_admin(
         self,
         *,
@@ -271,6 +239,16 @@ class McpService:
             data={"resource": resource, "resource_id": resource_id},
         )
 
+    def _authorization_dependencies(self) -> TokenAuthorizationDependencies:
+        return TokenAuthorizationDependencies(
+            project_service=self._project_service,
+            chat_service=self._chat_service,
+            memory_admin_service=self._memory_admin_service,
+            parse_uuid=self._parse_uuid,
+            canonical_tool_name=self._canonical_tool_name,
+            get_rehydration_bundle=get_rehydration_bundle,
+        )
+
     def _resolve_project_for_write(
         self,
         *,
@@ -286,24 +264,13 @@ class McpService:
         2) single allowed project from MCP token policy
         3) user default project from project settings
         """
-        resolved_project_input, used_default_project = self._resolve_project_input_for_write(
+        return resolve_project_for_write(
+            dependencies=self._authorization_dependencies(),
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
             requested_project_id=requested_project_id,
             token_auth=token_auth,
         )
-
-        try:
-            resolution = self._project_service.resolve_project_id_for_write(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                project_id=resolved_project_input,
-            )
-        except HTTPException as exc:
-            raise McpRpcError(
-                code=-32602,
-                message="Invalid params",
-                data={"detail": str(exc.detail)},
-            ) from exc
-        return resolution.project_id, (used_default_project and resolution.used_default_project)
 
     def _create_engram_payload_with_project_resolution(
         self,
@@ -370,135 +337,11 @@ class McpService:
         }
         return engram_payload, report_payload
 
-    @staticmethod
-    def _tool_catalog() -> list[dict[str, Any]]:
-        return build_tool_catalog()
-
-    def _required_scope_for_tool(self, tool_name: str) -> str:
-        canonical = self._canonical_tool_name(tool_name)
-        if canonical in _WRITE_TOOL_NAMES:
-            return "write"
-        if canonical in _READ_TOOL_NAMES:
-            return "read"
-        return "read"
-
-    def _allowed_canonical_tools(self, allowed_tools: set[str] | None) -> set[str]:
-        if not allowed_tools:
-            return set()
-        return {self._canonical_tool_name(item) for item in allowed_tools}
-
-    def _is_tool_allowed_by_token_policy(
-        self,
-        *,
-        canonical_tool: str,
-        allowed_tools: set[str] | None,
-        allowed_canonical: set[str],
-    ) -> bool:
-        if not allowed_tools:
-            return True
-        return canonical_tool in allowed_canonical
-
-    @staticmethod
-    def _public_tool_catalog_entry(item: dict[str, Any]) -> dict[str, Any]:
-        return {**item, "name": _to_public_tool_name(item["name"])}
-
-    def _visible_tool_catalog_entry(
-        self,
-        *,
-        item: dict[str, Any],
-        token_scope: str,
-        allowed_tools: set[str] | None,
-        allowed_canonical: set[str],
-    ) -> dict[str, Any] | None:
-        canonical_name = item["name"]
-        required_scope = self._required_scope_for_tool(canonical_name)
-        if token_scope == "read" and required_scope == "write":
-            return None
-        if not self._is_tool_allowed_by_token_policy(
-            canonical_tool=canonical_name,
-            allowed_tools=allowed_tools,
-            allowed_canonical=allowed_canonical,
-        ):
-            return None
-        return self._public_tool_catalog_entry(item)
-
     def _visible_tool_catalog(self, token_auth: McpTokenAuthContext | None) -> list[dict[str, Any]]:
-        if token_auth is None:
-            return [self._public_tool_catalog_entry(item) for item in self._tool_catalog()]
-
-        allowed_tools = token_auth.allowed_tools
-        allowed_canonical = self._allowed_canonical_tools(allowed_tools)
-
-        visible: list[dict[str, Any]] = []
-        for item in self._tool_catalog():
-            entry = self._visible_tool_catalog_entry(
-                item=item,
-                token_scope=token_auth.scope,
-                allowed_tools=allowed_tools,
-                allowed_canonical=allowed_canonical,
-            )
-            if entry is not None:
-                visible.append(entry)
-        return visible
-
-    def _resolve_project_from_session(self, *, session_id: UUID) -> str | None:
-        session = self._memory_admin_service.get_session(
-            session_id=session_id, include_deleted=True
+        return visible_tool_catalog(
+            dependencies=self._authorization_dependencies(),
+            token_auth=token_auth,
         )
-        return session.project_id if session else None
-
-    def _resolve_project_from_engram(
-        self, *, engram_id: UUID, target_project_id: str | None = None
-    ) -> str | None:
-        normalized_target = self._normalize_project_id(target_project_id)
-        if normalized_target:
-            return normalized_target
-        engram = self._memory_admin_service.find_engram(engram_id=engram_id, include_deleted=True)
-        return engram.project_id if engram else None
-
-    def _project_id_from_input_params(self, params: dict[str, Any]) -> str | None:
-        raw_project = params.get("project_id")
-        return self._normalize_project_id(str(raw_project) if raw_project else None)
-
-    def _project_id_for_chat_save_as_engram(
-        self, *, actor_user_id: UUID, params: dict[str, Any]
-    ) -> str | None:
-        raw_session_id = params.get("session_id")
-        if raw_session_id:
-            session = self._chat_service.get_session(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-            )
-            return session.project_id
-        return self._project_id_from_input_params(params)
-
-    def _project_id_for_engram_scoped_tool(
-        self, *, canonical_tool: str, params: dict[str, Any]
-    ) -> str | None:
-        target_project_id: str | None = None
-        if canonical_tool == "engram.move_project":
-            raw_target = params.get("target_project_id")
-            target_project_id = str(raw_target) if raw_target is not None else None
-        return self._resolve_project_from_engram(
-            engram_id=self._parse_uuid(params, "engram_id"),
-            target_project_id=target_project_id,
-        )
-
-    def _project_id_for_collection_scoped_tool(self, *, params: dict[str, Any]) -> str | None:
-        collection = self._memory_admin_service.find_collection(
-            collection_id=self._parse_uuid(params, "collection_id"),
-            include_deleted=True,
-        )
-        return collection.project_id if collection else None
-
-    def _project_id_for_rehydrate_tool(
-        self, *, actor_user_id: UUID, params: dict[str, Any]
-    ) -> str | None:
-        bundle = get_rehydration_bundle(
-            self._parse_uuid(params, "engram_id"),
-            actor_user_id=actor_user_id,
-        )
-        return bundle.project_id if bundle else None
 
     def _project_id_for_tool(
         self,
@@ -507,186 +350,12 @@ class McpService:
         tool_name: str,
         params: dict[str, Any],
     ) -> str | None:
-        canonical_tool = self._canonical_tool_name(tool_name)
-        project_input_tools = {
-            "chat.create_session",
-            "engram.create",
-            "engram.create_from_conversation",
-            "project.create",
-            "project.set_default",
-            "engram.collection_create",
-        }
-
-        if canonical_tool in project_input_tools:
-            return self._project_id_from_input_params(params)
-
-        if canonical_tool in _SESSION_SCOPED_TOOLS:
-            return self._resolve_project_from_session(
-                session_id=self._parse_uuid(params, "session_id"),
-            )
-
-        if canonical_tool == "chat.save_as_engram":
-            return self._project_id_for_chat_save_as_engram(
-                actor_user_id=actor_user_id,
-                params=params,
-            )
-
-        if canonical_tool in _ENGRAM_SCOPED_TOOLS:
-            return self._project_id_for_engram_scoped_tool(
-                canonical_tool=canonical_tool,
-                params=params,
-            )
-
-        if canonical_tool in _COLLECTION_SCOPED_TOOLS:
-            return self._project_id_for_collection_scoped_tool(params=params)
-
-        if canonical_tool == "engram.rehydrate":
-            return self._project_id_for_rehydrate_tool(
-                actor_user_id=actor_user_id,
-                params=params,
-            )
-
-        if canonical_tool in _OPTIONAL_PROJECT_TOOLS:
-            return self._project_id_from_input_params(params)
-
-        return None
-
-    def _needs_project_autofill_for_token(
-        self, canonical_tool: str, params: dict[str, Any]
-    ) -> bool:
-        if canonical_tool in _OPTIONAL_PROJECT_TOOLS:
-            return True
-        if canonical_tool in _PROJECT_FALLBACK_TOOLS:
-            if canonical_tool == "chat.save_as_engram":
-                # Session snapshot mode infers project from the session itself.
-                return not bool(params.get("session_id"))
-            return True
-        return False
-
-    def _enforce_single_allowed_project_autofill(
-        self,
-        *,
-        canonical_tool: str,
-        normalized_params: dict[str, Any],
-        allowed_projects: set[str],
-    ) -> dict[str, Any]:
-        if not self._needs_project_autofill_for_token(canonical_tool, normalized_params):
-            return normalized_params
-        if len(allowed_projects) > 1:
-            raise McpRpcError(
-                code=-32602,
-                message="Invalid params",
-                data={"missing": "project_id", "reason": "token_has_multiple_allowed_projects"},
-            )
-        normalized_params.setdefault("project_id", next(iter(allowed_projects)))
-        return normalized_params
-
-    @staticmethod
-    def _token_error_data(
-        *,
-        tool_name: str,
-        required_scope: str,
-        token_scope: str,
-        project_id: str | None = None,
-    ) -> dict[str, Any]:
-        data: dict[str, Any] = {
-            "tool": tool_name,
-            "required_scope": required_scope,
-            "token_scope": token_scope,
-        }
-        if project_id:
-            data["project_id"] = project_id
-        return data
-
-    def _enforce_token_scope(
-        self,
-        *,
-        tool_name: str,
-        token_scope: str,
-        required_scope: str,
-    ) -> None:
-        if token_scope == "read" and required_scope == "write":
-            raise McpRpcError(
-                code=-32003,
-                message="Token scope does not allow this tool",
-                data=self._token_error_data(
-                    tool_name=tool_name,
-                    required_scope=required_scope,
-                    token_scope=token_scope,
-                ),
-            )
-
-    def _enforce_token_tool_allowlist(
-        self,
-        *,
-        token_auth: McpTokenAuthContext,
-        tool_name: str,
-        canonical_tool: str,
-        required_scope: str,
-    ) -> None:
-        allowed_tools = token_auth.allowed_tools
-        allowed_canonical = self._allowed_canonical_tools(allowed_tools)
-        if self._is_tool_allowed_by_token_policy(
-            canonical_tool=canonical_tool,
-            allowed_tools=allowed_tools,
-            allowed_canonical=allowed_canonical,
-        ):
-            return
-        raise McpRpcError(
-            code=-32003,
-            message="Tool not allowed by token policy",
-            data=self._token_error_data(
-                tool_name=tool_name,
-                required_scope=required_scope,
-                token_scope=token_auth.scope,
-            ),
-        )
-
-    def _enforce_token_project_allowlist(
-        self,
-        *,
-        actor_user_id: UUID,
-        token_auth: McpTokenAuthContext,
-        tool_name: str,
-        canonical_tool: str,
-        required_scope: str,
-        params: dict[str, Any],
-    ) -> dict[str, Any]:
-        normalized_params = dict(params)
-        allowed_projects = token_auth.allowed_project_ids
-        if not allowed_projects:
-            return normalized_params
-
-        project_id = self._project_id_for_tool(
+        return project_id_for_tool(
+            dependencies=self._authorization_dependencies(),
             actor_user_id=actor_user_id,
-            tool_name=canonical_tool,
-            params=normalized_params,
+            tool_name=tool_name,
+            params=params,
         )
-
-        if not project_id:
-            normalized_params = self._enforce_single_allowed_project_autofill(
-                canonical_tool=canonical_tool,
-                normalized_params=normalized_params,
-                allowed_projects=allowed_projects,
-            )
-            project_id = self._project_id_for_tool(
-                actor_user_id=actor_user_id,
-                tool_name=canonical_tool,
-                params=normalized_params,
-            )
-
-        if project_id and project_id not in allowed_projects:
-            raise McpRpcError(
-                code=-32003,
-                message="Project not allowed by token policy",
-                data=self._token_error_data(
-                    tool_name=tool_name,
-                    required_scope=required_scope,
-                    token_scope=token_auth.scope,
-                    project_id=project_id,
-                ),
-            )
-        return normalized_params
 
     def _enforce_token_authorization(
         self,
@@ -696,31 +365,11 @@ class McpService:
         tool_name: str,
         params: dict[str, Any],
     ) -> dict[str, Any]:
-        if token_auth is None:
-            return params
-
-        if tool_name in {"initialize", "tools/list"}:
-            return params
-
-        canonical_tool = self._canonical_tool_name(tool_name)
-        required_scope = self._required_scope_for_tool(canonical_tool)
-        self._enforce_token_scope(
-            tool_name=tool_name,
-            token_scope=token_auth.scope,
-            required_scope=required_scope,
-        )
-        self._enforce_token_tool_allowlist(
-            token_auth=token_auth,
-            tool_name=tool_name,
-            canonical_tool=canonical_tool,
-            required_scope=required_scope,
-        )
-        return self._enforce_token_project_allowlist(
+        return enforce_token_authorization(
+            dependencies=self._authorization_dependencies(),
             actor_user_id=actor_user_id,
             token_auth=token_auth,
             tool_name=tool_name,
-            canonical_tool=canonical_tool,
-            required_scope=required_scope,
             params=params,
         )
 
