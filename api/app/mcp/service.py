@@ -1289,7 +1289,7 @@ class McpService:
         handler = handlers.get(method)
         return handler() if handler else None
 
-    def _dispatch_engram_tool(
+    def _dispatch_engram_primary_tool(
         self,
         *,
         actor: dict[str, Any],
@@ -1300,7 +1300,7 @@ class McpService:
     ) -> dict[str, Any] | None:
         actor_role = str(actor.get("role", ""))
 
-        if method == "engram.create":
+        def _create_engram() -> dict[str, Any]:
             resolved_payload, resolved_project_id, used_default_project = (
                 self._create_engram_payload_with_project_resolution(
                     actor_user_id=actor_user_id,
@@ -1320,7 +1320,7 @@ class McpService:
             engram["used_default_project"] = used_default_project
             return {"engram": engram}
 
-        if method == "engram.create_from_conversation":
+        def _create_from_conversation() -> dict[str, Any]:
             created, report = self._create_engram_from_conversation(
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
@@ -1330,16 +1330,7 @@ class McpService:
             )
             return {"engram": created, "enrichment_report": report}
 
-        engram_read_result = self._dispatch_engram_read_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
-        )
-        if engram_read_result is not None:
-            return engram_read_result
-
-        if method == "engram.update":
+        def _update_engram() -> dict[str, Any]:
             engram_id = self._parse_uuid(params, "engram_id")
             self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
             updated = self._memory_admin_service.update_engram(
@@ -1358,7 +1349,7 @@ class McpService:
             )
             return {"engram": updated.model_dump(mode="json")}
 
-        if method == "engram.move_project":
+        def _move_project() -> dict[str, Any]:
             return self._dispatch_engram_move_project_tool(
                 actor=actor,
                 actor_user_id=actor_user_id,
@@ -1366,13 +1357,51 @@ class McpService:
                 token_auth=token_auth,
             )
 
-        if method == "engram.collection_create":
+        def _create_collection() -> dict[str, Any]:
             return self._dispatch_engram_collection_create_tool(
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
                 params=params,
                 token_auth=token_auth,
             )
+
+        handlers = {
+            "engram.create": _create_engram,
+            "engram.create_from_conversation": _create_from_conversation,
+            "engram.update": _update_engram,
+            "engram.move_project": _move_project,
+            "engram.collection_create": _create_collection,
+        }
+        handler = handlers.get(method)
+        return handler() if handler else None
+
+    def _dispatch_engram_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> dict[str, Any] | None:
+        engram_primary_result = self._dispatch_engram_primary_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+            token_auth=token_auth,
+        )
+        if engram_primary_result is not None:
+            return engram_primary_result
+
+        engram_read_result = self._dispatch_engram_read_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+        )
+        if engram_read_result is not None:
+            return engram_read_result
 
         collection_mutation_result = self._dispatch_engram_collection_mutation_tool(
             actor=actor,

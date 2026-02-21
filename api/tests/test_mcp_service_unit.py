@@ -194,6 +194,51 @@ def test_dispatch_tool_routes_engram_get_with_include_deleted_flag() -> None:
     )
 
 
+def test_dispatch_tool_routes_engram_update_with_payload_mapping() -> None:
+    service, _, _, memory_admin_service = _build_service()
+    actor_user_id = uuid4()
+    actor = {"user_id": str(actor_user_id), "role": "user"}
+    engram_id = uuid4()
+    _mock_owned_engram(
+        memory_admin_service,
+        actor_user_id=actor_user_id,
+        engram_id=engram_id,
+    )
+    memory_admin_service.update_engram.return_value = _Dumpable(payload={"engram_id": str(engram_id)})
+
+    result = service._dispatch_tool(
+        actor=actor,
+        actor_user_id=actor_user_id,
+        method="engram.update",
+        params={
+            "engram_id": str(engram_id),
+            "title": "Updated title",
+            "abstract": "Updated abstract",
+            "detailed_summary_markdown": "## Updated",
+            "tags": ["incident"],
+            "keywords": ["memory"],
+            "visibility_scope": "private",
+            "expected_updated_at": "2026-02-21T00:00:00Z",
+            "sources": [{"kind": "chat_message", "reference_id": "m1"}],
+        },
+        token_auth=None,
+    )
+
+    assert result == {"engram": {"engram_id": str(engram_id)}}
+    call_kwargs = memory_admin_service.update_engram.call_args.kwargs
+    assert call_kwargs["engram_id"] == engram_id
+    assert call_kwargs["actor_user_id"] == actor_user_id
+    payload = call_kwargs["payload"]
+    assert payload.title == "Updated title"
+    assert payload.abstract == "Updated abstract"
+    assert payload.detailed_summary_markdown == "## Updated"
+    assert payload.tags == ["incident"]
+    assert payload.keywords == ["memory"]
+    assert payload.visibility_scope == "private"
+    assert payload.expected_updated_at == "2026-02-21T00:00:00Z"
+    assert payload.sources == [{"kind": "chat_message", "reference_id": "m1"}]
+
+
 def test_dispatch_tool_rehydrate_returns_not_found_when_bundle_missing(monkeypatch) -> None:
     service, _, _, _ = _build_service()
     actor_user_id = uuid4()

@@ -1465,6 +1465,27 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 54 - MCP Engram Primary Dispatch Map Phase 1.2 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition by extracting `_dispatch_engram_primary_tool(...)`:
+  - routes `engram.create`, `engram.create_from_conversation`, `engram.update`, `engram.move_project`, and `engram.collection_create` via handler map
+  - reduced branch complexity in `_dispatch_engram_tool(...)` by delegating primary/write routes to helper map
+- [x] Expanded unit tests in `api/tests/test_mcp_service_unit.py`:
+  - `engram.update` dispatch path validates `AdminEngramUpdateRequest` field mapping
+  - `engram.collection_list` dispatch route coverage retained and validated
+- [x] Validation run:
+  - `uv run pytest tests/test_mcp_service_unit.py -q` (`32 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`299 passed`)
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py` (passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **6.68** (improved from **6.49**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
