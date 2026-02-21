@@ -10,7 +10,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from .agent_models import AgentResumeRequest, AgentRunRequest, AgentRunResponse
 from .agent_workflow import AgentWorkflowService
 from .audit import log_audit_event
 from .auth import generate_csrf_token, hash_password, verify_password
@@ -19,6 +18,7 @@ from .config import build_debug_settings_snapshot, get_settings, should_log_sett
 from .db import ensure_schema_initialized
 from .ingestion import DocumentIngestionService, create_ingestion_router
 from .login_guard import LoginAttemptGuard
+from .main_api_router import MainApiRouterDependencies, create_main_api_router
 from .mcp import McpService, create_mcp_router
 from .mcp.auth import McpResolvedActor, resolve_mcp_actor
 from .mcp_tokens import (
@@ -30,22 +30,11 @@ from .mcp_tokens import (
 from .memory_admin import MemoryAdminService, create_memory_admin_router
 from .models import (
     AppVersionResponse,
-    EngramCreateResponse,
-    EngramQueryRequest,
-    EngramQueryResult,
-    EngramSourceRecord,
-    EngramSummary,
     McpTokenCreateRequest,
-    McpTokenCreateResponse,
-    McpTokenRevokeRequest,
     McpTokenScope,
     McpTokenSummary,
-    MemoryEngramCreate,
-    RehydrationBundle,
-    UserCreateRequest,
     UserRecord,
     UserRole,
-    UserUpdateRequest,
 )
 from .oauth import create_oauth_router
 from .projects import ProjectService, create_projects_router
@@ -182,9 +171,15 @@ LOGIN_FORM_PAYLOAD_DEPENDENCY = Depends(_parse_login_form_payload)
 
 def _session_user(request: Request) -> dict[str, Any] | None:
     user = request.session.get("user")
-    if isinstance(user, dict) and user.get("user_id") and user.get("username") and user.get("role"):
-        return user
-    return None
+    if not isinstance(user, dict):
+        return None
+    if not user.get("user_id"):
+        return None
+    if not user.get("username"):
+        return None
+    if not user.get("role"):
+        return None
+    return user
 
 
 def _resolve_session_user(request: Request) -> dict[str, Any] | None:
@@ -258,13 +253,20 @@ def _authenticate_user(username: str, password: str) -> dict[str, Any] | None:
     except Exception:
         user = None
 
-    if user and user.get("is_active") and verify_password(password, user["password_hash"]):
-        return {
-            "user_id": str(user["user_id"]),
-            "username": user["username"],
-            "role": user["role"],
-        }
-    return None
+    if not user:
+        return None
+    if not user.get("is_active"):
+        return None
+    password_hash = user.get("password_hash")
+    if not password_hash:
+        return None
+    if not verify_password(password, password_hash):
+        return None
+    return {
+        "user_id": str(user["user_id"]),
+        "username": user["username"],
+        "role": user["role"],
+    }
 
 
 def _validate_login_preconditions(*, request: Request, username: str, csrf_token: str) -> str:
@@ -356,6 +358,37 @@ app.include_router(
     create_memory_admin_router(
         memory_admin_service=memory_admin_service,
         require_admin_actor=_require_admin_api_user,
+    )
+)
+app.include_router(
+    create_main_api_router(
+        dependencies=MainApiRouterDependencies(
+            require_roles_api=lambda request, allowed_roles: _require_roles_api(
+                request, allowed_roles
+            ),
+            require_authenticated_api_user=lambda request: _require_authenticated_api_user(request),
+            get_settings=lambda: get_settings(),
+            project_service=project_service,
+            create_engram=lambda payload, **kwargs: create_engram(payload, **kwargs),
+            list_engrams=lambda **kwargs: list_engrams(**kwargs),
+            query_engrams=lambda payload, **kwargs: query_engrams(payload, **kwargs),
+            get_rehydration_bundle=lambda engram_id, **kwargs: get_rehydration_bundle(
+                engram_id, **kwargs
+            ),
+            get_engram_sources=lambda engram_id, **kwargs: get_engram_sources(
+                engram_id, **kwargs
+            ),
+            list_users=lambda **kwargs: list_users(**kwargs),
+            create_user=lambda **kwargs: create_user(**kwargs),
+            update_user=lambda **kwargs: update_user(**kwargs),
+            hash_password=lambda password: hash_password(password),
+            create_token_for_owner=lambda **kwargs: create_token_for_owner(**kwargs),
+            list_token_summaries=lambda **kwargs: list_token_summaries(**kwargs),
+            revoke_token_for_owner=lambda **kwargs: revoke_token_for_owner(**kwargs),
+            mcp_token_pepper=settings.mcp_token_pepper,
+            log_audit_event=lambda **kwargs: log_audit_event(**kwargs),
+            agent_workflow=agent_workflow,
+        )
     )
 )
 
@@ -592,267 +625,3 @@ def app_version() -> AppVersionResponse:
         semantic_version=semantic_version,
         release=f"v{semantic_version}",
     )
-
-
-@app.get("/api/v1/me")
-def me_endpoint(request: Request) -> dict[str, Any]:
-    return _require_roles_api(
-        request, {UserRole.admin.value, UserRole.analyst.value, UserRole.viewer.value}
-    )
-
-
-@app.get("/api/v1/users", response_model=list[UserRecord])
-def list_users_endpoint(
-    request: Request,
-    limit: int = Query(default=200, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-) -> list[UserRecord]:
-    _require_roles_api(request, {UserRole.admin.value})
-    return list_users(limit=limit, offset=offset)
-
-
-@app.post("/api/v1/users", response_model=UserRecord, status_code=201)
-def create_user_endpoint(request: Request, payload: UserCreateRequest) -> UserRecord:
-    actor = _require_roles_api(request, {UserRole.admin.value})
-    try:
-        created = create_user(
-            username=payload.username,
-            password_hash=hash_password(payload.password),
-            role=payload.role,
-            is_active=payload.is_active,
-        )
-        log_audit_event(
-            request=request,
-            event_type="user_created",
-            success=True,
-            username=actor["username"],
-            metadata={"target_username": payload.username, "role": payload.role.value},
-        )
-        return created
-    except ValueError as exc:
-        log_audit_event(
-            request=request,
-            event_type="user_create_conflict",
-            success=False,
-            username=actor["username"],
-            metadata={"target_username": payload.username},
-            detail=str(exc),
-        )
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-
-@app.patch("/api/v1/users/{user_id}", response_model=UserRecord)
-def update_user_endpoint(request: Request, user_id: UUID, payload: UserUpdateRequest) -> UserRecord:
-    actor = _require_roles_api(request, {UserRole.admin.value})
-
-    if payload.role is None and payload.is_active is None and payload.password is None:
-        raise HTTPException(status_code=400, detail="No update fields provided")
-
-    updated = update_user(
-        user_id=user_id,
-        role=payload.role,
-        is_active=payload.is_active,
-        password_hash=hash_password(payload.password) if payload.password else None,
-    )
-    if not updated:
-        log_audit_event(
-            request=request,
-            event_type="user_update_missing",
-            success=False,
-            username=actor["username"],
-            metadata={"target_user_id": str(user_id)},
-        )
-        raise HTTPException(status_code=404, detail="User not found")
-    log_audit_event(
-        request=request,
-        event_type="user_updated",
-        success=True,
-        username=actor["username"],
-        metadata={
-            "target_user_id": str(user_id),
-            "role": payload.role.value if payload.role else None,
-            "is_active": payload.is_active,
-            "password_updated": payload.password is not None,
-        },
-    )
-    return updated
-
-
-@app.post("/api/v1/mcp/tokens", response_model=McpTokenCreateResponse, status_code=201)
-def create_mcp_token_endpoint(
-    request: Request, payload: McpTokenCreateRequest
-) -> McpTokenCreateResponse:
-    actor = _require_roles_api(request, {UserRole.admin.value})
-    created = create_token_for_owner(
-        owner_user_id=UUID(actor["user_id"]),
-        payload=payload,
-        pepper=settings.mcp_token_pepper,
-    )
-    log_audit_event(
-        request=request,
-        event_type="mcp_token_created",
-        success=True,
-        username=actor["username"],
-        metadata={
-            "token_id": str(created.token_id),
-            "scope": created.scope.value,
-            "name": created.name,
-            "allowed_tools": created.allowed_tools,
-            "allowed_project_ids": created.allowed_project_ids,
-            "expires_at": created.expires_at.isoformat(),
-        },
-    )
-    return created
-
-
-@app.get("/api/v1/mcp/tokens", response_model=list[McpTokenSummary])
-def list_mcp_tokens_endpoint(
-    request: Request,
-    limit: int = Query(default=200, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-) -> list[McpTokenSummary]:
-    actor = _require_roles_api(request, {UserRole.admin.value})
-    return list_token_summaries(
-        owner_user_id=UUID(actor["user_id"]), limit=limit, offset=offset
-    )
-
-
-@app.post("/api/v1/mcp/tokens/{token_id}/revoke", response_model=McpTokenSummary)
-def revoke_mcp_token_endpoint(
-    request: Request,
-    token_id: UUID,
-    payload: McpTokenRevokeRequest,
-) -> McpTokenSummary:
-    actor = _require_roles_api(request, {UserRole.admin.value})
-    revoked = revoke_token_for_owner(
-        token_id=token_id,
-        owner_user_id=UUID(actor["user_id"]),
-    )
-    if not revoked:
-        raise HTTPException(status_code=404, detail="Token not found")
-
-    log_audit_event(
-        request=request,
-        event_type="mcp_token_revoked",
-        success=True,
-        username=actor["username"],
-        metadata={"token_id": str(token_id), "reason": payload.reason},
-    )
-    return revoked
-
-
-@app.post("/api/v1/agent-runs", response_model=AgentRunResponse)
-def run_agent_workflow(payload: AgentRunRequest) -> AgentRunResponse:
-    result = agent_workflow.run(payload.model_dump(mode="json"))
-    return AgentRunResponse(
-        thread_id=payload.thread_id,
-        status=result.get("status", "unknown"),
-        engram_id=result.get("engram_id"),
-        snapshot_engram_ids=result.get("snapshot_engram_ids", []),
-        state=result,
-    )
-
-
-@app.get("/api/v1/agent-runs/{thread_id}", response_model=AgentRunResponse)
-def get_agent_run_state(thread_id: str) -> AgentRunResponse:
-    state = agent_workflow.get_state(thread_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Thread state not found")
-    return AgentRunResponse(
-        thread_id=thread_id,
-        status=state.get("status", "unknown"),
-        engram_id=state.get("engram_id"),
-        snapshot_engram_ids=state.get("snapshot_engram_ids", []),
-        state=state,
-    )
-
-
-@app.post("/api/v1/agent-runs/{thread_id}/resume", response_model=AgentRunResponse)
-def resume_agent_workflow(thread_id: str, payload: AgentResumeRequest) -> AgentRunResponse:
-    result = agent_workflow.resume(thread_id, payload.model_dump(mode="json", exclude_none=True))
-    if not result:
-        raise HTTPException(status_code=404, detail="Thread state not found")
-    return AgentRunResponse(
-        thread_id=thread_id,
-        status=result.get("status", "unknown"),
-        engram_id=result.get("engram_id"),
-        snapshot_engram_ids=result.get("snapshot_engram_ids", []),
-        state=result,
-    )
-
-
-@app.post("/api/v1/engrams", response_model=EngramCreateResponse)
-def create_engram_endpoint(request: Request, payload: MemoryEngramCreate) -> EngramCreateResponse:
-    actor = _require_authenticated_api_user(request)
-    actor_user_id = UUID(actor["user_id"])
-    resolution = project_service.resolve_project_id_for_write(
-        actor_user_id=actor_user_id,
-        actor_role=actor["role"],
-        project_id=payload.project_id,
-    )
-    resolved_payload = payload.model_copy(update={"project_id": resolution.project_id})
-    current_settings = get_settings()
-    created = create_engram(
-        resolved_payload,
-        embedding_dim=current_settings.embedding_dim,
-        owner_user_id=actor_user_id,
-        enrichment_origin="api.engrams.create",
-    )
-    return created.model_copy(
-        update={
-            "resolved_project_id": resolution.project_id,
-            "used_default_project": resolution.used_default_project,
-        }
-    )
-
-
-@app.get("/api/v1/engrams", response_model=list[EngramSummary])
-def list_engrams_endpoint(
-    request: Request,
-    project_id: str | None = Query(default=None),
-    limit: int = Query(default=25, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-) -> list[EngramSummary]:
-    actor = _require_authenticated_api_user(request)
-    return list_engrams(
-        project_id=project_id,
-        limit=limit,
-        offset=offset,
-        actor_user_id=UUID(actor["user_id"]),
-    )
-
-
-@app.post("/api/v1/engrams/query", response_model=list[EngramQueryResult])
-def query_engrams_endpoint(
-    request: Request, payload: EngramQueryRequest
-) -> list[EngramQueryResult]:
-    actor = _require_authenticated_api_user(request)
-    current_settings = get_settings()
-    return query_engrams(
-        payload,
-        embedding_dim=current_settings.embedding_dim,
-        actor_user_id=UUID(actor["user_id"]),
-    )
-
-
-@app.get("/api/v1/engrams/{engram_id}/sources", response_model=list[EngramSourceRecord])
-def list_engram_sources_endpoint(
-    request: Request,
-    engram_id: UUID,
-    limit: int = Query(default=100, ge=1, le=500),
-) -> list[EngramSourceRecord]:
-    actor = _require_authenticated_api_user(request)
-    actor_user_id = UUID(actor["user_id"])
-    bundle = get_rehydration_bundle(engram_id, actor_user_id=actor_user_id)
-    if not bundle:
-        raise HTTPException(status_code=404, detail="Engram not found")
-    return get_engram_sources(engram_id, limit=limit, actor_user_id=actor_user_id)
-
-
-@app.get("/api/v1/engrams/{engram_id}/rehydrate", response_model=RehydrationBundle)
-def rehydrate_engram_endpoint(request: Request, engram_id: UUID) -> RehydrationBundle:
-    actor = _require_authenticated_api_user(request)
-    result = get_rehydration_bundle(engram_id, actor_user_id=UUID(actor["user_id"]))
-    if not result:
-        raise HTTPException(status_code=404, detail="Engram not found")
-    return result

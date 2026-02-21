@@ -2133,6 +2133,27 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 79 - Main API Router Extraction and Conditional Simplification)
+
+- [x] Continued Phase 5 cohesion refactor by extracting API-only route handlers out of `api/app/main.py`:
+  - added `api/app/main_api_router.py` with dedicated route registration for users, MCP tokens, agent runs, and engrams
+  - wired `create_main_api_router(...)` into `api/app/main.py` with dependency lambdas to preserve existing `app.main.*` monkeypatch seams in unit tests
+- [x] Reduced complexity hot spots in `api/app/main.py`:
+  - simplified `_session_user(...)` conditional chain into explicit guard returns
+  - simplified `_authenticate_user(...)` credential checks into linear guard flow
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`247 passed, 4 skipped, 81 deselected`)
+  - `make test` (`247 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/main.py` score: **10.0** (improved from **7.90**)
+  - `api/app/main_api_router.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2154,7 +2175,8 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/oauth/common.py` | 10.0 | GREEN |
 | `api/app/oauth/registration.py` | 10.0 | GREEN |
 | `api/app/oauth/router.py` | 10.0 | GREEN |
-| `api/app/main.py` | 7.90 | YELLOW |
+| `api/app/main.py` | 10.0 | GREEN |
+| `api/app/main_api_router.py` | 10.0 | GREEN |
 | `api/app/repository.py` | 10.0 | GREEN |
 | `api/app/providers/bedrock_provider.py` | 10.0 | GREEN |
 | `api/tests/test_oauth_api_unit.py` | 10.0 | GREEN |
