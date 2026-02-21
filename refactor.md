@@ -1042,6 +1042,39 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 38 - Workspace Lifecycle Hook Extraction Phase 10.1/10.2 Hardening)
+
+- [x] Continued App refactor by extracting workspace lifecycle side effects from `web/src/App.tsx`
+- [x] Added new hook module `web/src/hooks/useWorkspaceLifecycle.ts`:
+  - auth bootstrap effect (session profile + initial workspace loads)
+  - project-change refresh effect (sessions + documents reload)
+  - session-selection refresh/reset effect (session hydration vs detail reset)
+- [x] Updated `web/src/App.tsx`:
+  - removed inline auth bootstrap/project/session `useEffect` blocks
+  - wired `useWorkspaceLifecycle(...)` to preserve behavior while reducing in-component orchestration
+- [x] Added direct hook tests in `web/src/hooks/useWorkspaceLifecycle.test.ts`:
+  - bootstrap success path (profile + loader fan-out)
+  - bootstrap non-401 error mapping
+  - bootstrap 401 suppression behavior
+  - project refresh with user context
+  - session-detail reset behavior when no selected session
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/hooks/useWorkspaceLifecycle.test.ts src/hooks/useWorkspaceDataLoaders.test.ts src/hooks/useAuthActions.test.ts src/components/SessionSidebar.test.tsx`
+  - `make web-check`
+  - aggregate: `18 passed` (targeted web), `103 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/App.tsx` score: **10.0**
+  - `web/src/hooks/useWorkspaceLifecycle.ts` score: **10.0**
+  - `web/src/hooks/useWorkspaceLifecycle.test.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+- [x] Full backend suite attempted via `make test` before commit:
+  - currently failing in local environment with 6 unrelated failures (`test_ui_auth`/`test_api_integration` login 401s and `test_eval_harness` DB connection refusal)
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |

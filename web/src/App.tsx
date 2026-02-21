@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { getSessionProfile } from './api/auth'
 import { ApiError } from './api/http'
 import type {
   ChatMessage,
@@ -39,6 +38,7 @@ import { useIngestionActions, usePinActions, usePromptActions } from './hooks/us
 import { useAdminTokenActions } from './hooks/useAdminTokenActions'
 import { useSessionActions } from './hooks/useSessionActions'
 import { useWorkspaceDataLoaders } from './hooks/useWorkspaceDataLoaders'
+import { useWorkspaceLifecycle } from './hooks/useWorkspaceLifecycle'
 import { useWorkspaceActions } from './hooks/useWorkspaceActions'
 import { buildDefaultSaveAbstract } from './utils/chat'
 
@@ -76,10 +76,6 @@ function describeError(error: unknown): string {
     return error.message
   }
   return 'Unexpected error'
-}
-
-function isUnauthorized(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 401
 }
 
 function AppScreen() {
@@ -188,50 +184,25 @@ function AppScreen() {
     window.localStorage.setItem(PROJECT_ID_STORAGE_KEY, normalizeProjectId(projectId))
   }, [projectId])
 
-  useEffect(() => {
-    const run = async () => {
-      try {
-        const profile = await getSessionProfile()
-        setUser(profile)
-        setAuthError(null)
-        await Promise.all([
-          loadDefaultProject(),
-          loadSessions(projectId, null),
-          loadProjectDocuments(projectId),
-        ])
-      } catch (error) {
-        if (!isUnauthorized(error)) {
-          setAuthError(describeError(error))
-        }
-      } finally {
-        setAuthChecking(false)
-      }
-    }
-    void run()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    if (!user) {
-      return
-    }
-    void Promise.all([loadSessions(projectId, selectedSessionId), loadProjectDocuments(projectId)])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId])
-
-  useEffect(() => {
-    if (!user || !selectedSessionId) {
-      setMessages([])
-      setPinnedEngrams([])
-      setPinnedDocuments([])
-      setSourceReferences([])
-      setChatDebugTrace(null)
-      setTimelineEvents([])
-      return
-    }
-    void loadSessionData(selectedSessionId, projectId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSessionId])
+  useWorkspaceLifecycle({
+    projectId,
+    selectedSessionId,
+    user,
+    describeError,
+    setAuthChecking,
+    setAuthError,
+    setUser,
+    setMessages,
+    setPinnedEngrams,
+    setPinnedDocuments,
+    setSourceReferences,
+    setChatDebugTrace,
+    setTimelineEvents,
+    loadDefaultProject,
+    loadSessions,
+    loadProjectDocuments,
+    loadSessionData,
+  })
 
   const resetWorkspaceState = () => {
     setUser(null)
