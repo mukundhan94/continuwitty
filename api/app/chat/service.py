@@ -484,9 +484,9 @@ class ChatService:
         payload: PinEngramRequest,
     ):
         pinned = pin_engram_to_session(
-            session_id=session_id,
-            engram_id=payload.engram_id,
-            actor_user_id=actor_user_id,
+            session_id,
+            payload.engram_id,
+            actor_user_id,
         )
         if not pinned:
             raise ChatValidationError("Session or engram is not accessible for pinning")
@@ -499,9 +499,9 @@ class ChatService:
         payload: PinDocumentRequest,
     ) -> PinnedDocumentRecord:
         pinned = pin_document_to_session(
-            session_id=session_id,
-            document_id=payload.document_id,
-            actor_user_id=actor_user_id,
+            session_id,
+            payload.document_id,
+            actor_user_id,
         )
         if not pinned:
             raise ChatValidationError("Session or document is not accessible for pinning")
@@ -509,18 +509,18 @@ class ChatService:
 
     def unpin_engram(self, actor_user_id: UUID, session_id: UUID, engram_id: UUID) -> None:
         removed = unpin_engram_from_session(
-            session_id=session_id,
-            engram_id=engram_id,
-            actor_user_id=actor_user_id,
+            session_id,
+            engram_id,
+            actor_user_id,
         )
         if not removed:
             raise ChatSessionNotFoundError("Pinned engram not found for session")
 
     def unpin_document(self, actor_user_id: UUID, session_id: UUID, document_id: UUID) -> None:
         removed = unpin_document_from_session(
-            session_id=session_id,
-            document_id=document_id,
-            actor_user_id=actor_user_id,
+            session_id,
+            document_id,
+            actor_user_id,
         )
         if not removed:
             raise ChatSessionNotFoundError("Pinned document not found for session")
@@ -1099,9 +1099,9 @@ class ChatService:
             session_id=session.session_id, actor_user_id=actor_user_id
         ):
             copied = pin_engram_to_session(
-                session_id=continued.session_id,
-                engram_id=pinned.engram_id,
-                actor_user_id=actor_user_id,
+                continued.session_id,
+                pinned.engram_id,
+                actor_user_id,
             )
             if copied:
                 carried_ids.append(copied.engram_id)
@@ -1110,9 +1110,9 @@ class ChatService:
             session_id=session.session_id, actor_user_id=actor_user_id
         ):
             pin_document_to_session(
-                session_id=continued.session_id,
-                document_id=pinned_document.document_id,
-                actor_user_id=actor_user_id,
+                continued.session_id,
+                pinned_document.document_id,
+                actor_user_id,
             )
 
         return ContinueSessionResponse(

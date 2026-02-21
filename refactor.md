@@ -2019,13 +2019,45 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 75 - Chat Repository Pinning Module Extraction)
+
+- [x] Continued Phase 3 cohesion work by extracting pinning concerns from `api/app/chat_repository.py` into new `api/app/chat_repository_pinning.py`:
+  - moved pin/unpin/list pinned resource SQL and shared mutation/list configs
+  - moved `list_pinned_engram_summaries(...)` into dedicated pinning module
+  - retained existing public API surface in `chat_repository.py` through module-level partial aliases for pin/unpin functions and direct list aliases
+- [x] Kept compatibility while avoiding duplicated wrappers:
+  - introduced generic pin/unpin entry points in pinning module:
+    - `pin_resource_to_session(resource_kind, session_id, resource_id, actor_user_id)`
+    - `unpin_resource_from_session(resource_kind, session_id, resource_id, actor_user_id)`
+  - used `functools.partial(...)` in `chat_repository.py` for `pin_engram_to_session`, `unpin_engram_from_session`, `pin_document_to_session`, `unpin_document_from_session`
+- [x] Updated call sites and tests for the extracted/pivoted shape:
+  - updated positional pin/unpin calls in `api/app/chat/service.py`
+  - updated pinning unit/integration invocations in `api/tests/test_chat_repository.py`
+  - updated pinning monkeypatch stub shape in `api/tests/test_chat_service.py`
+- [x] Validation run (using `make` commands):
+  - `make test-unit` (`237 passed, 4 skipped, 81 deselected`)
+  - `make test` (`237 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+  - note: first acceptance attempt failed due Docker BuildKit cache snapshot extraction error, rerun passed without code changes
+- [x] Additional targeted validation:
+  - `uv run pytest tests/test_chat_repository.py tests/test_chat_service.py -q` (`21 passed, 7 skipped`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/chat_repository.py` score: **10.0** (improved from **8.03**)
+  - `api/app/chat_repository_pinning.py` score: **10.0**
+  - `api/app/chat/service.py` score: **7.90** (stable)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
 | `api/app/mcp/service.py` | **9.68** | GREEN |
 | `api/app/memory_admin/repository.py` | 8.03 | YELLOW |
-| `api/app/chat_repository.py` | 8.03 | YELLOW |
+| `api/app/chat_repository.py` | 10.0 | GREEN |
+| `api/app/chat_repository_pinning.py` | 10.0 | GREEN |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
 | `api/app/oauth/api.py` | 10.0 | GREEN |
 | `api/app/oauth/common.py` | 10.0 | GREEN |

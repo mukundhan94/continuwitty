@@ -481,7 +481,7 @@ def test_save_session_as_engram_derives_abstract_from_latest_assistant(monkeypat
 def test_pin_engram_raises_for_inaccessible_resources(monkeypatch) -> None:
     actor_id = uuid4()
     service = ChatService(embedding_dim=256)
-    monkeypatch.setattr("app.chat.service.pin_engram_to_session", lambda **kwargs: None)
+    monkeypatch.setattr("app.chat.service.pin_engram_to_session", lambda *args: None)
 
     with pytest.raises(ChatValidationError, match="not accessible"):
         service.pin_engram(

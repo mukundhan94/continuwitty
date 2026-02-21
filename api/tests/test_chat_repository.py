@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 
 from app import chat_repository as chat_repo
+from app import chat_repository_pinning as chat_repo_pinning
 from app.auth import hash_password
 from app.chat_repository import (
     ChatMessageCreateRepositoryRequest,
@@ -52,13 +53,9 @@ def test_pin_document_uses_shared_pin_request(monkeypatch) -> None:
             "created_at": datetime.now(UTC),
         }
 
-    monkeypatch.setattr(chat_repo, "_pin_to_session", _fake_pin_to_session)
+    monkeypatch.setattr(chat_repo_pinning, "_pin_to_session", _fake_pin_to_session)
 
-    pinned = chat_repo.pin_document_to_session(
-        session_id=session_id,
-        document_id=document_id,
-        actor_user_id=actor_user_id,
-    )
+    pinned = chat_repo.pin_document_to_session(session_id, document_id, actor_user_id)
 
     assert pinned is not None
     assert pinned.document_id == document_id
@@ -78,13 +75,9 @@ def test_unpin_engram_uses_shared_unpin_request(monkeypatch) -> None:
         captured["request"] = request
         return True
 
-    monkeypatch.setattr(chat_repo, "_unpin_from_session", _fake_unpin_from_session)
+    monkeypatch.setattr(chat_repo_pinning, "_unpin_from_session", _fake_unpin_from_session)
 
-    removed = chat_repo.unpin_engram_from_session(
-        session_id=session_id,
-        engram_id=engram_id,
-        actor_user_id=actor_user_id,
-    )
+    removed = chat_repo.unpin_engram_from_session(session_id, engram_id, actor_user_id)
 
     assert removed is True
     request = captured["request"]
@@ -100,7 +93,7 @@ def test_list_pinned_documents_uses_shared_list_helper(monkeypatch) -> None:
     now = datetime.now(UTC)
 
     monkeypatch.setattr(
-        chat_repo,
+        chat_repo_pinning,
         "_list_pinned_resources",
         lambda **kwargs: [  # noqa: ARG005
             {
@@ -235,22 +228,14 @@ def test_pin_and_unpin_engram(clean_db) -> None:
         payload, embedding_dim=get_settings().embedding_dim, owner_user_id=admin["user_id"]
     )
 
-    pinned = pin_engram_to_session(
-        session_id=session.session_id,
-        engram_id=created.engram_id,
-        actor_user_id=admin["user_id"],
-    )
+    pinned = pin_engram_to_session(session.session_id, created.engram_id, admin["user_id"])
     assert pinned is not None
 
     summaries = list_pinned_engram_summaries(session.session_id, actor_user_id=admin["user_id"])
     assert len(summaries) == 1
     assert summaries[0].engram_id == created.engram_id
 
-    removed = unpin_engram_from_session(
-        session_id=session.session_id,
-        engram_id=created.engram_id,
-        actor_user_id=admin["user_id"],
-    )
+    removed = unpin_engram_from_session(session.session_id, created.engram_id, admin["user_id"])
     assert removed is True
 
     summaries_after = list_pinned_engram_summaries(
@@ -308,11 +293,7 @@ def test_pin_and_unpin_document(clean_db) -> None:
         embedding_dim=settings.embedding_dim,
     )
 
-    pinned = pin_document_to_session(
-        session_id=session.session_id,
-        document_id=document_id,
-        actor_user_id=admin["user_id"],
-    )
+    pinned = pin_document_to_session(session.session_id, document_id, admin["user_id"])
     assert pinned is not None
     assert pinned.document_id == document_id
 
@@ -323,11 +304,7 @@ def test_pin_and_unpin_document(clean_db) -> None:
     assert len(listed) == 1
     assert listed[0].document_id == document_id
 
-    removed = unpin_document_from_session(
-        session_id=session.session_id,
-        document_id=document_id,
-        actor_user_id=admin["user_id"],
-    )
+    removed = unpin_document_from_session(session.session_id, document_id, admin["user_id"])
     assert removed is True
 
     listed_after = list_pinned_documents(
@@ -417,11 +394,7 @@ def test_cannot_pin_private_engram_of_other_user(clean_db) -> None:
         owner_user_id=admin["user_id"],
     )
 
-    pinned = pin_engram_to_session(
-        session_id=shared_session.session_id,
-        engram_id=private_engram.engram_id,
-        actor_user_id=analyst.user_id,
-    )
+    pinned = pin_engram_to_session(shared_session.session_id, private_engram.engram_id, analyst.user_id)
     assert pinned is None
 
 
