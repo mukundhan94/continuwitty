@@ -14,6 +14,12 @@ import {
   SessionMeta,
 } from '../styles/primitives'
 
+const DEFAULT_CHUNK_SIZE_CHARS = 1000
+const DEFAULT_CHUNK_OVERLAP_CHARS = 180
+
+type IngestionMode = 'text' | 'file'
+type VisibilityScope = 'private' | 'project'
+
 const IngestionPane = styled(GlassPane)`
   overflow: auto;
 `
@@ -122,19 +128,241 @@ interface DocumentIngestionPanelProps {
   onIngestText: (payload: {
     title: string
     text: string
-    visibility_scope: 'private' | 'project'
+    visibility_scope: VisibilityScope
     chunk_size_chars: number
     chunk_overlap_chars: number
   }) => Promise<void>
   onIngestFile: (payload: {
     title: string
     file: File
-    visibility_scope: 'private' | 'project'
+    visibility_scope: VisibilityScope
     chunk_size_chars: number
     chunk_overlap_chars: number
   }) => Promise<void>
   onPinDocument: (documentId: string) => Promise<void>
   onUnpinDocument: (documentId: string) => Promise<void>
+}
+
+interface RecentDocumentsListProps {
+  sortedDocuments: DocumentRecord[]
+  pinnedDocumentIds: string[]
+  selectedSessionId: string | null
+  loading: boolean
+  onPinDocument: (documentId: string) => Promise<void>
+  onUnpinDocument: (documentId: string) => Promise<void>
+}
+
+interface UploadControlsProps {
+  submitting: boolean
+  onIngestText: (payload: {
+    title: string
+    text: string
+    visibility_scope: VisibilityScope
+    chunk_size_chars: number
+    chunk_overlap_chars: number
+  }) => Promise<void>
+  onIngestFile: (payload: {
+    title: string
+    file: File
+    visibility_scope: VisibilityScope
+    chunk_size_chars: number
+    chunk_overlap_chars: number
+  }) => Promise<void>
+}
+
+function sortDocumentsByCreatedAt(documents: DocumentRecord[]): DocumentRecord[] {
+  return [...documents].sort((left, right) => right.created_at.localeCompare(left.created_at))
+}
+
+function RecentDocumentsList({
+  sortedDocuments,
+  pinnedDocumentIds,
+  selectedSessionId,
+  loading,
+  onPinDocument,
+  onUnpinDocument,
+}: RecentDocumentsListProps) {
+  const pinnedDocumentIdSet = useMemo(() => new Set(pinnedDocumentIds), [pinnedDocumentIds])
+
+  return (
+    <DocList>
+      {loading ? <MutedText>Loading documents...</MutedText> : null}
+      {!loading && sortedDocuments.length === 0 ? <MutedText>No documents ingested for this project.</MutedText> : null}
+
+      {sortedDocuments.map((item) => {
+        const isPinned = pinnedDocumentIdSet.has(item.document_id)
+        return (
+          <DocCard key={item.document_id} data-testid={`document-card-${item.document_id}`} $pinned={isPinned}>
+            <p className="font-semibold text-ink">{item.title}</p>
+            <SessionMeta>
+              {item.source_type} · chunks {item.chunk_count} · {item.visibility_scope}
+            </SessionMeta>
+            {isPinned ? <MutedText data-testid={`document-pinned-${item.document_id}`}>Pinned to active chat</MutedText> : null}
+            {item.source_name ? <MutedText>{item.source_name}</MutedText> : null}
+            <DocActions>
+              {isPinned ? (
+                <PinButton type="button" onClick={() => void onUnpinDocument(item.document_id)} disabled={!selectedSessionId}>
+                  Unpin
+                </PinButton>
+              ) : (
+                <PinButton type="button" onClick={() => void onPinDocument(item.document_id)} disabled={!selectedSessionId}>
+                  Pin to Chat
+                </PinButton>
+              )}
+            </DocActions>
+          </DocCard>
+        )
+      })}
+    </DocList>
+  )
+}
+
+function UploadControls({ submitting, onIngestText, onIngestFile }: UploadControlsProps) {
+  const [mode, setMode] = useState<IngestionMode>('file')
+  const [showUploadForm, setShowUploadForm] = useState(false)
+  const [title, setTitle] = useState('')
+  const [textBody, setTextBody] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>('private')
+  const chunkingConfig = {
+    chunk_size_chars: DEFAULT_CHUNK_SIZE_CHARS,
+    chunk_overlap_chars: DEFAULT_CHUNK_OVERLAP_CHARS,
+  }
+
+  const resetInputState = () => {
+    setTitle('')
+    setTextBody('')
+    setFile(null)
+  }
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setFile(event.target.files?.[0] || null)
+  }
+
+  const submitIngestion = async (
+    event: FormEvent<HTMLFormElement>,
+    shouldSubmit: boolean,
+    submitAction: () => Promise<void>,
+  ) => {
+    event.preventDefault()
+    if (!shouldSubmit) {
+      return
+    }
+    await submitAction()
+    resetInputState()
+  }
+
+  const handleSubmitText = async (event: FormEvent<HTMLFormElement>) => {
+    await submitIngestion(event, Boolean(textBody.trim()), async () => {
+      await onIngestText({
+        title: title.trim() || 'Untitled Text Document',
+        text: textBody,
+        visibility_scope: visibilityScope,
+        ...chunkingConfig,
+      })
+    })
+  }
+
+  const handleSubmitFile = async (event: FormEvent<HTMLFormElement>) => {
+    await submitIngestion(event, Boolean(file), async () => {
+      if (!file) {
+        return
+      }
+      await onIngestFile({
+        title: title.trim(),
+        file,
+        visibility_scope: visibilityScope,
+        ...chunkingConfig,
+      })
+    })
+  }
+
+  return (
+    <>
+      <SectionDivider>
+        <SecondaryActions>
+          <p className="font-display text-sm font-semibold text-ink">Upload Controls</p>
+          <button type="button" onClick={() => setShowUploadForm((current) => !current)} disabled={submitting}>
+            {showUploadForm ? 'Hide Upload Form' : 'Show Upload Form'}
+          </button>
+        </SecondaryActions>
+      </SectionDivider>
+
+      {showUploadForm ? (
+        <>
+          <ModeTabs>
+            <ModeButton type="button" $active={mode === 'file'} onClick={() => setMode('file')}>
+              File
+            </ModeButton>
+            <ModeButton type="button" $active={mode === 'text'} onClick={() => setMode('text')}>
+              Text
+            </ModeButton>
+          </ModeTabs>
+
+          {mode === 'file' ? (
+            <CompactForm onSubmit={handleSubmitFile} data-testid="ingest-file-form">
+              <label htmlFor="ingest-file-title">Title (optional)</label>
+              <SmallInput
+                id="ingest-file-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Use filename if empty"
+              />
+
+              <label htmlFor="ingest-file-input">Choose file</label>
+              <SmallInput id="ingest-file-input" type="file" onChange={handleFileChange} />
+
+              <label htmlFor="ingest-file-visibility">Visibility</label>
+              <select
+                id="ingest-file-visibility"
+                value={visibilityScope}
+                onChange={(event) => setVisibilityScope(event.target.value as VisibilityScope)}
+              >
+                <option value="private">Private</option>
+                <option value="project">Project</option>
+              </select>
+
+              <button type="submit" disabled={submitting || !file}>
+                {submitting ? 'Uploading...' : 'Upload and Chunk'}
+              </button>
+            </CompactForm>
+          ) : (
+            <CompactForm onSubmit={handleSubmitText} data-testid="ingest-text-form">
+              <label htmlFor="ingest-text-title">Title</label>
+              <SmallInput
+                id="ingest-text-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Incident Timeline"
+              />
+
+              <label htmlFor="ingest-text-body">Text</label>
+              <SmallTextArea
+                id="ingest-text-body"
+                value={textBody}
+                onChange={(event) => setTextBody(event.target.value)}
+                placeholder="Paste runbook notes, docs, or postmortem timeline..."
+              />
+
+              <label htmlFor="ingest-text-visibility">Visibility</label>
+              <select
+                id="ingest-text-visibility"
+                value={visibilityScope}
+                onChange={(event) => setVisibilityScope(event.target.value as VisibilityScope)}
+              >
+                <option value="private">Private</option>
+                <option value="project">Project</option>
+              </select>
+
+              <button type="submit" disabled={submitting || !textBody.trim()}>
+                {submitting ? 'Ingesting...' : 'Ingest Text'}
+              </button>
+            </CompactForm>
+          )}
+        </>
+      ) : null}
+    </>
+  )
 }
 
 export function DocumentIngestionPanel({
@@ -151,59 +379,7 @@ export function DocumentIngestionPanel({
   onPinDocument,
   onUnpinDocument,
 }: DocumentIngestionPanelProps) {
-  const [mode, setMode] = useState<'text' | 'file'>('file')
-  const [showUploadForm, setShowUploadForm] = useState(false)
-  const [title, setTitle] = useState('')
-  const [textBody, setTextBody] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [visibilityScope, setVisibilityScope] = useState<'private' | 'project'>('private')
-
-  const sortedDocuments = useMemo(
-    () => [...documents].sort((a, b) => b.created_at.localeCompare(a.created_at)),
-    [documents],
-  )
-  const pinnedDocumentIdSet = useMemo(() => new Set(pinnedDocumentIds), [pinnedDocumentIds])
-
-  const resetInputState = () => {
-    setTitle('')
-    setTextBody('')
-    setFile(null)
-  }
-
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextFile = event.target.files?.[0] || null
-    setFile(nextFile)
-  }
-
-  const handleSubmitText = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!textBody.trim()) {
-      return
-    }
-    await onIngestText({
-      title: title.trim() || 'Untitled Text Document',
-      text: textBody,
-      visibility_scope: visibilityScope,
-      chunk_size_chars: 1000,
-      chunk_overlap_chars: 180,
-    })
-    resetInputState()
-  }
-
-  const handleSubmitFile = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!file) {
-      return
-    }
-    await onIngestFile({
-      title: title.trim(),
-      file,
-      visibility_scope: visibilityScope,
-      chunk_size_chars: 1000,
-      chunk_overlap_chars: 180,
-    })
-    resetInputState()
-  }
+  const sortedDocuments = useMemo(() => sortDocumentsByCreatedAt(documents), [documents])
 
   return (
     <IngestionPane as="aside" data-testid="document-ingestion-panel">
@@ -223,135 +399,18 @@ export function DocumentIngestionPanel({
           <p className="font-display text-sm font-semibold text-ink">Recent Documents ({sortedDocuments.length})</p>
         </SectionDivider>
 
-        <DocList>
-          {loading ? <MutedText>Loading documents...</MutedText> : null}
-          {!loading && sortedDocuments.length === 0 ? (
-            <MutedText>No documents ingested for this project.</MutedText>
-          ) : null}
+        <RecentDocumentsList
+          sortedDocuments={sortedDocuments}
+          pinnedDocumentIds={pinnedDocumentIds}
+          selectedSessionId={selectedSessionId}
+          loading={loading}
+          onPinDocument={onPinDocument}
+          onUnpinDocument={onUnpinDocument}
+        />
 
-          {sortedDocuments.map((item) => (
-            <DocCard
-              key={item.document_id}
-              data-testid={`document-card-${item.document_id}`}
-              $pinned={pinnedDocumentIdSet.has(item.document_id)}
-            >
-              <p className="font-semibold text-ink">{item.title}</p>
-              <SessionMeta>
-                {item.source_type} · chunks {item.chunk_count} · {item.visibility_scope}
-              </SessionMeta>
-              {pinnedDocumentIdSet.has(item.document_id) ? (
-                <MutedText data-testid={`document-pinned-${item.document_id}`}>Pinned to active chat</MutedText>
-              ) : null}
-              {item.source_name ? <MutedText>{item.source_name}</MutedText> : null}
-              <DocActions>
-                {pinnedDocumentIdSet.has(item.document_id) ? (
-                  <PinButton
-                    type="button"
-                    onClick={() => void onUnpinDocument(item.document_id)}
-                    disabled={!selectedSessionId}
-                  >
-                    Unpin
-                  </PinButton>
-                ) : (
-                  <PinButton
-                    type="button"
-                    onClick={() => void onPinDocument(item.document_id)}
-                    disabled={!selectedSessionId}
-                  >
-                    Pin to Chat
-                  </PinButton>
-                )}
-              </DocActions>
-            </DocCard>
-          ))}
-        </DocList>
+        {!selectedSessionId ? <MutedText>Select a chat session to pin uploaded documents into message context.</MutedText> : null}
 
-        {!selectedSessionId ? (
-          <MutedText>Select a chat session to pin uploaded documents into message context.</MutedText>
-        ) : null}
-
-        <SectionDivider>
-          <SecondaryActions>
-            <p className="font-display text-sm font-semibold text-ink">Upload Controls</p>
-            <button type="button" onClick={() => setShowUploadForm((current) => !current)} disabled={submitting}>
-              {showUploadForm ? 'Hide Upload Form' : 'Show Upload Form'}
-            </button>
-          </SecondaryActions>
-        </SectionDivider>
-
-        {showUploadForm ? (
-          <>
-            <ModeTabs>
-              <ModeButton type="button" $active={mode === 'file'} onClick={() => setMode('file')}>
-                File
-              </ModeButton>
-              <ModeButton type="button" $active={mode === 'text'} onClick={() => setMode('text')}>
-                Text
-              </ModeButton>
-            </ModeTabs>
-
-            {mode === 'file' ? (
-              <CompactForm onSubmit={handleSubmitFile} data-testid="ingest-file-form">
-                <label htmlFor="ingest-file-title">Title (optional)</label>
-                <SmallInput
-                  id="ingest-file-title"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  placeholder="Use filename if empty"
-                />
-
-                <label htmlFor="ingest-file-input">Choose file</label>
-                <SmallInput id="ingest-file-input" type="file" onChange={handleFileChange} />
-
-                <label htmlFor="ingest-file-visibility">Visibility</label>
-                <select
-                  id="ingest-file-visibility"
-                  value={visibilityScope}
-                  onChange={(event) => setVisibilityScope(event.target.value as 'private' | 'project')}
-                >
-                  <option value="private">Private</option>
-                  <option value="project">Project</option>
-                </select>
-
-                <button type="submit" disabled={submitting || !file}>
-                  {submitting ? 'Uploading...' : 'Upload and Chunk'}
-                </button>
-              </CompactForm>
-            ) : (
-              <CompactForm onSubmit={handleSubmitText} data-testid="ingest-text-form">
-                <label htmlFor="ingest-text-title">Title</label>
-                <SmallInput
-                  id="ingest-text-title"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  placeholder="Incident Timeline"
-                />
-
-                <label htmlFor="ingest-text-body">Text</label>
-                <SmallTextArea
-                  id="ingest-text-body"
-                  value={textBody}
-                  onChange={(event) => setTextBody(event.target.value)}
-                  placeholder="Paste runbook notes, docs, or postmortem timeline..."
-                />
-
-                <label htmlFor="ingest-text-visibility">Visibility</label>
-                <select
-                  id="ingest-text-visibility"
-                  value={visibilityScope}
-                  onChange={(event) => setVisibilityScope(event.target.value as 'private' | 'project')}
-                >
-                  <option value="private">Private</option>
-                  <option value="project">Project</option>
-                </select>
-
-                <button type="submit" disabled={submitting || !textBody.trim()}>
-                  {submitting ? 'Ingesting...' : 'Ingest Text'}
-                </button>
-              </CompactForm>
-            )}
-          </>
-        ) : null}
+        <UploadControls submitting={submitting} onIngestText={onIngestText} onIngestFile={onIngestFile} />
 
         {error ? <ErrorText>{error}</ErrorText> : null}
       </PanelBody>

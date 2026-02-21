@@ -107,6 +107,15 @@ describe('DocumentIngestionPanel', () => {
     expect(screen.getByTestId('ingest-file-form')).toBeInTheDocument()
   })
 
+  it('calls refresh from header action', async () => {
+    const user = userEvent.setup()
+    const onRefresh = vi.fn(async () => {})
+    renderPanel({ onRefresh })
+
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
   it('pins and unpins documents from recent list', async () => {
     const user = userEvent.setup()
     const onPinDocument = vi.fn(async () => {})
