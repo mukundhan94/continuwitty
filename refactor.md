@@ -2241,6 +2241,32 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 84 - MCP Token Authorization Flow Flattening and Unit Coverage)
+
+- [x] Continued Phase 1 hardening in `api/app/mcp/token_authorization.py`:
+  - extracted public catalog helpers (`_public_tool_entry`, `_public_tool_catalog`, `_visible_tool_catalog_for_token`) to flatten `visible_tool_catalog(...)`
+  - introduced `_ResolvedTokenToolContext` and split token enforcement orchestration into focused helpers:
+    - `_resolve_token_tool_context(...)`
+    - `_enforce_token_scope_policy(...)`
+    - `_enforce_token_tool_allowlist_policy(...)`
+    - `_resolve_project_constrained_params(...)`
+    - `_enforce_token_project_allowlist_policy(...)`
+  - retained existing external API (`visible_tool_catalog`, `enforce_token_authorization`) and payload/error semantics
+- [x] Added focused unit coverage:
+  - new `api/tests/test_mcp_token_authorization_unit.py` for read-scope tool visibility, single-project autofill, and multi-project explicit-project enforcement
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`254 passed, 4 skipped, 81 deselected`)
+  - `make test` (`254 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/token_authorization.py` score: **10.0** (improved from **9.53**)
+  - `api/tests/test_mcp_token_authorization_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2280,9 +2306,10 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/mcp/service_access.py` | 10.0 | GREEN |
 | `api/app/mcp/service_stream.py` | 10.0 | GREEN |
 | `api/app/mcp/streaming.py` | 10.0 | GREEN |
-| `api/app/mcp/token_authorization.py` | 9.53 | GREEN |
+| `api/app/mcp/token_authorization.py` | 10.0 | GREEN |
 | `api/app/mcp/token_project_scope.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_streaming_helpers.py` | 10.0 | GREEN |
+| `api/tests/test_mcp_token_authorization_unit.py` | 10.0 | GREEN |
 | `web/src/api/http.ts` | 10.0 | GREEN |
 | `web/src/api/http.test.ts` | 10.0 | GREEN |
 | `web/src/api/chat.test.ts` | 10.0 | GREEN |

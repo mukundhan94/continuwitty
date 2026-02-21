@@ -67,6 +67,14 @@ class _AllowedProjectResolutionContext:
     allowed_projects: set[str]
 
 
+@dataclass(frozen=True)
+class _ResolvedTokenToolContext:
+    token_auth: McpTokenAuthContext
+    canonical_tool: str
+    required_scope: str
+    error_context: _TokenPolicyErrorContext
+
+
 def _single_allowed_token_project_id(token_auth: McpTokenAuthContext | None) -> str | None:
     if token_auth is None or not token_auth.allowed_project_ids:
         return None
@@ -164,32 +172,47 @@ def _is_tool_visible_for_token(
     )
 
 
+def _public_tool_entry(item: dict[str, Any]) -> dict[str, Any]:
+    return {**item, "name": _to_public_tool_name(item["name"])}
+
+
+def _public_tool_catalog() -> list[dict[str, Any]]:
+    return [_public_tool_entry(item) for item in build_tool_catalog()]
+
+
+def _visible_tool_catalog_for_token(
+    *,
+    dependencies: TokenAuthorizationDependencies,
+    token_auth: McpTokenAuthContext,
+) -> list[dict[str, Any]]:
+    allowed_tools = token_auth.allowed_tools
+    allowed_canonical = _allowed_canonical_tools(
+        canonical_tool_name=dependencies.canonical_tool_name,
+        allowed_tools=allowed_tools,
+    )
+    return [
+        _public_tool_entry(item)
+        for item in build_tool_catalog()
+        if _is_tool_visible_for_token(
+            canonical_name=item["name"],
+            token_auth=token_auth,
+            allowed_tools=allowed_tools,
+            allowed_canonical=allowed_canonical,
+        )
+    ]
+
+
 def visible_tool_catalog(
     *,
     dependencies: TokenAuthorizationDependencies,
     token_auth: McpTokenAuthContext | None,
 ) -> list[dict[str, Any]]:
     if token_auth is None:
-        return [{**item, "name": _to_public_tool_name(item["name"])} for item in build_tool_catalog()]
-
-    allowed_tools = token_auth.allowed_tools
-    allowed_canonical = _allowed_canonical_tools(
-        canonical_tool_name=dependencies.canonical_tool_name,
-        allowed_tools=allowed_tools,
+        return _public_tool_catalog()
+    return _visible_tool_catalog_for_token(
+        dependencies=dependencies,
+        token_auth=token_auth,
     )
-
-    visible: list[dict[str, Any]] = []
-    for item in build_tool_catalog():
-        canonical_name = item["name"]
-        if not _is_tool_visible_for_token(
-            canonical_name=canonical_name,
-            token_auth=token_auth,
-            allowed_tools=allowed_tools,
-            allowed_canonical=allowed_canonical,
-        ):
-            continue
-        visible.append({**item, "name": _to_public_tool_name(item["name"])})
-    return visible
 
 
 def project_id_for_tool(
@@ -296,6 +319,99 @@ def _resolve_project_for_allowed_projects(
     return context.normalized_params, project_id
 
 
+def _is_token_exempt_tool_name(tool_name: str) -> bool:
+    return tool_name in {"initialize", "tools/list"}
+
+
+def _resolve_token_tool_context(
+    *,
+    dependencies: TokenAuthorizationDependencies,
+    request: EnforceTokenAuthorizationRequest,
+) -> _ResolvedTokenToolContext:
+    canonical_tool = dependencies.canonical_tool_name(request.tool_name)
+    required_scope = _required_scope_for_tool(canonical_tool)
+    return _ResolvedTokenToolContext(
+        token_auth=request.token_auth,
+        canonical_tool=canonical_tool,
+        required_scope=required_scope,
+        error_context=_TokenPolicyErrorContext(
+            tool_name=request.tool_name,
+            required_scope=required_scope,
+            token_scope=request.token_auth.scope,
+        ),
+    )
+
+
+def _enforce_token_scope_policy(*, context: _ResolvedTokenToolContext) -> None:
+    if context.token_auth.scope == "read" and context.required_scope == "write":
+        _raise_token_policy_error(
+            message="Token scope does not allow this tool",
+            context=context.error_context,
+        )
+
+
+def _enforce_token_tool_allowlist_policy(
+    *,
+    dependencies: TokenAuthorizationDependencies,
+    context: _ResolvedTokenToolContext,
+) -> None:
+    allowed_tools = context.token_auth.allowed_tools
+    allowed_canonical = _allowed_canonical_tools(
+        canonical_tool_name=dependencies.canonical_tool_name,
+        allowed_tools=allowed_tools,
+    )
+    if _is_tool_allowed_by_token_policy(
+        canonical_tool=context.canonical_tool,
+        allowed_tools=allowed_tools,
+        allowed_canonical=allowed_canonical,
+    ):
+        return
+    _raise_token_policy_error(
+        message="Tool not allowed by token policy",
+        context=context.error_context,
+    )
+
+
+def _resolve_project_constrained_params(
+    *,
+    dependencies: TokenAuthorizationDependencies,
+    request: EnforceTokenAuthorizationRequest,
+    context: _ResolvedTokenToolContext,
+) -> tuple[dict[str, Any], str | None]:
+    normalized_params = dict(request.params)
+    allowed_projects = context.token_auth.allowed_project_ids
+    if not allowed_projects:
+        return normalized_params, None
+    return _resolve_project_for_allowed_projects(
+        context=_AllowedProjectResolutionContext(
+            dependencies=dependencies,
+            actor_user_id=request.actor_user_id,
+            canonical_tool=context.canonical_tool,
+            normalized_params=normalized_params,
+            allowed_projects=allowed_projects,
+        ),
+    )
+
+
+def _enforce_token_project_allowlist_policy(
+    *,
+    context: _ResolvedTokenToolContext,
+    project_id: str | None,
+) -> None:
+    allowed_projects = context.token_auth.allowed_project_ids
+    if not project_id or project_id in allowed_projects:
+        return
+    _raise_token_policy_error(
+        message="Project not allowed by token policy",
+        context=_TokenPolicyErrorContext(
+            tool_name=context.error_context.tool_name,
+            required_scope=context.required_scope,
+            token_scope=context.token_auth.scope,
+            project_id=project_id,
+        ),
+    )
+
+
 def enforce_token_authorization(
     *,
     dependencies: TokenAuthorizationDependencies,
@@ -304,60 +420,26 @@ def enforce_token_authorization(
     if request.token_auth is None:
         return request.params
 
-    if request.tool_name in {"initialize", "tools/list"}:
+    if _is_token_exempt_tool_name(request.tool_name):
         return request.params
 
-    canonical_tool = dependencies.canonical_tool_name(request.tool_name)
-    required_scope = _required_scope_for_tool(canonical_tool)
-    error_context = _TokenPolicyErrorContext(
-        tool_name=request.tool_name,
-        required_scope=required_scope,
-        token_scope=request.token_auth.scope,
+    context = _resolve_token_tool_context(
+        dependencies=dependencies,
+        request=request,
     )
-    if request.token_auth.scope == "read" and required_scope == "write":
-        _raise_token_policy_error(
-            message="Token scope does not allow this tool",
-            context=error_context,
-        )
-
-    allowed_tools = request.token_auth.allowed_tools
-    allowed_canonical = _allowed_canonical_tools(
-        canonical_tool_name=dependencies.canonical_tool_name,
-        allowed_tools=allowed_tools,
-    )
-    if not _is_tool_allowed_by_token_policy(
-        canonical_tool=canonical_tool,
-        allowed_tools=allowed_tools,
-        allowed_canonical=allowed_canonical,
-    ):
-        _raise_token_policy_error(
-            message="Tool not allowed by token policy",
-            context=error_context,
-        )
-
-    normalized_params = dict(request.params)
-    allowed_projects = request.token_auth.allowed_project_ids
-    if not allowed_projects:
-        return normalized_params
-
-    normalized_params, project_id = _resolve_project_for_allowed_projects(
-        context=_AllowedProjectResolutionContext(
-            dependencies=dependencies,
-            actor_user_id=request.actor_user_id,
-            canonical_tool=canonical_tool,
-            normalized_params=normalized_params,
-            allowed_projects=allowed_projects,
-        ),
+    _enforce_token_scope_policy(context=context)
+    _enforce_token_tool_allowlist_policy(
+        dependencies=dependencies,
+        context=context,
     )
 
-    if project_id and project_id not in allowed_projects:
-        _raise_token_policy_error(
-            message="Project not allowed by token policy",
-            context=_TokenPolicyErrorContext(
-                tool_name=request.tool_name,
-                required_scope=required_scope,
-                token_scope=request.token_auth.scope,
-                project_id=project_id,
-            ),
-        )
+    normalized_params, project_id = _resolve_project_constrained_params(
+        dependencies=dependencies,
+        request=request,
+        context=context,
+    )
+    _enforce_token_project_allowlist_policy(
+        context=context,
+        project_id=project_id,
+    )
     return normalized_params
