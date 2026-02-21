@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from 'styled-components'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -41,6 +42,37 @@ describe('AdminMemoryPage', () => {
       expect(memoryAdminMocks.listAdminSessions).toHaveBeenCalled()
       expect(memoryAdminMocks.listAdminEngrams).toHaveBeenCalled()
       expect(memoryAdminMocks.listCollections).toHaveBeenCalled()
+    })
+  })
+
+  it('reloads datasets with include_deleted when toggled', async () => {
+    const user = userEvent.setup()
+    render(
+      <ThemeProvider theme={lightTheme}>
+        <AdminMemoryPage
+          projectId="engram-vault"
+          onProjectChange={vi.fn()}
+          onNotice={vi.fn()}
+        />
+      </ThemeProvider>,
+    )
+
+    await waitFor(() => {
+      expect(memoryAdminMocks.listAdminSessions).toHaveBeenCalled()
+    })
+
+    await user.click(screen.getByLabelText(/include deleted/i))
+
+    await waitFor(() => {
+      expect(memoryAdminMocks.listAdminSessions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ include_deleted: true }),
+      )
+      expect(memoryAdminMocks.listAdminEngrams).toHaveBeenLastCalledWith(
+        expect.objectContaining({ include_deleted: true }),
+      )
+      expect(memoryAdminMocks.listCollections).toHaveBeenLastCalledWith(
+        expect.objectContaining({ include_deleted: true }),
+      )
     })
   })
 })

@@ -6,7 +6,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 **Business case for the worst file (`mcp/service.py`):** Improving from 3.0 to 5.15 (industry average) predicts 24–48% defect reduction and 3–20% development speed improvement (90% confidence interval).
 
-## Phase Completion Status (as of 2026-02-21, Checkpoint 93)
+## Phase Completion Status (as of 2026-02-21, Checkpoint 94)
 
 - [x] Phase 1 — `api/app/mcp/service.py` refactor and hardening completed (checkpoints 1, 44-68, 80-84, 87)
 - [x] Phase 2 — `api/app/memory_admin/repository.py` refactor completed (checkpoints 2, 16)
@@ -21,7 +21,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 - [x] Phase 11 — `api/app/ingestion/repository.py` refactor completed (checkpoint 11)
 - [x] Phase 12 — `api/app/engram_enrichment/service.py` refactor completed (checkpoint 12)
 - [x] Phase 13 — Green-zone files promoted and stabilized (checkpoints 13-15)
-- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-93)
+- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-94)
 
 ## Execution Checkpoints
 
@@ -2513,6 +2513,36 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 94 - Admin Memory Page Decomposition and Filter Coverage Expansion)
+
+- [x] Continued Phase 10/14 frontend hardening in `web/src/components/AdminMemoryPage.tsx`:
+  - decomposed the monolithic admin page into focused view sections:
+    - `SessionManagementSection`
+    - `EngramManagementSection`
+    - `EngramDetailEditor`
+    - `CollectionSection`
+  - extracted reusable action helpers to reduce duplicated mutation flows:
+    - `runSelectedEngramLifecycleAction(...)`
+    - `runSelectedCollectionItemAction(...)`
+  - extracted source draft helpers:
+    - `buildSourceDraft(...)`
+    - `withTimestampDraft(...)`
+- [x] Expanded component test coverage in `web/src/components/AdminMemoryPage.test.tsx`:
+  - added include-deleted filter reload assertion (`reloads datasets with include_deleted when toggled`)
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`255 passed, 4 skipped, 82 deselected`)
+  - `make test` (`255 passed, 86 skipped`)
+  - `make web-check` (`32 passed file suites, 119 passed tests`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/components/AdminMemoryPage.tsx` score: **9.68** (improved from **7.43**)
+  - `web/src/components/AdminMemoryPage.test.tsx` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed** (with non-gating string-heavy-argument advisory)
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2568,6 +2598,8 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `web/src/api/mcpTokens.test.ts` | 10.0 | GREEN |
 | `web/src/components/AdminMcpTokenPanel.tsx` | 10.0 | GREEN |
 | `web/src/components/AdminMcpTokenPanel.test.tsx` | 10.0 | GREEN |
+| `web/src/components/AdminMemoryPage.tsx` | 9.68 | GREEN |
+| `web/src/components/AdminMemoryPage.test.tsx` | 10.0 | GREEN |
 | `web/src/components/DocumentIngestionPanel.tsx` | 10.0 | GREEN |
 | `web/src/components/DocumentIngestionPanel.test.tsx` | 10.0 | GREEN |
 | `web/src/components/PinnedEngramPanel.tsx` | 10.0 | GREEN |
