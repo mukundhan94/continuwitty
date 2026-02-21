@@ -1790,6 +1790,32 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 67 - MCP Request/Context Parameter Object Adoption Phase 1.2/1.5 Hardening)
+
+- [x] Continued excess-argument reduction in `api/app/mcp/service.py` by introducing request/context parameter objects:
+  - added `_CreateEngramFromConversationContext`
+  - added `_AuthorizeToolCallRequest`
+  - added `_StreamChatSendMessageRequest`
+  - updated `_create_engram_from_conversation(...)`, `_dispatch_engram_primary_tool(...)`, `_dispatch_tool(...)`, `_authorize_tool_call(...)`, and `_stream_chat_send_message(...)` to consume parameter objects
+- [x] Updated MCP unit tests to align with new context/request call shapes:
+  - `api/tests/test_mcp_service_unit.py`
+  - `api/tests/test_mcp_service_engram_dispatch_unit.py`
+  - `api/tests/test_mcp_service_stream_unit.py`
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py tests/test_mcp_service_stream_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py tests/test_mcp_service_stream_unit.py -q` (`48 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 skipped`, local sandbox run)
+  - `make test` (**failed in local environment**: login/UI auth credentials returned 401 and eval harness DB bootstrap couldn't connect to local Postgres on `localhost:5432`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **9.09** (stable)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+  - fixed in change-set: excess-argument findings in `_create_engram_from_conversation`, `_dispatch_engram_primary_tool`, `_dispatch_tool`, `_authorize_tool_call`, `_stream_chat_send_message`
+  - remaining dominant score blockers in `api/app/mcp/service.py`: low cohesion + large module footprint + `McpService.__init__` argument count
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |

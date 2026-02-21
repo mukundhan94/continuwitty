@@ -96,6 +96,33 @@ class _ToolDispatchContext:
     token_auth: McpTokenAuthContext | None
 
 
+@dataclass(frozen=True)
+class _CreateEngramFromConversationContext:
+    actor_user_id: UUID
+    actor_role: str
+    token_auth: McpTokenAuthContext | None
+    params: dict[str, Any]
+    enrichment_origin: str
+
+
+@dataclass(frozen=True)
+class _AuthorizeToolCallRequest:
+    actor_user_id: UUID
+    request_id: str | int | None
+    token_auth: McpTokenAuthContext | None
+    tool_name: str
+    params: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class _StreamChatSendMessageRequest:
+    actor_user_id: UUID
+    request_id: str | int
+    tool_name: str
+    params: dict[str, Any]
+    as_tool_call: bool = False
+
+
 class McpService:
     """JSON-RPC tool dispatcher for MCP-over-SSE.
 
@@ -291,19 +318,15 @@ class McpService:
     def _create_engram_from_conversation(
         self,
         *,
-        actor_user_id: UUID,
-        actor_role: str,
-        token_auth: McpTokenAuthContext | None,
-        params: dict[str, Any],
-        enrichment_origin: str,
+        context: _CreateEngramFromConversationContext,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Create an engram from raw conversation text (no chat session required)."""
-        request = EngramCreateFromConversationRequest(**params)
+        request = EngramCreateFromConversationRequest(**context.params)
         resolved_payload, resolved_project_id, used_default_project = (
             self._create_engram_payload_with_project_resolution(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                token_auth=token_auth,
+                actor_user_id=context.actor_user_id,
+                actor_role=context.actor_role,
+                token_auth=context.token_auth,
                 payload=MemoryEngramCreate(
                     project_id=request.project_id,
                     thread_id=request.thread_id,
@@ -321,8 +344,8 @@ class McpService:
         created, enrichment_report = create_engram_with_report(
             payload=resolved_payload,
             embedding_dim=self._embedding_dim,
-            owner_user_id=actor_user_id,
-            enrichment_origin=enrichment_origin,
+            owner_user_id=context.actor_user_id,
+            enrichment_origin=context.enrichment_origin,
         )
         engram_payload = created.model_dump(mode="json")
         engram_payload["resolved_project_id"] = resolved_project_id
@@ -484,11 +507,13 @@ class McpService:
         if not fallback_params.get("title"):
             fallback_params["title"] = "Conversation Snapshot"
         created, report = self._create_engram_from_conversation(
-            actor_user_id=actor_user_id,
-            actor_role=actor_role,
-            token_auth=token_auth,
-            params=fallback_params,
-            enrichment_origin="mcp.chat.save_as_engram",
+            context=_CreateEngramFromConversationContext(
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                token_auth=token_auth,
+                params=fallback_params,
+                enrichment_origin="mcp.chat.save_as_engram",
+            )
         )
         return {"saved_engram": created, "enrichment_report": report}
 
@@ -674,11 +699,13 @@ class McpService:
     ) -> dict[str, Any]:
         actor_role = str(actor.get("role", ""))
         created, report = self._create_engram_from_conversation(
-            actor_user_id=actor_user_id,
-            actor_role=actor_role,
-            token_auth=token_auth,
-            params=params,
-            enrichment_origin="mcp.engram.create_from_conversation",
+            context=_CreateEngramFromConversationContext(
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                token_auth=token_auth,
+                params=params,
+                enrichment_origin="mcp.engram.create_from_conversation",
+            )
         )
         return {"engram": created, "enrichment_report": report}
 
@@ -711,47 +738,43 @@ class McpService:
     def _dispatch_engram_primary_tool(
         self,
         *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-        token_auth: McpTokenAuthContext | None,
+        context: _ToolDispatchContext,
     ) -> dict[str, Any] | None:
-        actor_role = str(actor.get("role", ""))
+        actor_role = str(context.actor.get("role", ""))
 
         handlers = {
             "engram.create": lambda: self._dispatch_engram_create_tool(
-                actor=actor,
-                actor_user_id=actor_user_id,
-                params=params,
-                token_auth=token_auth,
+                actor=context.actor,
+                actor_user_id=context.actor_user_id,
+                params=context.params,
+                token_auth=context.token_auth,
             ),
             "engram.create_from_conversation": lambda: self._dispatch_engram_create_from_conversation_tool(
-                actor=actor,
-                actor_user_id=actor_user_id,
-                params=params,
-                token_auth=token_auth,
+                actor=context.actor,
+                actor_user_id=context.actor_user_id,
+                params=context.params,
+                token_auth=context.token_auth,
             ),
             "engram.update": lambda: self._dispatch_engram_update_tool(
-                actor=actor,
-                actor_user_id=actor_user_id,
-                params=params,
-                token_auth=token_auth,
+                actor=context.actor,
+                actor_user_id=context.actor_user_id,
+                params=context.params,
+                token_auth=context.token_auth,
             ),
             "engram.move_project": lambda: self._dispatch_engram_move_project_tool(
-                actor=actor,
-                actor_user_id=actor_user_id,
-                params=params,
-                token_auth=token_auth,
+                actor=context.actor,
+                actor_user_id=context.actor_user_id,
+                params=context.params,
+                token_auth=context.token_auth,
             ),
             "engram.collection_create": lambda: self._dispatch_engram_collection_create_tool(
-                actor_user_id=actor_user_id,
+                actor_user_id=context.actor_user_id,
                 actor_role=actor_role,
-                params=params,
-                token_auth=token_auth,
+                params=context.params,
+                token_auth=context.token_auth,
             ),
         }
-        handler = handlers.get(method)
+        handler = handlers.get(context.method)
         return handler() if handler else None
 
     def _dispatch_engram_tool(
@@ -760,11 +783,7 @@ class McpService:
         context: _ToolDispatchContext,
     ) -> dict[str, Any] | None:
         engram_primary_result = self._dispatch_engram_primary_tool(
-            actor=context.actor,
-            actor_user_id=context.actor_user_id,
-            method=context.method,
-            params=context.params,
-            token_auth=context.token_auth,
+            context=context,
         )
         if engram_primary_result is not None:
             return engram_primary_result
@@ -844,46 +863,34 @@ class McpService:
     def _dispatch_tool(
         self,
         *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-        token_auth: McpTokenAuthContext | None,
+        context: _ToolDispatchContext,
     ) -> dict[str, Any]:
-        canonical_method = self._canonical_tool_name(method)
-        dispatch_context = _ToolDispatchContext(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=canonical_method,
-            params=params,
-            token_auth=token_auth,
-        )
         chat_result = self._dispatch_chat_tool(
-            context=dispatch_context,
+            context=context,
         )
         if chat_result is not None:
             return chat_result
 
         engram_result = self._dispatch_engram_tool(
-            context=dispatch_context,
+            context=context,
         )
         if engram_result is not None:
             return engram_result
 
         project_result = dispatch_project_tool(
             project_service=self._project_service,
-            actor=dispatch_context.actor,
-            actor_user_id=dispatch_context.actor_user_id,
-            method=dispatch_context.method,
-            params=dispatch_context.params,
+            actor=context.actor,
+            actor_user_id=context.actor_user_id,
+            method=context.method,
+            params=context.params,
         )
         if project_result is not None:
             return project_result
 
         user_result = dispatch_user_tool(
-            actor=dispatch_context.actor,
-            actor_user_id=dispatch_context.actor_user_id,
-            method=dispatch_context.method,
+            actor=context.actor,
+            actor_user_id=context.actor_user_id,
+            method=context.method,
             chat_service=self._chat_service,
         )
         if user_result is not None:
@@ -892,7 +899,7 @@ class McpService:
         raise McpRpcError(
             code=-32601,
             message="Method not found",
-            data={"method": canonical_method},
+            data={"method": context.method},
         )
 
     def _dispatch_non_stream(
@@ -927,11 +934,13 @@ class McpService:
                 params=tool_params,
             )
             tool_payload = self._dispatch_tool(
-                actor=actor,
-                actor_user_id=actor_user_id,
-                method=canonical_tool_name,
-                params=authorized_params,
-                token_auth=token_auth,
+                context=_ToolDispatchContext(
+                    actor=actor,
+                    actor_user_id=actor_user_id,
+                    method=canonical_tool_name,
+                    params=authorized_params,
+                    token_auth=token_auth,
+                ),
             )
             return self._tool_call_success(tool_name, tool_payload)
 
@@ -944,31 +953,29 @@ class McpService:
             params=params,
         )
         return self._dispatch_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=canonical_method,
-            params=authorized_params,
-            token_auth=token_auth,
+            context=_ToolDispatchContext(
+                actor=actor,
+                actor_user_id=actor_user_id,
+                method=canonical_method,
+                params=authorized_params,
+                token_auth=token_auth,
+            ),
         )
 
     def _authorize_tool_call(
         self,
         *,
-        actor_user_id: UUID,
-        request_id: str | int | None,
-        token_auth: McpTokenAuthContext | None,
-        tool_name: str,
-        params: dict[str, Any],
+        request: _AuthorizeToolCallRequest,
     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         try:
             authorized_params = self._enforce_token_authorization(
-                actor_user_id=actor_user_id,
-                token_auth=token_auth,
-                tool_name=tool_name,
-                params=params,
+                actor_user_id=request.actor_user_id,
+                token_auth=request.token_auth,
+                tool_name=request.tool_name,
+                params=request.params,
             )
         except McpRpcError as exc:
-            return None, self._error(request_id, code=exc.code, message=exc.message, data=exc.data)
+            return None, self._error(request.request_id, code=exc.code, message=exc.message, data=exc.data)
         return authorized_params, None
 
     def _maybe_stream_direct_chat_send_message(
@@ -979,11 +986,13 @@ class McpService:
         if request_ctx.canonical_method != "chat.send_message":
             return False, None
         authorized_params, error_frame = self._authorize_tool_call(
-            actor_user_id=request_ctx.actor_user_id,
-            request_id=request_ctx.request_id,
-            token_auth=request_ctx.token_auth,
-            tool_name=request_ctx.request_method,
-            params=request_ctx.request_params,
+            request=_AuthorizeToolCallRequest(
+                actor_user_id=request_ctx.actor_user_id,
+                request_id=request_ctx.request_id,
+                token_auth=request_ctx.token_auth,
+                tool_name=request_ctx.request_method,
+                params=request_ctx.request_params,
+            ),
         )
         if error_frame is not None:
             return True, iter((error_frame,))
@@ -991,10 +1000,12 @@ class McpService:
         return (
             True,
             self._stream_chat_send_message(
-                actor_user_id=request_ctx.actor_user_id,
-                request_id=request_ctx.request_id,
-                tool_name=request_ctx.request_method,
-                params=authorized_params,
+                request=_StreamChatSendMessageRequest(
+                    actor_user_id=request_ctx.actor_user_id,
+                    request_id=request_ctx.request_id,
+                    tool_name=request_ctx.request_method,
+                    params=authorized_params,
+                ),
             ),
         )
 
@@ -1027,11 +1038,13 @@ class McpService:
             )
 
         authorized_tool_params, error_frame = self._authorize_tool_call(
-            actor_user_id=request_ctx.actor_user_id,
-            request_id=request_ctx.request_id,
-            token_auth=request_ctx.token_auth,
-            tool_name=tool_name,
-            params=tool_params,
+            request=_AuthorizeToolCallRequest(
+                actor_user_id=request_ctx.actor_user_id,
+                request_id=request_ctx.request_id,
+                token_auth=request_ctx.token_auth,
+                tool_name=tool_name,
+                params=tool_params,
+            ),
         )
         if error_frame is not None:
             return True, iter((error_frame,))
@@ -1041,11 +1054,13 @@ class McpService:
             return (
                 True,
                 self._stream_chat_send_message(
-                    actor_user_id=request_ctx.actor_user_id,
-                    request_id=request_ctx.request_id,
-                    tool_name=tool_name,
-                    params=authorized_tool_params,
-                    as_tool_call=True,
+                    request=_StreamChatSendMessageRequest(
+                        actor_user_id=request_ctx.actor_user_id,
+                        request_id=request_ctx.request_id,
+                        tool_name=tool_name,
+                        params=authorized_tool_params,
+                        as_tool_call=True,
+                    ),
                 ),
             )
         return False, None
@@ -1188,30 +1203,26 @@ class McpService:
     def _stream_chat_send_message(
         self,
         *,
-        actor_user_id: UUID,
-        request_id: str | int,
-        tool_name: str,
-        params: dict[str, Any],
-        as_tool_call: bool = False,
+        request: _StreamChatSendMessageRequest,
     ):
         # This method emits progress frames (`mcp.event`) plus a final success/error
         # JSON-RPC frame. `as_tool_call=True` wraps the final success payload in the
         # `tools/call` envelope so external MCP clients get a consistent shape.
         try:
-            session_id = self._parse_uuid(params, "session_id")
-            payload = ChatMessageCreateRequest(content_text=params.get("content_text", ""))
-            stream_enabled = bool(params.get("stream", True))
+            session_id = self._parse_uuid(request.params, "session_id")
+            payload = ChatMessageCreateRequest(content_text=request.params.get("content_text", ""))
+            stream_enabled = bool(request.params.get("stream", True))
             if not stream_enabled:
                 response = self._chat_service.send_message(
-                    actor_user_id=actor_user_id,
+                    actor_user_id=request.actor_user_id,
                     session_id=session_id,
                     payload=payload,
                 )
                 yield chat_send_message_success_frame(
-                    request_id=request_id,
-                    tool_name=tool_name,
+                    request_id=request.request_id,
+                    tool_name=request.tool_name,
                     payload={"message": response.model_dump(mode="json")},
-                    as_tool_call=as_tool_call,
+                    as_tool_call=request.as_tool_call,
                     success=self._success,
                     tool_call_success=self._tool_call_success,
                 )
@@ -1219,24 +1230,24 @@ class McpService:
 
             final_message = yield from stream_chat_send_message_events(
                 chat_service=self._chat_service,
-                actor_user_id=actor_user_id,
+                actor_user_id=request.actor_user_id,
                 session_id=session_id,
                 payload=payload,
-                request_id=request_id,
-                tool_name=tool_name,
+                request_id=request.request_id,
+                tool_name=request.tool_name,
                 event=self._event,
             )
             yield chat_send_message_success_frame(
-                request_id=request_id,
-                tool_name=tool_name,
+                request_id=request.request_id,
+                tool_name=request.tool_name,
                 payload={"message": final_message},
-                as_tool_call=as_tool_call,
+                as_tool_call=request.as_tool_call,
                 success=self._success,
                 tool_call_success=self._tool_call_success,
             )
         except Exception as exc:
             yield stream_chat_send_message_error_frame(
-                request_id=request_id,
+                request_id=request.request_id,
                 exc=exc,
                 error=self._error,
             )

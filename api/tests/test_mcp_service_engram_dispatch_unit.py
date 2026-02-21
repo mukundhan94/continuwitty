@@ -3,12 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
 from app.mcp.errors import McpRpcError
-from app.mcp.service import McpService
+from app.mcp.service import McpService, _ToolDispatchContext
 
 
 @dataclass
@@ -56,18 +56,35 @@ def _mock_owned_engram(
     )
 
 
+def _dispatch_for_actor(
+    service: McpService,
+    *,
+    actor: dict[str, object],
+    method: str,
+    params: dict[str, object],
+) -> dict[str, object]:
+    return service._dispatch_tool(
+        context=_ToolDispatchContext(
+            actor=actor,
+            actor_user_id=UUID(str(actor["user_id"])),
+            method=method,
+            params=params,
+            token_auth=None,
+        )
+    )
+
+
 def test_dispatch_tool_routes_engram_collection_list() -> None:
     service, _, _, memory_admin_service = _build_service()
     actor_user_id = uuid4()
     actor = {"user_id": str(actor_user_id), "role": "user"}
     memory_admin_service.list_collections.return_value = [_Dumpable(payload={"collection_id": "c1"})]
 
-    result = service._dispatch_tool(
+    result = _dispatch_for_actor(
+        service,
         actor=actor,
-        actor_user_id=actor_user_id,
         method="engram.collection_list",
         params={},
-        token_auth=None,
     )
 
     assert result == {"collections": [{"collection_id": "c1"}]}
@@ -84,12 +101,11 @@ def test_dispatch_tool_routes_engram_get_with_include_deleted_flag() -> None:
         engram_id=engram_id,
     )
 
-    result = service._dispatch_tool(
+    result = _dispatch_for_actor(
+        service,
         actor=actor,
-        actor_user_id=actor_user_id,
         method="engram.get",
         params={"engram_id": str(engram_id), "include_deleted": False},
-        token_auth=None,
     )
 
     assert result == {"engram": {"engram_id": str(engram_id)}}
@@ -111,9 +127,9 @@ def test_dispatch_tool_routes_engram_update_with_payload_mapping() -> None:
     )
     memory_admin_service.update_engram.return_value = _Dumpable(payload={"engram_id": str(engram_id)})
 
-    result = service._dispatch_tool(
+    result = _dispatch_for_actor(
+        service,
         actor=actor,
-        actor_user_id=actor_user_id,
         method="engram.update",
         params={
             "engram_id": str(engram_id),
@@ -133,7 +149,6 @@ def test_dispatch_tool_routes_engram_update_with_payload_mapping() -> None:
                 }
             ],
         },
-        token_auth=None,
     )
 
     assert result == {"engram": {"engram_id": str(engram_id)}}
@@ -161,11 +176,13 @@ def test_dispatch_tool_rehydrate_returns_not_found_when_bundle_missing(monkeypat
 
     with pytest.raises(McpRpcError) as exc_info:
         service._dispatch_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method="engram.rehydrate",
-            params={"engram_id": str(engram_id)},
-            token_auth=None,
+            context=_ToolDispatchContext(
+                actor=actor,
+                actor_user_id=actor_user_id,
+                method="engram.rehydrate",
+                params={"engram_id": str(engram_id)},
+                token_auth=None,
+            )
         )
 
     assert exc_info.value.code == -32004
@@ -213,11 +230,13 @@ def test_dispatch_engram_primary_routes_extracted_helpers(
     monkeypatch.setattr(service, case.helper_name, helper)
 
     result = service._dispatch_engram_primary_tool(
-        actor=actor,
-        actor_user_id=actor_user_id,
-        method=case.method,
-        params=case.params,
-        token_auth=None,
+        context=_ToolDispatchContext(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=case.method,
+            params=case.params,
+            token_auth=None,
+        )
     )
 
     assert result == expected

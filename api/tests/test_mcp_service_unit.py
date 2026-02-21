@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from app.mcp.errors import McpRpcError
-from app.mcp.service import McpService
+from app.mcp.service import McpService, _ToolDispatchContext
 
 
 @dataclass
@@ -72,11 +72,13 @@ def _dispatch_for_user(
 ) -> dict[str, object]:
     actor = {"user_id": str(actor_user_id), "role": "user"}
     return service._dispatch_tool(
-        actor=actor,
-        actor_user_id=actor_user_id,
-        method=method,
-        params=params,
-        token_auth=None,
+        context=_ToolDispatchContext(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+            token_auth=None,
+        )
     )
 
 
@@ -113,11 +115,13 @@ def test_dispatch_tool_routes_chat_domain() -> None:
     chat_service.list_sessions.return_value = [_Dumpable(payload={"session_id": "s1"})]
 
     result = service._dispatch_tool(
-        actor=actor,
-        actor_user_id=actor_user_id,
-        method="chat.list_sessions",
-        params={},
-        token_auth=None,
+        context=_ToolDispatchContext(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method="chat.list_sessions",
+            params={},
+            token_auth=None,
+        )
     )
 
     assert result == {"sessions": [{"session_id": "s1"}]}
@@ -132,18 +136,22 @@ def test_dispatch_tool_routes_engram_and_project_domains() -> None:
     project_service.get_default_project_id.return_value = "project-alpha"
 
     engram_result = service._dispatch_tool(
-        actor=actor,
-        actor_user_id=actor_user_id,
-        method="engram.list",
-        params={"project_id": "project-alpha"},
-        token_auth=None,
+        context=_ToolDispatchContext(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method="engram.list",
+            params={"project_id": "project-alpha"},
+            token_auth=None,
+        )
     )
     project_result = service._dispatch_tool(
-        actor=actor,
-        actor_user_id=actor_user_id,
-        method="project.get_default",
-        params={},
-        token_auth=None,
+        context=_ToolDispatchContext(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method="project.get_default",
+            params={},
+            token_auth=None,
+        )
     )
 
     assert engram_result == {"engrams": [{"engram_id": "e1"}]}
@@ -156,11 +164,13 @@ def test_dispatch_tool_routes_user_domain() -> None:
     actor = {"user_id": str(actor_user_id), "role": "user", "username": "alice"}
 
     result = service._dispatch_tool(
-        actor=actor,
-        actor_user_id=actor_user_id,
-        method="user.get_profile",
-        params={},
-        token_auth=None,
+        context=_ToolDispatchContext(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method="user.get_profile",
+            params={},
+            token_auth=None,
+        )
     )
 
     assert result == {"profile": actor}
@@ -185,11 +195,13 @@ def test_dispatch_tool_returns_expected_rpc_errors_for_invalid_requests(
 
     with pytest.raises(McpRpcError) as exc_info:
         service._dispatch_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
-            token_auth=None,
+            context=_ToolDispatchContext(
+                actor=actor,
+                actor_user_id=actor_user_id,
+                method=method,
+                params=params,
+                token_auth=None,
+            )
         )
 
     assert exc_info.value.code == expected_code
@@ -706,11 +718,13 @@ def test_dispatch_engram_move_project_rejects_disallowed_source_project_for_toke
 
     with pytest.raises(McpRpcError) as exc_info:
         service._dispatch_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method="engram.move_project",
-            params={"engram_id": str(engram_id), "target_project_id": "target-project"},
-            token_auth=token_auth,
+            context=_ToolDispatchContext(
+                actor=actor,
+                actor_user_id=actor_user_id,
+                method="engram.move_project",
+                params={"engram_id": str(engram_id), "target_project_id": "target-project"},
+                token_auth=token_auth,
+            )
         )
 
     assert exc_info.value.code == -32003
@@ -771,11 +785,13 @@ def test_dispatch_engram_move_project_allows_source_project_in_token_allowlist()
     token_auth = _token_auth(scope="write", allowed_project_ids={"source-project", "target-project"})
 
     result = service._dispatch_tool(
-        actor=actor,
-        actor_user_id=actor_user_id,
-        method="engram.move_project",
-        params={"engram_id": str(engram_id), "target_project_id": "target-project"},
-        token_auth=token_auth,
+        context=_ToolDispatchContext(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method="engram.move_project",
+            params={"engram_id": str(engram_id), "target_project_id": "target-project"},
+            token_auth=token_auth,
+        )
     )
 
     assert result == {"engram": {"engram_id": str(engram_id)}}

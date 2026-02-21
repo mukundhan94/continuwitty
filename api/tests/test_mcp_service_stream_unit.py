@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 from app.mcp.errors import McpRpcError
-from app.mcp.service import McpService
+from app.mcp.service import McpService, _StreamChatSendMessageRequest
 from app.models import McpJsonRpcRequest
 
 
@@ -51,10 +51,12 @@ def test_maybe_stream_direct_chat_send_message_streams_authorized_frames(monkeyp
     assert list(frames or ()) == expected_frames
     authorize_tool_call.assert_called_once()
     stream_chat_send_message.assert_called_once_with(
-        actor_user_id=actor_user_id,
-        request_id="req-1",
-        tool_name="chat.send_message",
-        params={"stream": True},
+        request=_StreamChatSendMessageRequest(
+            actor_user_id=actor_user_id,
+            request_id="req-1",
+            tool_name="chat.send_message",
+            params={"stream": True},
+        )
     )
 
 
@@ -155,11 +157,13 @@ def test_stream_chat_send_message_requires_done_completion() -> None:
     service._chat_service.stream_message_events.return_value = iter([("chunk", {"text": "hello"})])
     frames = list(
         service._stream_chat_send_message(
-            actor_user_id=actor_user_id,
-            request_id="req-1",
-            tool_name="chat.send_message",
-            params={"session_id": str(session_id), "content_text": "hi", "stream": True},
-            as_tool_call=False,
+            request=_StreamChatSendMessageRequest(
+                actor_user_id=actor_user_id,
+                request_id="req-1",
+                tool_name="chat.send_message",
+                params={"session_id": str(session_id), "content_text": "hi", "stream": True},
+                as_tool_call=False,
+            )
         )
     )
 
@@ -176,11 +180,13 @@ def test_stream_chat_send_message_non_stream_as_tool_call_wraps_success() -> Non
 
     frames = list(
         service._stream_chat_send_message(
-            actor_user_id=actor_user_id,
-            request_id="req-1",
-            tool_name="chat.send_message",
-            params={"session_id": str(session_id), "content_text": "hi", "stream": False},
-            as_tool_call=True,
+            request=_StreamChatSendMessageRequest(
+                actor_user_id=actor_user_id,
+                request_id="req-1",
+                tool_name="chat.send_message",
+                params={"session_id": str(session_id), "content_text": "hi", "stream": False},
+                as_tool_call=True,
+            )
         )
     )
 
