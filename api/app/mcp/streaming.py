@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -11,18 +12,36 @@ from app.chat.errors import ChatProviderExecutionError, ChatServiceError
 from .errors import McpRpcError
 
 
+@dataclass(frozen=True)
+class StreamSuccessFrameRequest:
+    request_id: str | int
+    tool_name: str
+    payload: dict[str, Any]
+    as_tool_call: bool
+
+
+@dataclass(frozen=True)
+class StreamChatSendMessageEventsRequest:
+    chat_service: Any
+    actor_user_id: UUID
+    session_id: UUID
+    payload: Any
+    request_id: str | int
+    tool_name: str
+
+
 def chat_send_message_success_frame(
     *,
-    request_id: str | int,
-    tool_name: str,
-    payload: dict[str, Any],
-    as_tool_call: bool,
+    request: StreamSuccessFrameRequest,
     success: Any,
     tool_call_success: Any,
 ) -> dict[str, Any]:
-    if as_tool_call:
-        return success(request_id, tool_call_success(tool_name, payload))
-    return success(request_id, payload)
+    if request.as_tool_call:
+        return success(
+            request.request_id,
+            tool_call_success(request.tool_name, request.payload),
+        )
+    return success(request.request_id, request.payload)
 
 
 def stream_event_payload(event_payload: Any) -> dict[str, Any]:
@@ -33,24 +52,19 @@ def stream_event_payload(event_payload: Any) -> dict[str, Any]:
 
 def stream_chat_send_message_events(
     *,
-    chat_service: Any,
-    actor_user_id: UUID,
-    session_id: UUID,
-    payload: Any,
-    request_id: str | int,
-    tool_name: str,
+    request: StreamChatSendMessageEventsRequest,
     event: Any,
 ):
     final_message: dict[str, Any] | None = None
-    for event_name, event_payload in chat_service.stream_message_events(
-        actor_user_id=actor_user_id,
-        session_id=session_id,
-        payload=payload,
+    for event_name, event_payload in request.chat_service.stream_message_events(
+        actor_user_id=request.actor_user_id,
+        session_id=request.session_id,
+        payload=request.payload,
     ):
         event_payload_dict = stream_event_payload(event_payload)
         yield event(
-            request_id,
-            tool=tool_name,
+            request.request_id,
+            tool=request.tool_name,
             event_name=event_name,
             event_payload=event_payload_dict,
         )

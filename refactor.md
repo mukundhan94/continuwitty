@@ -2176,6 +2176,31 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 81 - MCP Streaming Request Object and Helper Coverage Hardening)
+
+- [x] Continued Phase 1 hardening in `api/app/mcp/streaming.py` by removing excess-argument helper signatures:
+  - added `StreamSuccessFrameRequest` and `StreamChatSendMessageEventsRequest` dataclasses
+  - updated `chat_send_message_success_frame(...)` and `stream_chat_send_message_events(...)` to accept request objects
+- [x] Updated `api/app/mcp/service_stream.py` integration and reduced function-size pressure:
+  - adapted streaming helper call sites to new request dataclasses
+  - extracted `_error_for_non_stream_exception(...)`, `_stream_route_request_context(...)`, `_stream_handled_result(...)`
+  - extracted `_stream_non_stream_chat_success_frame(...)` and `_stream_chat_send_message_events(...)` to keep stream orchestration cohesive and compact
+- [x] Added targeted helper tests:
+  - added `api/tests/test_mcp_streaming_helpers.py` for tool-call success wrapping, event payload normalization, done-payload return semantics, and error-event propagation
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`251 passed, 4 skipped, 81 deselected`)
+  - `make test` (`251 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/streaming.py` score: **10.0** (improved from **9.68**)
+  - `api/app/mcp/service_stream.py` score: **10.0**
+  - `api/tests/test_mcp_streaming_helpers.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2213,9 +2238,11 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/mcp/engram_dispatch.py` | 10.0 | GREEN |
 | `api/app/mcp/project_user_dispatch.py` | 10.0 | GREEN |
 | `api/app/mcp/service_access.py` | 10.0 | GREEN |
-| `api/app/mcp/streaming.py` | 9.68 | GREEN |
+| `api/app/mcp/service_stream.py` | 10.0 | GREEN |
+| `api/app/mcp/streaming.py` | 10.0 | GREEN |
 | `api/app/mcp/token_authorization.py` | 9.53 | GREEN |
 | `api/app/mcp/token_project_scope.py` | 10.0 | GREEN |
+| `api/tests/test_mcp_streaming_helpers.py` | 10.0 | GREEN |
 | `web/src/api/http.ts` | 10.0 | GREEN |
 | `web/src/api/http.test.ts` | 10.0 | GREEN |
 | `web/src/api/chat.test.ts` | 10.0 | GREEN |
