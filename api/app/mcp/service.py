@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -64,6 +64,11 @@ from .catalog import (
     build_tool_catalog,
 )
 from .errors import McpRpcError
+from .streaming import (
+    chat_send_message_success_frame,
+    stream_chat_send_message_error_frame,
+    stream_chat_send_message_events,
+)
 
 _COLLECTION_SCOPED_TOOLS = {
     "engram.collection_update",
@@ -71,6 +76,16 @@ _COLLECTION_SCOPED_TOOLS = {
     "engram.collection_add_items",
     "engram.collection_remove_items",
 }
+
+
+@dataclass(frozen=True)
+class _StreamRouteRequest:
+    actor_user_id: UUID
+    request_id: str | int | None
+    request_method: str
+    canonical_method: str
+    request_params: dict[str, Any]
+    token_auth: McpTokenAuthContext | None
 
 
 class McpService:
@@ -1743,21 +1758,16 @@ class McpService:
     def _maybe_stream_direct_chat_send_message(
         self,
         *,
-        actor_user_id: UUID,
-        request_id: str | int | None,
-        request_method: str,
-        canonical_method: str,
-        request_params: dict[str, Any],
-        token_auth: McpTokenAuthContext | None,
+        request_ctx: _StreamRouteRequest,
     ) -> tuple[bool, Iterator[dict[str, Any]] | None]:
-        if canonical_method != "chat.send_message":
+        if request_ctx.canonical_method != "chat.send_message":
             return False, None
         authorized_params, error_frame = self._authorize_tool_call(
-            actor_user_id=actor_user_id,
-            request_id=request_id,
-            token_auth=token_auth,
-            tool_name=request_method,
-            params=request_params,
+            actor_user_id=request_ctx.actor_user_id,
+            request_id=request_ctx.request_id,
+            token_auth=request_ctx.token_auth,
+            tool_name=request_ctx.request_method,
+            params=request_ctx.request_params,
         )
         if error_frame is not None:
             return True, iter((error_frame,))
@@ -1765,9 +1775,9 @@ class McpService:
         return (
             True,
             self._stream_chat_send_message(
-                actor_user_id=actor_user_id,
-                request_id=request_id,
-                tool_name=request_method,
+                actor_user_id=request_ctx.actor_user_id,
+                request_id=request_ctx.request_id,
+                tool_name=request_ctx.request_method,
                 params=authorized_params,
             ),
         )
@@ -1775,28 +1785,35 @@ class McpService:
     def _maybe_stream_tools_call_chat_message(
         self,
         *,
-        actor_user_id: UUID,
-        request_id: str | int | None,
-        request_method: str,
-        request_params: dict[str, Any],
-        token_auth: McpTokenAuthContext | None,
+        request_ctx: _StreamRouteRequest,
     ) -> tuple[bool, Iterator[dict[str, Any]] | None]:
-        if request_method != "tools/call":
+        if request_ctx.request_method != "tools/call":
             return False, None
 
         try:
-            tool_name, tool_params = self._tool_name_and_params_for_tools_call(request_params)
+            tool_name, tool_params = self._tool_name_and_params_for_tools_call(
+                request_ctx.request_params
+            )
             canonical_tool_name = self._canonical_tool_name(tool_name)
         except McpRpcError as exc:
             return (
                 True,
-                iter((self._error(request_id, code=exc.code, message=exc.message, data=exc.data),)),
+                iter(
+                    (
+                        self._error(
+                            request_ctx.request_id,
+                            code=exc.code,
+                            message=exc.message,
+                            data=exc.data,
+                        ),
+                    )
+                ),
             )
 
         authorized_tool_params, error_frame = self._authorize_tool_call(
-            actor_user_id=actor_user_id,
-            request_id=request_id,
-            token_auth=token_auth,
+            actor_user_id=request_ctx.actor_user_id,
+            request_id=request_ctx.request_id,
+            token_auth=request_ctx.token_auth,
             tool_name=tool_name,
             params=tool_params,
         )
@@ -1808,8 +1825,8 @@ class McpService:
             return (
                 True,
                 self._stream_chat_send_message(
-                    actor_user_id=actor_user_id,
-                    request_id=request_id,
+                    actor_user_id=request_ctx.actor_user_id,
+                    request_id=request_ctx.request_id,
                     tool_name=tool_name,
                     params=authorized_tool_params,
                     as_tool_call=True,
@@ -1907,7 +1924,7 @@ class McpService:
             return
 
         canonical_method = self._canonical_tool_name(request.method)
-        handled, direct_frames = self._maybe_stream_direct_chat_send_message(
+        request_ctx = _StreamRouteRequest(
             actor_user_id=actor_user_id,
             request_id=request.id,
             request_method=request.method,
@@ -1915,17 +1932,16 @@ class McpService:
             request_params=request.params,
             token_auth=token_auth,
         )
+        handled, direct_frames = self._maybe_stream_direct_chat_send_message(
+            request_ctx=request_ctx,
+        )
         if handled:
             assert direct_frames is not None
             yield from direct_frames
             return
 
         handled, tool_call_frames = self._maybe_stream_tools_call_chat_message(
-            actor_user_id=actor_user_id,
-            request_id=request.id,
-            request_method=request.method,
-            request_params=request.params,
-            token_auth=token_auth,
+            request_ctx=request_ctx,
         )
         if handled:
             assert tool_call_frames is not None
@@ -1953,102 +1969,6 @@ class McpService:
         """
         _ = request
 
-    def _chat_send_message_success_frame(
-        self,
-        *,
-        request_id: str | int,
-        tool_name: str,
-        payload: dict[str, Any],
-        as_tool_call: bool,
-    ) -> dict[str, Any]:
-        if as_tool_call:
-            return self._success(request_id, self._tool_call_success(tool_name, payload))
-        return self._success(request_id, payload)
-
-    @staticmethod
-    def _stream_event_payload(event_payload: Any) -> dict[str, Any]:
-        if isinstance(event_payload, dict):
-            return event_payload
-        return {"value": event_payload}
-
-    def _stream_chat_send_message_events(
-        self,
-        *,
-        actor_user_id: UUID,
-        session_id: UUID,
-        payload: ChatMessageCreateRequest,
-        request_id: str | int,
-        tool_name: str,
-    ) -> Iterator[dict[str, Any]]:
-        final_message: dict[str, Any] | None = None
-        for event_name, event_payload in self._chat_service.stream_message_events(
-            actor_user_id=actor_user_id,
-            session_id=session_id,
-            payload=payload,
-        ):
-            event_payload_dict = self._stream_event_payload(event_payload)
-            yield self._event(
-                request_id,
-                tool=tool_name,
-                event_name=event_name,
-                event_payload=event_payload_dict,
-            )
-            if event_name == "error":
-                raise McpRpcError(
-                    code=-32020,
-                    message=event_payload_dict.get("detail", "chat.send_message stream failed"),
-                    data=event_payload_dict,
-                )
-            if event_name == "done":
-                final_message = event_payload_dict
-        if final_message is None:
-            raise McpRpcError(
-                code=-32021,
-                message="chat.send_message stream ended without completion",
-            )
-        return final_message
-
-    def _stream_chat_send_message_error_frame(
-        self,
-        *,
-        request_id: str | int,
-        exc: Exception,
-    ) -> dict[str, Any]:
-        if isinstance(exc, McpRpcError):
-            return self._error(
-                request_id,
-                code=exc.code,
-                message=exc.message,
-                data=exc.data,
-            )
-        if isinstance(exc, ValidationError):
-            return self._error(
-                request_id,
-                code=-32602,
-                message="Invalid params",
-                data={"errors": exc.errors()},
-            )
-        if isinstance(exc, ChatProviderExecutionError):
-            return self._error(
-                request_id,
-                code=-32020,
-                message=exc.detail,
-                data={"error_code": exc.error_code, "status_code": exc.status_code},
-            )
-        if isinstance(exc, ChatServiceError):
-            return self._error(
-                request_id,
-                code=-32010,
-                message=exc.detail,
-                data={"status_code": exc.status_code},
-            )
-        return self._error(
-            request_id,
-            code=-32000,
-            message="Internal MCP error",
-            data={"detail": str(exc), "timestamp": datetime.now(UTC).isoformat()},
-        )
-
     def _stream_chat_send_message(
         self,
         *,
@@ -2071,29 +1991,36 @@ class McpService:
                     session_id=session_id,
                     payload=payload,
                 )
-                yield self._chat_send_message_success_frame(
+                yield chat_send_message_success_frame(
                     request_id=request_id,
                     tool_name=tool_name,
                     payload={"message": response.model_dump(mode="json")},
                     as_tool_call=as_tool_call,
+                    success=self._success,
+                    tool_call_success=self._tool_call_success,
                 )
                 return
 
-            final_message = yield from self._stream_chat_send_message_events(
+            final_message = yield from stream_chat_send_message_events(
+                chat_service=self._chat_service,
                 actor_user_id=actor_user_id,
                 session_id=session_id,
                 payload=payload,
                 request_id=request_id,
                 tool_name=tool_name,
+                event=self._event,
             )
-            yield self._chat_send_message_success_frame(
+            yield chat_send_message_success_frame(
                 request_id=request_id,
                 tool_name=tool_name,
                 payload={"message": final_message},
                 as_tool_call=as_tool_call,
+                success=self._success,
+                tool_call_success=self._tool_call_success,
             )
         except Exception as exc:
-            yield self._stream_chat_send_message_error_frame(
+            yield stream_chat_send_message_error_frame(
                 request_id=request_id,
                 exc=exc,
+                error=self._error,
             )

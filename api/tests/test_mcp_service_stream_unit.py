@@ -1,13 +1,12 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-import pytest
-
 from app.mcp.errors import McpRpcError
 from app.mcp.service import McpService
-from app.models import ChatMessageCreateRequest, McpJsonRpcRequest
+from app.models import McpJsonRpcRequest
 
 
 def _build_service() -> McpService:
@@ -38,12 +37,14 @@ def test_maybe_stream_direct_chat_send_message_streams_authorized_frames(monkeyp
     monkeypatch.setattr(service, "_stream_chat_send_message", stream_chat_send_message)
 
     handled, frames = service._maybe_stream_direct_chat_send_message(
-        actor_user_id=actor_user_id,
-        request_id="req-1",
-        request_method="chat.send_message",
-        canonical_method="chat.send_message",
-        request_params={"prompt": "hello"},
-        token_auth=None,
+        request_ctx=SimpleNamespace(
+            actor_user_id=actor_user_id,
+            request_id="req-1",
+            request_method="chat.send_message",
+            canonical_method="chat.send_message",
+            request_params={"prompt": "hello"},
+            token_auth=None,
+        ),
     )
 
     assert handled is True
@@ -67,11 +68,14 @@ def test_maybe_stream_tools_call_chat_message_returns_error_frame_for_invalid_pa
     )
 
     handled, frames = service._maybe_stream_tools_call_chat_message(
-        actor_user_id=actor_user_id,
-        request_id="req-1",
-        request_method="tools/call",
-        request_params={},
-        token_auth=None,
+        request_ctx=SimpleNamespace(
+            actor_user_id=actor_user_id,
+            request_id="req-1",
+            request_method="tools/call",
+            canonical_method="tools/call",
+            request_params={},
+            token_auth=None,
+        ),
     )
 
     assert handled is True
@@ -144,24 +148,22 @@ def test_stream_call_routes_to_non_stream_result_when_helpers_skip(monkeypatch) 
     assert frames == [{"jsonrpc": "2.0", "id": "req-1", "result": {"sessions": []}}]
 
 
-def test_stream_chat_send_message_events_requires_done_completion() -> None:
+def test_stream_chat_send_message_requires_done_completion() -> None:
     service = _build_service()
     actor_user_id = uuid4()
     session_id = uuid4()
     service._chat_service.stream_message_events.return_value = iter([("chunk", {"text": "hello"})])
-
-    with pytest.raises(McpRpcError) as exc_info:
-        list(
-            service._stream_chat_send_message_events(
-                actor_user_id=actor_user_id,
-                session_id=session_id,
-                payload=ChatMessageCreateRequest(content_text="hi"),
-                request_id="req-1",
-                tool_name="chat.send_message",
-            )
+    frames = list(
+        service._stream_chat_send_message(
+            actor_user_id=actor_user_id,
+            request_id="req-1",
+            tool_name="chat.send_message",
+            params={"session_id": str(session_id), "content_text": "hi", "stream": True},
+            as_tool_call=False,
         )
+    )
 
-    assert exc_info.value.code == -32021
+    assert frames[-1]["error"]["code"] == -32021
 
 
 def test_stream_chat_send_message_non_stream_as_tool_call_wraps_success() -> None:

@@ -1635,11 +1635,39 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 61 - MCP Stream Helper Module Extraction Phase 1.5 Hardening)
+
+- [x] Continued MCP streaming refactor by extracting shared stream helpers from `api/app/mcp/service.py` to new module `api/app/mcp/streaming.py`:
+  - moved success-frame shaping to `chat_send_message_success_frame(...)`
+  - moved event iteration/normalization to `stream_chat_send_message_events(...)`
+  - moved exception envelope mapping to `stream_chat_send_message_error_frame(...)`
+  - updated `McpService._stream_chat_send_message(...)` to delegate to new module helpers
+- [x] Reduced argument pressure in stream-route branching:
+  - introduced `_StreamRouteRequest` dataclass in `api/app/mcp/service.py`
+  - updated `_maybe_stream_direct_chat_send_message(...)` and `_maybe_stream_tools_call_chat_message(...)` to accept `request_ctx`
+- [x] Test updates:
+  - adjusted `api/tests/test_mcp_service_stream_unit.py` for `request_ctx`-based stream-route helpers
+  - retained completion guard coverage via `_stream_chat_send_message(...)` (missing `done` event path)
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py app/mcp/streaming.py tests/test_mcp_service_stream_unit.py tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_stream_unit.py tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py -q` (`48 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`315 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **9.09** (improved from **8.81**)
+  - `api/app/mcp/streaming.py` score: **9.68**
+  - `api/tests/test_mcp_service_stream_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+  - remaining dominant smell in `mcp/service.py`: low cohesion with large single-file footprint
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **8.81** | YELLOW |
+| `api/app/mcp/service.py` | **9.09** | GREEN |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
@@ -1658,6 +1686,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_oauth_repository.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |
+| `api/app/mcp/streaming.py` | 9.68 | GREEN |
 | `web/src/api/http.ts` | 10.0 | GREEN |
 | `web/src/api/http.test.ts` | 10.0 | GREEN |
 | `web/src/api/chat.test.ts` | 10.0 | GREEN |
