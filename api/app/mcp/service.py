@@ -31,6 +31,8 @@ from .catalog import (
     _to_dotted_tool_name,
 )
 from .chat_dispatch import (
+    ChatDispatchContext,
+    ChatDispatchDependencies,
     ChatSessionLifecycleDispatchContext,
     ChatSessionLifecycleDispatchDependencies,
     dispatch_chat_pinning_tool,
@@ -345,37 +347,37 @@ class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
         context: _ToolDispatchContext,
     ) -> dict[str, Any] | None:
         actor_role = str(context.actor.get("role", ""))
-
-        chat_session_query_result = dispatch_chat_session_query_tool(
-            chat_service=self._chat_service,
-            actor_user_id=context.actor_user_id,
-            method=context.method,
-            params=context.params,
-            parse_uuid=self._parse_uuid,
-        )
-        if chat_session_query_result is not None:
-            return chat_session_query_result
-
-        chat_pinning_result = dispatch_chat_pinning_tool(
-            chat_service=self._chat_service,
-            actor_user_id=context.actor_user_id,
-            method=context.method,
-            params=context.params,
-            parse_uuid=self._parse_uuid,
-        )
-        if chat_pinning_result is not None:
-            return chat_pinning_result
-
-        chat_primary_result = dispatch_chat_primary_tool(
+        chat_dispatch_dependencies = ChatDispatchDependencies(
             chat_service=self._chat_service,
             ingestion_service=self._ingestion_service,
+            parse_uuid=self._parse_uuid,
+            dispatch_chat_save_as_engram_tool=self._dispatch_chat_save_as_engram_tool,
+        )
+        chat_dispatch_context = ChatDispatchContext(
             actor_user_id=context.actor_user_id,
             actor_role=actor_role,
             method=context.method,
             params=context.params,
             token_auth=context.token_auth,
-            parse_uuid=self._parse_uuid,
-            dispatch_chat_save_as_engram_tool=self._dispatch_chat_save_as_engram_tool,
+        )
+
+        chat_session_query_result = dispatch_chat_session_query_tool(
+            dependencies=chat_dispatch_dependencies,
+            context=chat_dispatch_context,
+        )
+        if chat_session_query_result is not None:
+            return chat_session_query_result
+
+        chat_pinning_result = dispatch_chat_pinning_tool(
+            dependencies=chat_dispatch_dependencies,
+            context=chat_dispatch_context,
+        )
+        if chat_pinning_result is not None:
+            return chat_pinning_result
+
+        chat_primary_result = dispatch_chat_primary_tool(
+            dependencies=chat_dispatch_dependencies,
+            context=chat_dispatch_context,
         )
         if chat_primary_result is not None:
             return chat_primary_result

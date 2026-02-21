@@ -2201,6 +2201,28 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 82 - MCP Chat Dispatch Context Object Consolidation)
+
+- [x] Continued Phase 1 hardening in `api/app/mcp/chat_dispatch.py` to remove excess-argument dispatch helpers:
+  - added `ChatDispatchDependencies` and `ChatDispatchContext` dataclasses
+  - updated `dispatch_chat_session_query_tool(...)`, `dispatch_chat_pinning_tool(...)`, and `dispatch_chat_primary_tool(...)` to use context/dependencies objects
+  - preserved engram pin alias handling (`engram.pin_to_session`) and existing response payload shapes
+- [x] Updated integration in `api/app/mcp/service.py`:
+  - `_dispatch_chat_tool(...)` now builds shared chat dispatch dependencies/context once and reuses them across the three dispatch paths
+  - retained lifecycle-dispatch path and actor-role derivation behavior
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`251 passed, 4 skipped, 81 deselected`)
+  - `make test` (`251 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/chat_dispatch.py` score: **10.0** (improved from **9.68**)
+  - `api/app/mcp/service.py` score: **9.68** (unchanged; remaining constructor/cohesion slice tracked separately)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2234,7 +2256,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_oauth_repository.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |
-| `api/app/mcp/chat_dispatch.py` | 9.68 | GREEN |
+| `api/app/mcp/chat_dispatch.py` | 10.0 | GREEN |
 | `api/app/mcp/engram_dispatch.py` | 10.0 | GREEN |
 | `api/app/mcp/project_user_dispatch.py` | 10.0 | GREEN |
 | `api/app/mcp/service_access.py` | 10.0 | GREEN |
