@@ -8,18 +8,11 @@ from uuid import UUID
 from app.chat.service import ChatService
 from app.ingestion.service import DocumentIngestionService
 from app.mcp_tokens import McpTokenAuthContext
-from app.memory_admin import (
-    MemoryAdminEngramListRequest,
-    MemoryAdminListRequest,
-    MemoryAdminService,
-)
+from app.memory_admin import MemoryAdminService
 from app.models import (
     AdminEngramMoveRequest,
-    AdminEngramRecord,
     AdminEngramUpdateRequest,
-    AdminSessionDeleteRequest,
     EngramCollectionCreateRequest,
-    EngramCollectionRecord,
     EngramCreateFromConversationRequest,
     McpJsonRpcRequest,
     MemoryEngramCreate,
@@ -38,8 +31,11 @@ from .catalog import (
     _to_dotted_tool_name,
 )
 from .chat_dispatch import (
+    ChatSessionLifecycleDispatchContext,
+    ChatSessionLifecycleDispatchDependencies,
     dispatch_chat_pinning_tool,
     dispatch_chat_primary_tool,
+    dispatch_chat_session_lifecycle_tool,
     dispatch_chat_session_query_tool,
 )
 from .engram_dispatch import (
@@ -62,13 +58,6 @@ from .token_authorization import (
     resolve_project_for_write,
     visible_tool_catalog,
 )
-
-_COLLECTION_SCOPED_TOOLS = {
-    "engram.collection_update",
-    "engram.collection_delete",
-    "engram.collection_add_items",
-    "engram.collection_remove_items",
-}
 
 __all__ = ["McpService", "_ToolDispatchContext", "_StreamChatSendMessageRequest"]
 
@@ -344,35 +333,6 @@ class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
         )
         return {"saved_engram": created, "enrichment_report": report}
 
-    def _dispatch_chat_session_lifecycle_tool(
-        self,
-        *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        if method == "chat.delete_session":
-            session_id = self._parse_uuid(params, "session_id")
-            self._require_session_access(actor=actor, session_id=session_id)
-            deleted = self._memory_admin_service.delete_session(
-                session_id=session_id,
-                actor_user_id=actor_user_id,
-                payload=AdminSessionDeleteRequest(
-                    delete_linked_engrams=bool(params.get("delete_linked_engrams", False)),
-                    reason=params.get("reason"),
-                ),
-            )
-            return {"result": deleted.model_dump(mode="json")}
-
-        if method == "chat.restore_session":
-            session_id = self._parse_uuid(params, "session_id")
-            self._require_session_access(actor=actor, session_id=session_id)
-            restored = self._memory_admin_service.restore_session(session_id=session_id)
-            return {"result": restored.model_dump(mode="json")}
-
-        return None
-
     def _dispatch_chat_tool(
         self,
         *,
@@ -414,11 +374,18 @@ class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
         if chat_primary_result is not None:
             return chat_primary_result
 
-        session_lifecycle_result = self._dispatch_chat_session_lifecycle_tool(
-            actor=context.actor,
-            actor_user_id=context.actor_user_id,
-            method=context.method,
-            params=context.params,
+        session_lifecycle_result = dispatch_chat_session_lifecycle_tool(
+            dependencies=ChatSessionLifecycleDispatchDependencies(
+                memory_admin_service=self._memory_admin_service,
+                parse_uuid=self._parse_uuid,
+                require_session_access=self._require_session_access,
+            ),
+            context=ChatSessionLifecycleDispatchContext(
+                actor=context.actor,
+                actor_user_id=context.actor_user_id,
+                method=context.method,
+                params=context.params,
+            ),
         )
         if session_lifecycle_result is not None:
             return session_lifecycle_result
@@ -649,43 +616,6 @@ class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
             return mutation_result
 
         return None
-
-    def _list_engrams_for_actor(
-        self,
-        *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        session_id: UUID | None,
-        params: dict[str, Any],
-    ) -> list[AdminEngramRecord]:
-        return self._memory_admin_service.list_engrams(
-            request=MemoryAdminEngramListRequest(
-                project_id=params.get("project_id"),
-                owner_user_id=None if self._is_admin(actor) else actor_user_id,
-                include_deleted=bool(params.get("include_deleted", False)),
-                limit=int(params.get("limit", 200)),
-                offset=int(params.get("offset", 0)),
-                session_id=session_id,
-                query_text=params.get("q"),
-            )
-        )
-
-    def _list_collections_for_actor(
-        self,
-        *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        params: dict[str, Any],
-    ) -> list[EngramCollectionRecord]:
-        return self._memory_admin_service.list_collections(
-            request=MemoryAdminListRequest(
-                project_id=params.get("project_id"),
-                owner_user_id=None if self._is_admin(actor) else actor_user_id,
-                include_deleted=bool(params.get("include_deleted", False)),
-                limit=int(params.get("limit", 200)),
-                offset=int(params.get("offset", 0)),
-            )
-        )
 
     def _dispatch_tool(
         self,

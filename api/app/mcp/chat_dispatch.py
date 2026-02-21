@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
 from app.mcp_tokens import McpTokenAuthContext
 from app.models import (
+    AdminSessionDeleteRequest,
     ChatLifecyclePolicyUpdateRequest,
     ChatMessageCreateRequest,
     ChatSessionCreateRequest,
@@ -14,6 +16,50 @@ from app.models import (
 )
 
 from .errors import McpRpcError
+
+
+@dataclass(frozen=True)
+class ChatSessionLifecycleDispatchContext:
+    actor: dict[str, Any]
+    actor_user_id: UUID
+    method: str
+    params: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ChatSessionLifecycleDispatchDependencies:
+    memory_admin_service: Any
+    parse_uuid: Any
+    require_session_access: Any
+
+
+def dispatch_chat_session_lifecycle_tool(
+    *,
+    dependencies: ChatSessionLifecycleDispatchDependencies,
+    context: ChatSessionLifecycleDispatchContext,
+) -> dict[str, Any] | None:
+    if context.method == "chat.delete_session":
+        session_id = dependencies.parse_uuid(context.params, "session_id")
+        dependencies.require_session_access(actor=context.actor, session_id=session_id)
+        deleted = dependencies.memory_admin_service.delete_session(
+            session_id=session_id,
+            actor_user_id=context.actor_user_id,
+            payload=AdminSessionDeleteRequest(
+                delete_linked_engrams=bool(
+                    context.params.get("delete_linked_engrams", False)
+                ),
+                reason=context.params.get("reason"),
+            ),
+        )
+        return {"result": deleted.model_dump(mode="json")}
+
+    if context.method == "chat.restore_session":
+        session_id = dependencies.parse_uuid(context.params, "session_id")
+        dependencies.require_session_access(actor=context.actor, session_id=session_id)
+        restored = dependencies.memory_admin_service.restore_session(session_id=session_id)
+        return {"result": restored.model_dump(mode="json")}
+
+    return None
 
 
 def dispatch_chat_pinning_tool(

@@ -4,6 +4,9 @@ from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
+from app.memory_admin import MemoryAdminEngramListRequest, MemoryAdminListRequest
+from app.models import AdminEngramRecord, EngramCollectionRecord
+
 from .errors import McpRpcError
 
 
@@ -168,4 +171,56 @@ class McpServiceAccessMixin:
             resource="collection",
             resource_id=collection_id,
             lookup=self._lookup_collection,
+        )
+
+    def _admin_list_request_kwargs(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "project_id": params.get("project_id"),
+            "owner_user_id": None if self._is_admin(actor) else actor_user_id,
+            "include_deleted": bool(params.get("include_deleted", False)),
+            "limit": int(params.get("limit", 200)),
+            "offset": int(params.get("offset", 0)),
+        }
+
+    def _list_engrams_for_actor(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        session_id: UUID | None,
+        params: dict[str, Any],
+    ) -> list[AdminEngramRecord]:
+        request_kwargs = self._admin_list_request_kwargs(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            params=params,
+        )
+        return self._memory_admin_service.list_engrams(
+            request=MemoryAdminEngramListRequest(
+                **request_kwargs,
+                session_id=session_id,
+                query_text=params.get("q"),
+            )
+        )
+
+    def _list_collections_for_actor(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        params: dict[str, Any],
+    ) -> list[EngramCollectionRecord]:
+        request_kwargs = self._admin_list_request_kwargs(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            params=params,
+        )
+        return self._memory_admin_service.list_collections(
+            request=MemoryAdminListRequest(**request_kwargs)
         )

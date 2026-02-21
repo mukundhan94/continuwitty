@@ -1872,11 +1872,42 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 70 - MCP Chat Lifecycle Dispatch Consolidation)
+
+- [x] Continued MCP service decomposition by extracting chat session lifecycle routing to structured dispatch inputs:
+  - added `ChatSessionLifecycleDispatchContext` in `api/app/mcp/chat_dispatch.py`
+  - added `ChatSessionLifecycleDispatchDependencies` in `api/app/mcp/chat_dispatch.py`
+  - updated `dispatch_chat_session_lifecycle_tool(...)` to consume context/dependencies objects
+- [x] Reduced `api/app/mcp/service.py` size further and removed local duplication:
+  - removed now-unused `_COLLECTION_SCOPED_TOOLS`
+  - delegated actor-scoped engram/collection list helpers to `McpServiceAccessMixin`
+  - removed `_list_engrams_for_actor(...)` and `_list_collections_for_actor(...)` from `McpService`
+- [x] Kept access helper quality high after migration:
+  - added `_admin_list_request_kwargs(...)` in `api/app/mcp/service_access.py`
+  - deduplicated list request assembly for engram/collection list paths
+- [x] Added focused tests for the extracted chat lifecycle dispatch module:
+  - new `api/tests/test_mcp_chat_dispatch_unit.py`
+  - covers delete-session routing, restore-session routing, and unknown-method no-op behavior
+- [x] Validation run (using `make` commands):
+  - `make test-unit` (`233 passed, 4 skipped, 81 deselected`)
+  - `make test` (`233 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **9.68** (improved from **9.09**)
+  - `api/app/mcp/service_access.py` score: **10.0** (improved from **9.38**)
+  - `api/app/mcp/chat_dispatch.py` score: **9.68** (stable)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `api/tests/test_mcp_chat_dispatch_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **9.09** | GREEN |
+| `api/app/mcp/service.py` | **9.68** | GREEN |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
@@ -1898,6 +1929,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/mcp/chat_dispatch.py` | 9.68 | GREEN |
 | `api/app/mcp/engram_dispatch.py` | 10.0 | GREEN |
 | `api/app/mcp/project_user_dispatch.py` | 9.68 | GREEN |
+| `api/app/mcp/service_access.py` | 10.0 | GREEN |
 | `api/app/mcp/streaming.py` | 9.68 | GREEN |
 | `api/app/mcp/token_authorization.py` | 9.12 | GREEN |
 | `web/src/api/http.ts` | 10.0 | GREEN |
