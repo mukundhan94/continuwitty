@@ -414,6 +414,84 @@ def test_dispatch_chat_delete_session_routes_memory_admin_service() -> None:
     assert call_kwargs["payload"].reason == "cleanup"
 
 
+def test_dispatch_chat_pin_engram_alias_routes_chat_service() -> None:
+    service, chat_service, _, _ = _build_service()
+    actor_user_id = uuid4()
+    session_id = uuid4()
+    engram_id = uuid4()
+    chat_service.pin_engram.return_value = _Dumpable(payload={"pin_id": "p1"})
+
+    result = _dispatch_for_user(
+        service,
+        actor_user_id=actor_user_id,
+        method="engram.pin_to_session",
+        params={"session_id": str(session_id), "engram_id": str(engram_id)},
+    )
+
+    assert result == {"pinned": {"pin_id": "p1"}}
+    call_kwargs = chat_service.pin_engram.call_args.kwargs
+    assert call_kwargs["actor_user_id"] == actor_user_id
+    assert call_kwargs["session_id"] == session_id
+    assert call_kwargs["payload"].engram_id == engram_id
+
+
+def test_dispatch_chat_unpin_document_routes_chat_service() -> None:
+    service, chat_service, _, _ = _build_service()
+    actor_user_id = uuid4()
+    session_id = uuid4()
+    document_id = uuid4()
+
+    result = _dispatch_for_user(
+        service,
+        actor_user_id=actor_user_id,
+        method="chat.unpin_document",
+        params={"session_id": str(session_id), "document_id": str(document_id)},
+    )
+
+    assert result == {"removed": True}
+    chat_service.unpin_document.assert_called_once_with(
+        actor_user_id=actor_user_id,
+        session_id=session_id,
+        document_id=document_id,
+    )
+
+
+def test_dispatch_chat_update_lifecycle_policy_routes_chat_service() -> None:
+    service, chat_service, _, _ = _build_service()
+    actor_user_id = uuid4()
+    session_id = uuid4()
+    chat_service.update_lifecycle_policy.return_value = _Dumpable(
+        payload={"autosave_enabled": True}
+    )
+
+    result = _dispatch_for_user(
+        service,
+        actor_user_id=actor_user_id,
+        method="chat.update_lifecycle_policy",
+        params={
+            "session_id": str(session_id),
+            "autosave_enabled": True,
+            "autosave_strategy": "interval",
+            "autosave_interval_minutes": 10,
+            "autosave_min_messages": 2,
+            "retention_days": 30,
+            "retention_max_snapshots": 4,
+        },
+    )
+
+    assert result == {"lifecycle_policy": {"autosave_enabled": True}}
+    call_kwargs = chat_service.update_lifecycle_policy.call_args.kwargs
+    assert call_kwargs["actor_user_id"] == actor_user_id
+    assert call_kwargs["session_id"] == session_id
+    payload = call_kwargs["payload"]
+    assert payload.autosave_enabled is True
+    assert payload.autosave_strategy == "interval"
+    assert payload.autosave_interval_minutes == 10
+    assert payload.autosave_min_messages == 2
+    assert payload.retention_days == 30
+    assert payload.retention_max_snapshots == 4
+
+
 def test_dispatch_engram_collection_add_items_parses_uuid_list_payload() -> None:
     service, _, _, memory_admin_service = _build_service()
     actor_user_id = uuid4()

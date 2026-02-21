@@ -1361,11 +1361,38 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 50 - MCP Chat Dispatch Routing Simplification Phase 1.2 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition for chat dispatch routing:
+  - extracted `_dispatch_chat_pinning_tool(...)` as a centralized method-routing map for:
+    - `chat.list_pinned_engrams`, `chat.pin_engram`, `engram.pin_to_session`, `chat.unpin_engram`
+    - `chat.list_pinned_documents`, `chat.pin_document`, `chat.unpin_document`
+  - extracted `_dispatch_chat_session_query_tool(...)` as a centralized method-routing map for:
+    - `chat.list_sessions`, `chat.get_session`, `chat.get_lifecycle_policy`, `chat.update_lifecycle_policy`
+    - `chat.list_messages`, `chat.list_timeline`
+  - reduced `_dispatch_chat_tool(...)` branch complexity by delegating pinning/session-query routes to dispatch maps
+- [x] Expanded unit tests in `api/tests/test_mcp_service_unit.py`:
+  - alias dispatch path for `engram.pin_to_session` verifies `chat_service.pin_engram(...)` call + payload mapping
+  - `chat.unpin_document` dispatch path verifies `chat_service.unpin_document(...)` call
+  - `chat.update_lifecycle_policy` dispatch path verifies request payload mapping to `ChatLifecyclePolicyUpdateRequest`
+- [x] Validation run:
+  - `uv run pytest tests/test_mcp_service_unit.py -q` (`26 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`293 passed`)
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py` (passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **6.07** (improved from **5.83**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **5.83** | YELLOW |
+| `api/app/mcp/service.py` | **6.07** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
