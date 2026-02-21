@@ -19,19 +19,14 @@ from app.memory_admin import (
     MemoryAdminService,
 )
 from app.models import (
-    AdminEngramDeleteRequest,
     AdminEngramMoveRequest,
     AdminEngramRecord,
     AdminEngramUpdateRequest,
     AdminSessionDeleteRequest,
     ChatMessageCreateRequest,
     EngramCollectionCreateRequest,
-    EngramCollectionDeleteRequest,
-    EngramCollectionItemsUpdateRequest,
     EngramCollectionRecord,
-    EngramCollectionUpdateRequest,
     EngramCreateFromConversationRequest,
-    EngramQueryRequest,
     McpJsonRpcRequest,
     MemoryEngramCreate,
     ProjectCreateRequest,
@@ -62,6 +57,12 @@ from .chat_dispatch import (
     dispatch_chat_pinning_tool,
     dispatch_chat_primary_tool,
     dispatch_chat_session_query_tool,
+)
+from .engram_dispatch import (
+    EngramDispatchContext,
+    EngramDispatchDependencies,
+    dispatch_engram_mutation_tool,
+    dispatch_engram_read_tool,
 )
 from .errors import McpRpcError
 from .streaming import (
@@ -962,61 +963,6 @@ class McpService:
             "used_default_project": used_default_project,
         }
 
-    def _dispatch_engram_collection_mutation_tool(
-        self,
-        *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        collection_mutation_tools = {
-            "engram.collection_update",
-            "engram.collection_delete",
-            "engram.collection_add_items",
-            "engram.collection_remove_items",
-        }
-        if method not in collection_mutation_tools:
-            return None
-
-        collection_id = self._parse_uuid(params, "collection_id")
-        self._require_collection_access(actor=actor, collection_id=collection_id)
-
-        if method == "engram.collection_update":
-            updated_collection = self._memory_admin_service.update_collection(
-                collection_id=collection_id,
-                payload=EngramCollectionUpdateRequest(
-                    name=params.get("name"),
-                    description=params.get("description"),
-                    expected_updated_at=params.get("expected_updated_at"),
-                ),
-            )
-            return {"collection": updated_collection.model_dump(mode="json")}
-
-        if method == "engram.collection_delete":
-            result = self._memory_admin_service.delete_collection(
-                collection_id=collection_id,
-                actor_user_id=actor_user_id,
-                payload=EngramCollectionDeleteRequest(reason=params.get("reason")),
-            )
-            return {"result": result}
-
-        if method == "engram.collection_add_items":
-            result = self._memory_admin_service.add_collection_items(
-                collection_id=collection_id,
-                actor_user_id=actor_user_id,
-                payload=EngramCollectionItemsUpdateRequest(
-                    engram_ids=self._parse_uuid_list(params, "engram_ids")
-                ),
-            )
-            return {"result": result}
-
-        result = self._memory_admin_service.remove_collection_item(
-            collection_id=collection_id,
-            engram_id=self._parse_uuid(params, "engram_id"),
-        )
-        return {"result": result}
-
     def _dispatch_engram_move_project_tool(
         self,
         *,
@@ -1050,124 +996,6 @@ class McpService:
             ),
         )
         return {"engram": moved.model_dump(mode="json")}
-
-    def _dispatch_engram_state_mutation_tool(
-        self,
-        *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        if method not in {"engram.delete", "engram.restore"}:
-            return None
-
-        engram_id = self._parse_uuid(params, "engram_id")
-        self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
-
-        if method == "engram.delete":
-            deleted = self._memory_admin_service.delete_engram(
-                engram_id=engram_id,
-                actor_user_id=actor_user_id,
-                payload=AdminEngramDeleteRequest(reason=params.get("reason")),
-            )
-            return {"result": deleted.model_dump(mode="json")}
-
-        restored = self._memory_admin_service.restore_engram(engram_id=engram_id)
-        return {"result": restored.model_dump(mode="json")}
-
-    def _dispatch_engram_mutation_tool(
-        self,
-        *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        collection_mutation_result = self._dispatch_engram_collection_mutation_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
-        )
-        if collection_mutation_result is not None:
-            return collection_mutation_result
-        return self._dispatch_engram_state_mutation_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
-        )
-
-    def _dispatch_engram_read_tool(
-        self,
-        *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        def _query() -> dict[str, Any]:
-            results = query_engrams(
-                request=EngramQueryRequest(**params),
-                embedding_dim=self._embedding_dim,
-                actor_user_id=actor_user_id,
-            )
-            return {"results": [item.model_dump(mode="json") for item in results]}
-
-        def _rehydrate() -> dict[str, Any]:
-            engram_id = self._parse_uuid(params, "engram_id")
-            bundle = get_rehydration_bundle(engram_id, actor_user_id=actor_user_id)
-            if not bundle:
-                raise McpRpcError(
-                    code=-32004,
-                    message="Engram not found",
-                    data={"engram_id": str(engram_id)},
-                )
-            return {"bundle": bundle.model_dump(mode="json")}
-
-        def _list_engrams() -> dict[str, Any]:
-            session_id_value = params.get("session_id")
-            session_id = (
-                self._parse_uuid({"session_id": session_id_value}, "session_id")
-                if session_id_value is not None
-                else None
-            )
-            listed = self._list_engrams_for_actor(
-                actor=actor,
-                actor_user_id=actor_user_id,
-                session_id=session_id,
-                params=params,
-            )
-            return {"engrams": [item.model_dump(mode="json") for item in listed]}
-
-        def _get_engram() -> dict[str, Any]:
-            engram_id = self._parse_uuid(params, "engram_id")
-            include_deleted = bool(params.get("include_deleted", True))
-            engram = self._require_engram_access(
-                actor=actor,
-                engram_id=engram_id,
-                include_deleted=include_deleted,
-            )
-            return {"engram": engram.model_dump(mode="json")}
-
-        def _list_collections() -> dict[str, Any]:
-            collections = self._list_collections_for_actor(
-                actor=actor,
-                actor_user_id=actor_user_id,
-                params=params,
-            )
-            return {"collections": [item.model_dump(mode="json") for item in collections]}
-
-        handlers = {
-            "engram.query": _query,
-            "engram.rehydrate": _rehydrate,
-            "engram.list": _list_engrams,
-            "engram.get": _get_engram,
-            "engram.collection_list": _list_collections,
-        }
-        handler = handlers.get(method)
-        return handler() if handler else None
 
     def _dispatch_engram_create_tool(
         self,
@@ -1306,20 +1134,35 @@ class McpService:
         if engram_primary_result is not None:
             return engram_primary_result
 
-        engram_read_result = self._dispatch_engram_read_tool(
+        dispatch_context = EngramDispatchContext(
             actor=actor,
             actor_user_id=actor_user_id,
             method=method,
             params=params,
         )
+        dispatch_dependencies = EngramDispatchDependencies(
+            memory_admin_service=self._memory_admin_service,
+            embedding_dim=self._embedding_dim,
+            parse_uuid=self._parse_uuid,
+            parse_uuid_list=self._parse_uuid_list,
+            require_collection_access=self._require_collection_access,
+            require_engram_access=self._require_engram_access,
+            list_engrams_for_actor=self._list_engrams_for_actor,
+            list_collections_for_actor=self._list_collections_for_actor,
+            query_engrams=query_engrams,
+            get_rehydration_bundle=get_rehydration_bundle,
+        )
+
+        engram_read_result = dispatch_engram_read_tool(
+            dependencies=dispatch_dependencies,
+            context=dispatch_context,
+        )
         if engram_read_result is not None:
             return engram_read_result
 
-        mutation_result = self._dispatch_engram_mutation_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
+        mutation_result = dispatch_engram_mutation_tool(
+            dependencies=dispatch_dependencies,
+            context=dispatch_context,
         )
         if mutation_result is not None:
             return mutation_result
