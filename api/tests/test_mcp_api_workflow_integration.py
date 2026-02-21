@@ -4,6 +4,7 @@ import pytest
 
 from app.config import get_settings
 from tests.mcp_api_integration_helpers import (
+    _assert_saved_engram_queryable,
     _create_tools_chat_session,
     _final_result_frame,
     _ingest_project_document,
@@ -11,6 +12,8 @@ from tests.mcp_api_integration_helpers import (
     _login,
     _mcp_frames,
     _pin_document_for_session,
+    _pin_saved_engram_in_new_session,
+    _save_as_engram_without_session,
     _tools_call_structured_content,
 )
 
@@ -375,80 +378,9 @@ def test_mcp_create_from_conversation_preserves_explicit_metadata(client, clean_
 def test_mcp_chat_save_as_engram_without_session_end_to_end(client, clean_db) -> None:
     _login(client)
     project_id = "project-mcp-no-session"
-    structured = _tools_call_structured_content(
-        client,
-        "mcp-save-without-session",
-        {
-            "name": "chat_save_as_engram",
-            "arguments": {
-                "project_id": project_id,
-                "conversation_markdown": (
-                    "## USER\nInvestigate payment latency spike.\n\n"
-                    "## ASSISTANT\nLikely cache stampede and queue saturation; "
-                    "rollback + throttling mitigated impact."
-                ),
-                "title": "MCP no-session snapshot",
-                "abstract": "",
-                "tags": [],
-                "keywords": [],
-                "visibility_scope": "project",
-            },
-        },
-    )
-    engram_id = structured["saved_engram"]["engram_id"]
-    report = structured["enrichment_report"]
-    assert report["enrichment_applied"] is True
-    assert report["abstract_derived"] is True
-
-    session_id = _tools_call_structured_content(
-        client,
-        "mcp-save-no-session-create-chat",
-        {
-            "name": "chat_create_session",
-            "arguments": {
-                "project_id": project_id,
-                "title": "Pin from conversation-only engram",
-                "provider": "openai",
-                "model_id": "gpt-4o-mini",
-                "visibility_scope": "private",
-                "autosave_enabled": False,
-            },
-        },
-    )["session"]["session_id"]
-
-    pinned_engram = _tools_call_structured_content(
-        client,
-        "mcp-save-no-session-pin",
-        {
-            "name": "chat_pin_engram",
-            "arguments": {"session_id": session_id, "engram_id": engram_id},
-        },
-    )["pinned"]["engram_id"]
-    assert pinned_engram == engram_id
-
-    pinned = _tools_call_structured_content(
-        client,
-        "mcp-save-no-session-list-pins",
-        {
-            "name": "chat_list_pinned_engrams",
-            "arguments": {"session_id": session_id},
-        },
-    )["pinned_engrams"]
-    assert any(item["engram_id"] == engram_id for item in pinned)
-
-    results = _tools_call_structured_content(
-        client,
-        "mcp-save-no-session-query",
-        {
-            "name": "engram_query",
-            "arguments": {
-                "query": "cache stampede",
-                "project_id": project_id,
-                "top_k": 5,
-            },
-        },
-    )["results"]
-    assert any(item["engram_id"] == engram_id for item in results)
+    engram_id = _save_as_engram_without_session(client, project_id)
+    _pin_saved_engram_in_new_session(client, project_id, engram_id)
+    _assert_saved_engram_queryable(client, project_id, engram_id)
 
 
 @pytest.mark.integration

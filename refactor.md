@@ -6,6 +6,23 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 **Business case for the worst file (`mcp/service.py`):** Improving from 3.0 to 5.15 (industry average) predicts 24–48% defect reduction and 3–20% development speed improvement (90% confidence interval).
 
+## Phase Completion Status (as of 2026-02-21, Checkpoint 89)
+
+- [x] Phase 1 — `api/app/mcp/service.py` refactor and hardening completed (checkpoints 1, 44-68, 80-84, 87)
+- [x] Phase 2 — `api/app/memory_admin/repository.py` refactor completed (checkpoints 2, 16)
+- [x] Phase 3 — `api/app/chat_repository.py` refactor completed (checkpoints 3, 17, 83)
+- [x] Phase 4 — `api/app/chat/service.py` refactor and follow-up hardening completed (checkpoints 4-5, 85-86)
+- [x] Phase 5 — `api/app/main.py` refactor completed (checkpoints 6, 19)
+- [x] Phase 6 — `api/app/oauth/api.py` refactor/module split completed (checkpoints 7, 18-23)
+- [x] Phase 7 — `api/app/repository.py` refactor completed (checkpoints 8, 21-22)
+- [x] Phase 8 — `api/app/providers/bedrock_provider.py` refactor completed (checkpoint 9)
+- [x] Phase 9 — `api/app/chat/context.py` refactor completed (checkpoint 10)
+- [x] Phase 10 — `web/src/App.tsx` and hook decomposition completed (checkpoints 29-43)
+- [x] Phase 11 — `api/app/ingestion/repository.py` refactor completed (checkpoint 11)
+- [x] Phase 12 — `api/app/engram_enrichment/service.py` refactor completed (checkpoint 12)
+- [x] Phase 13 — Green-zone files promoted and stabilized (checkpoints 13-15)
+- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-89)
+
 ## Execution Checkpoints
 
 ### 2026-02-19 (Checkpoint 1 - MCP Service Phase 1)
@@ -2362,6 +2379,26 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 89 - MCP Workflow Test Large-Method Elimination)
+
+- [x] Continued Phase 14 hardening in MCP workflow integration coverage:
+  - removed the remaining large-method smell in `api/tests/test_mcp_api_workflow_integration.py`
+  - extracted reusable conversation-save and pin/query helper flows into:
+    - `api/tests/mcp_api_integration_helpers.py`
+  - kept workflow end-to-end behavior unchanged while simplifying test orchestration
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`255 passed, 4 skipped, 81 deselected`)
+  - `make test` (`255 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/tests/test_mcp_api_workflow_integration.py` score: **10.0** (improved from **9.59**)
+  - `api/tests/mcp_api_integration_helpers.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2396,7 +2433,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_api_integration.py` | 10.0 | GREEN |
-| `api/tests/test_mcp_api_workflow_integration.py` | 9.59 | GREEN |
+| `api/tests/test_mcp_api_workflow_integration.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_api_token_auth_integration.py` | 10.0 | GREEN |
 | `api/tests/mcp_api_integration_helpers.py` | 10.0 | GREEN |
 | `api/app/mcp/chat_dispatch.py` | 10.0 | GREEN |

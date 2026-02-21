@@ -203,3 +203,85 @@ def _pin_document_for_session(client, session_id: str, document_id: str, request
         },
     )
     assert structured["pinned"]["document_id"] == document_id
+
+
+def _save_as_engram_without_session(client, project_id: str) -> str:  # noqa: ANN001
+    structured = _tools_call_structured_content(
+        client,
+        "mcp-save-without-session",
+        {
+            "name": "chat_save_as_engram",
+            "arguments": {
+                "project_id": project_id,
+                "conversation_markdown": (
+                    "## USER\nInvestigate payment latency spike.\n\n"
+                    "## ASSISTANT\nLikely cache stampede and queue saturation; "
+                    "rollback + throttling mitigated impact."
+                ),
+                "title": "MCP no-session snapshot",
+                "abstract": "",
+                "tags": [],
+                "keywords": [],
+                "visibility_scope": "project",
+            },
+        },
+    )
+    report = structured["enrichment_report"]
+    assert report["enrichment_applied"] is True
+    assert report["abstract_derived"] is True
+    return str(structured["saved_engram"]["engram_id"])
+
+
+def _pin_saved_engram_in_new_session(client, project_id: str, engram_id: str) -> str:  # noqa: ANN001
+    session_id = _tools_call_structured_content(
+        client,
+        "mcp-save-no-session-create-chat",
+        {
+            "name": "chat_create_session",
+            "arguments": {
+                "project_id": project_id,
+                "title": "Pin from conversation-only engram",
+                "provider": "openai",
+                "model_id": "gpt-4o-mini",
+                "visibility_scope": "private",
+                "autosave_enabled": False,
+            },
+        },
+    )["session"]["session_id"]
+
+    pinned_engram = _tools_call_structured_content(
+        client,
+        "mcp-save-no-session-pin",
+        {
+            "name": "chat_pin_engram",
+            "arguments": {"session_id": session_id, "engram_id": engram_id},
+        },
+    )["pinned"]["engram_id"]
+    assert pinned_engram == engram_id
+
+    pinned = _tools_call_structured_content(
+        client,
+        "mcp-save-no-session-list-pins",
+        {
+            "name": "chat_list_pinned_engrams",
+            "arguments": {"session_id": session_id},
+        },
+    )["pinned_engrams"]
+    assert any(item["engram_id"] == engram_id for item in pinned)
+    return str(session_id)
+
+
+def _assert_saved_engram_queryable(client, project_id: str, engram_id: str) -> None:  # noqa: ANN001
+    results = _tools_call_structured_content(
+        client,
+        "mcp-save-no-session-query",
+        {
+            "name": "engram_query",
+            "arguments": {
+                "query": "cache stampede",
+                "project_id": project_id,
+                "top_k": 5,
+            },
+        },
+    )["results"]
+    assert any(item["engram_id"] == engram_id for item in results)
