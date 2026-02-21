@@ -973,6 +973,42 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 36 - Workspace Data Loader Hook Prep Phase 10.1/10.2 Hardening)
+
+- [x] Continued frontend refactor by extracting workspace loading orchestration into a dedicated hook module
+- [x] Added new hook module `web/src/hooks/useWorkspaceDataLoaders.ts` with loader APIs:
+  - `loadDefaultProject(...)`
+  - `loadSessions(...)`
+  - `loadSessionData(...)`
+  - `loadProjectDocuments(...)`
+  - `refreshFromSession(...)`
+- [x] Structured hook internals as small focused callback builders to keep CodeScene health above threshold:
+  - `useDefaultProjectLoader(...)`
+  - `useSessionsLoader(...)`
+  - `useSessionDataLoader(...)`
+  - `useProjectDocumentsLoader(...)`
+  - `useSessionRefreshLoader(...)`
+- [x] Added direct hook tests in `web/src/hooks/useWorkspaceDataLoaders.test.ts`:
+  - default project loading + empty-project backfill
+  - session list loading + preferred session selection
+  - session data/timeline hydration
+  - project document loading + refresh-from-session delegation
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/hooks/useWorkspaceDataLoaders.test.ts src/hooks/useAuthActions.test.ts src/hooks/useWorkspaceActions.test.ts src/hooks/useSessionActions.test.ts`
+  - `make test`
+  - `make web-check`
+  - aggregate: `17 passed` (targeted web), `274 passed` (backend), `97 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/App.tsx` score: **10.0**
+  - `web/src/hooks/useWorkspaceDataLoaders.ts` score: **10.0**
+  - `web/src/hooks/useWorkspaceDataLoaders.test.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -1012,6 +1048,8 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `web/src/hooks/useWorkspaceActions.test.ts` | 10.0 | GREEN |
 | `web/src/hooks/useAuthActions.ts` | 10.0 | GREEN |
 | `web/src/hooks/useAuthActions.test.ts` | 10.0 | GREEN |
+| `web/src/hooks/useWorkspaceDataLoaders.ts` | 10.0 | GREEN |
+| `web/src/hooks/useWorkspaceDataLoaders.test.ts` | 10.0 | GREEN |
 | `web/src/components/SessionSidebar.test.tsx` | 10.0 | GREEN |
 | `web/src/App.tsx` | 10.0 | GREEN |
 | `api/app/chat/context.py` | 10.0 | GREEN |
