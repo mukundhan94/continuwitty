@@ -36,6 +36,7 @@ import { useThemeMode } from './styles/useThemeMode'
 import { useAuthActions } from './hooks/useAuthActions'
 import { useIngestionActions, usePinActions, usePromptActions } from './hooks/useChatActions'
 import { useAdminTokenActions } from './hooks/useAdminTokenActions'
+import { useWorkspaceReset } from './hooks/useWorkspaceReset'
 import { useSessionActions } from './hooks/useSessionActions'
 import { useWorkspaceDataLoaders } from './hooks/useWorkspaceDataLoaders'
 import { useWorkspaceLifecycle } from './hooks/useWorkspaceLifecycle'
@@ -204,23 +205,23 @@ function AppScreen() {
     loadSessionData,
   })
 
-  const resetWorkspaceState = () => {
-    setUser(null)
-    setSessions([])
-    setSelectedSessionId(null)
-    setDefaultProjectId(null)
-    setMessages([])
-    setPinnedEngrams([])
-    setPinnedDocuments([])
-    setAvailableEngrams([])
-    setSourceReferences([])
-    setDocuments([])
-    setDocumentsError(null)
-    setTimelineEvents([])
-    setNotice(null)
-    setAuthError(null)
-    resetAdminTokenState()
-  }
+  const resetWorkspaceState = useWorkspaceReset({
+    setUser,
+    setSessions,
+    setSelectedSessionId,
+    setDefaultProjectId,
+    setMessages,
+    setPinnedEngrams,
+    setPinnedDocuments,
+    setAvailableEngrams,
+    setSourceReferences,
+    setDocuments,
+    setDocumentsError,
+    setTimelineEvents,
+    setNotice,
+    setAuthError,
+    resetAdminTokenState,
+  })
 
   const { handleLogin, handleLogout } = useAuthActions({
     projectId,

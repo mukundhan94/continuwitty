@@ -1075,6 +1075,34 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 39 - Workspace Reset Hook Extraction Phase 10.1/10.2 Hardening)
+
+- [x] Continued App refactor by extracting workspace-reset orchestration from `web/src/App.tsx`
+- [x] Added new hook module `web/src/hooks/useWorkspaceReset.ts`:
+  - encapsulates deterministic logout/reset state clearing for workspace/session data
+  - keeps admin token reset path centralized via `resetAdminTokenState(...)`
+- [x] Updated `web/src/App.tsx`:
+  - replaced inline `resetWorkspaceState` function with `useWorkspaceReset(...)`
+  - preserved existing reset behavior used by `useAuthActions(...)`
+- [x] Added direct hook tests in `web/src/hooks/useWorkspaceReset.test.ts`:
+  - verifies full workspace state clear and admin-token reset invocation
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/hooks/useWorkspaceReset.test.ts src/hooks/useAuthActions.test.ts src/hooks/useWorkspaceLifecycle.test.ts src/hooks/useWorkspaceDataLoaders.test.ts`
+  - `make web-check`
+  - aggregate: `15 passed` (targeted web), `104 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/App.tsx` score: **10.0**
+  - `web/src/hooks/useWorkspaceReset.ts` score: **10.0**
+  - `web/src/hooks/useWorkspaceReset.test.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+- [x] Full backend suite attempted via `make test` before commit:
+  - currently failing in local environment with 6 unrelated failures (`test_ui_auth`/`test_api_integration` login 401s and `test_eval_harness` DB connection refusal)
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
