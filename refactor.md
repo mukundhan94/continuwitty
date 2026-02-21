@@ -1663,6 +1663,28 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 62 - MCP Chat Dispatch Module Split Phase 1.2 Hardening)
+
+- [x] Continued module decomposition by extracting chat tool dispatch logic to new `api/app/mcp/chat_dispatch.py`:
+  - moved chat pin/unpin routes into `dispatch_chat_pinning_tool(...)`
+  - moved chat session query/timeline/lifecycle query routes into `dispatch_chat_session_query_tool(...)`
+  - moved chat primary routes (`create_session`, `send_message`, `list_project_documents`, `save_as_engram`, `continue_session`) into `dispatch_chat_primary_tool(...)`
+  - updated `McpService._dispatch_chat_tool(...)` to delegate to extracted module functions
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py app/mcp/chat_dispatch.py app/mcp/streaming.py tests/test_mcp_service_unit.py tests/test_mcp_service_stream_unit.py tests/test_mcp_service_engram_dispatch_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_service_stream_unit.py tests/test_mcp_service_engram_dispatch_unit.py -q` (`48 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`315 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **9.09** (stable; lines reduced to ~1577, residual low-cohesion + excess-args smells remain)
+  - `api/app/mcp/chat_dispatch.py` score: **9.68**
+  - `api/app/mcp/streaming.py` score: **9.68**
+  - `api/tests/test_mcp_service_stream_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -1686,6 +1708,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_oauth_repository.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |
+| `api/app/mcp/chat_dispatch.py` | 9.68 | GREEN |
 | `api/app/mcp/streaming.py` | 9.68 | GREEN |
 | `web/src/api/http.ts` | 10.0 | GREEN |
 | `web/src/api/http.test.ts` | 10.0 | GREEN |

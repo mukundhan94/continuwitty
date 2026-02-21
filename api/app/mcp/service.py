@@ -24,10 +24,7 @@ from app.models import (
     AdminEngramRecord,
     AdminEngramUpdateRequest,
     AdminSessionDeleteRequest,
-    ChatLifecyclePolicyUpdateRequest,
     ChatMessageCreateRequest,
-    ChatSessionCreateRequest,
-    ContinueSessionRequest,
     EngramCollectionCreateRequest,
     EngramCollectionDeleteRequest,
     EngramCollectionItemsUpdateRequest,
@@ -37,8 +34,6 @@ from app.models import (
     EngramQueryRequest,
     McpJsonRpcRequest,
     MemoryEngramCreate,
-    PinDocumentRequest,
-    PinEngramRequest,
     ProjectCreateRequest,
     SaveSessionAsEngramRequest,
 )
@@ -62,6 +57,11 @@ from .catalog import (
     _to_dotted_tool_name,
     _to_public_tool_name,
     build_tool_catalog,
+)
+from .chat_dispatch import (
+    dispatch_chat_pinning_tool,
+    dispatch_chat_primary_tool,
+    dispatch_chat_session_query_tool,
 )
 from .errors import McpRpcError
 from .streaming import (
@@ -877,202 +877,6 @@ class McpService:
 
         return None
 
-    def _dispatch_chat_pinning_tool(
-        self,
-        *,
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        normalized_method = "chat.pin_engram" if method == "engram.pin_to_session" else method
-
-        def _list_pinned_engrams() -> dict[str, Any]:
-            pinned = self._chat_service.list_pinned_engrams(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-            )
-            return {"pinned_engrams": [item.model_dump(mode="json") for item in pinned]}
-
-        def _pin_engram() -> dict[str, Any]:
-            pinned = self._chat_service.pin_engram(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                payload=PinEngramRequest(engram_id=self._parse_uuid(params, "engram_id")),
-            )
-            return {"pinned": pinned.model_dump(mode="json")}
-
-        def _unpin_engram() -> dict[str, Any]:
-            self._chat_service.unpin_engram(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                engram_id=self._parse_uuid(params, "engram_id"),
-            )
-            return {"removed": True}
-
-        def _list_pinned_documents() -> dict[str, Any]:
-            pinned = self._chat_service.list_pinned_documents(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-            )
-            return {"pinned_documents": [item.model_dump(mode="json") for item in pinned]}
-
-        def _pin_document() -> dict[str, Any]:
-            pinned = self._chat_service.pin_document(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                payload=PinDocumentRequest(document_id=self._parse_uuid(params, "document_id")),
-            )
-            return {"pinned": pinned.model_dump(mode="json")}
-
-        def _unpin_document() -> dict[str, Any]:
-            self._chat_service.unpin_document(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                document_id=self._parse_uuid(params, "document_id"),
-            )
-            return {"removed": True}
-
-        handlers = {
-            "chat.list_pinned_engrams": _list_pinned_engrams,
-            "chat.pin_engram": _pin_engram,
-            "chat.unpin_engram": _unpin_engram,
-            "chat.list_pinned_documents": _list_pinned_documents,
-            "chat.pin_document": _pin_document,
-            "chat.unpin_document": _unpin_document,
-        }
-        handler = handlers.get(normalized_method)
-        return handler() if handler else None
-
-    def _dispatch_chat_session_query_tool(
-        self,
-        *,
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        def _list_sessions() -> dict[str, Any]:
-            sessions = self._chat_service.list_sessions(
-                actor_user_id=actor_user_id,
-                project_id=params.get("project_id"),
-                limit=int(params.get("limit", 50)),
-                offset=int(params.get("offset", 0)),
-            )
-            return {"sessions": [item.model_dump(mode="json") for item in sessions]}
-
-        def _get_session() -> dict[str, Any]:
-            session = self._chat_service.get_session(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-            )
-            return {"session": session.model_dump(mode="json")}
-
-        def _get_lifecycle_policy() -> dict[str, Any]:
-            policy = self._chat_service.get_lifecycle_policy(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-            )
-            return {"lifecycle_policy": policy.model_dump(mode="json")}
-
-        def _update_lifecycle_policy() -> dict[str, Any]:
-            policy = self._chat_service.update_lifecycle_policy(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                payload=ChatLifecyclePolicyUpdateRequest(
-                    autosave_enabled=params.get("autosave_enabled"),
-                    autosave_strategy=params.get("autosave_strategy"),
-                    autosave_interval_minutes=params.get("autosave_interval_minutes"),
-                    autosave_min_messages=params.get("autosave_min_messages"),
-                    retention_days=params.get("retention_days"),
-                    retention_max_snapshots=params.get("retention_max_snapshots"),
-                ),
-            )
-            return {"lifecycle_policy": policy.model_dump(mode="json")}
-
-        def _list_messages() -> dict[str, Any]:
-            messages = self._chat_service.list_messages(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                limit=int(params.get("limit", 200)),
-                offset=int(params.get("offset", 0)),
-            )
-            return {"messages": [item.model_dump(mode="json") for item in messages]}
-
-        def _list_timeline() -> dict[str, Any]:
-            events = self._chat_service.list_timeline_events(
-                actor_user_id=actor_user_id,
-                session_id=self._parse_uuid(params, "session_id"),
-                limit=int(params.get("limit", 100)),
-                offset=int(params.get("offset", 0)),
-            )
-            return {"events": [item.model_dump(mode="json") for item in events]}
-
-        handlers = {
-            "chat.list_sessions": _list_sessions,
-            "chat.get_session": _get_session,
-            "chat.get_lifecycle_policy": _get_lifecycle_policy,
-            "chat.update_lifecycle_policy": _update_lifecycle_policy,
-            "chat.list_messages": _list_messages,
-            "chat.list_timeline": _list_timeline,
-        }
-        handler = handlers.get(method)
-        return handler() if handler else None
-
-    def _dispatch_chat_primary_tool(
-        self,
-        *,
-        actor_user_id: UUID,
-        actor_role: str,
-        method: str,
-        params: dict[str, Any],
-        token_auth: McpTokenAuthContext | None,
-    ) -> dict[str, Any] | None:
-        def _list_project_documents() -> dict[str, Any]:
-            if self._ingestion_service is None:
-                raise McpRpcError(
-                    code=-32000,
-                    message="Ingestion service unavailable for MCP tool",
-                    data={"method": method},
-                )
-            documents = self._ingestion_service.list_documents(
-                actor_user_id=actor_user_id,
-                project_id=params.get("project_id"),
-                limit=int(params.get("limit", 200)),
-                offset=int(params.get("offset", 0)),
-            )
-            return {"documents": [item.model_dump(mode="json") for item in documents]}
-
-        handlers = {
-            "chat.create_session": lambda: {
-                "session": self._chat_service.create_session(
-                    actor_user_id=actor_user_id,
-                    payload=ChatSessionCreateRequest(**params),
-                ).model_dump(mode="json")
-            },
-            "chat.send_message": lambda: {
-                "message": self._chat_service.send_message(
-                    actor_user_id=actor_user_id,
-                    session_id=self._parse_uuid(params, "session_id"),
-                    payload=ChatMessageCreateRequest(content_text=params.get("content_text", "")),
-                ).model_dump(mode="json")
-            },
-            "chat.list_project_documents": _list_project_documents,
-            "chat.save_as_engram": lambda: self._dispatch_chat_save_as_engram_tool(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                params=params,
-                token_auth=token_auth,
-            ),
-            "chat.continue_session": lambda: {
-                "continuation": self._chat_service.continue_session(
-                    actor_user_id=actor_user_id,
-                    session_id=self._parse_uuid(params, "session_id"),
-                    payload=ContinueSessionRequest(title=params.get("title")),
-                ).model_dump(mode="json")
-            },
-        }
-        handler = handlers.get(method)
-        return handler() if handler else None
-
     def _dispatch_chat_tool(
         self,
         *,
@@ -1084,28 +888,36 @@ class McpService:
     ) -> dict[str, Any] | None:
         actor_role = str(actor.get("role", ""))
 
-        chat_session_query_result = self._dispatch_chat_session_query_tool(
+        chat_session_query_result = dispatch_chat_session_query_tool(
+            chat_service=self._chat_service,
             actor_user_id=actor_user_id,
             method=method,
             params=params,
+            parse_uuid=self._parse_uuid,
         )
         if chat_session_query_result is not None:
             return chat_session_query_result
 
-        chat_pinning_result = self._dispatch_chat_pinning_tool(
+        chat_pinning_result = dispatch_chat_pinning_tool(
+            chat_service=self._chat_service,
             actor_user_id=actor_user_id,
             method=method,
             params=params,
+            parse_uuid=self._parse_uuid,
         )
         if chat_pinning_result is not None:
             return chat_pinning_result
 
-        chat_primary_result = self._dispatch_chat_primary_tool(
+        chat_primary_result = dispatch_chat_primary_tool(
+            chat_service=self._chat_service,
+            ingestion_service=self._ingestion_service,
             actor_user_id=actor_user_id,
             actor_role=actor_role,
             method=method,
             params=params,
             token_auth=token_auth,
+            parse_uuid=self._parse_uuid,
+            dispatch_chat_save_as_engram_tool=self._dispatch_chat_save_as_engram_tool,
         )
         if chat_primary_result is not None:
             return chat_primary_result
