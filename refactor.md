@@ -1587,11 +1587,37 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 59 - MCP Project Resolution and Catalog Flattening Phase 1.4/1.5 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition in project resolution and catalog visibility flows:
+  - added `_single_allowed_token_project_id(...)` and `_resolve_project_input_for_write(...)`
+  - simplified `_resolve_project_for_write(...)` by delegating explicit/token/default project-input decision logic
+  - added `_public_tool_catalog_entry(...)` and `_visible_tool_catalog_entry(...)`
+  - flattened `_visible_tool_catalog(...)` loop into helper-filtered append flow
+- [x] Expanded `api/tests/test_mcp_service_unit.py`:
+  - added `test_resolve_project_for_write_uses_single_token_project_when_explicit_missing`
+  - added `test_resolve_project_for_write_rejects_multiple_token_projects_without_explicit`
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py tests/test_mcp_service_stream_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py tests/test_mcp_service_stream_unit.py -q` (`47 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`314 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **8.28** (improved from **8.15**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `api/tests/test_mcp_service_stream_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+  - fixed in change-set: `_resolve_project_for_write` Complex Method + Complex Conditional, `_visible_tool_catalog` Bumpy Road
+  - introduced in change-set: module function-count threshold exceeded (`77 > 75`) but quality gate remained pass
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **8.15** | YELLOW |
+| `api/app/mcp/service.py` | **8.28** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |

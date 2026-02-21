@@ -361,6 +361,52 @@ def test_project_id_for_tool_resolves_project_from_input_params(
     assert resolved == expected_project_id
 
 
+def test_resolve_project_for_write_uses_single_token_project_when_explicit_missing() -> None:
+    service, _, project_service, _ = _build_service()
+    actor_user_id = uuid4()
+    token_auth = _token_auth(allowed_project_ids={"project-token"})
+    project_service.resolve_project_id_for_write.return_value = SimpleNamespace(
+        project_id="project-token",
+        used_default_project=False,
+    )
+
+    resolved_project_id, used_default_project = service._resolve_project_for_write(
+        actor_user_id=actor_user_id,
+        actor_role="user",
+        requested_project_id=None,
+        token_auth=token_auth,
+    )
+
+    assert resolved_project_id == "project-token"
+    assert used_default_project is False
+    project_service.resolve_project_id_for_write.assert_called_once_with(
+        actor_user_id=actor_user_id,
+        actor_role="user",
+        project_id="project-token",
+    )
+
+
+def test_resolve_project_for_write_rejects_multiple_token_projects_without_explicit() -> None:
+    service, _, project_service, _ = _build_service()
+    actor_user_id = uuid4()
+    token_auth = _token_auth(allowed_project_ids={"project-a", "project-b"})
+
+    with pytest.raises(McpRpcError) as exc_info:
+        service._resolve_project_for_write(
+            actor_user_id=actor_user_id,
+            actor_role="user",
+            requested_project_id=None,
+            token_auth=token_auth,
+        )
+
+    assert exc_info.value.code == -32602
+    assert exc_info.value.data == {
+        "missing": "project_id",
+        "reason": "token_has_multiple_allowed_projects",
+    }
+    project_service.resolve_project_id_for_write.assert_not_called()
+
+
 def test_project_id_for_tool_uses_session_project_for_save_as_engram() -> None:
     service, chat_service, _, _ = _build_service()
     actor_user_id = uuid4()

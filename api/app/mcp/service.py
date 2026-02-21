@@ -216,6 +216,32 @@ class McpService:
         normalized = (value or "").strip()
         return normalized or None
 
+    @staticmethod
+    def _single_allowed_token_project_id(token_auth: McpTokenAuthContext | None) -> str | None:
+        if token_auth is None or not token_auth.allowed_project_ids:
+            return None
+        if len(token_auth.allowed_project_ids) > 1:
+            raise McpRpcError(
+                code=-32602,
+                message="Invalid params",
+                data={"missing": "project_id", "reason": "token_has_multiple_allowed_projects"},
+            )
+        return next(iter(token_auth.allowed_project_ids))
+
+    def _resolve_project_input_for_write(
+        self,
+        *,
+        requested_project_id: str | None,
+        token_auth: McpTokenAuthContext | None,
+    ) -> tuple[str | None, bool]:
+        explicit_project_id = self._normalize_project_id(requested_project_id)
+        if explicit_project_id is not None:
+            return explicit_project_id, False
+        token_project_id = self._single_allowed_token_project_id(token_auth)
+        if token_project_id is not None:
+            return token_project_id, False
+        return None, True
+
     def _require_owner_or_admin(
         self,
         *,
@@ -250,20 +276,10 @@ class McpService:
         2) single allowed project from MCP token policy
         3) user default project from project settings
         """
-        explicit_project_id = self._normalize_project_id(requested_project_id)
-        resolved_project_input = explicit_project_id
-        used_default_project = False
-
-        if not explicit_project_id and token_auth and token_auth.allowed_project_ids:
-            if len(token_auth.allowed_project_ids) > 1:
-                raise McpRpcError(
-                    code=-32602,
-                    message="Invalid params",
-                    data={"missing": "project_id", "reason": "token_has_multiple_allowed_projects"},
-                )
-            resolved_project_input = next(iter(token_auth.allowed_project_ids))
-        elif not explicit_project_id:
-            used_default_project = True
+        resolved_project_input, used_default_project = self._resolve_project_input_for_write(
+            requested_project_id=requested_project_id,
+            token_auth=token_auth,
+        )
 
         try:
             resolution = self._project_service.resolve_project_id_for_write(
@@ -372,30 +388,47 @@ class McpService:
             return True
         return canonical_tool in allowed_canonical
 
+    @staticmethod
+    def _public_tool_catalog_entry(item: dict[str, Any]) -> dict[str, Any]:
+        return {**item, "name": _to_public_tool_name(item["name"])}
+
+    def _visible_tool_catalog_entry(
+        self,
+        *,
+        item: dict[str, Any],
+        token_scope: str,
+        allowed_tools: set[str] | None,
+        allowed_canonical: set[str],
+    ) -> dict[str, Any] | None:
+        canonical_name = item["name"]
+        required_scope = self._required_scope_for_tool(canonical_name)
+        if token_scope == "read" and required_scope == "write":
+            return None
+        if not self._is_tool_allowed_by_token_policy(
+            canonical_tool=canonical_name,
+            allowed_tools=allowed_tools,
+            allowed_canonical=allowed_canonical,
+        ):
+            return None
+        return self._public_tool_catalog_entry(item)
+
     def _visible_tool_catalog(self, token_auth: McpTokenAuthContext | None) -> list[dict[str, Any]]:
         if token_auth is None:
-            return [
-                {**item, "name": _to_public_tool_name(item["name"])}
-                for item in self._tool_catalog()
-            ]
+            return [self._public_tool_catalog_entry(item) for item in self._tool_catalog()]
 
         allowed_tools = token_auth.allowed_tools
         allowed_canonical = self._allowed_canonical_tools(allowed_tools)
 
         visible: list[dict[str, Any]] = []
         for item in self._tool_catalog():
-            canonical_name = item["name"]
-            public_name = _to_public_tool_name(canonical_name)
-            required_scope = self._required_scope_for_tool(canonical_name)
-            if token_auth.scope == "read" and required_scope == "write":
-                continue
-            if not self._is_tool_allowed_by_token_policy(
-                canonical_tool=canonical_name,
+            entry = self._visible_tool_catalog_entry(
+                item=item,
+                token_scope=token_auth.scope,
                 allowed_tools=allowed_tools,
                 allowed_canonical=allowed_canonical,
-            ):
-                continue
-            visible.append({**item, "name": public_name})
+            )
+            if entry is not None:
+                visible.append(entry)
         return visible
 
     def _resolve_project_from_session(self, *, session_id: UUID) -> str | None:
