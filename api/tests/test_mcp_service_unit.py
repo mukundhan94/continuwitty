@@ -22,6 +22,20 @@ class _Dumpable:
 
 
 def _build_service() -> tuple[McpService, MagicMock, MagicMock, MagicMock]:
+    return _build_service_core(ingestion_service=None)
+
+
+def _build_service_with_ingestion() -> tuple[McpService, MagicMock, MagicMock, MagicMock, MagicMock]:
+    ingestion_service = MagicMock()
+    service, chat_service, project_service, memory_admin_service = _build_service_core(
+        ingestion_service=ingestion_service
+    )
+    return service, chat_service, project_service, memory_admin_service, ingestion_service
+
+
+def _build_service_core(
+    *, ingestion_service: MagicMock | None
+) -> tuple[McpService, MagicMock, MagicMock, MagicMock]:
     chat_service = MagicMock()
     project_service = MagicMock()
     memory_admin_service = MagicMock()
@@ -29,6 +43,7 @@ def _build_service() -> tuple[McpService, MagicMock, MagicMock, MagicMock]:
         chat_service=chat_service,
         project_service=project_service,
         memory_admin_service=memory_admin_service,
+        ingestion_service=ingestion_service,
         embedding_dim=1536,
     )
     return service, chat_service, project_service, memory_admin_service
@@ -414,25 +429,51 @@ def test_dispatch_chat_delete_session_routes_memory_admin_service() -> None:
     assert call_kwargs["payload"].reason == "cleanup"
 
 
-def test_dispatch_chat_pin_engram_alias_routes_chat_service() -> None:
+@pytest.mark.parametrize(
+    "case",
+    [
+        {
+            "method": "engram.pin_to_session",
+            "chat_method": "pin_engram",
+            "result_key": "pinned",
+            "payload_attr": "engram_id",
+            "input_key": "engram_id",
+        },
+        {
+            "method": "chat.continue_session",
+            "chat_method": "continue_session",
+            "result_key": "continuation",
+            "payload_attr": "title",
+            "input_key": "title",
+        },
+    ],
+)
+def test_dispatch_chat_routes_pin_alias_and_continue_session(case: dict[str, str]) -> None:
     service, chat_service, _, _ = _build_service()
     actor_user_id = uuid4()
     session_id = uuid4()
-    engram_id = uuid4()
-    chat_service.pin_engram.return_value = _Dumpable(payload={"pin_id": "p1"})
+    input_key = case["input_key"]
+    extra_value: str = str(uuid4()) if input_key == "engram_id" else "Resume thread"
+    built_params = {"session_id": str(session_id), input_key: extra_value}
+    chat_method_mock = getattr(chat_service, case["chat_method"])
+    chat_method_mock.return_value = _Dumpable(payload={"ok": True})
 
     result = _dispatch_for_user(
         service,
         actor_user_id=actor_user_id,
-        method="engram.pin_to_session",
-        params={"session_id": str(session_id), "engram_id": str(engram_id)},
+        method=case["method"],
+        params=built_params,
     )
 
-    assert result == {"pinned": {"pin_id": "p1"}}
-    call_kwargs = chat_service.pin_engram.call_args.kwargs
+    assert result == {case["result_key"]: {"ok": True}}
+    call_kwargs = chat_method_mock.call_args.kwargs
     assert call_kwargs["actor_user_id"] == actor_user_id
     assert call_kwargs["session_id"] == session_id
-    assert call_kwargs["payload"].engram_id == engram_id
+    payload_value = getattr(call_kwargs["payload"], case["payload_attr"])
+    if input_key == "engram_id":
+        assert str(payload_value) == extra_value
+    else:
+        assert payload_value == extra_value
 
 
 def test_dispatch_chat_unpin_document_routes_chat_service() -> None:
@@ -490,6 +531,43 @@ def test_dispatch_chat_update_lifecycle_policy_routes_chat_service() -> None:
     assert payload.autosave_min_messages == 2
     assert payload.retention_days == 30
     assert payload.retention_max_snapshots == 4
+
+
+def test_dispatch_chat_list_project_documents_requires_ingestion_service() -> None:
+    service, _, _, _ = _build_service()
+    actor_user_id = uuid4()
+
+    with pytest.raises(McpRpcError) as exc_info:
+        _dispatch_for_user(
+            service,
+            actor_user_id=actor_user_id,
+            method="chat.list_project_documents",
+            params={},
+        )
+
+    assert exc_info.value.code == -32000
+    assert exc_info.value.data == {"method": "chat.list_project_documents"}
+
+
+def test_dispatch_chat_list_project_documents_routes_ingestion_service() -> None:
+    service, _, _, _, ingestion_service = _build_service_with_ingestion()
+    actor_user_id = uuid4()
+    ingestion_service.list_documents.return_value = [_Dumpable(payload={"document_id": "d1"})]
+
+    result = _dispatch_for_user(
+        service,
+        actor_user_id=actor_user_id,
+        method="chat.list_project_documents",
+        params={"project_id": "project-alpha", "limit": 10, "offset": 5},
+    )
+
+    assert result == {"documents": [{"document_id": "d1"}]}
+    ingestion_service.list_documents.assert_called_once_with(
+        actor_user_id=actor_user_id,
+        project_id="project-alpha",
+        limit=10,
+        offset=5,
+    )
 
 
 def test_dispatch_engram_collection_add_items_parses_uuid_list_payload() -> None:

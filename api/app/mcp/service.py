@@ -968,31 +968,21 @@ class McpService:
         handler = handlers.get(method)
         return handler() if handler else None
 
-    def _dispatch_chat_tool(
+    def _dispatch_chat_primary_tool(
         self,
         *,
-        actor: dict[str, Any],
         actor_user_id: UUID,
+        actor_role: str,
         method: str,
         params: dict[str, Any],
         token_auth: McpTokenAuthContext | None,
     ) -> dict[str, Any] | None:
-        actor_role = str(actor.get("role", ""))
-
         if method == "chat.create_session":
             created = self._chat_service.create_session(
                 actor_user_id=actor_user_id,
                 payload=ChatSessionCreateRequest(**params),
             )
             return {"session": created.model_dump(mode="json")}
-
-        chat_session_query_result = self._dispatch_chat_session_query_tool(
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
-        )
-        if chat_session_query_result is not None:
-            return chat_session_query_result
 
         if method == "chat.send_message":
             message = self._chat_service.send_message(
@@ -1001,14 +991,6 @@ class McpService:
                 payload=ChatMessageCreateRequest(content_text=params.get("content_text", "")),
             )
             return {"message": message.model_dump(mode="json")}
-
-        chat_pinning_result = self._dispatch_chat_pinning_tool(
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
-        )
-        if chat_pinning_result is not None:
-            return chat_pinning_result
 
         if method == "chat.list_project_documents":
             if self._ingestion_service is None:
@@ -1040,6 +1022,45 @@ class McpService:
                 payload=ContinueSessionRequest(title=params.get("title")),
             )
             return {"continuation": continued.model_dump(mode="json")}
+
+        return None
+
+    def _dispatch_chat_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> dict[str, Any] | None:
+        actor_role = str(actor.get("role", ""))
+
+        chat_session_query_result = self._dispatch_chat_session_query_tool(
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+        )
+        if chat_session_query_result is not None:
+            return chat_session_query_result
+
+        chat_pinning_result = self._dispatch_chat_pinning_tool(
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+        )
+        if chat_pinning_result is not None:
+            return chat_pinning_result
+
+        chat_primary_result = self._dispatch_chat_primary_tool(
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            method=method,
+            params=params,
+            token_auth=token_auth,
+        )
+        if chat_primary_result is not None:
+            return chat_primary_result
 
         session_lifecycle_result = self._dispatch_chat_session_lifecycle_tool(
             actor=actor,

@@ -1388,11 +1388,42 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 51 - MCP Chat Primary Dispatch Extraction Phase 1.2 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition by extracting remaining chat primary branches:
+  - added `_dispatch_chat_primary_tool(...)` for:
+    - `chat.create_session`
+    - `chat.send_message`
+    - `chat.list_project_documents`
+    - `chat.save_as_engram`
+    - `chat.continue_session`
+  - reduced `_dispatch_chat_tool(...)` to orchestrate:
+    - session-query helper
+    - pinning helper
+    - primary helper
+    - session lifecycle helper
+- [x] Expanded unit tests in `api/tests/test_mcp_service_unit.py`:
+  - `chat.continue_session` dispatch path verifies request payload mapping
+  - `chat.list_project_documents` error path when ingestion service is unavailable
+  - `chat.list_project_documents` success path with ingestion service wiring
+- [x] Validation run:
+  - `uv run pytest tests/test_mcp_service_unit.py -q` (`29 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`296 passed`)
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py` (passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **6.17** (improved from **6.07**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **6.07** | YELLOW |
+| `api/app/mcp/service.py` | **6.17** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
