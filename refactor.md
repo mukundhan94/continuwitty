@@ -1486,11 +1486,33 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 55 - MCP Engram Mutation Dispatch Split Phase 1.2 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition by extracting `_dispatch_engram_mutation_tool(...)`:
+  - centralized mutation-route orchestration across `_dispatch_engram_collection_mutation_tool(...)` and `_dispatch_engram_state_mutation_tool(...)`
+  - simplified `_dispatch_engram_tool(...)` to delegate read + mutation branches through explicit helper boundaries
+- [x] Split engram dispatch test coverage for maintainability:
+  - moved focused engram dispatch tests from `api/tests/test_mcp_service_unit.py` to new `api/tests/test_mcp_service_engram_dispatch_unit.py`
+  - retained `engram.move_project` mutation mapping assertion in `api/tests/test_mcp_service_unit.py`
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py -q` (`34 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`301 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **6.74** (improved from **6.68**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `api/tests/test_mcp_service_engram_dispatch_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **6.68** | YELLOW |
+| `api/app/mcp/service.py` | **6.74** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
@@ -1507,6 +1529,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_user_repository.py` | 10.0 | GREEN |
 | `api/tests/test_db.py` | 10.0 | GREEN |
 | `api/tests/test_oauth_repository.py` | 10.0 | GREEN |
+| `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
 | `web/src/api/http.ts` | 10.0 | GREEN |
 | `web/src/api/http.test.ts` | 10.0 | GREEN |
 | `web/src/api/chat.test.ts` | 10.0 | GREEN |

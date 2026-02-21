@@ -1219,6 +1219,29 @@ class McpService:
         restored = self._memory_admin_service.restore_engram(engram_id=engram_id)
         return {"result": restored.model_dump(mode="json")}
 
+    def _dispatch_engram_mutation_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        collection_mutation_result = self._dispatch_engram_collection_mutation_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+        )
+        if collection_mutation_result is not None:
+            return collection_mutation_result
+        return self._dispatch_engram_state_mutation_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+        )
+
     def _dispatch_engram_read_tool(
         self,
         *,
@@ -1403,23 +1426,14 @@ class McpService:
         if engram_read_result is not None:
             return engram_read_result
 
-        collection_mutation_result = self._dispatch_engram_collection_mutation_tool(
+        mutation_result = self._dispatch_engram_mutation_tool(
             actor=actor,
             actor_user_id=actor_user_id,
             method=method,
             params=params,
         )
-        if collection_mutation_result is not None:
-            return collection_mutation_result
-
-        state_mutation_result = self._dispatch_engram_state_mutation_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
-        )
-        if state_mutation_result is not None:
-            return state_mutation_result
+        if mutation_result is not None:
+            return mutation_result
 
         return None
 
