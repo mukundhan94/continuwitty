@@ -52,6 +52,8 @@ from .service_stream import (
     _StreamChatSendMessageRequest,
 )
 from .token_authorization import (
+    EnforceTokenAuthorizationRequest,
+    ResolveProjectForWriteRequest,
     TokenAuthorizationDependencies,
     enforce_token_authorization,
     project_id_for_tool,
@@ -186,10 +188,12 @@ class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
         """
         return resolve_project_for_write(
             dependencies=self._authorization_dependencies(),
-            actor_user_id=actor_user_id,
-            actor_role=actor_role,
-            requested_project_id=requested_project_id,
-            token_auth=token_auth,
+            request=ResolveProjectForWriteRequest(
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                requested_project_id=requested_project_id,
+                token_auth=token_auth,
+            ),
         )
 
     def _create_engram_payload_with_project_resolution(
@@ -283,10 +287,12 @@ class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
     ) -> dict[str, Any]:
         return enforce_token_authorization(
             dependencies=self._authorization_dependencies(),
-            actor_user_id=actor_user_id,
-            token_auth=token_auth,
-            tool_name=tool_name,
-            params=params,
+            request=EnforceTokenAuthorizationRequest(
+                actor_user_id=actor_user_id,
+                token_auth=token_auth,
+                tool_name=tool_name,
+                params=params,
+            ),
         )
 
     def _dispatch_chat_save_as_engram_tool(

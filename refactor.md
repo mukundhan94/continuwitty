@@ -1925,6 +1925,38 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 72 - Token Project Scope Extraction and Request-Object Hardening)
+
+- [x] Continued MCP token authorization decomposition to raise CodeScene quality above 9.5:
+  - extracted project-scope resolution logic into new `api/app/mcp/token_project_scope.py`
+  - moved project normalization and canonical-tool project resolution helpers to dedicated module:
+    - `normalize_project_id(...)`
+    - `resolve_project_id_for_canonical_tool(...)`
+  - kept `project_id_for_tool(...)` as compatibility wrapper in `token_authorization.py`
+- [x] Reduced argument-heavy public functions in `token_authorization.py` with explicit request objects:
+  - added `ResolveProjectForWriteRequest`
+  - added `EnforceTokenAuthorizationRequest`
+  - updated `resolve_project_for_write(...)` and `enforce_token_authorization(...)` to consume request objects
+  - updated `api/app/mcp/service.py` wrappers to construct and pass the new request objects
+- [x] Reduced `visible_tool_catalog(...)` nested-conditional bumps by extracting `_is_tool_visible_for_token(...)`
+- [x] Added focused project-scope unit coverage:
+  - new `api/tests/test_mcp_token_project_scope_unit.py`
+  - covers session-scoped tool project resolution, save-as-engram session precedence, optional project normalization, and rehydrate project scope derivation
+- [x] Validation run (using `make` commands):
+  - `make test-unit` (`237 passed, 4 skipped, 81 deselected`)
+  - `make test` (`237 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] Additional targeted validation:
+  - `uv run pytest tests/test_mcp_token_project_scope_unit.py tests/test_mcp_service_unit.py tests/test_mcp_chat_dispatch_unit.py tests/test_mcp_service_engram_dispatch_unit.py tests/test_mcp_service_stream_unit.py -q` (`55 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/token_authorization.py` score: **9.53** (improved from **9.24**)
+  - `api/app/mcp/token_project_scope.py` score: **10.0**
+  - `api/app/mcp/service.py` score: **9.68** (stable)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -1953,7 +1985,8 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/mcp/project_user_dispatch.py` | 9.68 | GREEN |
 | `api/app/mcp/service_access.py` | 10.0 | GREEN |
 | `api/app/mcp/streaming.py` | 9.68 | GREEN |
-| `api/app/mcp/token_authorization.py` | 9.24 | GREEN |
+| `api/app/mcp/token_authorization.py` | 9.53 | GREEN |
+| `api/app/mcp/token_project_scope.py` | 10.0 | GREEN |
 | `web/src/api/http.ts` | 10.0 | GREEN |
 | `web/src/api/http.test.ts` | 10.0 | GREEN |
 | `web/src/api/chat.test.ts` | 10.0 | GREEN |
