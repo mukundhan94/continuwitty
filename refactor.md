@@ -2336,6 +2336,32 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 88 - MCP API Integration Test Module Decomposition)
+
+- [x] Continued Phase 14 hardening by decomposing low-cohesion MCP integration tests:
+  - extracted shared helpers into new module: `api/tests/mcp_api_integration_helpers.py`
+  - split auth/token scenarios into `api/tests/test_mcp_api_token_auth_integration.py`
+  - split chat/workflow scenarios into `api/tests/test_mcp_api_workflow_integration.py`
+  - reduced `api/tests/test_mcp_api_integration.py` to protocol/contract coverage only
+- [x] Preserved end-to-end MCP scenario coverage while reducing large-method and cohesion hotspots:
+  - protocol/contract coverage remains in `test_mcp_api_integration.py`
+  - workflow coverage remains in `test_mcp_api_workflow_integration.py`
+  - token/authorization coverage remains in `test_mcp_api_token_auth_integration.py`
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`255 passed, 4 skipped, 81 deselected`)
+  - `make test` (`255 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/tests/test_mcp_api_integration.py` score: **10.0** (improved from **7.17**)
+  - `api/tests/test_mcp_api_workflow_integration.py` score: **9.59**
+  - `api/tests/test_mcp_api_token_auth_integration.py` score: **10.0**
+  - `api/tests/mcp_api_integration_helpers.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2369,6 +2395,10 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_oauth_repository.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |
+| `api/tests/test_mcp_api_integration.py` | 10.0 | GREEN |
+| `api/tests/test_mcp_api_workflow_integration.py` | 9.59 | GREEN |
+| `api/tests/test_mcp_api_token_auth_integration.py` | 10.0 | GREEN |
+| `api/tests/mcp_api_integration_helpers.py` | 10.0 | GREEN |
 | `api/app/mcp/chat_dispatch.py` | 10.0 | GREEN |
 | `api/app/mcp/engram_dispatch.py` | 10.0 | GREEN |
 | `api/app/mcp/project_user_dispatch.py` | 10.0 | GREEN |
