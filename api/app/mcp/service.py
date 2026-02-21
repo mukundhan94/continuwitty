@@ -88,6 +88,15 @@ class _StreamRouteRequest:
     token_auth: McpTokenAuthContext | None
 
 
+@dataclass(frozen=True)
+class _ToolDispatchContext:
+    actor: dict[str, Any]
+    actor_user_id: UUID
+    method: str
+    params: dict[str, Any]
+    token_auth: McpTokenAuthContext | None
+
+
 class McpService:
     """JSON-RPC tool dispatcher for MCP-over-SSE.
 
@@ -866,19 +875,15 @@ class McpService:
     def _dispatch_chat_tool(
         self,
         *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-        token_auth: McpTokenAuthContext | None,
+        context: _ToolDispatchContext,
     ) -> dict[str, Any] | None:
-        actor_role = str(actor.get("role", ""))
+        actor_role = str(context.actor.get("role", ""))
 
         chat_session_query_result = dispatch_chat_session_query_tool(
             chat_service=self._chat_service,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
+            actor_user_id=context.actor_user_id,
+            method=context.method,
+            params=context.params,
             parse_uuid=self._parse_uuid,
         )
         if chat_session_query_result is not None:
@@ -886,9 +891,9 @@ class McpService:
 
         chat_pinning_result = dispatch_chat_pinning_tool(
             chat_service=self._chat_service,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
+            actor_user_id=context.actor_user_id,
+            method=context.method,
+            params=context.params,
             parse_uuid=self._parse_uuid,
         )
         if chat_pinning_result is not None:
@@ -897,11 +902,11 @@ class McpService:
         chat_primary_result = dispatch_chat_primary_tool(
             chat_service=self._chat_service,
             ingestion_service=self._ingestion_service,
-            actor_user_id=actor_user_id,
+            actor_user_id=context.actor_user_id,
             actor_role=actor_role,
-            method=method,
-            params=params,
-            token_auth=token_auth,
+            method=context.method,
+            params=context.params,
+            token_auth=context.token_auth,
             parse_uuid=self._parse_uuid,
             dispatch_chat_save_as_engram_tool=self._dispatch_chat_save_as_engram_tool,
         )
@@ -909,10 +914,10 @@ class McpService:
             return chat_primary_result
 
         session_lifecycle_result = self._dispatch_chat_session_lifecycle_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
+            actor=context.actor,
+            actor_user_id=context.actor_user_id,
+            method=context.method,
+            params=context.params,
         )
         if session_lifecycle_result is not None:
             return session_lifecycle_result
@@ -1103,27 +1108,23 @@ class McpService:
     def _dispatch_engram_tool(
         self,
         *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-        token_auth: McpTokenAuthContext | None,
+        context: _ToolDispatchContext,
     ) -> dict[str, Any] | None:
         engram_primary_result = self._dispatch_engram_primary_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
-            token_auth=token_auth,
+            actor=context.actor,
+            actor_user_id=context.actor_user_id,
+            method=context.method,
+            params=context.params,
+            token_auth=context.token_auth,
         )
         if engram_primary_result is not None:
             return engram_primary_result
 
         dispatch_context = EngramDispatchContext(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=method,
-            params=params,
+            actor=context.actor,
+            actor_user_id=context.actor_user_id,
+            method=context.method,
+            params=context.params,
         )
         dispatch_dependencies = EngramDispatchDependencies(
             memory_admin_service=self._memory_admin_service,
@@ -1201,40 +1202,39 @@ class McpService:
         token_auth: McpTokenAuthContext | None,
     ) -> dict[str, Any]:
         canonical_method = self._canonical_tool_name(method)
-        chat_result = self._dispatch_chat_tool(
+        dispatch_context = _ToolDispatchContext(
             actor=actor,
             actor_user_id=actor_user_id,
             method=canonical_method,
             params=params,
             token_auth=token_auth,
         )
+        chat_result = self._dispatch_chat_tool(
+            context=dispatch_context,
+        )
         if chat_result is not None:
             return chat_result
 
         engram_result = self._dispatch_engram_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=canonical_method,
-            params=params,
-            token_auth=token_auth,
+            context=dispatch_context,
         )
         if engram_result is not None:
             return engram_result
 
         project_result = dispatch_project_tool(
             project_service=self._project_service,
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=canonical_method,
-            params=params,
+            actor=dispatch_context.actor,
+            actor_user_id=dispatch_context.actor_user_id,
+            method=dispatch_context.method,
+            params=dispatch_context.params,
         )
         if project_result is not None:
             return project_result
 
         user_result = dispatch_user_tool(
-            actor=actor,
-            actor_user_id=actor_user_id,
-            method=canonical_method,
+            actor=dispatch_context.actor,
+            actor_user_id=dispatch_context.actor_user_id,
+            method=dispatch_context.method,
             chat_service=self._chat_service,
         )
         if user_result is not None:

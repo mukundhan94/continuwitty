@@ -1735,6 +1735,29 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 65 - MCP Dispatch Context Consolidation Phase 1.2 Hardening)
+
+- [x] Continued argument-footprint reduction in `api/app/mcp/service.py`:
+  - introduced `_ToolDispatchContext` for shared dispatch inputs (`actor`, `actor_user_id`, `method`, `params`, `token_auth`)
+  - updated `_dispatch_chat_tool(...)` to consume `context`
+  - updated `_dispatch_engram_tool(...)` to consume `context`
+  - updated `_dispatch_tool(...)` to construct and pass context to chat/engram/project/user dispatch layers
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py app/mcp/project_user_dispatch.py app/mcp/engram_dispatch.py app/mcp/chat_dispatch.py app/mcp/streaming.py tests/test_mcp_service_unit.py tests/test_mcp_service_stream_unit.py tests/test_mcp_service_engram_dispatch_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_service_stream_unit.py tests/test_mcp_service_engram_dispatch_unit.py -q` (`48 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 skipped` in sandbox; DB/network restricted)
+  - `make test` (`315 passed`) via escalated execution to run DB-backed tests
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **9.09** (stable; further reduced to ~1348 LoC and fewer excess-arg findings)
+  - `api/app/mcp/project_user_dispatch.py` score: **9.68**
+  - `api/app/mcp/engram_dispatch.py` score: **10.0**
+  - `api/app/mcp/chat_dispatch.py` score: **9.68**
+  - `api/app/mcp/streaming.py` score: **9.68**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
