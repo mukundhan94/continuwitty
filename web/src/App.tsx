@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -36,6 +36,7 @@ import { useThemeMode } from './styles/useThemeMode'
 import { useAuthActions } from './hooks/useAuthActions'
 import { useIngestionActions, usePinActions, usePromptActions } from './hooks/useChatActions'
 import { useAdminTokenActions } from './hooks/useAdminTokenActions'
+import { useProjectScopePersistence } from './hooks/useProjectScopePersistence'
 import { useWorkspaceReset } from './hooks/useWorkspaceReset'
 import { useSessionActions } from './hooks/useSessionActions'
 import { useWorkspaceDataLoaders } from './hooks/useWorkspaceDataLoaders'
@@ -180,10 +181,11 @@ function AppScreen() {
     setDocuments,
   })
 
-  useEffect(() => {
-    // Keep the current project scope sticky across hard refreshes.
-    window.localStorage.setItem(PROJECT_ID_STORAGE_KEY, normalizeProjectId(projectId))
-  }, [projectId])
+  useProjectScopePersistence({
+    projectId,
+    normalizeProjectId,
+    storageKey: PROJECT_ID_STORAGE_KEY,
+  })
 
   useWorkspaceLifecycle({
     projectId,

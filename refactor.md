@@ -1103,6 +1103,35 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 40 - Project Scope Persistence Hook Extraction Phase 10.1/10.2 Hardening)
+
+- [x] Continued App refactor by extracting project-scope localStorage persistence from `web/src/App.tsx`
+- [x] Added new hook module `web/src/hooks/useProjectScopePersistence.ts`:
+  - encapsulates normalized project-id persistence to localStorage
+  - keeps browser guard behavior (`window` existence check) inside one hook
+- [x] Updated `web/src/App.tsx`:
+  - replaced inline persistence `useEffect` with `useProjectScopePersistence(...)`
+  - removed direct `useEffect` import from `App.tsx`
+- [x] Added direct hook tests in `web/src/hooks/useProjectScopePersistence.test.ts`:
+  - verifies normalized project-id persistence
+  - verifies persisted value update on project scope changes
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/hooks/useProjectScopePersistence.test.ts src/hooks/useWorkspaceLifecycle.test.ts src/hooks/useWorkspaceReset.test.ts src/hooks/useAuthActions.test.ts`
+  - `make web-check`
+  - aggregate: `12 passed` (targeted web), `106 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/App.tsx` score: **10.0**
+  - `web/src/hooks/useProjectScopePersistence.ts` score: **10.0**
+  - `web/src/hooks/useProjectScopePersistence.test.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+- [x] Full backend suite run:
+  - `make test` passed (`274 passed`) after ensuring local DB availability via `make db-up`
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
