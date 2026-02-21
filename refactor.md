@@ -1243,11 +1243,36 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 45 - MCP Token Authorization Decomposition Phase 1.3 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition of token authorization flow:
+  - added `_token_error_data(...)` for stable policy error payloads
+  - extracted `_enforce_token_scope(...)`
+  - extracted `_enforce_token_tool_allowlist(...)`
+  - extracted `_enforce_token_project_allowlist(...)`
+  - reduced `_enforce_token_authorization(...)` to orchestration
+- [x] Expanded unit tests in `api/tests/test_mcp_service_unit.py`:
+  - kept allowlist rejection coverage
+  - added scope-denial regression (`read` token calling write tool)
+  - added project-policy denial regression (`project_id` outside allowed set)
+- [x] Validation run:
+  - `uv run pytest tests/test_mcp_service_unit.py -q` (`12 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`279 passed`)
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py` (passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **5.14** (improved from **4.96**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **4.96** | YELLOW |
+| `api/app/mcp/service.py` | **5.14** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |

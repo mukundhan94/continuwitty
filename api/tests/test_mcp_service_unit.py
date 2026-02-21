@@ -217,3 +217,50 @@ def test_enforce_token_authorization_rejects_tool_outside_allowlist() -> None:
         "required_scope": "read",
         "token_scope": "read",
     }
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "params", "allowed_project_ids", "expected_data"),
+    [
+        (
+            "chat_create_session",
+            {},
+            None,
+            {
+                "tool": "chat_create_session",
+                "required_scope": "write",
+                "token_scope": "read",
+            },
+        ),
+        (
+            "chat_list_sessions",
+            {"project_id": "project-other"},
+            {"project-allowed"},
+            {
+                "tool": "chat_list_sessions",
+                "required_scope": "read",
+                "token_scope": "read",
+                "project_id": "project-other",
+            },
+        ),
+    ],
+)
+def test_enforce_token_authorization_rejects_scope_or_project_violations(
+    tool_name: str,
+    params: dict[str, object],
+    allowed_project_ids: set[str] | None,
+    expected_data: dict[str, str],
+) -> None:
+    service, _, _, _ = _build_service()
+    token_auth = _token_auth(scope="read", allowed_project_ids=allowed_project_ids)
+
+    with pytest.raises(McpRpcError) as exc_info:
+        service._enforce_token_authorization(
+            actor_user_id=uuid4(),
+            token_auth=token_auth,
+            tool_name=tool_name,
+            params=params,
+        )
+
+    assert exc_info.value.code == -32003
+    assert exc_info.value.data == expected_data

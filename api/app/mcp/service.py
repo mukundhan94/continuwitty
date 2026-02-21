@@ -508,50 +508,77 @@ class McpService:
         normalized_params.setdefault("project_id", next(iter(allowed_projects)))
         return normalized_params
 
-    def _enforce_token_authorization(
+    @staticmethod
+    def _token_error_data(
+        *,
+        tool_name: str,
+        required_scope: str,
+        token_scope: str,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "tool": tool_name,
+            "required_scope": required_scope,
+            "token_scope": token_scope,
+        }
+        if project_id:
+            data["project_id"] = project_id
+        return data
+
+    def _enforce_token_scope(
         self,
         *,
-        actor_user_id: UUID,
-        token_auth: McpTokenAuthContext | None,
         tool_name: str,
-        params: dict[str, Any],
-    ) -> dict[str, Any]:
-        if token_auth is None:
-            return params
-
-        if tool_name in {"initialize", "tools/list"}:
-            return params
-
-        canonical_tool = self._canonical_tool_name(tool_name)
-        required_scope = self._required_scope_for_tool(canonical_tool)
-        if token_auth.scope == "read" and required_scope == "write":
+        token_scope: str,
+        required_scope: str,
+    ) -> None:
+        if token_scope == "read" and required_scope == "write":
             raise McpRpcError(
                 code=-32003,
                 message="Token scope does not allow this tool",
-                data={
-                    "tool": tool_name,
-                    "required_scope": required_scope,
-                    "token_scope": token_auth.scope,
-                },
+                data=self._token_error_data(
+                    tool_name=tool_name,
+                    required_scope=required_scope,
+                    token_scope=token_scope,
+                ),
             )
 
+    def _enforce_token_tool_allowlist(
+        self,
+        *,
+        token_auth: McpTokenAuthContext,
+        tool_name: str,
+        canonical_tool: str,
+        required_scope: str,
+    ) -> None:
         allowed_tools = token_auth.allowed_tools
         allowed_canonical = self._allowed_canonical_tools(allowed_tools)
-        if not self._is_tool_allowed_by_token_policy(
+        if self._is_tool_allowed_by_token_policy(
             canonical_tool=canonical_tool,
             allowed_tools=allowed_tools,
             allowed_canonical=allowed_canonical,
         ):
-            raise McpRpcError(
-                code=-32003,
-                message="Tool not allowed by token policy",
-                data={
-                    "tool": tool_name,
-                    "required_scope": required_scope,
-                    "token_scope": token_auth.scope,
-                },
-            )
+            return
+        raise McpRpcError(
+            code=-32003,
+            message="Tool not allowed by token policy",
+            data=self._token_error_data(
+                tool_name=tool_name,
+                required_scope=required_scope,
+                token_scope=token_auth.scope,
+            ),
+        )
 
+    def _enforce_token_project_allowlist(
+        self,
+        *,
+        actor_user_id: UUID,
+        token_auth: McpTokenAuthContext,
+        tool_name: str,
+        canonical_tool: str,
+        required_scope: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
         normalized_params = dict(params)
         allowed_projects = token_auth.allowed_project_ids
         if not allowed_projects:
@@ -579,14 +606,50 @@ class McpService:
             raise McpRpcError(
                 code=-32003,
                 message="Project not allowed by token policy",
-                data={
-                    "tool": tool_name,
-                    "required_scope": required_scope,
-                    "token_scope": token_auth.scope,
-                    "project_id": project_id,
-                },
+                data=self._token_error_data(
+                    tool_name=tool_name,
+                    required_scope=required_scope,
+                    token_scope=token_auth.scope,
+                    project_id=project_id,
+                ),
             )
         return normalized_params
+
+    def _enforce_token_authorization(
+        self,
+        *,
+        actor_user_id: UUID,
+        token_auth: McpTokenAuthContext | None,
+        tool_name: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        if token_auth is None:
+            return params
+
+        if tool_name in {"initialize", "tools/list"}:
+            return params
+
+        canonical_tool = self._canonical_tool_name(tool_name)
+        required_scope = self._required_scope_for_tool(canonical_tool)
+        self._enforce_token_scope(
+            tool_name=tool_name,
+            token_scope=token_auth.scope,
+            required_scope=required_scope,
+        )
+        self._enforce_token_tool_allowlist(
+            token_auth=token_auth,
+            tool_name=tool_name,
+            canonical_tool=canonical_tool,
+            required_scope=required_scope,
+        )
+        return self._enforce_token_project_allowlist(
+            actor_user_id=actor_user_id,
+            token_auth=token_auth,
+            tool_name=tool_name,
+            canonical_tool=canonical_tool,
+            required_scope=required_scope,
+            params=params,
+        )
 
     @staticmethod
     def _tool_name_and_params_for_tools_call(
