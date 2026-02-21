@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Generator, Iterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
 from uuid import UUID
@@ -79,26 +78,17 @@ from .errors import (
 )
 from .lifecycle_policy import (
     classify_timeline_event_type,
-    duplicate_snapshot_exists,
-    is_low_value_snapshot_abstract,
     normalize_autosave_policy,
-    select_retention_prune_ids,
-    should_take_interval_snapshot,
-    should_take_message_count_snapshot,
 )
-
-_GENERIC_SNAPSHOT_ABSTRACTS = {
-    "",
-    "snapshot from active chat session.",
-    "snapshot from active chat session",
-    "chat snapshot",
-    "session snapshot",
-}
-_AUTOSAVE_SNAPSHOT_TAGS = [
-    "autosave_snapshot",
-    "session-lifecycle",
-    "chat",
-]
+from .session_lifecycle import (
+    LifecycleMaintenanceResult,
+    SessionLifecycleDependencies,
+    derive_chat_snapshot_abstract,
+    is_generic_snapshot_abstract,
+    retrieval_text_from_messages,
+    run_session_lifecycle_maintenance,
+    transcript_markdown,
+)
 
 _PROVIDER_ERROR_STATUS_MAP: list[tuple[type[ProviderError], int]] = [
     (ProviderRateLimitError, 429),
@@ -119,14 +109,6 @@ class PreparedGeneration:
     prepare_duration_ms: float
     context_duration_ms: float
     history_load_duration_ms: float
-
-
-@dataclass(frozen=True)
-class LifecycleMaintenanceResult:
-    snapshot_engram_id: UUID | None
-    pruned_engram_ids: list[UUID]
-    skipped_reason: str | None = None
-
 
 @dataclass(frozen=True)
 class _DebugBuildContext:
@@ -159,30 +141,6 @@ def _build_system_prompt(base_prompt: str, context_markdown: str) -> str:
             f"{context_markdown}"
         )
     return "\n\n".join(sections)
-
-
-def _transcript_markdown(session: ChatSessionRecord, messages: list[ChatMessageRecord]) -> str:
-    lines = [
-        f"# Chat Session Snapshot: {session.title}",
-        "",
-        f"- Session ID: {session.session_id}",
-        f"- Provider/Model: {session.provider.value}/{session.model_id}",
-        "",
-    ]
-    for message in messages:
-        lines.extend(
-            [
-                f"## {message.role.upper()} ({message.created_at.isoformat()})",
-                message.content_text.strip() or "(empty)",
-                "",
-            ]
-        )
-    return "\n".join(lines).strip()
-
-
-def _retrieval_text_from_messages(messages: list[ChatMessageRecord], tail_count: int = 8) -> str:
-    tail = messages[-tail_count:]
-    return " ".join(item.content_text.strip() for item in tail if item.content_text.strip())
 
 
 def _normalize_spaces(value: str) -> str:
@@ -252,23 +210,6 @@ def _resolve_token_usage(
     if int(resolved.get("total_tokens", 0)) <= 0:
         return _estimate_token_usage(input_chars=input_chars, output_chars=output_chars), True
     return resolved, False
-
-
-def _is_generic_snapshot_abstract(value: str) -> bool:
-    return _normalize_spaces(value).lower() in _GENERIC_SNAPSHOT_ABSTRACTS
-
-
-def _derive_chat_snapshot_abstract(messages: list[ChatMessageRecord], max_chars: int = 320) -> str:
-    for role in ("assistant", "user"):
-        for message in reversed(messages):
-            if message.role != role:
-                continue
-            normalized = _normalize_spaces(message.content_text)
-            if not normalized:
-                continue
-            return _truncate_text(normalized, max_chars=max_chars)
-    return ""
-
 
 class ChatService:
     def __init__(self, embedding_dim: int) -> None:
@@ -689,68 +630,14 @@ class ChatService:
         return debug_trace
 
     @staticmethod
-    def _is_autosave_snapshot(summary: EngramSummary) -> bool:
-        return "autosave_snapshot" in {item.strip().lower() for item in summary.tags}
-
-    def _list_autosave_snapshots(
-        self,
-        *,
-        actor_user_id: UUID,
-        session_id: UUID,
-        limit: int = 500,
-    ) -> list[EngramSummary]:
-        linked = list_session_linked_engrams(
-            session_id=session_id,
-            actor_user_id=actor_user_id,
-            limit=limit,
-            offset=0,
+    def _lifecycle_dependencies() -> SessionLifecycleDependencies:
+        return SessionLifecycleDependencies(
+            list_session_linked_engrams=list_session_linked_engrams,
+            list_chat_messages=list_chat_messages,
+            count_session_messages_by_role=count_session_messages_by_role,
+            delete_session_autosave_engrams=delete_session_autosave_engrams,
+            create_engram=create_engram,
         )
-        return [item for item in linked if self._is_autosave_snapshot(item)]
-
-    def _create_autosave_snapshot(
-        self,
-        *,
-        actor_user_id: UUID,
-        session: ChatSessionRecord,
-        existing_snapshots: list[EngramSummary],
-    ) -> UUID | None:
-        messages = list_chat_messages(
-            session_id=session.session_id,
-            actor_user_id=actor_user_id,
-            limit=500,
-            offset=0,
-        )
-        if not messages:
-            return None
-
-        abstract = _derive_chat_snapshot_abstract(messages)
-        if is_low_value_snapshot_abstract(abstract):
-            return None
-        if duplicate_snapshot_exists(abstract=abstract, existing_snapshots=existing_snapshots):
-            return None
-
-        now = datetime.now(UTC)
-        created = create_engram(
-            payload=MemoryEngramCreate(
-                project_id=session.project_id,
-                thread_id=f"chat-session:{session.session_id}:autosave",
-                title=f"{session.title} Autosave {now.strftime('%Y-%m-%d %H:%M:%S')}",
-                abstract=abstract,
-                detailed_summary_markdown=_transcript_markdown(session, messages),
-                tags=[
-                    *_AUTOSAVE_SNAPSHOT_TAGS,
-                    f"autosave_strategy:{session.autosave_strategy.value}",
-                ],
-                keywords=["autosave", "snapshot", session.provider.value, session.model_id],
-                visibility_scope=session.visibility_scope.value,
-                source_session_id=session.session_id,
-                retrieval_text=_retrieval_text_from_messages(messages),
-            ),
-            embedding_dim=self._embedding_dim,
-            owner_user_id=actor_user_id,
-            enrichment_origin="chat.autosave_snapshot",
-        )
-        return created.engram_id
 
     def _run_session_lifecycle_maintenance(
         self,
@@ -758,73 +645,11 @@ class ChatService:
         actor_user_id: UUID,
         session: ChatSessionRecord,
     ) -> LifecycleMaintenanceResult:
-        if not session.autosave_enabled or session.autosave_strategy == ChatAutosaveStrategy.off:
-            return LifecycleMaintenanceResult(
-                snapshot_engram_id=None,
-                pruned_engram_ids=[],
-                skipped_reason="autosave_disabled",
-            )
-
-        now = datetime.now(UTC)
-        autosave_snapshots = self._list_autosave_snapshots(
+        return run_session_lifecycle_maintenance(
             actor_user_id=actor_user_id,
-            session_id=session.session_id,
-        )
-
-        should_create = False
-        skipped_reason: str | None = None
-        if session.autosave_strategy == ChatAutosaveStrategy.interval:
-            latest_created_at = autosave_snapshots[0].created_at if autosave_snapshots else None
-            should_create = should_take_interval_snapshot(
-                now=now,
-                latest_snapshot_created_at=latest_created_at,
-                interval_minutes=session.autosave_interval_minutes,
-            )
-            if not should_create:
-                skipped_reason = "interval_not_elapsed"
-        elif session.autosave_strategy == ChatAutosaveStrategy.message_count:
-            assistant_message_count = count_session_messages_by_role(
-                session_id=session.session_id,
-                actor_user_id=actor_user_id,
-                role="assistant",
-            )
-            should_create = should_take_message_count_snapshot(
-                assistant_message_count=assistant_message_count,
-                min_messages=session.autosave_min_messages,
-            )
-            if not should_create:
-                skipped_reason = "message_count_threshold_not_met"
-
-        created_snapshot_id: UUID | None = None
-        if should_create:
-            created_snapshot_id = self._create_autosave_snapshot(
-                actor_user_id=actor_user_id,
-                session=session,
-                existing_snapshots=autosave_snapshots,
-            )
-            if created_snapshot_id is None:
-                skipped_reason = "duplicate_or_low_value_snapshot"
-            autosave_snapshots = self._list_autosave_snapshots(
-                actor_user_id=actor_user_id,
-                session_id=session.session_id,
-            )
-
-        prune_ids = select_retention_prune_ids(
-            snapshots=autosave_snapshots,
-            retention_days=session.retention_days,
-            retention_max_snapshots=session.retention_max_snapshots,
-            now=now,
-        )
-        pruned_ids = delete_session_autosave_engrams(
-            session_id=session.session_id,
-            actor_user_id=actor_user_id,
-            engram_ids=prune_ids,
-        )
-
-        return LifecycleMaintenanceResult(
-            snapshot_engram_id=created_snapshot_id,
-            pruned_engram_ids=pruned_ids,
-            skipped_reason=skipped_reason,
+            session=session,
+            embedding_dim=self._embedding_dim,
+            dependencies=self._lifecycle_dependencies(),
         )
 
     def send_message(
@@ -1041,8 +866,8 @@ class ChatService:
             raise ChatValidationError("Cannot save an empty chat session as engram")
 
         abstract = payload.abstract.strip()
-        if _is_generic_snapshot_abstract(abstract):
-            derived_abstract = _derive_chat_snapshot_abstract(messages)
+        if is_generic_snapshot_abstract(abstract):
+            derived_abstract = derive_chat_snapshot_abstract(messages)
             if derived_abstract:
                 abstract = derived_abstract
 
@@ -1052,12 +877,12 @@ class ChatService:
                 thread_id=f"chat-session:{session.session_id}",
                 title=payload.title,
                 abstract=abstract,
-                detailed_summary_markdown=_transcript_markdown(session, messages),
+                detailed_summary_markdown=transcript_markdown(session, messages),
                 tags=payload.tags,
                 keywords=payload.keywords,
                 visibility_scope=payload.visibility_scope.value,
                 source_session_id=session.session_id,
-                retrieval_text=_retrieval_text_from_messages(messages),
+                retrieval_text=retrieval_text_from_messages(messages),
             ),
             embedding_dim=self._embedding_dim,
             owner_user_id=actor_user_id,

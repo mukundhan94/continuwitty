@@ -2050,6 +2050,32 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 76 - Chat Session Lifecycle Module Extraction)
+
+- [x] Continued Phase 4 refactor by extracting autosave/session snapshot lifecycle orchestration from `api/app/chat/service.py` into a dedicated module:
+  - added `api/app/chat/session_lifecycle.py` for snapshot derivation, transcript/retrieval helpers, and lifecycle maintenance flow
+  - introduced `SessionLifecycleDependencies` and `AutosaveSnapshotCreateRequest` to reduce argument-heavy helper signatures
+  - split lifecycle decision and creation branches into focused helpers to remove bumpy-road concentration
+- [x] Kept service API stable while delegating lifecycle internals:
+  - `ChatService._run_session_lifecycle_maintenance(...)` now delegates to `run_session_lifecycle_maintenance(...)`
+  - `save_session_as_engram(...)` now reuses extracted snapshot/transcript helpers from lifecycle module
+- [x] Expanded test coverage for extracted lifecycle module:
+  - added `api/tests/test_chat_session_lifecycle.py` for abstract derivation and lifecycle skip/threshold behavior
+- [x] Validation run (using `make` commands):
+  - `make test-unit` (`240 passed, 4 skipped, 81 deselected`)
+  - `make test` (`271 passed, 54 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] Additional targeted validation:
+  - `uv run pytest tests/test_chat_service.py tests/test_chat_session_lifecycle.py -q` (`21 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/chat/service.py` score: **8.28** (improved from **7.90**)
+  - `api/app/chat/session_lifecycle.py` score: **9.68**
+  - `api/tests/test_chat_session_lifecycle.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2058,7 +2084,8 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/memory_admin/repository.py` | 8.03 | YELLOW |
 | `api/app/chat_repository.py` | 10.0 | GREEN |
 | `api/app/chat_repository_pinning.py` | 10.0 | GREEN |
-| `api/app/chat/service.py` | 7.90 | YELLOW |
+| `api/app/chat/service.py` | 8.28 | YELLOW |
+| `api/app/chat/session_lifecycle.py` | 9.68 | GREEN |
 | `api/app/oauth/api.py` | 10.0 | GREEN |
 | `api/app/oauth/common.py` | 10.0 | GREEN |
 | `api/app/oauth/registration.py` | 10.0 | GREEN |
