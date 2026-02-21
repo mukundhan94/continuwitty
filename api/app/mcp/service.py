@@ -1924,6 +1924,102 @@ class McpService:
         """
         _ = request
 
+    def _chat_send_message_success_frame(
+        self,
+        *,
+        request_id: str | int,
+        tool_name: str,
+        payload: dict[str, Any],
+        as_tool_call: bool,
+    ) -> dict[str, Any]:
+        if as_tool_call:
+            return self._success(request_id, self._tool_call_success(tool_name, payload))
+        return self._success(request_id, payload)
+
+    @staticmethod
+    def _stream_event_payload(event_payload: Any) -> dict[str, Any]:
+        if isinstance(event_payload, dict):
+            return event_payload
+        return {"value": event_payload}
+
+    def _stream_chat_send_message_events(
+        self,
+        *,
+        actor_user_id: UUID,
+        session_id: UUID,
+        payload: ChatMessageCreateRequest,
+        request_id: str | int,
+        tool_name: str,
+    ) -> Iterator[dict[str, Any]]:
+        final_message: dict[str, Any] | None = None
+        for event_name, event_payload in self._chat_service.stream_message_events(
+            actor_user_id=actor_user_id,
+            session_id=session_id,
+            payload=payload,
+        ):
+            event_payload_dict = self._stream_event_payload(event_payload)
+            yield self._event(
+                request_id,
+                tool=tool_name,
+                event_name=event_name,
+                event_payload=event_payload_dict,
+            )
+            if event_name == "error":
+                raise McpRpcError(
+                    code=-32020,
+                    message=event_payload_dict.get("detail", "chat.send_message stream failed"),
+                    data=event_payload_dict,
+                )
+            if event_name == "done":
+                final_message = event_payload_dict
+        if final_message is None:
+            raise McpRpcError(
+                code=-32021,
+                message="chat.send_message stream ended without completion",
+            )
+        return final_message
+
+    def _stream_chat_send_message_error_frame(
+        self,
+        *,
+        request_id: str | int,
+        exc: Exception,
+    ) -> dict[str, Any]:
+        if isinstance(exc, McpRpcError):
+            return self._error(
+                request_id,
+                code=exc.code,
+                message=exc.message,
+                data=exc.data,
+            )
+        if isinstance(exc, ValidationError):
+            return self._error(
+                request_id,
+                code=-32602,
+                message="Invalid params",
+                data={"errors": exc.errors()},
+            )
+        if isinstance(exc, ChatProviderExecutionError):
+            return self._error(
+                request_id,
+                code=-32020,
+                message=exc.detail,
+                data={"error_code": exc.error_code, "status_code": exc.status_code},
+            )
+        if isinstance(exc, ChatServiceError):
+            return self._error(
+                request_id,
+                code=-32010,
+                message=exc.detail,
+                data={"status_code": exc.status_code},
+            )
+        return self._error(
+            request_id,
+            code=-32000,
+            message="Internal MCP error",
+            data={"detail": str(exc), "timestamp": datetime.now(UTC).isoformat()},
+        )
+
     def _stream_chat_send_message(
         self,
         *,
@@ -1946,85 +2042,29 @@ class McpService:
                     session_id=session_id,
                     payload=payload,
                 )
-                direct_payload = {"message": response.model_dump(mode="json")}
-                if as_tool_call:
-                    yield self._success(
-                        request_id, self._tool_call_success(tool_name, direct_payload)
-                    )
-                else:
-                    yield self._success(request_id, direct_payload)
+                yield self._chat_send_message_success_frame(
+                    request_id=request_id,
+                    tool_name=tool_name,
+                    payload={"message": response.model_dump(mode="json")},
+                    as_tool_call=as_tool_call,
+                )
                 return
 
-            final_message: dict[str, Any] | None = None
-            for event_name, event_payload in self._chat_service.stream_message_events(
+            final_message = yield from self._stream_chat_send_message_events(
                 actor_user_id=actor_user_id,
                 session_id=session_id,
                 payload=payload,
-            ):
-                event_payload_dict: dict[str, Any]
-                if isinstance(event_payload, dict):
-                    event_payload_dict = event_payload
-                else:
-                    event_payload_dict = {"value": event_payload}
-
-                yield self._event(
-                    request_id,
-                    tool=tool_name,
-                    event_name=event_name,
-                    event_payload=event_payload_dict,
-                )
-                if event_name == "error":
-                    raise McpRpcError(
-                        code=-32020,
-                        message=event_payload_dict.get("detail", "chat.send_message stream failed"),
-                        data=event_payload_dict,
-                    )
-                if event_name == "done":
-                    final_message = event_payload_dict
-
-            if final_message is None:
-                raise McpRpcError(
-                    code=-32021,
-                    message="chat.send_message stream ended without completion",
-                )
-
-            final_payload = {"message": final_message}
-            if as_tool_call:
-                yield self._success(request_id, self._tool_call_success(tool_name, final_payload))
-            else:
-                yield self._success(request_id, final_payload)
-        except McpRpcError as exc:
-            yield self._error(
-                request_id,
-                code=exc.code,
-                message=exc.message,
-                data=exc.data,
+                request_id=request_id,
+                tool_name=tool_name,
             )
-        except ValidationError as exc:
-            yield self._error(
-                request_id,
-                code=-32602,
-                message="Invalid params",
-                data={"errors": exc.errors()},
-            )
-        except ChatProviderExecutionError as exc:
-            yield self._error(
-                request_id,
-                code=-32020,
-                message=exc.detail,
-                data={"error_code": exc.error_code, "status_code": exc.status_code},
-            )
-        except ChatServiceError as exc:
-            yield self._error(
-                request_id,
-                code=-32010,
-                message=exc.detail,
-                data={"status_code": exc.status_code},
+            yield self._chat_send_message_success_frame(
+                request_id=request_id,
+                tool_name=tool_name,
+                payload={"message": final_message},
+                as_tool_call=as_tool_call,
             )
         except Exception as exc:
-            yield self._error(
-                request_id,
-                code=-32000,
-                message="Internal MCP error",
-                data={"detail": str(exc), "timestamp": datetime.now(UTC).isoformat()},
+            yield self._stream_chat_send_message_error_frame(
+                request_id=request_id,
+                exc=exc,
             )

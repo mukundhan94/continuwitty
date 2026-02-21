@@ -3,9 +3,11 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+import pytest
+
 from app.mcp.errors import McpRpcError
 from app.mcp.service import McpService
-from app.models import McpJsonRpcRequest
+from app.models import ChatMessageCreateRequest, McpJsonRpcRequest
 
 
 def _build_service() -> McpService:
@@ -140,3 +142,49 @@ def test_stream_call_routes_to_non_stream_result_when_helpers_skip(monkeypatch) 
     frames = list(service.stream_call(actor=actor, request=request, token_auth=None))
 
     assert frames == [{"jsonrpc": "2.0", "id": "req-1", "result": {"sessions": []}}]
+
+
+def test_stream_chat_send_message_events_requires_done_completion() -> None:
+    service = _build_service()
+    actor_user_id = uuid4()
+    session_id = uuid4()
+    service._chat_service.stream_message_events.return_value = iter([("chunk", {"text": "hello"})])
+
+    with pytest.raises(McpRpcError) as exc_info:
+        list(
+            service._stream_chat_send_message_events(
+                actor_user_id=actor_user_id,
+                session_id=session_id,
+                payload=ChatMessageCreateRequest(content_text="hi"),
+                request_id="req-1",
+                tool_name="chat.send_message",
+            )
+        )
+
+    assert exc_info.value.code == -32021
+
+
+def test_stream_chat_send_message_non_stream_as_tool_call_wraps_success() -> None:
+    service = _build_service()
+    actor_user_id = uuid4()
+    session_id = uuid4()
+    service._chat_service.send_message.return_value = MagicMock(
+        model_dump=MagicMock(return_value={"message_id": "m1"})
+    )
+
+    frames = list(
+        service._stream_chat_send_message(
+            actor_user_id=actor_user_id,
+            request_id="req-1",
+            tool_name="chat.send_message",
+            params={"session_id": str(session_id), "content_text": "hi", "stream": False},
+            as_tool_call=True,
+        )
+    )
+
+    assert frames == [
+        service._success(
+            "req-1",
+            service._tool_call_success("chat.send_message", {"message": {"message_id": "m1"}}),
+        )
+    ]

@@ -1562,11 +1562,36 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 58 - MCP Chat Streaming Helper Decomposition Phase 1.5 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition by splitting `_stream_chat_send_message(...)` internals:
+  - added `_chat_send_message_success_frame(...)` for direct/tool-call success envelope shaping
+  - added `_stream_event_payload(...)` for normalized event payload conversion
+  - added `_stream_chat_send_message_events(...)` for event iteration + terminal `done` enforcement
+  - added `_stream_chat_send_message_error_frame(...)` for centralized exception-to-MCP-error mapping
+  - reduced `_stream_chat_send_message(...)` to orchestration-only flow
+- [x] Expanded `api/tests/test_mcp_service_stream_unit.py`:
+  - validates missing `done` event fails with expected MCP error code (`-32021`)
+  - validates non-stream `chat.send_message` with `as_tool_call=True` returns wrapped tool-call success frame
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_stream_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_stream_unit.py tests/test_mcp_service_engram_dispatch_unit.py tests/test_mcp_service_unit.py -q` (`45 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`312 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **8.15** (improved from **7.65**)
+  - `api/tests/test_mcp_service_stream_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+  - fixed in change-set: `_stream_chat_send_message` Complex Method and Bumpy Road findings
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **7.65** | YELLOW |
+| `api/app/mcp/service.py` | **8.15** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
