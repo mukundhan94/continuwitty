@@ -1816,6 +1816,36 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 68 - MCP Service Helper Mixins Extraction Phase 1.2/1.5 Hardening)
+
+- [x] Continued decomposition of `api/app/mcp/service.py` by extracting helper responsibilities into dedicated mixins:
+  - added `api/app/mcp/service_access.py` with ownership/access and request parsing helpers
+    - `_parse_uuid(...)`, `_parse_uuid_list(...)`
+    - `_tool_name_and_params_for_tools_call(...)`
+    - `_require_owner_or_admin(...)`, `_require_session_access(...)`, `_require_engram_access(...)`, `_require_collection_access(...)`
+  - added `api/app/mcp/service_stream.py` with stream transport and error-envelope handling
+    - `_authorize_tool_call(...)`
+    - `_maybe_stream_direct_chat_send_message(...)`
+    - `_maybe_stream_tools_call_chat_message(...)`
+    - `_stream_dispatch_non_stream_result(...)`
+    - `_stream_chat_send_message(...)`
+    - `stream_call(...)`, `handle_notification(...)`
+  - updated `McpService` to inherit `McpServiceAccessMixin` and `McpServiceStreamMixin`
+- [x] `api/app/mcp/service.py` reduced from ~1025 LoC to ~628 LoC (comments stripped per CodeScene)
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py app/mcp/service_access.py app/mcp/service_stream.py tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py tests/test_mcp_service_stream_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py tests/test_mcp_service_stream_unit.py -q` (`48 passed`)
+  - `make test-unit` (**failed in local environment**: existing UI login auth tests return `401` for demo credentials)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **9.09** (stable; large LoC drop but remaining low-cohesion + constructor-args smell)
+  - `api/app/mcp/service_stream.py` score: **10.0**
+  - `api/app/mcp/service_access.py` score: **9.38**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
