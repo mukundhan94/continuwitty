@@ -1221,11 +1221,33 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 44 - MCP Token Authorization Helper Split Phase 1.3 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` refactor by extracting shared token-allowlist logic:
+  - added `_allowed_canonical_tools(...)`
+  - added `_is_tool_allowed_by_token_policy(...)`
+  - simplified `_visible_tool_catalog(...)` and `_enforce_token_authorization(...)` to use helpers
+- [x] Added/expanded unit tests in `api/tests/test_mcp_service_unit.py`:
+  - public tool-name allowlist visibility (`engram_query`)
+  - alias authorization with public allowlist name (`chat_pin_engram` + `engram_pin_to_session`)
+  - explicit rejection when tool is outside token allowlist
+- [x] Validation run:
+  - `uv run pytest tests/test_mcp_service_unit.py -q` (`10 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`277 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **4.96** (improved from **4.56**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **4.56** | YELLOW |
+| `api/app/mcp/service.py` | **4.96** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |

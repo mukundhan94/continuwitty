@@ -348,6 +348,22 @@ class McpService:
             return "read"
         return "read"
 
+    def _allowed_canonical_tools(self, allowed_tools: set[str] | None) -> set[str]:
+        if not allowed_tools:
+            return set()
+        return {self._canonical_tool_name(item) for item in allowed_tools}
+
+    def _is_tool_allowed_by_token_policy(
+        self,
+        *,
+        canonical_tool: str,
+        allowed_tools: set[str] | None,
+        allowed_canonical: set[str],
+    ) -> bool:
+        if not allowed_tools:
+            return True
+        return canonical_tool in allowed_canonical
+
     def _visible_tool_catalog(self, token_auth: McpTokenAuthContext | None) -> list[dict[str, Any]]:
         if token_auth is None:
             return [
@@ -356,9 +372,7 @@ class McpService:
             ]
 
         allowed_tools = token_auth.allowed_tools
-        allowed_canonical = (
-            {self._canonical_tool_name(item) for item in allowed_tools} if allowed_tools else set()
-        )
+        allowed_canonical = self._allowed_canonical_tools(allowed_tools)
 
         visible: list[dict[str, Any]] = []
         for item in self._tool_catalog():
@@ -367,10 +381,10 @@ class McpService:
             required_scope = self._required_scope_for_tool(canonical_name)
             if token_auth.scope == "read" and required_scope == "write":
                 continue
-            if allowed_tools and (
-                canonical_name not in allowed_canonical
-                and public_name not in allowed_tools
-                and canonical_name not in allowed_tools
+            if not self._is_tool_allowed_by_token_policy(
+                canonical_tool=canonical_name,
+                allowed_tools=allowed_tools,
+                allowed_canonical=allowed_canonical,
             ):
                 continue
             visible.append({**item, "name": public_name})
@@ -522,13 +536,11 @@ class McpService:
             )
 
         allowed_tools = token_auth.allowed_tools
-        allowed_canonical = (
-            {self._canonical_tool_name(item) for item in allowed_tools} if allowed_tools else set()
-        )
-        if allowed_tools and (
-            canonical_tool not in allowed_canonical
-            and tool_name not in allowed_tools
-            and _to_public_tool_name(canonical_tool) not in allowed_tools
+        allowed_canonical = self._allowed_canonical_tools(allowed_tools)
+        if not self._is_tool_allowed_by_token_policy(
+            canonical_tool=canonical_tool,
+            allowed_tools=allowed_tools,
+            allowed_canonical=allowed_canonical,
         ):
             raise McpRpcError(
                 code=-32003,

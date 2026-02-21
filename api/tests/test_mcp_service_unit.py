@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -31,6 +32,19 @@ def _build_service() -> tuple[McpService, MagicMock, MagicMock, MagicMock]:
         embedding_dim=1536,
     )
     return service, chat_service, project_service, memory_admin_service
+
+
+def _token_auth(
+    *,
+    scope: str = "write",
+    allowed_tools: set[str] | None = None,
+    allowed_project_ids: set[str] | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        scope=scope,
+        allowed_tools=allowed_tools if allowed_tools is not None else set(),
+        allowed_project_ids=allowed_project_ids if allowed_project_ids is not None else set(),
+    )
 
 
 def test_dispatch_tool_routes_chat_domain() -> None:
@@ -160,3 +174,46 @@ def test_require_collection_access_raises_not_found() -> None:
 
     assert exc_info.value.code == -32004
     assert exc_info.value.data == {"collection_id": str(collection_id)}
+
+
+def test_visible_tool_catalog_accepts_public_tool_name_allowlist() -> None:
+    service, _, _, _ = _build_service()
+    token_auth = _token_auth(allowed_tools={"engram_query"})
+
+    visible = service._visible_tool_catalog(token_auth=token_auth)
+
+    assert {item["name"] for item in visible} == {"engram_query"}
+
+
+def test_enforce_token_authorization_allows_alias_tool_with_public_allowlist_name() -> None:
+    service, _, _, _ = _build_service()
+    token_auth = _token_auth(allowed_tools={"chat_pin_engram"})
+
+    normalized = service._enforce_token_authorization(
+        actor_user_id=uuid4(),
+        token_auth=token_auth,
+        tool_name="engram_pin_to_session",
+        params={},
+    )
+
+    assert normalized == {}
+
+
+def test_enforce_token_authorization_rejects_tool_outside_allowlist() -> None:
+    service, _, _, _ = _build_service()
+    token_auth = _token_auth(scope="read", allowed_tools={"engram_query"})
+
+    with pytest.raises(McpRpcError) as exc_info:
+        service._enforce_token_authorization(
+            actor_user_id=uuid4(),
+            token_auth=token_auth,
+            tool_name="chat_list_sessions",
+            params={},
+        )
+
+    assert exc_info.value.code == -32003
+    assert exc_info.value.data == {
+        "tool": "chat_list_sessions",
+        "required_scope": "read",
+        "token_scope": "read",
+    }
