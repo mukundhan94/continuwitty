@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NoReturn
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -28,6 +28,15 @@ _COLLECTION_SCOPED_TOOLS = {
     "engram.collection_remove_items",
 }
 
+_PROJECT_INPUT_TOOLS = {
+    "chat.create_session",
+    "engram.create",
+    "engram.create_from_conversation",
+    "project.create",
+    "project.set_default",
+    "engram.collection_create",
+}
+
 
 @dataclass(frozen=True)
 class TokenAuthorizationDependencies:
@@ -37,6 +46,23 @@ class TokenAuthorizationDependencies:
     parse_uuid: Callable[[dict[str, Any], str], UUID]
     canonical_tool_name: Callable[[str], str]
     get_rehydration_bundle: Callable[..., Any]
+
+
+@dataclass(frozen=True)
+class _TokenPolicyErrorContext:
+    tool_name: str
+    required_scope: str
+    token_scope: str
+    project_id: str | None = None
+
+
+@dataclass
+class _AllowedProjectResolutionContext:
+    dependencies: TokenAuthorizationDependencies
+    actor_user_id: UUID
+    canonical_tool: str
+    normalized_params: dict[str, Any]
+    allowed_projects: set[str]
 
 
 def _normalize_project_id(value: str | None) -> str | None:
@@ -256,16 +282,7 @@ def project_id_for_tool(
     params: dict[str, Any],
 ) -> str | None:
     canonical_tool = dependencies.canonical_tool_name(tool_name)
-    project_input_tools = {
-        "chat.create_session",
-        "engram.create",
-        "engram.create_from_conversation",
-        "project.create",
-        "project.set_default",
-        "engram.collection_create",
-    }
-
-    if canonical_tool in project_input_tools:
+    if canonical_tool in _PROJECT_INPUT_TOOLS:
         return _project_id_from_input_params(params)
 
     if canonical_tool in _SESSION_SCOPED_TOOLS:
@@ -352,6 +369,49 @@ def _token_error_data(
     return data
 
 
+def _raise_token_policy_error(
+    *,
+    message: str,
+    context: _TokenPolicyErrorContext,
+) -> NoReturn:
+    raise McpRpcError(
+        code=-32003,
+        message=message,
+        data=_token_error_data(
+            tool_name=context.tool_name,
+            required_scope=context.required_scope,
+            token_scope=context.token_scope,
+            project_id=context.project_id,
+        ),
+    )
+
+
+def _resolve_project_for_allowed_projects(
+    *,
+    context: _AllowedProjectResolutionContext,
+) -> tuple[dict[str, Any], str | None]:
+    project_id = project_id_for_tool(
+        dependencies=context.dependencies,
+        actor_user_id=context.actor_user_id,
+        tool_name=context.canonical_tool,
+        params=context.normalized_params,
+    )
+    if project_id:
+        return context.normalized_params, project_id
+    context.normalized_params = _enforce_single_allowed_project_autofill(
+        canonical_tool=context.canonical_tool,
+        normalized_params=context.normalized_params,
+        allowed_projects=context.allowed_projects,
+    )
+    project_id = project_id_for_tool(
+        dependencies=context.dependencies,
+        actor_user_id=context.actor_user_id,
+        tool_name=context.canonical_tool,
+        params=context.normalized_params,
+    )
+    return context.normalized_params, project_id
+
+
 def enforce_token_authorization(
     *,
     dependencies: TokenAuthorizationDependencies,
@@ -368,15 +428,15 @@ def enforce_token_authorization(
 
     canonical_tool = dependencies.canonical_tool_name(tool_name)
     required_scope = _required_scope_for_tool(canonical_tool)
+    error_context = _TokenPolicyErrorContext(
+        tool_name=tool_name,
+        required_scope=required_scope,
+        token_scope=token_auth.scope,
+    )
     if token_auth.scope == "read" and required_scope == "write":
-        raise McpRpcError(
-            code=-32003,
+        _raise_token_policy_error(
             message="Token scope does not allow this tool",
-            data=_token_error_data(
-                tool_name=tool_name,
-                required_scope=required_scope,
-                token_scope=token_auth.scope,
-            ),
+            context=error_context,
         )
 
     allowed_tools = token_auth.allowed_tools
@@ -389,14 +449,9 @@ def enforce_token_authorization(
         allowed_tools=allowed_tools,
         allowed_canonical=allowed_canonical,
     ):
-        raise McpRpcError(
-            code=-32003,
+        _raise_token_policy_error(
             message="Tool not allowed by token policy",
-            data=_token_error_data(
-                tool_name=tool_name,
-                required_scope=required_scope,
-                token_scope=token_auth.scope,
-            ),
+            context=error_context,
         )
 
     normalized_params = dict(params)
@@ -404,30 +459,20 @@ def enforce_token_authorization(
     if not allowed_projects:
         return normalized_params
 
-    project_id = project_id_for_tool(
-        dependencies=dependencies,
-        actor_user_id=actor_user_id,
-        tool_name=canonical_tool,
-        params=normalized_params,
-    )
-    if not project_id:
-        normalized_params = _enforce_single_allowed_project_autofill(
+    normalized_params, project_id = _resolve_project_for_allowed_projects(
+        context=_AllowedProjectResolutionContext(
+            dependencies=dependencies,
+            actor_user_id=actor_user_id,
             canonical_tool=canonical_tool,
             normalized_params=normalized_params,
             allowed_projects=allowed_projects,
-        )
-        project_id = project_id_for_tool(
-            dependencies=dependencies,
-            actor_user_id=actor_user_id,
-            tool_name=canonical_tool,
-            params=normalized_params,
-        )
+        ),
+    )
 
     if project_id and project_id not in allowed_projects:
-        raise McpRpcError(
-            code=-32003,
+        _raise_token_policy_error(
             message="Project not allowed by token policy",
-            data=_token_error_data(
+            context=_TokenPolicyErrorContext(
                 tool_name=tool_name,
                 required_scope=required_scope,
                 token_scope=token_auth.scope,

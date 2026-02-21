@@ -1903,6 +1903,28 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 71 - Token Authorization Complexity Reduction)
+
+- [x] Continued MCP authorization refactor in `api/app/mcp/token_authorization.py`:
+  - extracted `_PROJECT_INPUT_TOOLS` constant out of `project_id_for_tool(...)`
+  - extracted `_raise_token_policy_error(...)` to consolidate repeated token-policy error payload construction
+  - extracted `_resolve_project_for_allowed_projects(...)` to isolate project-constraint/autofill flow
+  - introduced `_TokenPolicyErrorContext` and `_AllowedProjectResolutionContext` parameter objects to avoid excess helper arguments
+- [x] Reduced `enforce_token_authorization(...)` cyclomatic complexity from **13** to **9** (CodeScene threshold-compliant)
+- [x] Validation run (using `make` commands):
+  - `make test-unit` (`233 passed, 4 skipped, 81 deselected`)
+  - `make test` (`233 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] Targeted authorization regression coverage:
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_chat_dispatch_unit.py tests/test_mcp_api_integration.py -k "token_allowed_tools_and_project_guards or enforce_token_authorization" -q` (`4 passed, 1 skipped`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/token_authorization.py` score: **9.24** (improved from **9.12**)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+  - remaining work to reach 9.5+ is primarily file-level cohesion decomposition (next slice)
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -1931,7 +1953,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/mcp/project_user_dispatch.py` | 9.68 | GREEN |
 | `api/app/mcp/service_access.py` | 10.0 | GREEN |
 | `api/app/mcp/streaming.py` | 9.68 | GREEN |
-| `api/app/mcp/token_authorization.py` | 9.12 | GREEN |
+| `api/app/mcp/token_authorization.py` | 9.24 | GREEN |
 | `web/src/api/http.ts` | 10.0 | GREEN |
 | `web/src/api/http.test.ts` | 10.0 | GREEN |
 | `web/src/api/chat.test.ts` | 10.0 | GREEN |
