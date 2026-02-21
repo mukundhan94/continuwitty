@@ -60,6 +60,24 @@ class AutosaveSnapshotCreateRequest:
     embedding_dim: int
 
 
+@dataclass(frozen=True)
+class SnapshotResolutionRequest:
+    actor_user_id: UUID
+    session: ChatSessionRecord
+    autosave_snapshots: list[EngramSummary]
+    now: datetime
+
+
+@dataclass(frozen=True)
+class SnapshotCreationRequest:
+    actor_user_id: UUID
+    session: ChatSessionRecord
+    autosave_snapshots: list[EngramSummary]
+    should_create: bool
+    skipped_reason: str | None
+    embedding_dim: int
+
+
 def _normalize_spaces(value: str) -> str:
     return " ".join(value.strip().split())
 
@@ -185,30 +203,31 @@ def _create_autosave_snapshot(
 
 def _resolve_snapshot_creation(
     *,
-    actor_user_id: UUID,
-    session: ChatSessionRecord,
-    autosave_snapshots: list[EngramSummary],
-    now: datetime,
+    request: SnapshotResolutionRequest,
     dependencies: SessionLifecycleDependencies,
 ) -> tuple[bool, str | None]:
-    if session.autosave_strategy == ChatAutosaveStrategy.interval:
-        latest_created_at = autosave_snapshots[0].created_at if autosave_snapshots else None
+    if request.session.autosave_strategy == ChatAutosaveStrategy.interval:
+        latest_created_at = (
+            request.autosave_snapshots[0].created_at
+            if request.autosave_snapshots
+            else None
+        )
         should_create = should_take_interval_snapshot(
-            now=now,
+            now=request.now,
             latest_snapshot_created_at=latest_created_at,
-            interval_minutes=session.autosave_interval_minutes,
+            interval_minutes=request.session.autosave_interval_minutes,
         )
         return should_create, None if should_create else "interval_not_elapsed"
 
-    if session.autosave_strategy == ChatAutosaveStrategy.message_count:
+    if request.session.autosave_strategy == ChatAutosaveStrategy.message_count:
         assistant_message_count = dependencies.count_session_messages_by_role(
-            session_id=session.session_id,
-            actor_user_id=actor_user_id,
+            session_id=request.session.session_id,
+            actor_user_id=request.actor_user_id,
             role="assistant",
         )
         should_create = should_take_message_count_snapshot(
             assistant_message_count=assistant_message_count,
-            min_messages=session.autosave_min_messages,
+            min_messages=request.session.autosave_min_messages,
         )
         return should_create, None if should_create else "message_count_threshold_not_met"
 
@@ -217,35 +236,30 @@ def _resolve_snapshot_creation(
 
 def _maybe_create_snapshot(
     *,
-    actor_user_id: UUID,
-    session: ChatSessionRecord,
-    autosave_snapshots: list[EngramSummary],
-    should_create: bool,
-    skipped_reason: str | None,
-    embedding_dim: int,
+    request: SnapshotCreationRequest,
     dependencies: SessionLifecycleDependencies,
 ) -> tuple[UUID | None, list[EngramSummary], str | None]:
-    if not should_create:
-        return None, autosave_snapshots, skipped_reason
+    if not request.should_create:
+        return None, request.autosave_snapshots, request.skipped_reason
 
     created_snapshot_id = _create_autosave_snapshot(
         request=AutosaveSnapshotCreateRequest(
-            actor_user_id=actor_user_id,
-            session=session,
-            existing_snapshots=autosave_snapshots,
-            embedding_dim=embedding_dim,
+            actor_user_id=request.actor_user_id,
+            session=request.session,
+            existing_snapshots=request.autosave_snapshots,
+            embedding_dim=request.embedding_dim,
         ),
         dependencies=dependencies,
     )
     if created_snapshot_id is None:
-        return None, autosave_snapshots, "duplicate_or_low_value_snapshot"
+        return None, request.autosave_snapshots, "duplicate_or_low_value_snapshot"
 
     refreshed_snapshots = _list_autosave_snapshots(
-        actor_user_id=actor_user_id,
-        session_id=session.session_id,
+        actor_user_id=request.actor_user_id,
+        session_id=request.session.session_id,
         dependencies=dependencies,
     )
-    return created_snapshot_id, refreshed_snapshots, skipped_reason
+    return created_snapshot_id, refreshed_snapshots, request.skipped_reason
 
 
 def run_session_lifecycle_maintenance(
@@ -269,19 +283,23 @@ def run_session_lifecycle_maintenance(
         dependencies=dependencies,
     )
     should_create, skipped_reason = _resolve_snapshot_creation(
-        actor_user_id=actor_user_id,
-        session=session,
-        autosave_snapshots=autosave_snapshots,
-        now=now,
+        request=SnapshotResolutionRequest(
+            actor_user_id=actor_user_id,
+            session=session,
+            autosave_snapshots=autosave_snapshots,
+            now=now,
+        ),
         dependencies=dependencies,
     )
     created_snapshot_id, autosave_snapshots, skipped_reason = _maybe_create_snapshot(
-        actor_user_id=actor_user_id,
-        session=session,
-        autosave_snapshots=autosave_snapshots,
-        should_create=should_create,
-        skipped_reason=skipped_reason,
-        embedding_dim=embedding_dim,
+        request=SnapshotCreationRequest(
+            actor_user_id=actor_user_id,
+            session=session,
+            autosave_snapshots=autosave_snapshots,
+            should_create=should_create,
+            skipped_reason=skipped_reason,
+            embedding_dim=embedding_dim,
+        ),
         dependencies=dependencies,
     )
 

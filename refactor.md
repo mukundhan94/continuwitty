@@ -2290,6 +2290,27 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 86 - Chat Session Lifecycle Request Object Adoption)
+
+- [x] Continued Phase 4 hardening in `api/app/chat/session_lifecycle.py` by removing excess-argument helper signatures:
+  - added `SnapshotResolutionRequest` and `SnapshotCreationRequest` dataclasses
+  - updated `_resolve_snapshot_creation(...)` and `_maybe_create_snapshot(...)` to accept request objects
+  - kept `run_session_lifecycle_maintenance(...)` behavior stable while simplifying orchestration argument fan-out
+- [x] Expanded lifecycle unit coverage:
+  - updated `api/tests/test_chat_session_lifecycle.py` with a threshold-met autosave creation case that asserts snapshot creation and payload linkage
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`255 passed, 4 skipped, 81 deselected`)
+  - `make test` (`255 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/chat/session_lifecycle.py` score: **10.0** (improved from **9.68**)
+  - `api/tests/test_chat_session_lifecycle.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2306,7 +2327,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/chat/service.py` | 10.0 | GREEN |
 | `api/app/chat/message_runtime.py` | 10.0 | GREEN |
 | `api/app/chat/session_operations.py` | 10.0 | GREEN |
-| `api/app/chat/session_lifecycle.py` | 9.68 | GREEN |
+| `api/app/chat/session_lifecycle.py` | 10.0 | GREEN |
 | `api/app/oauth/api.py` | 10.0 | GREEN |
 | `api/app/oauth/common.py` | 10.0 | GREEN |
 | `api/app/oauth/registration.py` | 10.0 | GREEN |

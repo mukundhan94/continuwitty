@@ -152,3 +152,59 @@ def test_run_session_lifecycle_skips_message_count_threshold() -> None:
     assert result.skipped_reason == "message_count_threshold_not_met"
     assert delete_calls == [[]]
     assert create_calls == []
+
+
+def test_run_session_lifecycle_creates_snapshot_when_threshold_is_met() -> None:
+    actor_id = uuid4()
+    session = _session(actor_id).model_copy(
+        update={
+            "autosave_enabled": True,
+            "autosave_strategy": ChatAutosaveStrategy.message_count,
+            "autosave_min_messages": 1,
+            "retention_days": 30,
+            "retention_max_snapshots": 10,
+        }
+    )
+    created_id = uuid4()
+    created_payload = None
+
+    def create_engram(**kwargs):
+        nonlocal created_payload
+        created_payload = kwargs["payload"]
+        return EngramCreateResponse(engram_id=created_id, created_at=datetime.now(UTC))
+
+    dependencies = SessionLifecycleDependencies(
+        list_session_linked_engrams=lambda **kwargs: [],
+        list_chat_messages=lambda **kwargs: [
+            _message(
+                session_id=session.session_id,
+                role="user",
+                content_text="Need help with a query",
+            ),
+            _message(
+                session_id=session.session_id,
+                role="assistant",
+                content_text=(
+                    "Detailed assistant summary with concrete decisions, actions, and next steps."
+                ),
+            ),
+        ],
+        count_session_messages_by_role=lambda **kwargs: 1,
+        delete_session_autosave_engrams=lambda **kwargs: [],
+        create_engram=create_engram,
+    )
+
+    result = run_session_lifecycle_maintenance(
+        actor_user_id=actor_id,
+        session=session,
+        embedding_dim=256,
+        dependencies=dependencies,
+    )
+
+    assert result.snapshot_engram_id == created_id
+    assert result.pruned_engram_ids == []
+    assert result.skipped_reason is None
+    assert created_payload is not None
+    assert created_payload.project_id == session.project_id
+    assert created_payload.source_session_id == session.session_id
+    assert "autosave_snapshot" in created_payload.tags
