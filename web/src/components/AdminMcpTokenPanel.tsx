@@ -25,6 +25,35 @@ type Props = {
   onRevoke: (tokenId: string) => Promise<void>
 }
 
+interface OptionChipSelectorProps {
+  label: string
+  ariaLabel: string
+  testId: string
+  addButtonTestId: string
+  addButtonLabel: string
+  emptyOptionLabel: string
+  emptyChipLabel: string
+  removeLabelPrefix: string
+  availableChoices: string[]
+  pendingValues: string[]
+  selectedValues: string[]
+  onPendingValuesChange: (values: string[]) => void
+  onAdd: () => void
+  onRemove: (value: string) => void
+}
+
+interface TokenCreationFormProps {
+  creating: boolean
+  availableTools: string[]
+  availableProjects: string[]
+  onCreate: (payload: McpTokenCreateRequest) => Promise<void>
+}
+
+interface IssuedTokensTableProps {
+  tokens: McpTokenSummary[]
+  onRevoke: (tokenId: string) => Promise<void>
+}
+
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
@@ -195,31 +224,100 @@ const EmptyText = styled.p`
 `
 
 const STATUS_ACTIVE = 'active'
+const DEFAULT_EXPIRY_DAYS = 90
 
-export function AdminMcpTokenPanel({
-  isOpen,
-  loading,
-  optionsLoading,
-  creating,
-  tokens,
-  latestToken,
-  error,
-  availableTools,
-  availableProjects,
-  onClose,
-  onRefresh,
-  onCreate,
-  onRevoke,
-}: Props) {
+function mergeUnique(current: string[], additions: string[]): string[] {
+  const merged = [...current]
+  for (const item of additions) {
+    if (!merged.includes(item)) {
+      merged.push(item)
+    }
+  }
+  return merged
+}
+
+function toSelectedOptions(select: HTMLSelectElement): string[] {
+  return Array.from(select.selectedOptions, (option) => option.value).filter(Boolean)
+}
+
+function effectivePendingValues(pendingValues: string[], availableChoices: string[]): string[] {
+  return pendingValues.filter((item) => availableChoices.includes(item))
+}
+
+function selectSize(optionCount: number): number {
+  return Math.min(Math.max(optionCount, 3), 8)
+}
+
+function formatTimestamp(value: string | null): string {
+  return value ? new Date(value).toLocaleString() : '-'
+}
+
+function OptionChipSelector({
+  label,
+  ariaLabel,
+  testId,
+  addButtonTestId,
+  addButtonLabel,
+  emptyOptionLabel,
+  emptyChipLabel,
+  removeLabelPrefix,
+  availableChoices,
+  pendingValues,
+  selectedValues,
+  onPendingValuesChange,
+  onAdd,
+  onRemove,
+}: OptionChipSelectorProps) {
+  return (
+    <Field>
+      {label}
+      <OptionSelectRow>
+        <Select
+          aria-label={ariaLabel}
+          data-testid={testId}
+          multiple
+          size={selectSize(availableChoices.length)}
+          value={pendingValues}
+          onChange={(event) => onPendingValuesChange(toSelectedOptions(event.target))}
+          disabled={availableChoices.length === 0}
+        >
+          {availableChoices.length === 0 ? <option value="">{emptyOptionLabel}</option> : null}
+          {availableChoices.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </Select>
+        <button type="button" data-testid={addButtonTestId} onClick={onAdd} disabled={pendingValues.length === 0}>
+          {addButtonLabel}
+        </button>
+      </OptionSelectRow>
+      <Hint>{`Select one or more options from the list, then click ${addButtonLabel}.`}</Hint>
+      <ChipWrap>
+        {selectedValues.length === 0
+          ? <Hint>{emptyChipLabel}</Hint>
+          : selectedValues.map((value) => (
+              <Chip key={value}>
+                {value}
+                <button type="button" aria-label={`${removeLabelPrefix} ${value}`} onClick={() => onRemove(value)}>
+                  ×
+                </button>
+              </Chip>
+            ))}
+      </ChipWrap>
+    </Field>
+  )
+}
+
+function TokenCreationForm({ creating, availableTools, availableProjects, onCreate }: TokenCreationFormProps) {
   const [name, setName] = useState('')
   const [scope, setScope] = useState<McpTokenScope>('read')
-  const [expiresInDays, setExpiresInDays] = useState(90)
+  const [expiresInDays, setExpiresInDays] = useState(DEFAULT_EXPIRY_DAYS)
   const [selectedTools, setSelectedTools] = useState<string[]>([])
   const [selectedProjects, setSelectedProjects] = useState<string[]>([])
   const [pendingTools, setPendingTools] = useState<string[]>([])
   const [pendingProjects, setPendingProjects] = useState<string[]>([])
 
-  const activeCount = useMemo(() => tokens.filter((item) => item.is_active).length, [tokens])
   const availableToolChoices = useMemo(
     () => availableTools.filter((item) => !selectedTools.includes(item)),
     [availableTools, selectedTools],
@@ -228,32 +326,21 @@ export function AdminMcpTokenPanel({
     () => availableProjects.filter((item) => !selectedProjects.includes(item)),
     [availableProjects, selectedProjects],
   )
+
   const effectivePendingTools = useMemo(
-    () => pendingTools.filter((item) => availableToolChoices.includes(item)),
-    [availableToolChoices, pendingTools],
+    () => effectivePendingValues(pendingTools, availableToolChoices),
+    [pendingTools, availableToolChoices],
   )
   const effectivePendingProjects = useMemo(
-    () => pendingProjects.filter((item) => availableProjectChoices.includes(item)),
-    [availableProjectChoices, pendingProjects],
+    () => effectivePendingValues(pendingProjects, availableProjectChoices),
+    [pendingProjects, availableProjectChoices],
   )
-
-  if (!isOpen) {
-    return null
-  }
 
   const addTools = () => {
     if (effectivePendingTools.length === 0) {
       return
     }
-    setSelectedTools((current) => {
-      const merged = [...current]
-      for (const item of effectivePendingTools) {
-        if (!merged.includes(item)) {
-          merged.push(item)
-        }
-      }
-      return merged
-    })
+    setSelectedTools((current) => mergeUnique(current, effectivePendingTools))
     setPendingTools([])
   }
 
@@ -261,15 +348,7 @@ export function AdminMcpTokenPanel({
     if (effectivePendingProjects.length === 0) {
       return
     }
-    setSelectedProjects((current) => {
-      const merged = [...current]
-      for (const item of effectivePendingProjects) {
-        if (!merged.includes(item)) {
-          merged.push(item)
-        }
-      }
-      return merged
-    })
+    setSelectedProjects((current) => mergeUnique(current, effectivePendingProjects))
     setPendingProjects([])
   }
 
@@ -286,6 +365,160 @@ export function AdminMcpTokenPanel({
     setSelectedProjects([])
     setPendingTools([])
     setPendingProjects([])
+  }
+
+  return (
+    <FormGrid onSubmit={(event) => void handleSubmit(event)}>
+      <Grid>
+        <Field>
+          Token Name
+          <Input
+            aria-label="Token Name"
+            required
+            minLength={3}
+            maxLength={120}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="LibreChat read token"
+          />
+        </Field>
+        <Field>
+          Scope
+          <Select
+            aria-label="Scope"
+            value={scope}
+            onChange={(event) => setScope(event.target.value as McpTokenScope)}
+          >
+            <option value="read">read</option>
+            <option value="write">write</option>
+          </Select>
+        </Field>
+        <Field>
+          Expiry (days)
+          <Input
+            aria-label="Expiry Days"
+            type="number"
+            min={1}
+            max={3650}
+            value={expiresInDays}
+            onChange={(event) => setExpiresInDays(Number(event.target.value || DEFAULT_EXPIRY_DAYS))}
+          />
+        </Field>
+      </Grid>
+
+      <OptionChipSelector
+        label="Allowed Tools (optional)"
+        ariaLabel="Tool Options"
+        testId="admin-tool-options"
+        addButtonTestId="admin-add-tool-chip"
+        addButtonLabel="Add Tools"
+        emptyOptionLabel="No tools available"
+        emptyChipLabel="No tool restrictions selected."
+        removeLabelPrefix="Remove tool"
+        availableChoices={availableToolChoices}
+        pendingValues={effectivePendingTools}
+        selectedValues={selectedTools}
+        onPendingValuesChange={setPendingTools}
+        onAdd={addTools}
+        onRemove={(value) => setSelectedTools((current) => current.filter((item) => item !== value))}
+      />
+
+      <OptionChipSelector
+        label="Allowed Project IDs (optional)"
+        ariaLabel="Project Options"
+        testId="admin-project-options"
+        addButtonTestId="admin-add-project-chip"
+        addButtonLabel="Add Projects"
+        emptyOptionLabel="No projects available"
+        emptyChipLabel="No project restrictions selected."
+        removeLabelPrefix="Remove project"
+        availableChoices={availableProjectChoices}
+        pendingValues={effectivePendingProjects}
+        selectedValues={selectedProjects}
+        onPendingValuesChange={setPendingProjects}
+        onAdd={addProjects}
+        onRemove={(value) => setSelectedProjects((current) => current.filter((item) => item !== value))}
+      />
+
+      <button type="submit" disabled={creating}>
+        {creating ? 'Creating...' : 'Create Token'}
+      </button>
+    </FormGrid>
+  )
+}
+
+function IssuedTokensTable({ tokens, onRevoke }: IssuedTokensTableProps) {
+  if (tokens.length === 0) {
+    return <EmptyText>No tokens issued yet.</EmptyText>
+  }
+
+  return (
+    <TableWrap>
+      <Table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Scope</th>
+            <th>Hint</th>
+            <th>Projects</th>
+            <th>Tools</th>
+            <th>Expires</th>
+            <th>Last Used</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tokens.map((token) => (
+            <tr key={token.token_id}>
+              <td>{token.name}</td>
+              <td>{token.scope}</td>
+              <td>
+                <code>{token.token_secret_hint}</code>
+              </td>
+              <td>{token.allowed_project_ids.length > 0 ? token.allowed_project_ids.join(', ') : 'all visible'}</td>
+              <td>{token.allowed_tools.length > 0 ? token.allowed_tools.join(', ') : 'scope defaults'}</td>
+              <td>{formatTimestamp(token.expires_at)}</td>
+              <td>{formatTimestamp(token.last_used_at)}</td>
+              <td>{token.is_active ? STATUS_ACTIVE : 'inactive'}</td>
+              <td>
+                {token.revoked_at ? (
+                  <button type="button" disabled>
+                    Revoked
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => void onRevoke(token.token_id)}>
+                    Revoke
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </TableWrap>
+  )
+}
+
+export function AdminMcpTokenPanel({
+  isOpen,
+  loading,
+  optionsLoading,
+  creating,
+  tokens,
+  latestToken,
+  error,
+  availableTools,
+  availableProjects,
+  onClose,
+  onRefresh,
+  onCreate,
+  onRevoke,
+}: Props) {
+  const activeCount = useMemo(() => tokens.filter((item) => item.is_active).length, [tokens])
+
+  if (!isOpen) {
+    return null
   }
 
   return (
@@ -326,201 +559,15 @@ export function AdminMcpTokenPanel({
           </SuccessBox>
         ) : null}
 
-        <FormGrid onSubmit={(event) => void handleSubmit(event)}>
-          <Grid>
-            <Field>
-              Token Name
-              <Input
-                aria-label="Token Name"
-                required
-                minLength={3}
-                maxLength={120}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="LibreChat read token"
-              />
-            </Field>
-            <Field>
-              Scope
-              <Select
-                aria-label="Scope"
-                value={scope}
-                onChange={(event) => setScope(event.target.value as McpTokenScope)}
-              >
-                <option value="read">read</option>
-                <option value="write">write</option>
-              </Select>
-            </Field>
-            <Field>
-              Expiry (days)
-              <Input
-                aria-label="Expiry Days"
-                type="number"
-                min={1}
-                max={3650}
-                value={expiresInDays}
-                onChange={(event) => setExpiresInDays(Number(event.target.value || 90))}
-              />
-            </Field>
-          </Grid>
-
-          <Field>
-            Allowed Tools (optional)
-            <OptionSelectRow>
-              <Select
-                aria-label="Tool Options"
-                data-testid="admin-tool-options"
-                multiple
-                size={Math.min(Math.max(availableToolChoices.length, 3), 8)}
-                value={effectivePendingTools}
-                onChange={(event) =>
-                  setPendingTools(Array.from(event.target.selectedOptions, (option) => option.value).filter(Boolean))
-                }
-                disabled={availableToolChoices.length === 0}
-              >
-                {availableToolChoices.length === 0 ? <option value="">No tools available</option> : null}
-                {availableToolChoices.map((toolName) => (
-                  <option key={toolName} value={toolName}>
-                    {toolName}
-                  </option>
-                ))}
-              </Select>
-              <button
-                type="button"
-                onClick={addTools}
-                disabled={effectivePendingTools.length === 0}
-                data-testid="admin-add-tool-chip"
-              >
-                Add Tools
-              </button>
-            </OptionSelectRow>
-            <Hint>Select one or more tools from the list, then click Add Tools.</Hint>
-            <ChipWrap>
-              {selectedTools.length === 0 ? (
-                <Hint>No tool restrictions selected.</Hint>
-              ) : (
-                selectedTools.map((toolName) => (
-                  <Chip key={toolName}>
-                    {toolName}
-                    <button
-                      type="button"
-                      aria-label={`Remove tool ${toolName}`}
-                      onClick={() => setSelectedTools((current) => current.filter((item) => item !== toolName))}
-                    >
-                      ×
-                    </button>
-                  </Chip>
-                ))
-              )}
-            </ChipWrap>
-          </Field>
-
-          <Field>
-            Allowed Project IDs (optional)
-            <OptionSelectRow>
-              <Select
-                aria-label="Project Options"
-                data-testid="admin-project-options"
-                multiple
-                size={Math.min(Math.max(availableProjectChoices.length, 3), 8)}
-                value={effectivePendingProjects}
-                onChange={(event) =>
-                  setPendingProjects(Array.from(event.target.selectedOptions, (option) => option.value).filter(Boolean))
-                }
-                disabled={availableProjectChoices.length === 0}
-              >
-                {availableProjectChoices.length === 0 ? <option value="">No projects available</option> : null}
-                {availableProjectChoices.map((projectName) => (
-                  <option key={projectName} value={projectName}>
-                    {projectName}
-                  </option>
-                ))}
-              </Select>
-              <button
-                type="button"
-                onClick={addProjects}
-                disabled={effectivePendingProjects.length === 0}
-                data-testid="admin-add-project-chip"
-              >
-                Add Projects
-              </button>
-            </OptionSelectRow>
-            <Hint>Select one or more projects from the list, then click Add Projects.</Hint>
-            <ChipWrap>
-              {selectedProjects.length === 0 ? (
-                <Hint>No project restrictions selected.</Hint>
-              ) : (
-                selectedProjects.map((projectName) => (
-                  <Chip key={projectName}>
-                    {projectName}
-                    <button
-                      type="button"
-                      aria-label={`Remove project ${projectName}`}
-                      onClick={() =>
-                        setSelectedProjects((current) => current.filter((item) => item !== projectName))
-                      }
-                    >
-                      ×
-                    </button>
-                  </Chip>
-                ))
-              )}
-            </ChipWrap>
-          </Field>
-
-          <button type="submit" disabled={creating}>
-            {creating ? 'Creating...' : 'Create Token'}
-          </button>
-        </FormGrid>
+        <TokenCreationForm
+          creating={creating}
+          availableTools={availableTools}
+          availableProjects={availableProjects}
+          onCreate={onCreate}
+        />
 
         <h3 className="font-display text-lg font-semibold tracking-tight text-ink">Issued Tokens</h3>
-        <TableWrap>
-          <Table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Scope</th>
-                <th>Hint</th>
-                <th>Projects</th>
-                <th>Tools</th>
-                <th>Expires</th>
-                <th>Last Used</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tokens.length === 0 ? null :
-                tokens.map((token) => (
-                  <tr key={token.token_id}>
-                    <td>{token.name}</td>
-                    <td>{token.scope}</td>
-                    <td>
-                      <code>{token.token_secret_hint}</code>
-                    </td>
-                    <td>{token.allowed_project_ids.length > 0 ? token.allowed_project_ids.join(', ') : 'all visible'}</td>
-                    <td>{token.allowed_tools.length > 0 ? token.allowed_tools.join(', ') : 'scope defaults'}</td>
-                    <td>{new Date(token.expires_at).toLocaleString()}</td>
-                    <td>{token.last_used_at ? new Date(token.last_used_at).toLocaleString() : '-'}</td>
-                    <td>{token.is_active ? STATUS_ACTIVE : 'inactive'}</td>
-                    <td>
-                      {token.revoked_at ? (
-                        <button type="button" disabled>
-                          Revoked
-                        </button>
-                      ) : (
-                        <button type="button" onClick={() => void onRevoke(token.token_id)}>
-                          Revoke
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </Table>
-        </TableWrap>
-
-        {tokens.length === 0 ? <EmptyText>No tokens issued yet.</EmptyText> : null}
+        <IssuedTokensTable tokens={tokens} onRevoke={onRevoke} />
       </Dialog>
     </Overlay>
   )

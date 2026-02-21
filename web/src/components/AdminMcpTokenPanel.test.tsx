@@ -74,6 +74,14 @@ describe('AdminMcpTokenPanel', () => {
     expect(screen.queryByRole('dialog', { name: /admin mcp tokens/i })).not.toBeInTheDocument()
   })
 
+  it('calls onClose when close button is clicked', async () => {
+    const user = userEvent.setup()
+    const { onClose } = renderPanel()
+
+    await user.click(screen.getByRole('button', { name: /^close$/i }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('submits token creation payload from selected tool/project chips', async () => {
     const user = userEvent.setup()
     const onCreate = vi.fn(async () => {})
