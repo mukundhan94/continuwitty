@@ -1082,6 +1082,68 @@ class McpService:
         )
         return {"result": result}
 
+    def _dispatch_engram_move_project_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> dict[str, Any]:
+        actor_role = str(actor.get("role", ""))
+        engram_id = self._parse_uuid(params, "engram_id")
+        current = self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
+        if (
+            token_auth
+            and token_auth.allowed_project_ids
+            and current.project_id not in token_auth.allowed_project_ids
+        ):
+            raise McpRpcError(
+                code=-32003,
+                message="Project not allowed by token policy",
+                data={
+                    "tool": "engram.move_project",
+                    "project_id": current.project_id,
+                    "token_scope": token_auth.scope,
+                },
+            )
+        moved = self._memory_admin_service.move_engram(
+            engram_id=engram_id,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            payload=AdminEngramMoveRequest(
+                target_project_id=str(params.get("target_project_id", "")),
+                expected_updated_at=params.get("expected_updated_at"),
+                reason=params.get("reason"),
+            ),
+        )
+        return {"engram": moved.model_dump(mode="json")}
+
+    def _dispatch_engram_state_mutation_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if method not in {"engram.delete", "engram.restore"}:
+            return None
+
+        engram_id = self._parse_uuid(params, "engram_id")
+        self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
+
+        if method == "engram.delete":
+            deleted = self._memory_admin_service.delete_engram(
+                engram_id=engram_id,
+                actor_user_id=actor_user_id,
+                payload=AdminEngramDeleteRequest(reason=params.get("reason")),
+            )
+            return {"result": deleted.model_dump(mode="json")}
+
+        restored = self._memory_admin_service.restore_engram(engram_id=engram_id)
+        return {"result": restored.model_dump(mode="json")}
+
     def _dispatch_engram_tool(
         self,
         *,
@@ -1187,51 +1249,12 @@ class McpService:
             return {"engram": updated.model_dump(mode="json")}
 
         if method == "engram.move_project":
-            engram_id = self._parse_uuid(params, "engram_id")
-            current = self._require_engram_access(
-                actor=actor, engram_id=engram_id, include_deleted=True
-            )
-            if (
-                token_auth
-                and token_auth.allowed_project_ids
-                and current.project_id not in token_auth.allowed_project_ids
-            ):
-                raise McpRpcError(
-                    code=-32003,
-                    message="Project not allowed by token policy",
-                    data={
-                        "tool": method,
-                        "project_id": current.project_id,
-                        "token_scope": token_auth.scope,
-                    },
-                )
-            moved = self._memory_admin_service.move_engram(
-                engram_id=engram_id,
+            return self._dispatch_engram_move_project_tool(
+                actor=actor,
                 actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                payload=AdminEngramMoveRequest(
-                    target_project_id=str(params.get("target_project_id", "")),
-                    expected_updated_at=params.get("expected_updated_at"),
-                    reason=params.get("reason"),
-                ),
+                params=params,
+                token_auth=token_auth,
             )
-            return {"engram": moved.model_dump(mode="json")}
-
-        if method == "engram.delete":
-            engram_id = self._parse_uuid(params, "engram_id")
-            self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
-            deleted = self._memory_admin_service.delete_engram(
-                engram_id=engram_id,
-                actor_user_id=actor_user_id,
-                payload=AdminEngramDeleteRequest(reason=params.get("reason")),
-            )
-            return {"result": deleted.model_dump(mode="json")}
-
-        if method == "engram.restore":
-            engram_id = self._parse_uuid(params, "engram_id")
-            self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
-            restored = self._memory_admin_service.restore_engram(engram_id=engram_id)
-            return {"result": restored.model_dump(mode="json")}
 
         if method == "engram.collection_list":
             collections = self._list_collections_for_actor(
@@ -1257,6 +1280,15 @@ class McpService:
         )
         if collection_mutation_result is not None:
             return collection_mutation_result
+
+        state_mutation_result = self._dispatch_engram_state_mutation_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+        )
+        if state_mutation_result is not None:
+            return state_mutation_result
 
         return None
 

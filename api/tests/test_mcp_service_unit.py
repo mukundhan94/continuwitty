@@ -76,6 +76,20 @@ def _mock_owned_collection(
     )
 
 
+def _mock_owned_engram(
+    memory_admin_service: MagicMock,
+    *,
+    actor_user_id: object,
+    engram_id: object,
+    project_id: str = "project-alpha",
+) -> None:
+    memory_admin_service.find_engram.return_value = _Dumpable(
+        payload={"engram_id": str(engram_id)},
+        owner_user_id=actor_user_id,
+        project_id=project_id,
+    )
+
+
 def test_dispatch_tool_routes_chat_domain() -> None:
     service, chat_service, _, _ = _build_service()
     actor_user_id = uuid4()
@@ -400,31 +414,6 @@ def test_dispatch_chat_delete_session_routes_memory_admin_service() -> None:
     assert call_kwargs["payload"].reason == "cleanup"
 
 
-def test_dispatch_engram_collection_delete_routes_memory_admin_service() -> None:
-    service, _, _, memory_admin_service = _build_service()
-    actor_user_id = uuid4()
-    collection_id = uuid4()
-    _mock_owned_collection(
-        memory_admin_service,
-        actor_user_id=actor_user_id,
-        collection_id=collection_id,
-    )
-    memory_admin_service.delete_collection.return_value = {"deleted": True}
-
-    result = _dispatch_for_user(
-        service,
-        actor_user_id=actor_user_id,
-        method="engram.collection_delete",
-        params={"collection_id": str(collection_id), "reason": "cleanup"},
-    )
-
-    assert result == {"result": {"deleted": True}}
-    call_kwargs = memory_admin_service.delete_collection.call_args.kwargs
-    assert call_kwargs["collection_id"] == collection_id
-    assert call_kwargs["actor_user_id"] == actor_user_id
-    assert call_kwargs["payload"].reason == "cleanup"
-
-
 def test_dispatch_engram_collection_add_items_parses_uuid_list_payload() -> None:
     service, _, _, memory_admin_service = _build_service()
     actor_user_id = uuid4()
@@ -453,3 +442,78 @@ def test_dispatch_engram_collection_add_items_parses_uuid_list_payload() -> None
     assert call_kwargs["collection_id"] == collection_id
     assert call_kwargs["actor_user_id"] == actor_user_id
     assert call_kwargs["payload"].engram_ids == [engram_id_a, engram_id_b]
+
+
+@pytest.mark.parametrize(
+    ("method", "resource_key", "delete_mock_name", "delete_return_value"),
+    [
+        ("engram.collection_delete", "collection_id", "delete_collection", {"deleted": True}),
+        ("engram.delete", "engram_id", "delete_engram", _Dumpable(payload={"deleted": True})),
+    ],
+)
+def test_dispatch_delete_routes_memory_admin_service(
+    method: str,
+    resource_key: str,
+    delete_mock_name: str,
+    delete_return_value: object,
+) -> None:
+    service, _, _, memory_admin_service = _build_service()
+    actor_user_id = uuid4()
+    resource_id = uuid4()
+    if resource_key == "collection_id":
+        _mock_owned_collection(
+            memory_admin_service,
+            actor_user_id=actor_user_id,
+            collection_id=resource_id,
+        )
+    else:
+        _mock_owned_engram(
+            memory_admin_service,
+            actor_user_id=actor_user_id,
+            engram_id=resource_id,
+        )
+    getattr(memory_admin_service, delete_mock_name).return_value = delete_return_value
+
+    result = _dispatch_for_user(
+        service,
+        actor_user_id=actor_user_id,
+        method=method,
+        params={resource_key: str(resource_id), "reason": "cleanup"},
+    )
+
+    assert result == {"result": {"deleted": True}}
+    call_kwargs = getattr(memory_admin_service, delete_mock_name).call_args.kwargs
+    assert call_kwargs[resource_key] == resource_id
+    assert call_kwargs["actor_user_id"] == actor_user_id
+    assert call_kwargs["payload"].reason == "cleanup"
+
+
+def test_dispatch_engram_move_project_rejects_disallowed_source_project_for_token() -> None:
+    service, _, _, memory_admin_service = _build_service()
+    actor_user_id = uuid4()
+    actor = {"user_id": str(actor_user_id), "role": "user"}
+    engram_id = uuid4()
+    _mock_owned_engram(
+        memory_admin_service,
+        actor_user_id=actor_user_id,
+        engram_id=engram_id,
+        project_id="source-project",
+    )
+    token_auth = _token_auth(scope="write", allowed_project_ids={"target-project"})
+
+    with pytest.raises(McpRpcError) as exc_info:
+        service._dispatch_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method="engram.move_project",
+            params={"engram_id": str(engram_id), "target_project_id": "target-project"},
+            token_auth=token_auth,
+        )
+
+    assert exc_info.value.code == -32003
+    assert exc_info.value.data == {
+        "tool": "engram.move_project",
+        "project_id": "source-project",
+        "token_scope": "write",
+    }
+    memory_admin_service.move_engram.assert_not_called()
