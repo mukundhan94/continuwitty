@@ -1161,6 +1161,35 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 42 - Shared Error Utility Extraction Phase 10.1/10.2 Hardening)
+
+- [x] Continued App refactor by extracting API/user-error mapping helper from `web/src/App.tsx`
+- [x] Added new utility module `web/src/utils/errors.ts`:
+  - `describeError(...)` for shared `ApiError`/`Error`/fallback mapping
+- [x] Updated `web/src/App.tsx`:
+  - removed inline `describeError(...)` helper
+  - switched to imported shared `describeError(...)` utility
+- [x] Added direct utility tests in `web/src/utils/errors.test.ts`:
+  - `ApiError` detail mapping
+  - generic `Error` message mapping
+  - unknown-input fallback mapping
+- [x] Validation run:
+  - `npm run lint` (web)
+  - `npm run test -- src/utils/errors.test.ts src/utils/projectScope.test.ts src/hooks/useProjectScopePersistence.test.ts src/hooks/useWorkspaceLifecycle.test.ts src/hooks/useWorkspaceReset.test.ts`
+  - `make web-check`
+  - aggregate: `14 passed` (targeted web), `112 passed` (full web)
+- [x] Acceptance run: `make acceptance-test-mock-docker` (10 passed on port `5173`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `web/src/App.tsx` score: **10.0**
+  - `web/src/utils/errors.ts` score: **10.0**
+  - `web/src/utils/errors.test.ts` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+- [x] Full backend suite run:
+  - `make test` passed (`274 passed`) after ensuring local DB availability via `make db-up`
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |

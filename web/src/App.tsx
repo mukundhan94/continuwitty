@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { ApiError } from './api/http'
 import type {
   ChatMessage,
   ChatDebugTrace,
@@ -43,6 +42,7 @@ import { useWorkspaceDataLoaders } from './hooks/useWorkspaceDataLoaders'
 import { useWorkspaceLifecycle } from './hooks/useWorkspaceLifecycle'
 import { useWorkspaceActions } from './hooks/useWorkspaceActions'
 import { buildDefaultSaveAbstract } from './utils/chat'
+import { describeError } from './utils/errors'
 import {
   initialProjectId,
   normalizeProjectId,
@@ -59,16 +59,6 @@ const RightRail = styled.div`
     grid-template-rows: none;
   }
 `
-
-function describeError(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.detail
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return 'Unexpected error'
-}
 
 function AppScreen() {
   const navigate = useNavigate()
