@@ -43,21 +43,11 @@ import { useWorkspaceDataLoaders } from './hooks/useWorkspaceDataLoaders'
 import { useWorkspaceLifecycle } from './hooks/useWorkspaceLifecycle'
 import { useWorkspaceActions } from './hooks/useWorkspaceActions'
 import { buildDefaultSaveAbstract } from './utils/chat'
-
-const PROJECT_ID_STORAGE_KEY = 'engram.lastProjectId'
-
-function normalizeProjectId(value: string): string {
-  const trimmed = value.trim()
-  return trimmed || WEB_CONFIG.defaultProjectId
-}
-
-function initialProjectId(): string {
-  if (typeof window === 'undefined') {
-    return WEB_CONFIG.defaultProjectId
-  }
-  const stored = window.localStorage.getItem(PROJECT_ID_STORAGE_KEY)
-  return normalizeProjectId(stored || WEB_CONFIG.defaultProjectId)
-}
+import {
+  initialProjectId,
+  normalizeProjectId,
+  PROJECT_ID_STORAGE_KEY,
+} from './utils/projectScope'
 
 const RightRail = styled.div`
   min-height: 0;
