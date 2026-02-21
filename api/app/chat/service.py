@@ -1,203 +1,31 @@
 from __future__ import annotations
 
 from collections.abc import Generator, Iterator
-from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
 from uuid import UUID
 
-from app.chat_repository import (
-    ChatMessageCreateRepositoryRequest,
-    MessageMetadata,
-    count_session_messages_by_role,
-    create_chat_message,
-    create_chat_session,
-    delete_session_autosave_engrams,
-    get_chat_session,
-    list_chat_messages,
-    list_chat_sessions,
-    list_pinned_documents,
-    list_pinned_engram_summaries,
-    list_pinned_engrams,
-    list_session_linked_engrams,
-    pin_document_to_session,
-    pin_engram_to_session,
-    unpin_document_from_session,
-    unpin_engram_from_session,
-    update_chat_session,
-)
 from app.config import get_settings
-from app.models import (
-    ChatAutosaveStrategy,
-    ChatDebugEmbeddingCall,
-    ChatDebugLLMCall,
-    ChatDebugProviderMessage,
-    ChatDebugTrace,
-    ChatLifecyclePolicy,
-    ChatLifecyclePolicyUpdateRequest,
-    ChatMessageCreateRequest,
-    ChatMessageRecord,
-    ChatSendResponse,
-    ChatSessionCreateRequest,
-    ChatSessionRecord,
-    ChatSessionUpdateRequest,
-    ChatTimelineEvent,
-    ContinueSessionRequest,
-    ContinueSessionResponse,
-    EngramSummary,
-    MemoryEngramCreate,
-    PinDocumentRequest,
-    PinEngramRequest,
-    PinnedDocumentRecord,
-    SaveSessionAsEngramRequest,
-    SaveSessionAsEngramResponse,
-)
-from app.observability import (
-    ChatDebugCollector,
-    ChatDebugTelemetryPublisher,
-    bind_chat_debug_collector,
-)
-from app.projects.repository import ensure_project_exists
-from app.providers.base import ProviderGenerateRequest, ProviderGenerateResult, ProviderMessage
-from app.providers.errors import (
-    ProviderAPIError,
-    ProviderAuthError,
-    ProviderError,
-    ProviderRateLimitError,
-    ProviderRequestError,
-)
+from app.models import ChatDebugTrace, ChatMessageCreateRequest, ChatMessageRecord, ChatSendResponse
+from app.observability import ChatDebugTelemetryPublisher
+from app.providers.base import ProviderGenerateResult
 from app.providers.registry import get_provider_adapter
-from app.repository import create_engram
 
-from .context import AssembledChatContext, ChatContextRequest, assemble_chat_context
-from .errors import (
-    ChatProviderExecutionError,
-    ChatServiceError,
-    ChatSessionNotFoundError,
-    ChatValidationError,
+from .errors import ChatServiceError
+from .message_runtime import (
+    ChatMessageRuntime,
+    PreparedGeneration,
+    raise_provider_error,
+    resolve_token_usage,
 )
-from .lifecycle_policy import (
-    classify_timeline_event_type,
-    normalize_autosave_policy,
+from .message_runtime import (
+    DebugBuildContext as _DebugBuildContext,
 )
-from .session_lifecycle import (
-    LifecycleMaintenanceResult,
-    SessionLifecycleDependencies,
-    derive_chat_snapshot_abstract,
-    is_generic_snapshot_abstract,
-    retrieval_text_from_messages,
-    run_session_lifecycle_maintenance,
-    transcript_markdown,
-)
-
-_PROVIDER_ERROR_STATUS_MAP: list[tuple[type[ProviderError], int]] = [
-    (ProviderRateLimitError, 429),
-    (ProviderAuthError, 503),
-    (ProviderRequestError, 400),
-    (ProviderAPIError, 502),
-    (ProviderError, 502),
-]
-
-
-@dataclass(frozen=True)
-class PreparedGeneration:
-    session: ChatSessionRecord
-    user_message: ChatMessageRecord
-    context: AssembledChatContext
-    provider_request: ProviderGenerateRequest
-    debug_collector: ChatDebugCollector
-    prepare_duration_ms: float
-    context_duration_ms: float
-    history_load_duration_ms: float
-
-@dataclass(frozen=True)
-class _DebugBuildContext:
-    actor_user_id: UUID
-    prepared: PreparedGeneration
-    result: ProviderGenerateResult
-    llm_call_duration_ms: float
-    persistence_duration_ms: float
-    total_duration_ms: float
-    call_type: str
-
-
-def _history_as_provider_messages(
-    messages: list[ChatMessageRecord],
-    history_limit: int = 40,
-) -> list[ProviderMessage]:
-    normalized = [item for item in messages if item.role in {"user", "assistant"}]
-    trimmed = normalized[-history_limit:]
-    return [ProviderMessage(role=item.role, content=item.content_text) for item in trimmed]
-
-
-def _build_system_prompt(base_prompt: str, context_markdown: str) -> str:
-    sections: list[str] = []
-    if base_prompt.strip():
-        sections.append(base_prompt.strip())
-    if context_markdown:
-        sections.append(
-            "Use the retrieved engram context below when relevant. "
-            "If you cite evidence, prefer source URLs from the context.\n\n"
-            f"{context_markdown}"
-        )
-    return "\n\n".join(sections)
-
-
-def _normalize_spaces(value: str) -> str:
-    return " ".join(value.strip().split())
-
-
-def _truncate_text(value: str, max_chars: int) -> str:
-    if len(value) <= max_chars:
-        return value
-    return value[: max_chars - 3].rstrip() + "..."
+from .session_operations import ChatSessionOperationsMixin
 
 
 def _duration_ms(started_at: float) -> float:
     return (perf_counter() - started_at) * 1000.0
-
-
-def _preview_text(value: str, max_chars: int = 360) -> str:
-    normalized = _normalize_spaces(value)
-    return _truncate_text(normalized, max_chars=max_chars)
-
-
-def _estimate_token_usage(*, input_chars: int, output_chars: int) -> dict[str, int]:
-    input_tokens = max(1, round(input_chars / 4))
-    output_tokens = max(1, round(output_chars / 4))
-    return {
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "total_tokens": input_tokens + output_tokens,
-    }
-
-
-def _build_provider_message_debug(
-    messages: list[ProviderMessage],
-) -> list[ChatDebugProviderMessage]:
-    return [
-        ChatDebugProviderMessage(
-            role=message.role,
-            content_preview=_preview_text(message.content),
-            char_count=len(message.content),
-        )
-        for message in messages
-    ]
-
-
-def _build_embedding_call_debug(embedding_calls: list[Any]) -> list[ChatDebugEmbeddingCall]:
-    return [
-        ChatDebugEmbeddingCall(
-            operation=item.operation,
-            provider_id=item.provider_id,
-            duration_ms=round(item.duration_ms, 2),
-            item_count=item.item_count,
-            text_chars=item.text_chars,
-            dim=item.dim,
-            used_fallback=item.used_fallback,
-        )
-        for item in embedding_calls
-    ]
 
 
 def _resolve_token_usage(
@@ -206,12 +34,14 @@ def _resolve_token_usage(
     input_chars: int,
     output_chars: int,
 ) -> tuple[dict[str, int], bool]:
-    resolved = token_usage or {}
-    if int(resolved.get("total_tokens", 0)) <= 0:
-        return _estimate_token_usage(input_chars=input_chars, output_chars=output_chars), True
-    return resolved, False
+    return resolve_token_usage(
+        token_usage=token_usage,
+        input_chars=input_chars,
+        output_chars=output_chars,
+    )
 
-class ChatService:
+
+class ChatService(ChatSessionOperationsMixin):
     def __init__(self, embedding_dim: int) -> None:
         self._embedding_dim = embedding_dim
         settings = get_settings()
@@ -224,247 +54,14 @@ class ChatService:
             langfuse_secret_key=settings.langfuse_secret_key,
             langfuse_host=settings.langfuse_host,
         )
-
-    @staticmethod
-    def _normalize_create_payload(payload: ChatSessionCreateRequest) -> ChatSessionCreateRequest:
-        autosave_enabled, autosave_strategy = normalize_autosave_policy(
-            autosave_enabled=payload.autosave_enabled,
-            autosave_strategy=payload.autosave_strategy,
+        self._runtime = ChatMessageRuntime(
+            embedding_dim=self._embedding_dim,
+            chat_debug_enabled=self._chat_debug_enabled,
+            chat_debug_include_raw_text=self._chat_debug_include_raw_text,
+            debug_publisher=self._debug_publisher,
+            get_session=self.get_session,
+            run_session_lifecycle_maintenance=self._run_session_lifecycle_maintenance,
         )
-        return payload.model_copy(
-            update={
-                "autosave_enabled": autosave_enabled,
-                "autosave_strategy": autosave_strategy,
-            }
-        )
-
-    @staticmethod
-    def _normalize_update_payload(payload: ChatSessionUpdateRequest) -> ChatSessionUpdateRequest:
-        autosave_enabled = payload.autosave_enabled
-        autosave_strategy = payload.autosave_strategy
-
-        if autosave_enabled is None and autosave_strategy is None:
-            return payload
-
-        if autosave_enabled is None and autosave_strategy is not None:
-            autosave_enabled = autosave_strategy != ChatAutosaveStrategy.off
-        if autosave_strategy is None and autosave_enabled is not None:
-            autosave_strategy = (
-                ChatAutosaveStrategy.interval if autosave_enabled else ChatAutosaveStrategy.off
-            )
-
-        assert autosave_enabled is not None
-        assert autosave_strategy is not None
-        normalized_enabled, normalized_strategy = normalize_autosave_policy(
-            autosave_enabled=autosave_enabled,
-            autosave_strategy=autosave_strategy,
-        )
-        return payload.model_copy(
-            update={
-                "autosave_enabled": normalized_enabled,
-                "autosave_strategy": normalized_strategy,
-            }
-        )
-
-    @staticmethod
-    def _build_lifecycle_policy(session: ChatSessionRecord) -> ChatLifecyclePolicy:
-        return ChatLifecyclePolicy(
-            autosave_enabled=session.autosave_enabled,
-            autosave_strategy=session.autosave_strategy,
-            autosave_interval_minutes=session.autosave_interval_minutes,
-            autosave_min_messages=session.autosave_min_messages,
-            retention_days=session.retention_days,
-            retention_max_snapshots=session.retention_max_snapshots,
-        )
-
-    def create_session(
-        self, actor_user_id: UUID, payload: ChatSessionCreateRequest
-    ) -> ChatSessionRecord:
-        normalized_payload = self._normalize_create_payload(payload)
-        ensure_project_exists(
-            project_id=normalized_payload.project_id,
-            owner_user_id=actor_user_id,
-        )
-        return create_chat_session(owner_user_id=actor_user_id, payload=normalized_payload)
-
-    def list_sessions(
-        self,
-        actor_user_id: UUID,
-        project_id: str | None,
-        limit: int,
-        offset: int,
-    ) -> list[ChatSessionRecord]:
-        return list_chat_sessions(
-            actor_user_id=actor_user_id,
-            project_id=project_id,
-            limit=limit,
-            offset=offset,
-        )
-
-    def get_session(self, actor_user_id: UUID, session_id: UUID) -> ChatSessionRecord:
-        session = get_chat_session(session_id=session_id, actor_user_id=actor_user_id)
-        if not session:
-            raise ChatSessionNotFoundError()
-        return session
-
-    def update_session(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-        payload: ChatSessionUpdateRequest,
-    ) -> ChatSessionRecord:
-        normalized_payload = self._normalize_update_payload(payload)
-        updated = update_chat_session(
-            session_id=session_id,
-            actor_user_id=actor_user_id,
-            payload=normalized_payload,
-        )
-        if not updated:
-            raise ChatSessionNotFoundError()
-        return updated
-
-    def get_lifecycle_policy(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-    ) -> ChatLifecyclePolicy:
-        session = self.get_session(actor_user_id=actor_user_id, session_id=session_id)
-        return self._build_lifecycle_policy(session)
-
-    def update_lifecycle_policy(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-        payload: ChatLifecyclePolicyUpdateRequest,
-    ) -> ChatLifecyclePolicy:
-        if not payload.model_fields_set:
-            return self.get_lifecycle_policy(actor_user_id=actor_user_id, session_id=session_id)
-
-        updated = self.update_session(
-            actor_user_id=actor_user_id,
-            session_id=session_id,
-            payload=ChatSessionUpdateRequest(
-                autosave_enabled=payload.autosave_enabled,
-                autosave_strategy=payload.autosave_strategy,
-                autosave_interval_minutes=payload.autosave_interval_minutes,
-                autosave_min_messages=payload.autosave_min_messages,
-                retention_days=payload.retention_days,
-                retention_max_snapshots=payload.retention_max_snapshots,
-            ),
-        )
-        return self._build_lifecycle_policy(updated)
-
-    def list_timeline_events(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-        limit: int,
-        offset: int,
-    ) -> list[ChatTimelineEvent]:
-        self.get_session(actor_user_id=actor_user_id, session_id=session_id)
-        linked = list_session_linked_engrams(
-            session_id=session_id,
-            actor_user_id=actor_user_id,
-            limit=limit,
-            offset=offset,
-        )
-        return [
-            ChatTimelineEvent(
-                event_id=item.engram_id,
-                session_id=session_id,
-                event_type=classify_timeline_event_type(item.tags),
-                title=item.title,
-                abstract=item.abstract,
-                tags=item.tags,
-                created_at=item.created_at,
-            )
-            for item in linked
-        ]
-
-    def list_messages(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-        limit: int,
-        offset: int,
-    ) -> list[ChatMessageRecord]:
-        self.get_session(actor_user_id=actor_user_id, session_id=session_id)
-        return list_chat_messages(
-            session_id=session_id,
-            actor_user_id=actor_user_id,
-            limit=limit,
-            offset=offset,
-        )
-
-    def list_pinned_engrams(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-    ) -> list[EngramSummary]:
-        self.get_session(actor_user_id=actor_user_id, session_id=session_id)
-        return list_pinned_engram_summaries(
-            session_id=session_id,
-            actor_user_id=actor_user_id,
-        )
-
-    def list_pinned_documents(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-    ) -> list[PinnedDocumentRecord]:
-        self.get_session(actor_user_id=actor_user_id, session_id=session_id)
-        return list_pinned_documents(
-            session_id=session_id,
-            actor_user_id=actor_user_id,
-        )
-
-    def pin_engram(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-        payload: PinEngramRequest,
-    ):
-        pinned = pin_engram_to_session(
-            session_id,
-            payload.engram_id,
-            actor_user_id,
-        )
-        if not pinned:
-            raise ChatValidationError("Session or engram is not accessible for pinning")
-        return pinned
-
-    def pin_document(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-        payload: PinDocumentRequest,
-    ) -> PinnedDocumentRecord:
-        pinned = pin_document_to_session(
-            session_id,
-            payload.document_id,
-            actor_user_id,
-        )
-        if not pinned:
-            raise ChatValidationError("Session or document is not accessible for pinning")
-        return pinned
-
-    def unpin_engram(self, actor_user_id: UUID, session_id: UUID, engram_id: UUID) -> None:
-        removed = unpin_engram_from_session(
-            session_id,
-            engram_id,
-            actor_user_id,
-        )
-        if not removed:
-            raise ChatSessionNotFoundError("Pinned engram not found for session")
-
-    def unpin_document(self, actor_user_id: UUID, session_id: UUID, document_id: UUID) -> None:
-        removed = unpin_document_from_session(
-            session_id,
-            document_id,
-            actor_user_id,
-        )
-        if not removed:
-            raise ChatSessionNotFoundError("Pinned document not found for session")
 
     def _prepare_generation(
         self,
@@ -472,69 +69,15 @@ class ChatService:
         session_id: UUID,
         payload: ChatMessageCreateRequest,
     ) -> PreparedGeneration:
-        prepare_started_at = perf_counter()
-        if not payload.content_text.strip():
-            raise ChatValidationError("Message content cannot be empty")
-
-        session = self.get_session(actor_user_id=actor_user_id, session_id=session_id)
-        user_message = create_chat_message(
-            request=ChatMessageCreateRepositoryRequest(
-                session_id=session.session_id,
-                actor_user_id=actor_user_id,
-                role="user",
-                content_text=payload.content_text,
-            ),
-        )
-        if not user_message:
-            raise ChatSessionNotFoundError()
-
-        debug_collector = ChatDebugCollector()
-        context_started_at = perf_counter()
-        with bind_chat_debug_collector(debug_collector):
-            context = assemble_chat_context(
-                request=ChatContextRequest(
-                    session=session,
-                    actor_user_id=actor_user_id,
-                    user_query=payload.content_text,
-                    embedding_dim=self._embedding_dim,
-                ),
-            )
-        context_duration_ms = _duration_ms(context_started_at)
-
-        history_started_at = perf_counter()
-        history = list_chat_messages(
-            session_id=session.session_id,
+        return self._runtime.prepare_generation(
             actor_user_id=actor_user_id,
-            limit=200,
-            offset=0,
-        )
-        history_load_duration_ms = _duration_ms(history_started_at)
-        provider_request = ProviderGenerateRequest(
-            model_id=session.model_id,
-            messages=_history_as_provider_messages(history),
-            system_prompt=_build_system_prompt(session.system_prompt, context.context_markdown),
-        )
-        return PreparedGeneration(
-            session=session,
-            user_message=user_message,
-            context=context,
-            provider_request=provider_request,
-            debug_collector=debug_collector,
-            prepare_duration_ms=_duration_ms(prepare_started_at),
-            context_duration_ms=context_duration_ms,
-            history_load_duration_ms=history_load_duration_ms,
+            session_id=session_id,
+            payload=payload,
         )
 
     @staticmethod
     def _raise_provider_error(exc: Exception) -> None:
-        for exception_type, status_code in _PROVIDER_ERROR_STATUS_MAP:
-            if isinstance(exc, exception_type):
-                raise ChatProviderExecutionError(
-                    detail=str(exc),
-                    status_code=status_code,
-                    error_code=exc.code,
-                ) from exc
-        raise exc
+        raise_provider_error(exc)
 
     def _persist_assistant_reply(
         self,
@@ -543,114 +86,18 @@ class ChatService:
         prepared: PreparedGeneration,
         result: ProviderGenerateResult,
     ) -> ChatMessageRecord:
-        assistant_message = create_chat_message(
-            request=ChatMessageCreateRepositoryRequest(
-                session_id=prepared.session.session_id,
-                actor_user_id=actor_user_id,
-                role="assistant",
-                content_text=result.text,
-                metadata=MessageMetadata(
-                    provider=prepared.session.provider.value,
-                    model_id=prepared.session.model_id,
-                    token_usage_json=result.token_usage,
-                    used_engram_ids=prepared.context.used_engram_ids,
-                ),
-            ),
+        return self._runtime.persist_assistant_reply(
+            actor_user_id=actor_user_id,
+            prepared=prepared,
+            result=result,
         )
-        if not assistant_message:
-            raise ChatSessionNotFoundError()
-        return assistant_message
 
     def _build_debug_trace(
         self,
         *,
         context: _DebugBuildContext,
     ) -> ChatDebugTrace | None:
-        if not self._chat_debug_enabled:
-            return None
-
-        response_output_text = context.result.text if self._chat_debug_include_raw_text else ""
-        provider_message_debug = _build_provider_message_debug(
-            context.prepared.provider_request.messages
-        )
-        embedding_calls = _build_embedding_call_debug(
-            context.prepared.debug_collector.embedding_calls
-        )
-
-        input_chars = sum(
-            len(item.content) for item in context.prepared.provider_request.messages
-        ) + len(context.prepared.provider_request.system_prompt)
-        output_chars = len(context.result.text)
-        token_usage, token_usage_is_estimated = _resolve_token_usage(
-            token_usage=context.result.token_usage,
-            input_chars=input_chars,
-            output_chars=output_chars,
-        )
-
-        llm_call = ChatDebugLLMCall(
-            provider=context.prepared.session.provider.value,
-            model_id=context.prepared.session.model_id,
-            call_type=context.call_type,
-            duration_ms=round(context.llm_call_duration_ms, 2),
-            input_chars=input_chars,
-            output_chars=output_chars,
-            token_usage=token_usage,
-            token_usage_is_estimated=token_usage_is_estimated,
-        )
-
-        debug_trace = ChatDebugTrace(
-            total_duration_ms=round(context.total_duration_ms, 2),
-            prepare_duration_ms=round(context.prepared.prepare_duration_ms, 2),
-            context_duration_ms=round(context.prepared.context_duration_ms, 2),
-            history_load_duration_ms=round(context.prepared.history_load_duration_ms, 2),
-            llm_call_duration_ms=round(context.llm_call_duration_ms, 2),
-            persistence_duration_ms=round(context.persistence_duration_ms, 2),
-            used_engram_count=len(context.prepared.context.used_engram_ids),
-            used_document_chunk_count=len(context.prepared.context.used_document_chunk_ids),
-            source_reference_count=len(context.prepared.context.source_references),
-            provider=context.prepared.session.provider.value,
-            model_id=context.prepared.session.model_id,
-            request_input_text=context.prepared.user_message.content_text,
-            response_output_text=response_output_text,
-            provider_system_prompt_preview=_preview_text(
-                context.prepared.provider_request.system_prompt
-            ),
-            provider_messages=provider_message_debug,
-            embedding_calls=embedding_calls,
-            llm_calls=[llm_call],
-        )
-
-        self._debug_publisher.publish_chat_trace(
-            trace_payload={
-                "actor_user_id": str(context.actor_user_id),
-                "session_id": str(context.prepared.session.session_id),
-                **debug_trace.model_dump(mode="json"),
-            }
-        )
-        return debug_trace
-
-    @staticmethod
-    def _lifecycle_dependencies() -> SessionLifecycleDependencies:
-        return SessionLifecycleDependencies(
-            list_session_linked_engrams=list_session_linked_engrams,
-            list_chat_messages=list_chat_messages,
-            count_session_messages_by_role=count_session_messages_by_role,
-            delete_session_autosave_engrams=delete_session_autosave_engrams,
-            create_engram=create_engram,
-        )
-
-    def _run_session_lifecycle_maintenance(
-        self,
-        *,
-        actor_user_id: UUID,
-        session: ChatSessionRecord,
-    ) -> LifecycleMaintenanceResult:
-        return run_session_lifecycle_maintenance(
-            actor_user_id=actor_user_id,
-            session=session,
-            embedding_dim=self._embedding_dim,
-            dependencies=self._lifecycle_dependencies(),
-        )
+        return self._runtime.build_debug_trace(context=context)
 
     def send_message(
         self,
@@ -708,13 +155,7 @@ class ChatService:
 
     @staticmethod
     def _build_stream_meta_payload(*, prepared: PreparedGeneration) -> dict[str, Any]:
-        return {
-            "session_id": prepared.session.session_id,
-            "message_id": prepared.user_message.message_id,
-            "used_engram_ids": prepared.context.used_engram_ids,
-            "used_document_chunk_ids": prepared.context.used_document_chunk_ids,
-            "source_references": prepared.context.source_references,
-        }
+        return ChatMessageRuntime.build_stream_meta_payload(prepared=prepared)
 
     def _yield_stream_chunks(
         self,
@@ -722,30 +163,12 @@ class ChatService:
         adapter: Any,
         prepared: PreparedGeneration,
     ) -> Generator[tuple[str, dict[str, Any]], None, tuple[str, float] | None]:
-        chunks: list[str] = []
-        llm_started_at = perf_counter()
-        try:
-            for part in adapter.stream_generate(prepared.provider_request):
-                chunk_text = str(part)
-                if not chunk_text:
-                    continue
-                chunks.append(chunk_text)
-                yield ("chunk", {"text": chunk_text})
-        except Exception as exc:
-            try:
-                self._raise_provider_error(exc)
-            except ChatProviderExecutionError as provider_error:
-                yield (
-                    "error",
-                    {
-                        "detail": provider_error.detail,
-                        "status_code": provider_error.status_code,
-                        "error_code": provider_error.error_code,
-                    },
-                )
-                return None
-            raise
-        return "".join(chunks), _duration_ms(llm_started_at)
+        return (
+            yield from self._runtime.yield_stream_chunks(
+                adapter=adapter,
+                prepared=prepared,
+            )
+        )
 
     def _persist_stream_completion(
         self,
@@ -774,16 +197,12 @@ class ChatService:
         full_text: str,
         debug_trace: ChatDebugTrace | None,
     ) -> dict[str, Any]:
-        return {
-            "session_id": prepared.session.session_id,
-            "message_id": prepared.user_message.message_id,
-            "reply_message_id": assistant_message.message_id,
-            "assistant_text": full_text,
-            "used_engram_ids": prepared.context.used_engram_ids,
-            "used_document_chunk_ids": prepared.context.used_document_chunk_ids,
-            "source_references": prepared.context.source_references,
-            "debug_trace": debug_trace.model_dump(mode="json") if debug_trace else None,
-        }
+        return ChatMessageRuntime.build_stream_done_payload(
+            prepared=prepared,
+            assistant_message=assistant_message,
+            full_text=full_text,
+            debug_trace=debug_trace,
+        )
 
     def stream_message_events(
         self,
@@ -847,100 +266,4 @@ class ChatService:
                 full_text=full_text,
                 debug_trace=debug_trace,
             ),
-        )
-
-    def save_session_as_engram(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-        payload: SaveSessionAsEngramRequest,
-    ) -> SaveSessionAsEngramResponse:
-        session = self.get_session(actor_user_id=actor_user_id, session_id=session_id)
-        messages = list_chat_messages(
-            session_id=session.session_id,
-            actor_user_id=actor_user_id,
-            limit=500,
-            offset=0,
-        )
-        if not messages:
-            raise ChatValidationError("Cannot save an empty chat session as engram")
-
-        abstract = payload.abstract.strip()
-        if is_generic_snapshot_abstract(abstract):
-            derived_abstract = derive_chat_snapshot_abstract(messages)
-            if derived_abstract:
-                abstract = derived_abstract
-
-        created = create_engram(
-            payload=MemoryEngramCreate(
-                project_id=session.project_id,
-                thread_id=f"chat-session:{session.session_id}",
-                title=payload.title,
-                abstract=abstract,
-                detailed_summary_markdown=transcript_markdown(session, messages),
-                tags=payload.tags,
-                keywords=payload.keywords,
-                visibility_scope=payload.visibility_scope.value,
-                source_session_id=session.session_id,
-                retrieval_text=retrieval_text_from_messages(messages),
-            ),
-            embedding_dim=self._embedding_dim,
-            owner_user_id=actor_user_id,
-            enrichment_origin="chat.save_as_engram",
-        )
-        return SaveSessionAsEngramResponse(
-            engram_id=created.engram_id,
-            session_id=session.session_id,
-            created_at=created.created_at,
-        )
-
-    def continue_session(
-        self,
-        actor_user_id: UUID,
-        session_id: UUID,
-        payload: ContinueSessionRequest,
-    ) -> ContinueSessionResponse:
-        session = self.get_session(actor_user_id=actor_user_id, session_id=session_id)
-        continued = create_chat_session(
-            owner_user_id=actor_user_id,
-            payload=ChatSessionCreateRequest(
-                project_id=session.project_id,
-                title=payload.title or f"{session.title} (continued)",
-                provider=session.provider,
-                model_id=session.model_id,
-                system_prompt=session.system_prompt,
-                visibility_scope=session.visibility_scope,
-                autosave_enabled=session.autosave_enabled,
-                autosave_strategy=session.autosave_strategy,
-                autosave_interval_minutes=session.autosave_interval_minutes,
-                autosave_min_messages=session.autosave_min_messages,
-                retention_days=session.retention_days,
-                retention_max_snapshots=session.retention_max_snapshots,
-            ),
-        )
-
-        carried_ids: list[UUID] = []
-        for pinned in list_pinned_engrams(
-            session_id=session.session_id, actor_user_id=actor_user_id
-        ):
-            copied = pin_engram_to_session(
-                continued.session_id,
-                pinned.engram_id,
-                actor_user_id,
-            )
-            if copied:
-                carried_ids.append(copied.engram_id)
-
-        for pinned_document in list_pinned_documents(
-            session_id=session.session_id, actor_user_id=actor_user_id
-        ):
-            pin_document_to_session(
-                continued.session_id,
-                pinned_document.document_id,
-                actor_user_id,
-            )
-
-        return ContinueSessionResponse(
-            session=continued,
-            carried_engram_ids=carried_ids,
         )

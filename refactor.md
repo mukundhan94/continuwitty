@@ -2076,6 +2076,34 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 77 - Chat Service Cohesion Split via Runtime and Session-Operations Modules)
+
+- [x] Continued Phase 4 cohesion refactor by splitting non-cohesive responsibilities from `api/app/chat/service.py` into focused modules:
+  - added `api/app/chat/message_runtime.py` for message preparation, provider-error mapping, debug trace construction, and stream chunk helpers
+  - added `api/app/chat/session_operations.py` for session CRUD/pinning/lifecycle/save/continue orchestration
+  - made `ChatService` inherit `ChatSessionOperationsMixin` and delegate generation/stream internals through `ChatMessageRuntime`
+- [x] Preserved public API and private test seams:
+  - retained `ChatService._resolve_token_usage(...)` and `ChatService._raise_provider_error(...)` compatibility
+  - kept send/stream wrappers (`_prepare_generation`, `_persist_assistant_reply`, `_yield_stream_chunks`, `_build_stream_done_payload`) to avoid behavioral drift
+- [x] Added runtime-focused tests:
+  - added `api/tests/test_chat_message_runtime.py` for token-usage estimation, provider-error mapping, and stream meta payload shape
+  - updated `api/tests/test_chat_service.py` monkeypatch targets to moved symbols in `chat/message_runtime.py` and `chat/session_operations.py`
+- [x] Validation run (using `make` commands):
+  - `make test-unit` (`247 passed, 4 skipped, 81 deselected`)
+  - `make test` (`247 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] Additional targeted validation:
+  - `uv run pytest tests/test_chat_service.py tests/test_chat_message_runtime.py tests/test_chat_session_lifecycle.py -q` (`28 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/chat/service.py` score: **10.0** (improved from **8.28**)
+  - `api/app/chat/message_runtime.py` score: **9.68**
+  - `api/app/chat/session_operations.py` score: **9.68**
+  - `api/tests/test_chat_message_runtime.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2084,7 +2112,9 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/memory_admin/repository.py` | 8.03 | YELLOW |
 | `api/app/chat_repository.py` | 10.0 | GREEN |
 | `api/app/chat_repository_pinning.py` | 10.0 | GREEN |
-| `api/app/chat/service.py` | 8.28 | YELLOW |
+| `api/app/chat/service.py` | 10.0 | GREEN |
+| `api/app/chat/message_runtime.py` | 9.68 | GREEN |
+| `api/app/chat/session_operations.py` | 9.68 | GREEN |
 | `api/app/chat/session_lifecycle.py` | 9.68 | GREEN |
 | `api/app/oauth/api.py` | 10.0 | GREEN |
 | `api/app/oauth/common.py` | 10.0 | GREEN |

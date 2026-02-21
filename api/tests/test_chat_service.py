@@ -146,13 +146,13 @@ def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
     )
 
     monkeypatch.setattr(
-        "app.chat.service.get_chat_session", lambda session_id, actor_user_id: session
+        "app.chat.session_operations.get_chat_session", lambda session_id, actor_user_id: session
     )
     monkeypatch.setattr(
-        "app.chat.service.assemble_chat_context",
+        "app.chat.message_runtime.assemble_chat_context",
         lambda **kwargs: _context_with_source(referenced_engram_id),
     )
-    monkeypatch.setattr("app.chat.service.list_chat_messages", lambda **kwargs: [user_message])
+    monkeypatch.setattr("app.chat.message_runtime.list_chat_messages", lambda **kwargs: [user_message])
 
     def _fake_create_chat_message(*, request):
         if request.role == "user":
@@ -160,7 +160,7 @@ def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
         assert request.metadata and request.metadata.used_engram_ids == [referenced_engram_id]
         return assistant_message
 
-    monkeypatch.setattr("app.chat.service.create_chat_message", _fake_create_chat_message)
+    monkeypatch.setattr("app.chat.message_runtime.create_chat_message", _fake_create_chat_message)
 
     monkeypatch.setattr("app.chat.service.get_provider_adapter", lambda provider: _FixedReplyAdapter())
 
@@ -282,10 +282,10 @@ def test_continue_session_copies_pinned_engrams(monkeypatch) -> None:
     service = ChatService(embedding_dim=256)
 
     monkeypatch.setattr(
-        "app.chat.service.get_chat_session", lambda session_id, actor_user_id: session
+        "app.chat.session_operations.get_chat_session", lambda session_id, actor_user_id: session
     )
     monkeypatch.setattr(
-        "app.chat.service.create_chat_session",
+        "app.chat.session_operations.create_chat_session",
         lambda owner_user_id, payload: ChatSessionRecord(
             **(
                 continued.model_dump()
@@ -302,7 +302,7 @@ def test_continue_session_copies_pinned_engrams(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        "app.chat.service.list_pinned_engrams",
+        "app.chat.session_operations.list_pinned_engrams",
         lambda session_id, actor_user_id: [
             PinnedEngramRecord(
                 session_id=session.session_id,
@@ -319,7 +319,7 @@ def test_continue_session_copies_pinned_engrams(monkeypatch) -> None:
         ],
     )
     monkeypatch.setattr(
-        "app.chat.service.pin_engram_to_session",
+        "app.chat.session_operations.pin_engram_to_session",
         lambda session_id, engram_id, actor_user_id: PinnedEngramRecord(
             session_id=session_id,
             engram_id=engram_id,
@@ -328,7 +328,7 @@ def test_continue_session_copies_pinned_engrams(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        "app.chat.service.list_pinned_documents",
+        "app.chat.session_operations.list_pinned_documents",
         lambda session_id, actor_user_id: [
             PinnedDocumentRecord(
                 session_id=session.session_id,
@@ -348,7 +348,7 @@ def test_continue_session_copies_pinned_engrams(monkeypatch) -> None:
             created_at=datetime.now(UTC),
         )
 
-    monkeypatch.setattr("app.chat.service.pin_document_to_session", _fake_pin_document_to_session)
+    monkeypatch.setattr("app.chat.session_operations.pin_document_to_session", _fake_pin_document_to_session)
 
     response = service.continue_session(
         actor_user_id=actor_id,
@@ -380,10 +380,10 @@ def test_save_session_as_engram_sets_source_session_id(monkeypatch) -> None:
     captured: dict = {}
 
     monkeypatch.setattr(
-        "app.chat.service.get_chat_session", lambda session_id, actor_user_id: session
+        "app.chat.session_operations.get_chat_session", lambda session_id, actor_user_id: session
     )
     monkeypatch.setattr(
-        "app.chat.service.list_chat_messages",
+        "app.chat.session_operations.list_chat_messages",
         lambda session_id, actor_user_id, limit, offset: [message_a, message_b],
     )
 
@@ -399,7 +399,7 @@ def test_save_session_as_engram_sets_source_session_id(monkeypatch) -> None:
         captured["enrichment_origin"] = enrichment_origin
         return EngramCreateResponse(engram_id=uuid4(), created_at=datetime.now(UTC))
 
-    monkeypatch.setattr("app.chat.service.create_engram", _fake_create_engram)
+    monkeypatch.setattr("app.chat.session_operations.create_engram", _fake_create_engram)
 
     response = service.save_session_as_engram(
         actor_user_id=actor_id,
@@ -441,10 +441,10 @@ def test_save_session_as_engram_derives_abstract_from_latest_assistant(monkeypat
     captured: dict = {}
 
     monkeypatch.setattr(
-        "app.chat.service.get_chat_session", lambda session_id, actor_user_id: session
+        "app.chat.session_operations.get_chat_session", lambda session_id, actor_user_id: session
     )
     monkeypatch.setattr(
-        "app.chat.service.list_chat_messages",
+        "app.chat.session_operations.list_chat_messages",
         lambda session_id, actor_user_id, limit, offset: [message_a, message_b],
     )
 
@@ -460,7 +460,7 @@ def test_save_session_as_engram_derives_abstract_from_latest_assistant(monkeypat
         captured["enrichment_origin"] = enrichment_origin
         return EngramCreateResponse(engram_id=uuid4(), created_at=datetime.now(UTC))
 
-    monkeypatch.setattr("app.chat.service.create_engram", _fake_create_engram)
+    monkeypatch.setattr("app.chat.session_operations.create_engram", _fake_create_engram)
 
     service.save_session_as_engram(
         actor_user_id=actor_id,
@@ -481,7 +481,7 @@ def test_save_session_as_engram_derives_abstract_from_latest_assistant(monkeypat
 def test_pin_engram_raises_for_inaccessible_resources(monkeypatch) -> None:
     actor_id = uuid4()
     service = ChatService(embedding_dim=256)
-    monkeypatch.setattr("app.chat.service.pin_engram_to_session", lambda *args: None)
+    monkeypatch.setattr("app.chat.session_operations.pin_engram_to_session", lambda *args: None)
 
     with pytest.raises(ChatValidationError, match="not accessible"):
         service.pin_engram(
@@ -496,10 +496,10 @@ def test_create_session_delegates_to_repository(monkeypatch) -> None:
     service = ChatService(embedding_dim=256)
     expected = _session(actor_id)
     monkeypatch.setattr(
-        "app.chat.service.ensure_project_exists", lambda project_id, owner_user_id: None
+        "app.chat.session_operations.ensure_project_exists", lambda project_id, owner_user_id: None
     )
     monkeypatch.setattr(
-        "app.chat.service.create_chat_session", lambda owner_user_id, payload: expected
+        "app.chat.session_operations.create_chat_session", lambda owner_user_id, payload: expected
     )
 
     created = service.create_session(
@@ -558,7 +558,7 @@ def test_update_lifecycle_policy_normalizes_disabled_autosave(monkeypatch) -> No
             }
         )
 
-    monkeypatch.setattr("app.chat.service.update_chat_session", _fake_update_chat_session)
+    monkeypatch.setattr("app.chat.session_operations.update_chat_session", _fake_update_chat_session)
 
     policy = service.update_lifecycle_policy(
         actor_user_id=actor_id,
@@ -589,9 +589,9 @@ def test_run_session_lifecycle_creates_autosave_snapshot(monkeypatch) -> None:
     service = ChatService(embedding_dim=256)
     captured: dict = {}
 
-    monkeypatch.setattr("app.chat.service.list_session_linked_engrams", lambda **kwargs: [])
+    monkeypatch.setattr("app.chat.session_operations.list_session_linked_engrams", lambda **kwargs: [])
     monkeypatch.setattr(
-        "app.chat.service.list_chat_messages",
+        "app.chat.session_operations.list_chat_messages",
         lambda **kwargs: [
             _message(
                 message_id=uuid4(),
@@ -623,9 +623,9 @@ def test_run_session_lifecycle_creates_autosave_snapshot(monkeypatch) -> None:
         captured["enrichment_origin"] = enrichment_origin
         return EngramCreateResponse(engram_id=uuid4(), created_at=datetime.now(UTC))
 
-    monkeypatch.setattr("app.chat.service.create_engram", _fake_create_engram)
+    monkeypatch.setattr("app.chat.session_operations.create_engram", _fake_create_engram)
     monkeypatch.setattr(
-        "app.chat.service.delete_session_autosave_engrams",
+        "app.chat.session_operations.delete_session_autosave_engrams",
         lambda **kwargs: [],
     )
 
@@ -670,11 +670,11 @@ def test_run_session_lifecycle_prunes_retention_excess(monkeypatch) -> None:
     ]
 
     monkeypatch.setattr(
-        "app.chat.service.list_session_linked_engrams",
+        "app.chat.session_operations.list_session_linked_engrams",
         lambda **kwargs: snapshots,
     )
     monkeypatch.setattr(
-        "app.chat.service.delete_session_autosave_engrams",
+        "app.chat.session_operations.delete_session_autosave_engrams",
         lambda **kwargs: kwargs["engram_ids"],
     )
 
