@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
+
+from app.models import ProjectCreateRequest
+
+from .errors import McpRpcError
+
+
+def projects_for_user(
+    *,
+    actor_user_id: UUID,
+    chat_service: Any,
+) -> list[str]:
+    sessions = chat_service.list_sessions(
+        actor_user_id=actor_user_id,
+        project_id=None,
+        limit=1000,
+        offset=0,
+    )
+    project_ids = {session.project_id for session in sessions if getattr(session, "project_id", None)}
+    return sorted(project_ids)
+
+
+def dispatch_project_tool(
+    *,
+    project_service: Any,
+    actor: dict[str, Any],
+    actor_user_id: UUID,
+    method: str,
+    params: dict[str, Any],
+) -> dict[str, Any] | None:
+    actor_role = str(actor.get("role", ""))
+
+    if method == "project.list":
+        projects = project_service.list_projects(
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            include_archived=bool(params.get("include_archived", False)),
+            limit=int(params.get("limit", 500)),
+            offset=int(params.get("offset", 0)),
+        )
+        return {"projects": [item.model_dump(mode="json") for item in projects]}
+
+    if method == "project.create":
+        try:
+            payload = ProjectCreateRequest(
+                project_id=str(params.get("project_id", "")),
+                name=str(params.get("name", "")),
+                description=str(params.get("description", "")),
+                owner_user_id=(
+                    UUID(str(params["owner_user_id"]))
+                    if params.get("owner_user_id") is not None
+                    else None
+                ),
+            )
+        except ValueError as exc:
+            raise McpRpcError(
+                code=-32602,
+                message="Invalid params",
+                data={"invalid": "owner_user_id"},
+            ) from exc
+        created = project_service.create_project(
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            payload=payload,
+        )
+        return {"project": created.model_dump(mode="json")}
+
+    if method == "project.get_default":
+        return {
+            "default_project_id": project_service.get_default_project_id(
+                actor_user_id=actor_user_id
+            )
+        }
+
+    if method == "project.set_default":
+        project_id = project_service.set_default_project_id(
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            project_id=str(params.get("project_id", "")),
+        )
+        return {"default_project_id": project_id}
+
+    return None
+
+
+def dispatch_user_tool(
+    *,
+    actor: dict[str, Any],
+    actor_user_id: UUID,
+    method: str,
+    chat_service: Any,
+) -> dict[str, Any] | None:
+    if method == "user.get_profile":
+        return {"profile": actor}
+    if method == "user.list_projects":
+        return {
+            "project_ids": projects_for_user(
+                actor_user_id=actor_user_id,
+                chat_service=chat_service,
+            )
+        }
+    return None

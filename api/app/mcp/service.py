@@ -29,7 +29,6 @@ from app.models import (
     EngramCreateFromConversationRequest,
     McpJsonRpcRequest,
     MemoryEngramCreate,
-    ProjectCreateRequest,
     SaveSessionAsEngramRequest,
 )
 from app.projects import ProjectService
@@ -37,7 +36,6 @@ from app.repository import (
     create_engram,
     create_engram_with_report,
     get_rehydration_bundle,
-    list_engrams,
     query_engrams,
 )
 
@@ -65,6 +63,7 @@ from .engram_dispatch import (
     dispatch_engram_read_tool,
 )
 from .errors import McpRpcError
+from .project_user_dispatch import dispatch_project_tool, dispatch_user_tool
 from .streaming import (
     chat_send_message_success_frame,
     stream_chat_send_message_error_frame,
@@ -191,20 +190,6 @@ class McpService:
                     data={"invalid": key, "index": index},
                 ) from exc
         return parsed
-
-    @staticmethod
-    def _projects_for_user(actor_user_id: UUID, chat_service: ChatService) -> list[str]:
-        project_ids: set[str] = set()
-        for item in list_engrams(limit=1000, offset=0, actor_user_id=actor_user_id):
-            project_ids.add(item.project_id)
-        for item in chat_service.list_sessions(
-            actor_user_id=actor_user_id,
-            project_id=None,
-            limit=1000,
-            offset=0,
-        ):
-            project_ids.add(item.project_id)
-        return sorted(project_ids)
 
     @staticmethod
     def _tool_call_success(tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1206,81 +1191,6 @@ class McpService:
             )
         )
 
-    def _dispatch_project_tool(
-        self,
-        *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-        params: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        actor_role = str(actor.get("role", ""))
-
-        if method == "project.list":
-            projects = self._project_service.list_projects(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                include_archived=bool(params.get("include_archived", False)),
-                limit=int(params.get("limit", 500)),
-                offset=int(params.get("offset", 0)),
-            )
-            return {"projects": [item.model_dump(mode="json") for item in projects]}
-
-        if method == "project.create":
-            try:
-                payload = ProjectCreateRequest(
-                    project_id=str(params.get("project_id", "")),
-                    name=str(params.get("name", "")),
-                    description=str(params.get("description", "")),
-                    owner_user_id=(
-                        UUID(str(params["owner_user_id"]))
-                        if params.get("owner_user_id") is not None
-                        else None
-                    ),
-                )
-            except ValueError as exc:
-                raise McpRpcError(
-                    code=-32602,
-                    message="Invalid params",
-                    data={"invalid": "owner_user_id"},
-                ) from exc
-            created = self._project_service.create_project(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                payload=payload,
-            )
-            return {"project": created.model_dump(mode="json")}
-
-        if method == "project.get_default":
-            return {
-                "default_project_id": self._project_service.get_default_project_id(
-                    actor_user_id=actor_user_id
-                )
-            }
-
-        if method == "project.set_default":
-            project_id = self._project_service.set_default_project_id(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                project_id=str(params.get("project_id", "")),
-            )
-            return {"default_project_id": project_id}
-
-        return None
-
-    def _dispatch_user_tool(
-        self,
-        *,
-        actor: dict[str, Any],
-        actor_user_id: UUID,
-        method: str,
-    ) -> dict[str, Any] | None:
-        if method == "user.get_profile":
-            return {"profile": actor}
-        if method == "user.list_projects":
-            return {"project_ids": self._projects_for_user(actor_user_id, self._chat_service)}
-        return None
-
     def _dispatch_tool(
         self,
         *,
@@ -1311,7 +1221,8 @@ class McpService:
         if engram_result is not None:
             return engram_result
 
-        project_result = self._dispatch_project_tool(
+        project_result = dispatch_project_tool(
+            project_service=self._project_service,
             actor=actor,
             actor_user_id=actor_user_id,
             method=canonical_method,
@@ -1320,10 +1231,11 @@ class McpService:
         if project_result is not None:
             return project_result
 
-        user_result = self._dispatch_user_tool(
+        user_result = dispatch_user_tool(
             actor=actor,
             actor_user_id=actor_user_id,
             method=canonical_method,
+            chat_service=self._chat_service,
         )
         if user_result is not None:
             return user_result
