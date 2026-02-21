@@ -1846,6 +1846,32 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 69 - Test Determinism and Access Mixin Quality Hardening)
+
+- [x] Fixed intermittent/local-environment test failures in DB-dependent auth/API paths:
+  - marked `test_sources_endpoint_returns_404_for_missing_engram` as integration and wired `clean_db` fixture
+  - wired `clean_db` into DB-backed UI auth success-path tests in `api/tests/test_ui_auth.py`
+  - wired `db_conn` fixture into `api/tests/test_eval_harness.py::test_eval_harness_passes` so DB-unavailable environments skip cleanly instead of failing
+- [x] Continued MCP access-layer cleanup in `api/app/mcp/service_access.py`:
+  - extracted `_lookup_session(...)` and `_lookup_collection(...)`
+  - restored compact wrappers `_require_session_access(...)` and `_require_collection_access(...)`
+  - retained shared ownership enforcement through `_require_owned_resource_by_lookup(...)`
+  - resolved CodeScene duplication in access helper module
+- [x] Validation run (using `make` commands):
+  - `make test-unit` (`230 passed, 4 skipped, 81 deselected`)
+  - `make test` (`230 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service_access.py` score: **10.0** (improved from **9.38**)
+  - `api/tests/test_ui_auth.py` score: **10.0**
+  - `api/tests/test_api_integration.py` score: **10.0**
+  - `api/tests/test_eval_harness.py` score: **10.0**
+  - `api/app/mcp/service.py` score: **9.09** (stable)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |

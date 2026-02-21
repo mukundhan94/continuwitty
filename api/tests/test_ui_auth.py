@@ -81,7 +81,7 @@ def test_login_rejects_invalid_csrf() -> None:
     assert response.status_code == 403
 
 
-def test_login_and_logout_workflow() -> None:
+def test_login_and_logout_workflow(clean_db) -> None:
     client = TestClient(app)
     settings = get_settings()
 
@@ -126,7 +126,11 @@ def test_login_and_logout_workflow() -> None:
         ("https://malicious.example/phish", "/ui"),
     ],
 )
-def test_login_redirect_path_sanitization(next_path: str, expected_location: str) -> None:
+def test_login_redirect_path_sanitization(
+    next_path: str,
+    expected_location: str,
+    clean_db,
+) -> None:
     client = TestClient(app)
     settings = get_settings()
 
@@ -147,7 +151,7 @@ def test_login_redirect_path_sanitization(next_path: str, expected_location: str
     assert login_response.headers["location"] == expected_location
 
 
-def test_logout_rejects_invalid_csrf() -> None:
+def test_logout_rejects_invalid_csrf(clean_db) -> None:
     client = TestClient(app)
     settings = get_settings()
 

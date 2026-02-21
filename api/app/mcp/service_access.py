@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
@@ -108,15 +109,39 @@ class McpServiceAccessMixin:
         )
         return record
 
-    def _require_session_access(self, *, actor: dict[str, Any], session_id: UUID) -> Any:
-        session = self._memory_admin_service.get_session(
-            session_id=session_id, include_deleted=True
-        )
+    def _require_owned_resource_by_lookup(
+        self,
+        *,
+        actor: dict[str, Any],
+        resource: str,
+        resource_id: UUID,
+        lookup: Callable[[UUID], Any | None],
+    ) -> Any:
         return self._require_existing_owned_resource(
+            actor=actor,
+            resource=resource,
+            resource_id=resource_id,
+            record=lookup(resource_id),
+        )
+
+    def _lookup_session(self, session_id: UUID) -> Any | None:
+        return self._memory_admin_service.get_session(
+            session_id=session_id,
+            include_deleted=True,
+        )
+
+    def _lookup_collection(self, collection_id: UUID) -> Any | None:
+        return self._memory_admin_service.find_collection(
+            collection_id=collection_id,
+            include_deleted=True,
+        )
+
+    def _require_session_access(self, *, actor: dict[str, Any], session_id: UUID) -> Any:
+        return self._require_owned_resource_by_lookup(
             actor=actor,
             resource="session",
             resource_id=session_id,
-            record=session,
+            lookup=self._lookup_session,
         )
 
     def _require_engram_access(
@@ -138,13 +163,9 @@ class McpServiceAccessMixin:
         )
 
     def _require_collection_access(self, *, actor: dict[str, Any], collection_id: UUID) -> Any:
-        collection = self._memory_admin_service.find_collection(
-            collection_id=collection_id,
-            include_deleted=True,
-        )
-        return self._require_existing_owned_resource(
+        return self._require_owned_resource_by_lookup(
             actor=actor,
             resource="collection",
             resource_id=collection_id,
-            record=collection,
+            lookup=self._lookup_collection,
         )

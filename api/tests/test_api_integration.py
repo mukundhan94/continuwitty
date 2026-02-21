@@ -264,7 +264,8 @@ def test_sources_endpoint_returns_provenance_records(client, clean_db) -> None:
     assert records[0]["url"] == "https://example.com/source"
 
 
-def test_sources_endpoint_returns_404_for_missing_engram(client) -> None:
+@pytest.mark.integration
+def test_sources_endpoint_returns_404_for_missing_engram(client, clean_db) -> None:
     _login(client)
     response = client.get("/api/v1/engrams/00000000-0000-0000-0000-000000000000/sources")
     assert response.status_code == 404
