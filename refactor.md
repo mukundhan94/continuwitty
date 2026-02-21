@@ -2104,12 +2104,46 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 78 - Memory Admin Repository Module Decomposition)
+
+- [x] Continued Phase 2 cohesion refactor by decomposing `api/app/memory_admin/repository.py` into focused submodules:
+  - added `api/app/memory_admin/repository_sessions.py` for admin session list/get/delete/restore operations
+  - added `api/app/memory_admin/repository_engrams.py` for admin engram listing, mutation, move, and lifecycle operations
+  - added `api/app/memory_admin/repository_collections.py` for collection CRUD and item membership operations
+  - added `api/app/memory_admin/repository_common.py` for shared soft-delete/restore helpers and session column constants
+  - added `api/app/memory_admin/repository_types.py` for request/payload dataclasses and typed update fields
+- [x] Preserved stable import surface:
+  - converted `api/app/memory_admin/repository.py` into a compatibility facade that re-exports public and test-used private helpers
+  - retained local `_compute_engram_embedding(...)` in facade to preserve existing monkeypatch semantics in repository unit tests
+- [x] Validation run (using `make` commands):
+  - `make test-unit` (`247 passed, 4 skipped, 81 deselected`)
+  - `make test` (`247 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] Additional targeted validation:
+  - `uv run pytest tests/test_memory_admin_service.py tests/test_memory_admin_repository.py -q` (`11 passed, 1 skipped`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/memory_admin/repository.py` score: **10.0** (improved from **8.03**)
+  - `api/app/memory_admin/repository_sessions.py` score: **10.0**
+  - `api/app/memory_admin/repository_engrams.py` score: **10.0**
+  - `api/app/memory_admin/repository_collections.py` score: **10.0**
+  - `api/app/memory_admin/repository_common.py` score: **10.0**
+  - `api/app/memory_admin/repository_types.py` score: **N/A** (type-definition-only module; CodeScene returns `None`)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
 | `api/app/mcp/service.py` | **9.68** | GREEN |
-| `api/app/memory_admin/repository.py` | 8.03 | YELLOW |
+| `api/app/memory_admin/repository.py` | 10.0 | GREEN |
+| `api/app/memory_admin/repository_sessions.py` | 10.0 | GREEN |
+| `api/app/memory_admin/repository_engrams.py` | 10.0 | GREEN |
+| `api/app/memory_admin/repository_collections.py` | 10.0 | GREEN |
+| `api/app/memory_admin/repository_common.py` | 10.0 | GREEN |
+| `api/app/memory_admin/repository_types.py` | N/A | GREEN |
 | `api/app/chat_repository.py` | 10.0 | GREEN |
 | `api/app/chat_repository_pinning.py` | 10.0 | GREEN |
 | `api/app/chat/service.py` | 10.0 | GREEN |
