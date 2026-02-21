@@ -1295,11 +1295,33 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 47 - MCP Chat Dispatch Helper Split Phase 1.2/1.5 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition by splitting chat dispatch branches:
+  - extracted `_dispatch_chat_save_as_engram_tool(...)`
+  - extracted `_dispatch_chat_session_lifecycle_tool(...)`
+  - reduced `_dispatch_chat_tool(...)` by removing inline save/delete/restore branches
+- [x] Expanded unit tests in `api/tests/test_mcp_service_unit.py`:
+  - invalid request matrix for `_dispatch_tool(...)` (`unknown.tool`, `chat.save_as_engram` missing conversation fallback)
+  - `chat.delete_session` dispatch path verifies memory-admin call args and delete payload mapping
+- [x] Validation run:
+  - `uv run pytest tests/test_mcp_service_unit.py -q` (`19 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`286 passed`)
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py` (passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **5.53** (improved from **5.35**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **5.35** | YELLOW |
+| `api/app/mcp/service.py` | **5.53** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |

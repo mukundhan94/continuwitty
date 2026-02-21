@@ -757,6 +757,77 @@ class McpService:
         )
         return collection
 
+    def _dispatch_chat_save_as_engram_tool(
+        self,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> dict[str, Any]:
+        session_id = params.get("session_id")
+        if session_id:
+            saved = self._chat_service.save_session_as_engram(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+                payload=SaveSessionAsEngramRequest(
+                    title=params.get("title", "Session Snapshot"),
+                    abstract=params.get("abstract", ""),
+                    visibility_scope=params.get("visibility_scope", "private"),
+                    tags=params.get("tags", []),
+                    keywords=params.get("keywords", []),
+                ),
+            )
+            return {"saved_engram": saved.model_dump(mode="json")}
+
+        if not params.get("conversation_markdown"):
+            raise McpRpcError(
+                code=-32602,
+                message="Invalid params",
+                data={"missing": "conversation_markdown"},
+            )
+
+        fallback_params = dict(params)
+        if not fallback_params.get("title"):
+            fallback_params["title"] = "Conversation Snapshot"
+        created, report = self._create_engram_from_conversation(
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            token_auth=token_auth,
+            params=fallback_params,
+            enrichment_origin="mcp.chat.save_as_engram",
+        )
+        return {"saved_engram": created, "enrichment_report": report}
+
+    def _dispatch_chat_session_lifecycle_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        method: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if method == "chat.delete_session":
+            session_id = self._parse_uuid(params, "session_id")
+            self._require_session_access(actor=actor, session_id=session_id)
+            deleted = self._memory_admin_service.delete_session(
+                session_id=session_id,
+                actor_user_id=actor_user_id,
+                payload=AdminSessionDeleteRequest(
+                    delete_linked_engrams=bool(params.get("delete_linked_engrams", False)),
+                    reason=params.get("reason"),
+                ),
+            )
+            return {"result": deleted.model_dump(mode="json")}
+
+        if method == "chat.restore_session":
+            session_id = self._parse_uuid(params, "session_id")
+            self._require_session_access(actor=actor, session_id=session_id)
+            restored = self._memory_admin_service.restore_session(session_id=session_id)
+            return {"result": restored.model_dump(mode="json")}
+
+        return None
+
     def _dispatch_chat_tool(
         self,
         *,
@@ -901,39 +972,12 @@ class McpService:
             return {"documents": [item.model_dump(mode="json") for item in documents]}
 
         if method == "chat.save_as_engram":
-            session_id = params.get("session_id")
-            if session_id:
-                saved = self._chat_service.save_session_as_engram(
-                    actor_user_id=actor_user_id,
-                    session_id=self._parse_uuid(params, "session_id"),
-                    payload=SaveSessionAsEngramRequest(
-                        title=params.get("title", "Session Snapshot"),
-                        abstract=params.get("abstract", ""),
-                        visibility_scope=params.get("visibility_scope", "private"),
-                        tags=params.get("tags", []),
-                        keywords=params.get("keywords", []),
-                    ),
-                )
-                return {"saved_engram": saved.model_dump(mode="json")}
-
-            if not params.get("conversation_markdown"):
-                raise McpRpcError(
-                    code=-32602,
-                    message="Invalid params",
-                    data={"missing": "conversation_markdown"},
-                )
-
-            fallback_params = dict(params)
-            if not fallback_params.get("title"):
-                fallback_params["title"] = "Conversation Snapshot"
-            created, report = self._create_engram_from_conversation(
+            return self._dispatch_chat_save_as_engram_tool(
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
+                params=params,
                 token_auth=token_auth,
-                params=fallback_params,
-                enrichment_origin="mcp.chat.save_as_engram",
             )
-            return {"saved_engram": created, "enrichment_report": report}
 
         if method == "chat.continue_session":
             continued = self._chat_service.continue_session(
@@ -943,24 +987,14 @@ class McpService:
             )
             return {"continuation": continued.model_dump(mode="json")}
 
-        if method == "chat.delete_session":
-            session_id = self._parse_uuid(params, "session_id")
-            self._require_session_access(actor=actor, session_id=session_id)
-            deleted = self._memory_admin_service.delete_session(
-                session_id=session_id,
-                actor_user_id=actor_user_id,
-                payload=AdminSessionDeleteRequest(
-                    delete_linked_engrams=bool(params.get("delete_linked_engrams", False)),
-                    reason=params.get("reason"),
-                ),
-            )
-            return {"result": deleted.model_dump(mode="json")}
-
-        if method == "chat.restore_session":
-            session_id = self._parse_uuid(params, "session_id")
-            self._require_session_access(actor=actor, session_id=session_id)
-            restored = self._memory_admin_service.restore_session(session_id=session_id)
-            return {"result": restored.model_dump(mode="json")}
+        session_lifecycle_result = self._dispatch_chat_session_lifecycle_tool(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            method=method,
+            params=params,
+        )
+        if session_lifecycle_result is not None:
+            return session_lifecycle_result
 
         return None
 

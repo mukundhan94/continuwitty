@@ -107,7 +107,19 @@ def test_dispatch_tool_routes_user_domain() -> None:
     assert result == {"profile": actor}
 
 
-def test_dispatch_tool_unknown_method_returns_not_found_error() -> None:
+@pytest.mark.parametrize(
+    ("method", "params", "expected_code", "expected_data"),
+    [
+        ("unknown.tool", {}, -32601, {"method": "unknown.tool"}),
+        ("chat.save_as_engram", {}, -32602, {"missing": "conversation_markdown"}),
+    ],
+)
+def test_dispatch_tool_returns_expected_rpc_errors_for_invalid_requests(
+    method: str,
+    params: dict[str, object],
+    expected_code: int,
+    expected_data: dict[str, str],
+) -> None:
     service, _, _, _ = _build_service()
     actor_user_id = uuid4()
     actor = {"user_id": str(actor_user_id), "role": "user"}
@@ -116,13 +128,13 @@ def test_dispatch_tool_unknown_method_returns_not_found_error() -> None:
         service._dispatch_tool(
             actor=actor,
             actor_user_id=actor_user_id,
-            method="unknown.tool",
-            params={},
+            method=method,
+            params=params,
             token_auth=None,
         )
 
-    assert exc_info.value.code == -32601
-    assert exc_info.value.data == {"method": "unknown.tool"}
+    assert exc_info.value.code == expected_code
+    assert exc_info.value.data == expected_data
 
 
 def test_require_session_access_rejects_non_owner() -> None:
@@ -328,3 +340,34 @@ def test_project_id_for_tool_resolves_collection_scoped_tool() -> None:
         collection_id=collection_id,
         include_deleted=True,
     )
+
+
+def test_dispatch_chat_delete_session_routes_memory_admin_service() -> None:
+    service, _, _, memory_admin_service = _build_service()
+    actor_user_id = uuid4()
+    actor = {"user_id": str(actor_user_id), "role": "user"}
+    session_id = uuid4()
+    memory_admin_service.get_session.return_value = _Dumpable(
+        payload={"session_id": str(session_id)},
+        owner_user_id=actor_user_id,
+    )
+    memory_admin_service.delete_session.return_value = _Dumpable(payload={"deleted": True})
+
+    result = service._dispatch_tool(
+        actor=actor,
+        actor_user_id=actor_user_id,
+        method="chat.delete_session",
+        params={
+            "session_id": str(session_id),
+            "delete_linked_engrams": True,
+            "reason": "cleanup",
+        },
+        token_auth=None,
+    )
+
+    assert result == {"result": {"deleted": True}}
+    call_kwargs = memory_admin_service.delete_session.call_args.kwargs
+    assert call_kwargs["session_id"] == session_id
+    assert call_kwargs["actor_user_id"] == actor_user_id
+    assert call_kwargs["payload"].delete_linked_engrams is True
+    assert call_kwargs["payload"].reason == "cleanup"
