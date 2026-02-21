@@ -1535,11 +1535,38 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 57 - MCP Stream Dispatch Decomposition Phase 1.5 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition by splitting `stream_call(...)` internals:
+  - added `_maybe_stream_direct_chat_send_message(...)` for direct `chat.send_message` streaming path
+  - added `_maybe_stream_tools_call_chat_message(...)` for MCP `tools/call` streaming path
+  - added `_stream_dispatch_non_stream_result(...)` for unified non-stream dispatch + error envelope handling
+  - reduced `stream_call(...)` to high-level orchestration over extracted helpers
+- [x] Added new stream-focused unit test file: `api/tests/test_mcp_service_stream_unit.py`
+  - direct chat stream helper route test
+  - invalid tools/call payload error-frame test
+  - non-stream MCP error-frame mapping test
+  - `stream_call(...)` helper routing tests for stream and non-stream paths
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_stream_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py tests/test_mcp_service_stream_unit.py -q` (`43 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`310 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **7.65** (improved from **7.04**)
+  - `api/tests/test_mcp_service_stream_unit.py` score: **10.0**
+  - `api/tests/test_mcp_service_engram_dispatch_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+  - fixed in change-set: `stream_call` Complex Method and Bumpy Road findings
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **7.04** | YELLOW |
+| `api/app/mcp/service.py` | **7.65** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
@@ -1557,6 +1584,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_db.py` | 10.0 | GREEN |
 | `api/tests/test_oauth_repository.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
+| `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |
 | `web/src/api/http.ts` | 10.0 | GREEN |
 | `web/src/api/http.test.ts` | 10.0 | GREEN |
 | `web/src/api/chat.test.ts` | 10.0 | GREEN |

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -1710,90 +1711,91 @@ class McpService:
             return None, self._error(request_id, code=exc.code, message=exc.message, data=exc.data)
         return authorized_params, None
 
-    def stream_call(
+    def _maybe_stream_direct_chat_send_message(
         self,
         *,
-        actor: dict[str, Any],
-        request: McpJsonRpcRequest,
-        token_auth: McpTokenAuthContext | None = None,
-    ):
-        if request.jsonrpc != "2.0":
-            yield self._error(
-                request.id,
-                code=-32600,
-                message="Invalid Request",
-                data={"jsonrpc": request.jsonrpc},
-            )
-            return
+        actor_user_id: UUID,
+        request_id: str | int | None,
+        request_method: str,
+        canonical_method: str,
+        request_params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> tuple[bool, Iterator[dict[str, Any]] | None]:
+        if canonical_method != "chat.send_message":
+            return False, None
+        authorized_params, error_frame = self._authorize_tool_call(
+            actor_user_id=actor_user_id,
+            request_id=request_id,
+            token_auth=token_auth,
+            tool_name=request_method,
+            params=request_params,
+        )
+        if error_frame is not None:
+            return True, iter((error_frame,))
+        assert authorized_params is not None
+        return (
+            True,
+            self._stream_chat_send_message(
+                actor_user_id=actor_user_id,
+                request_id=request_id,
+                tool_name=request_method,
+                params=authorized_params,
+            ),
+        )
+
+    def _maybe_stream_tools_call_chat_message(
+        self,
+        *,
+        actor_user_id: UUID,
+        request_id: str | int | None,
+        request_method: str,
+        request_params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> tuple[bool, Iterator[dict[str, Any]] | None]:
+        if request_method != "tools/call":
+            return False, None
 
         try:
-            actor_user_id = UUID(str(actor["user_id"]))
-        except Exception:
-            yield self._error(
-                request.id,
-                code=-32001,
-                message="Unauthorized actor context",
-                data={"user_id": actor.get("user_id")},
+            tool_name, tool_params = self._tool_name_and_params_for_tools_call(request_params)
+            canonical_tool_name = self._canonical_tool_name(tool_name)
+        except McpRpcError as exc:
+            return (
+                True,
+                iter((self._error(request_id, code=exc.code, message=exc.message, data=exc.data),)),
             )
-            return
 
-        canonical_method = self._canonical_tool_name(request.method)
+        authorized_tool_params, error_frame = self._authorize_tool_call(
+            actor_user_id=actor_user_id,
+            request_id=request_id,
+            token_auth=token_auth,
+            tool_name=tool_name,
+            params=tool_params,
+        )
+        if error_frame is not None:
+            return True, iter((error_frame,))
+        assert authorized_tool_params is not None
 
-        # Direct streaming path retained for backward compatibility.
-        if canonical_method == "chat.send_message":
-            authorized_params, error_frame = self._authorize_tool_call(
-                actor_user_id=actor_user_id,
-                request_id=request.id,
-                token_auth=token_auth,
-                tool_name=request.method,
-                params=request.params,
-            )
-            if error_frame:
-                yield error_frame
-                return
-            assert authorized_params is not None
-            yield from self._stream_chat_send_message(
-                actor_user_id=actor_user_id,
-                request_id=request.id,
-                tool_name=request.method,
-                params=authorized_params,
-            )
-            return
-
-        # Standard MCP interop path for clients that only use `tools/call`.
-        if request.method == "tools/call":
-            try:
-                tool_name, tool_params = self._tool_name_and_params_for_tools_call(request.params)
-                canonical_tool_name = self._canonical_tool_name(tool_name)
-            except McpRpcError as exc:
-                yield self._error(request.id, code=exc.code, message=exc.message, data=exc.data)
-                return
-
-            authorized_tool_params, error_frame = self._authorize_tool_call(
-                actor_user_id=actor_user_id,
-                request_id=request.id,
-                token_auth=token_auth,
-                tool_name=tool_name,
-                params=tool_params,
-            )
-            if error_frame:
-                yield error_frame
-                return
-            assert authorized_tool_params is not None
-
-            # Streaming is currently only meaningful for chat message generation.
-            if canonical_tool_name == "chat.send_message" and bool(
-                authorized_tool_params.get("stream", True)
-            ):
-                yield from self._stream_chat_send_message(
+        if canonical_tool_name == "chat.send_message" and bool(authorized_tool_params.get("stream", True)):
+            return (
+                True,
+                self._stream_chat_send_message(
                     actor_user_id=actor_user_id,
-                    request_id=request.id,
+                    request_id=request_id,
                     tool_name=tool_name,
                     params=authorized_tool_params,
                     as_tool_call=True,
-                )
-                return
+                ),
+            )
+        return False, None
 
+    def _stream_dispatch_non_stream_result(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        request: McpJsonRpcRequest,
+        token_auth: McpTokenAuthContext | None,
+    ) -> Iterator[dict[str, Any]]:
         try:
             result = self._dispatch_non_stream(
                 actor=actor,
@@ -1847,6 +1849,66 @@ class McpService:
                 message="Internal MCP error",
                 data={"detail": str(exc)},
             )
+
+    def stream_call(
+        self,
+        *,
+        actor: dict[str, Any],
+        request: McpJsonRpcRequest,
+        token_auth: McpTokenAuthContext | None = None,
+    ):
+        if request.jsonrpc != "2.0":
+            yield self._error(
+                request.id,
+                code=-32600,
+                message="Invalid Request",
+                data={"jsonrpc": request.jsonrpc},
+            )
+            return
+
+        try:
+            actor_user_id = UUID(str(actor["user_id"]))
+        except Exception:
+            yield self._error(
+                request.id,
+                code=-32001,
+                message="Unauthorized actor context",
+                data={"user_id": actor.get("user_id")},
+            )
+            return
+
+        canonical_method = self._canonical_tool_name(request.method)
+        handled, direct_frames = self._maybe_stream_direct_chat_send_message(
+            actor_user_id=actor_user_id,
+            request_id=request.id,
+            request_method=request.method,
+            canonical_method=canonical_method,
+            request_params=request.params,
+            token_auth=token_auth,
+        )
+        if handled:
+            assert direct_frames is not None
+            yield from direct_frames
+            return
+
+        handled, tool_call_frames = self._maybe_stream_tools_call_chat_message(
+            actor_user_id=actor_user_id,
+            request_id=request.id,
+            request_method=request.method,
+            request_params=request.params,
+            token_auth=token_auth,
+        )
+        if handled:
+            assert tool_call_frames is not None
+            yield from tool_call_frames
+            return
+
+        yield from self._stream_dispatch_non_stream_result(
+            actor=actor,
+            actor_user_id=actor_user_id,
+            request=request,
+            token_auth=token_auth,
+        )
 
     def handle_notification(
         self,
