@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.mcp.errors import McpRpcError
-from app.mcp.service import McpService, _ToolDispatchContext
+from app.mcp.service import McpService, McpServiceDependencies, _ToolDispatchContext
 
 
 @dataclass
@@ -34,10 +34,12 @@ def _build_service() -> tuple[McpService, MagicMock, MagicMock, MagicMock]:
     project_service = MagicMock()
     memory_admin_service = MagicMock()
     service = McpService(
-        chat_service=chat_service,
-        project_service=project_service,
-        memory_admin_service=memory_admin_service,
-        embedding_dim=1536,
+        dependencies=McpServiceDependencies(
+            chat_service=chat_service,
+            project_service=project_service,
+            memory_admin_service=memory_admin_service,
+            embedding_dim=1536,
+        ),
     )
     return service, chat_service, project_service, memory_admin_service
 

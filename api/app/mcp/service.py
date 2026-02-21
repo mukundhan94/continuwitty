@@ -63,7 +63,12 @@ from .token_authorization import (
     visible_tool_catalog,
 )
 
-__all__ = ["McpService", "_ToolDispatchContext", "_StreamChatSendMessageRequest"]
+__all__ = [
+    "McpService",
+    "McpServiceDependencies",
+    "_ToolDispatchContext",
+    "_StreamChatSendMessageRequest",
+]
 
 
 @dataclass(frozen=True)
@@ -84,6 +89,15 @@ class _CreateEngramFromConversationContext:
     enrichment_origin: str
 
 
+@dataclass(frozen=True)
+class McpServiceDependencies:
+    chat_service: ChatService
+    project_service: ProjectService
+    memory_admin_service: MemoryAdminService
+    embedding_dim: int
+    ingestion_service: DocumentIngestionService | None = None
+
+
 class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
     """JSON-RPC tool dispatcher for MCP-over-SSE.
 
@@ -96,18 +110,15 @@ class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
 
     def __init__(
         self,
-        chat_service: ChatService,
-        project_service: ProjectService,
-        memory_admin_service: MemoryAdminService,
-        embedding_dim: int,
-        ingestion_service: DocumentIngestionService | None = None,
+        *,
+        dependencies: McpServiceDependencies,
         server_version: str = "0.1.0",
     ) -> None:
-        self._chat_service = chat_service
-        self._project_service = project_service
-        self._memory_admin_service = memory_admin_service
-        self._embedding_dim = embedding_dim
-        self._ingestion_service = ingestion_service
+        self._chat_service = dependencies.chat_service
+        self._project_service = dependencies.project_service
+        self._memory_admin_service = dependencies.memory_admin_service
+        self._embedding_dim = dependencies.embedding_dim
+        self._ingestion_service = dependencies.ingestion_service
         self._server_version = server_version
 
     @staticmethod

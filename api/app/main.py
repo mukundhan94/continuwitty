@@ -19,7 +19,7 @@ from .db import ensure_schema_initialized
 from .ingestion import DocumentIngestionService, create_ingestion_router
 from .login_guard import LoginAttemptGuard
 from .main_api_router import MainApiRouterDependencies, create_main_api_router
-from .mcp import McpService, create_mcp_router
+from .mcp import McpService, McpServiceDependencies, create_mcp_router
 from .mcp.auth import McpResolvedActor, resolve_mcp_actor
 from .mcp_tokens import (
     create_token_for_owner,
@@ -99,11 +99,13 @@ ingestion_service = DocumentIngestionService(
     max_text_chars=settings.ingestion_max_text_chars,
 )
 mcp_service = McpService(
-    chat_service=chat_service,
-    project_service=project_service,
-    memory_admin_service=memory_admin_service,
-    embedding_dim=settings.embedding_dim,
-    ingestion_service=ingestion_service,
+    dependencies=McpServiceDependencies(
+        chat_service=chat_service,
+        project_service=project_service,
+        memory_admin_service=memory_admin_service,
+        embedding_dim=settings.embedding_dim,
+        ingestion_service=ingestion_service,
+    ),
     server_version=settings.app_semantic_version,
 )
 # FastAPI dependency object kept at module scope to satisfy lint rule B008.

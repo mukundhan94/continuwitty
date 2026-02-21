@@ -5,16 +5,18 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 from app.mcp.errors import McpRpcError
-from app.mcp.service import McpService, _StreamChatSendMessageRequest
+from app.mcp.service import McpService, McpServiceDependencies, _StreamChatSendMessageRequest
 from app.models import McpJsonRpcRequest
 
 
 def _build_service() -> McpService:
     return McpService(
-        chat_service=MagicMock(),
-        project_service=MagicMock(),
-        memory_admin_service=MagicMock(),
-        embedding_dim=1536,
+        dependencies=McpServiceDependencies(
+            chat_service=MagicMock(),
+            project_service=MagicMock(),
+            memory_admin_service=MagicMock(),
+            embedding_dim=1536,
+        ),
     )
 
 

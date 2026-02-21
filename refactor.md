@@ -2311,11 +2311,36 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 87 - MCP Service Dependency Object Constructor Adoption)
+
+- [x] Continued Phase 1 hardening by removing remaining constructor argument-smell in `api/app/mcp/service.py`:
+  - added `McpServiceDependencies` dataclass to bundle service wiring dependencies
+  - updated `McpService.__init__(...)` to accept `dependencies` + `server_version`
+  - exported `McpServiceDependencies` via `api/app/mcp/__init__.py`
+- [x] Updated call sites and tests to new constructor shape:
+  - `api/app/main.py` now constructs `McpService` with a `McpServiceDependencies` object
+  - updated MCP unit helpers in:
+    - `api/tests/test_mcp_service_unit.py`
+    - `api/tests/test_mcp_service_stream_unit.py`
+    - `api/tests/test_mcp_service_engram_dispatch_unit.py`
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`255 passed, 4 skipped, 81 deselected`)
+  - `make test` (`255 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **10.0** (improved from **9.68**)
+  - `api/app/main.py` score: **10.0** (stable)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **9.68** | GREEN |
+| `api/app/mcp/service.py` | **10.0** | GREEN |
 | `api/app/memory_admin/repository.py` | 10.0 | GREEN |
 | `api/app/memory_admin/repository_sessions.py` | 10.0 | GREEN |
 | `api/app/memory_admin/repository_engrams.py` | 10.0 | GREEN |
