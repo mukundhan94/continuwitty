@@ -1989,13 +1989,43 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 74 - Chat Repository Message Request Object and Pinning Cleanup)
+
+- [x] Continued Phase 3 refactor in `api/app/chat_repository.py` to reduce function argument count and improve cohesion:
+  - added `ChatMessageCreateRepositoryRequest`
+  - updated `create_chat_message(...)` to consume a request object instead of multiple scalar arguments
+- [x] Reduced pinning wrapper duplication and stabilized helper shape:
+  - added `_PinnedResourcePublicConfig` + `_PINNED_RESOURCE_PUBLIC_CONFIG`
+  - added `_build_pinned_resource_mutation_request(...)`
+  - kept a single shared pin-helper (`_pin_resource_by_config(...)`) and removed mirrored unpin helper duplication
+  - updated `pin_engram_to_session(...)`, `pin_document_to_session(...)`, `unpin_engram_from_session(...)`, `unpin_document_from_session(...)`
+- [x] Updated service and tests to match the repository request-object contract:
+  - `api/app/chat/service.py` now passes `ChatMessageCreateRepositoryRequest` in user/assistant message persistence
+  - updated `api/tests/test_chat_repository.py` message-create integration path
+  - updated `api/tests/test_chat_service.py` create-message monkeypatch expectations
+- [x] Validation run (using `make` commands):
+  - `make test-unit` (`237 passed, 4 skipped, 81 deselected`)
+  - `make test` (`237 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] Additional targeted validation:
+  - `uv run pytest tests/test_chat_repository.py tests/test_chat_service.py -q` (`21 passed, 7 skipped`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/chat_repository.py` score: **8.03** (improved from **7.78**)
+  - `api/app/chat/service.py` score: **7.90** (stable)
+  - `api/tests/test_chat_repository.py` score: **10.0**
+  - `api/tests/test_chat_service.py` score: **7.91**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
 | `api/app/mcp/service.py` | **9.68** | GREEN |
 | `api/app/memory_admin/repository.py` | 8.03 | YELLOW |
-| `api/app/chat_repository.py` | 7.78 | YELLOW |
+| `api/app/chat_repository.py` | 8.03 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |
 | `api/app/oauth/api.py` | 10.0 | GREEN |
 | `api/app/oauth/common.py` | 10.0 | GREEN |

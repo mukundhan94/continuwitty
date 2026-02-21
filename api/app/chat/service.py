@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from app.chat_repository import (
+    ChatMessageCreateRepositoryRequest,
     MessageMetadata,
     count_session_messages_by_role,
     create_chat_message,
@@ -536,10 +537,12 @@ class ChatService:
 
         session = self.get_session(actor_user_id=actor_user_id, session_id=session_id)
         user_message = create_chat_message(
-            session_id=session.session_id,
-            actor_user_id=actor_user_id,
-            role="user",
-            content_text=payload.content_text,
+            request=ChatMessageCreateRepositoryRequest(
+                session_id=session.session_id,
+                actor_user_id=actor_user_id,
+                role="user",
+                content_text=payload.content_text,
+            ),
         )
         if not user_message:
             raise ChatSessionNotFoundError()
@@ -600,15 +603,17 @@ class ChatService:
         result: ProviderGenerateResult,
     ) -> ChatMessageRecord:
         assistant_message = create_chat_message(
-            session_id=prepared.session.session_id,
-            actor_user_id=actor_user_id,
-            role="assistant",
-            content_text=result.text,
-            metadata=MessageMetadata(
-                provider=prepared.session.provider.value,
-                model_id=prepared.session.model_id,
-                token_usage_json=result.token_usage,
-                used_engram_ids=prepared.context.used_engram_ids,
+            request=ChatMessageCreateRepositoryRequest(
+                session_id=prepared.session.session_id,
+                actor_user_id=actor_user_id,
+                role="assistant",
+                content_text=result.text,
+                metadata=MessageMetadata(
+                    provider=prepared.session.provider.value,
+                    model_id=prepared.session.model_id,
+                    token_usage_json=result.token_usage,
+                    used_engram_ids=prepared.context.used_engram_ids,
+                ),
             ),
         )
         if not assistant_message:

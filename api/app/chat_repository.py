@@ -52,6 +52,13 @@ class _PinnedResourceMutationRequest:
 
 
 @dataclass(frozen=True)
+class _PinnedResourcePublicConfig:
+    table: str
+    id_column: str
+    record_factory: type[PinnedEngramRecord] | type[PinnedDocumentRecord]
+
+
+@dataclass(frozen=True)
 class _PinnedResourceListConfig:
     id_column: str
     join_sql: str
@@ -92,6 +99,19 @@ _PINNED_RESOURCE_LIST_CONFIG = {
     ),
 }
 
+_PINNED_RESOURCE_PUBLIC_CONFIG = {
+    "engram": _PinnedResourcePublicConfig(
+        table="session_pinned_engrams",
+        id_column="engram_id",
+        record_factory=PinnedEngramRecord,
+    ),
+    "document": _PinnedResourcePublicConfig(
+        table="session_pinned_documents",
+        id_column="document_id",
+        record_factory=PinnedDocumentRecord,
+    ),
+}
+
 
 @dataclass(frozen=True)
 class MessageMetadata:
@@ -99,6 +119,15 @@ class MessageMetadata:
     model_id: str | None = None
     token_usage_json: dict | None = None
     used_engram_ids: list[UUID] | None = None
+
+
+@dataclass(frozen=True)
+class ChatMessageCreateRepositoryRequest:
+    session_id: UUID
+    actor_user_id: UUID
+    role: str
+    content_text: str
+    metadata: MessageMetadata | None = None
 
 
 def create_chat_session(
@@ -273,14 +302,11 @@ def update_chat_session(
 
 
 def create_chat_message(
-    session_id: UUID,
-    actor_user_id: UUID,
-    role: str,
-    content_text: str,
-    metadata: MessageMetadata | None = None,
+    *,
+    request: ChatMessageCreateRepositoryRequest,
 ) -> ChatMessageRecord | None:
     message_id = uuid4()
-    resolved_metadata = metadata or MessageMetadata()
+    resolved_metadata = request.metadata or MessageMetadata()
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -323,15 +349,15 @@ def create_chat_message(
             """,
             (
                 message_id,
-                role,
-                content_text,
+                request.role,
+                request.content_text,
                 resolved_metadata.provider,
                 resolved_metadata.model_id,
                 Jsonb(resolved_metadata.token_usage_json or {}),
                 resolved_metadata.used_engram_ids or [],
                 datetime.now(UTC),
-                session_id,
-                actor_user_id,
+                request.session_id,
+                request.actor_user_id,
             ),
         )
         row = cur.fetchone()
@@ -466,6 +492,40 @@ def _unpin_from_session(*, request: _PinnedResourceMutationRequest) -> bool:
         return _unpin_resource_from_session(request=request, conn=conn)
 
 
+def _build_pinned_resource_mutation_request(
+    *,
+    config: _PinnedResourcePublicConfig,
+    resource_id: UUID,
+    session_id: UUID,
+    actor_user_id: UUID,
+) -> _PinnedResourceMutationRequest:
+    return _PinnedResourceMutationRequest(
+        table=config.table,
+        id_column=config.id_column,
+        resource_id=resource_id,
+        session_id=session_id,
+        actor_user_id=actor_user_id,
+    )
+
+
+def _pin_resource_by_config(
+    *,
+    config: _PinnedResourcePublicConfig,
+    resource_id: UUID,
+    session_id: UUID,
+    actor_user_id: UUID,
+) -> PinnedEngramRecord | PinnedDocumentRecord | None:
+    row = _pin_to_session(
+        request=_build_pinned_resource_mutation_request(
+            config=config,
+            resource_id=resource_id,
+            session_id=session_id,
+            actor_user_id=actor_user_id,
+        )
+    )
+    return config.record_factory(**row) if row else None
+
+
 def _list_pinned_resources(
     *,
     table: str,
@@ -506,18 +566,12 @@ def pin_engram_to_session(
     engram_id: UUID,
     actor_user_id: UUID,
 ) -> PinnedEngramRecord | None:
-    row = _pin_to_session(
-        request=_PinnedResourceMutationRequest(
-            table="session_pinned_engrams",
-            id_column="engram_id",
-            resource_id=engram_id,
-            session_id=session_id,
-            actor_user_id=actor_user_id,
-        )
+    return _pin_resource_by_config(
+        config=_PINNED_RESOURCE_PUBLIC_CONFIG["engram"],
+        resource_id=engram_id,
+        session_id=session_id,
+        actor_user_id=actor_user_id,
     )
-    if not row:
-        return None
-    return PinnedEngramRecord(**row)
 
 
 def unpin_engram_from_session(
@@ -526,9 +580,8 @@ def unpin_engram_from_session(
     actor_user_id: UUID,
 ) -> bool:
     return _unpin_from_session(
-        request=_PinnedResourceMutationRequest(
-            table="session_pinned_engrams",
-            id_column="engram_id",
+        request=_build_pinned_resource_mutation_request(
+            config=_PINNED_RESOURCE_PUBLIC_CONFIG["engram"],
             resource_id=engram_id,
             session_id=session_id,
             actor_user_id=actor_user_id,
@@ -686,18 +739,12 @@ def pin_document_to_session(
     document_id: UUID,
     actor_user_id: UUID,
 ) -> PinnedDocumentRecord | None:
-    row = _pin_to_session(
-        request=_PinnedResourceMutationRequest(
-            table="session_pinned_documents",
-            id_column="document_id",
-            resource_id=document_id,
-            session_id=session_id,
-            actor_user_id=actor_user_id,
-        )
+    return _pin_resource_by_config(
+        config=_PINNED_RESOURCE_PUBLIC_CONFIG["document"],
+        resource_id=document_id,
+        session_id=session_id,
+        actor_user_id=actor_user_id,
     )
-    if not row:
-        return None
-    return PinnedDocumentRecord(**row)
 
 
 def unpin_document_from_session(
@@ -706,9 +753,8 @@ def unpin_document_from_session(
     actor_user_id: UUID,
 ) -> bool:
     return _unpin_from_session(
-        request=_PinnedResourceMutationRequest(
-            table="session_pinned_documents",
-            id_column="document_id",
+        request=_build_pinned_resource_mutation_request(
+            config=_PINNED_RESOURCE_PUBLIC_CONFIG["document"],
             resource_id=document_id,
             session_id=session_id,
             actor_user_id=actor_user_id,

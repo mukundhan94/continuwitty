@@ -154,10 +154,10 @@ def test_send_message_returns_used_engram_ids_and_sources(monkeypatch) -> None:
     )
     monkeypatch.setattr("app.chat.service.list_chat_messages", lambda **kwargs: [user_message])
 
-    def _fake_create_chat_message(**kwargs):
-        if kwargs["role"] == "user":
+    def _fake_create_chat_message(*, request):
+        if request.role == "user":
             return user_message
-        assert kwargs["metadata"] and kwargs["metadata"].used_engram_ids == [referenced_engram_id]
+        assert request.metadata and request.metadata.used_engram_ids == [referenced_engram_id]
         return assistant_message
 
     monkeypatch.setattr("app.chat.service.create_chat_message", _fake_create_chat_message)

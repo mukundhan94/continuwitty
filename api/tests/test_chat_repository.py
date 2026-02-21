@@ -8,6 +8,7 @@ import pytest
 from app import chat_repository as chat_repo
 from app.auth import hash_password
 from app.chat_repository import (
+    ChatMessageCreateRepositoryRequest,
     MessageMetadata,
     create_chat_message,
     create_chat_session,
@@ -182,15 +183,17 @@ def test_chat_message_create_and_list(clean_db) -> None:
     )
 
     msg = create_chat_message(
-        session_id=session.session_id,
-        actor_user_id=admin["user_id"],
-        role="user",
-        content_text="Hello",
-        metadata=MessageMetadata(
-            provider="openai",
-            model_id="gpt-4o-mini",
-            token_usage_json={"input": 3, "output": 0},
-            used_engram_ids=[uuid4()],
+        request=ChatMessageCreateRepositoryRequest(
+            session_id=session.session_id,
+            actor_user_id=admin["user_id"],
+            role="user",
+            content_text="Hello",
+            metadata=MessageMetadata(
+                provider="openai",
+                model_id="gpt-4o-mini",
+                token_usage_json={"input": 3, "output": 0},
+                used_engram_ids=[uuid4()],
+            ),
         ),
     )
     assert msg is not None
