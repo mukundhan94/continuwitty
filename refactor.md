@@ -2267,6 +2267,29 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 85 - Chat Message Runtime Dependency Object Adoption)
+
+- [x] Continued Phase 4 hardening in `api/app/chat/message_runtime.py` by removing constructor argument-smell:
+  - added `ChatMessageRuntimeDependencies` dataclass to bundle runtime construction dependencies
+  - updated `ChatMessageRuntime.__init__(...)` to accept a single `dependencies` object
+- [x] Updated integration and tests:
+  - updated `api/app/chat/service.py` to construct runtime via `ChatMessageRuntimeDependencies`
+  - updated `api/tests/test_chat_message_runtime.py` runtime setup to use dependency object
+  - extracted `_runtime_for_session(...)` helper in test module to keep test methods small and maintain test-file CodeScene quality
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`254 passed, 4 skipped, 81 deselected`)
+  - `make test` (`254 passed, 85 skipped`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/chat/message_runtime.py` score: **10.0** (improved from **9.68**)
+  - `api/app/chat/service.py` score: **10.0** (stable)
+  - `api/tests/test_chat_message_runtime.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2281,7 +2304,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/chat_repository.py` | 10.0 | GREEN |
 | `api/app/chat_repository_pinning.py` | 10.0 | GREEN |
 | `api/app/chat/service.py` | 10.0 | GREEN |
-| `api/app/chat/message_runtime.py` | 9.68 | GREEN |
+| `api/app/chat/message_runtime.py` | 10.0 | GREEN |
 | `api/app/chat/session_operations.py` | 10.0 | GREEN |
 | `api/app/chat/session_lifecycle.py` | 9.68 | GREEN |
 | `api/app/oauth/api.py` | 10.0 | GREEN |

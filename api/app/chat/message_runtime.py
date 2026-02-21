@@ -71,6 +71,16 @@ class DebugBuildContext:
     call_type: str
 
 
+@dataclass(frozen=True)
+class ChatMessageRuntimeDependencies:
+    embedding_dim: int
+    chat_debug_enabled: bool
+    chat_debug_include_raw_text: bool
+    debug_publisher: ChatDebugTelemetryPublisher
+    get_session: Callable[..., ChatSessionRecord]
+    run_session_lifecycle_maintenance: Callable[..., LifecycleMaintenanceResult]
+
+
 def _history_as_provider_messages(
     messages: list[ChatMessageRecord],
     history_limit: int = 40,
@@ -177,19 +187,16 @@ class ChatMessageRuntime:
     def __init__(
         self,
         *,
-        embedding_dim: int,
-        chat_debug_enabled: bool,
-        chat_debug_include_raw_text: bool,
-        debug_publisher: ChatDebugTelemetryPublisher,
-        get_session: Callable[..., ChatSessionRecord],
-        run_session_lifecycle_maintenance: Callable[..., LifecycleMaintenanceResult],
+        dependencies: ChatMessageRuntimeDependencies,
     ) -> None:
-        self._embedding_dim = embedding_dim
-        self._chat_debug_enabled = chat_debug_enabled
-        self._chat_debug_include_raw_text = chat_debug_include_raw_text
-        self._debug_publisher = debug_publisher
-        self._get_session = get_session
-        self._run_session_lifecycle_maintenance = run_session_lifecycle_maintenance
+        self._embedding_dim = dependencies.embedding_dim
+        self._chat_debug_enabled = dependencies.chat_debug_enabled
+        self._chat_debug_include_raw_text = dependencies.chat_debug_include_raw_text
+        self._debug_publisher = dependencies.debug_publisher
+        self._get_session = dependencies.get_session
+        self._run_session_lifecycle_maintenance = (
+            dependencies.run_session_lifecycle_maintenance
+        )
 
     def prepare_generation(
         self,

@@ -9,6 +9,7 @@ from app.chat.context import AssembledChatContext
 from app.chat.errors import ChatProviderExecutionError
 from app.chat.message_runtime import (
     ChatMessageRuntime,
+    ChatMessageRuntimeDependencies,
     PreparedGeneration,
     raise_provider_error,
     resolve_token_usage,
@@ -29,6 +30,29 @@ from app.providers.errors import (
     ProviderRateLimitError,
     ProviderRequestError,
 )
+
+
+def _runtime_for_session(session: ChatSessionRecord) -> ChatMessageRuntime:
+    return ChatMessageRuntime(
+        dependencies=ChatMessageRuntimeDependencies(
+            embedding_dim=256,
+            chat_debug_enabled=False,
+            chat_debug_include_raw_text=False,
+            debug_publisher=ChatDebugTelemetryPublisher(
+                console_enabled=False,
+                langfuse_enabled=False,
+                langfuse_public_key=None,
+                langfuse_secret_key=None,
+                langfuse_host="https://example.com",
+            ),
+            get_session=lambda **kwargs: session,
+            run_session_lifecycle_maintenance=lambda **kwargs: LifecycleMaintenanceResult(
+                snapshot_engram_id=None,
+                pruned_engram_ids=[],
+                skipped_reason="autosave_disabled",
+            ),
+        ),
+    )
 
 
 def test_resolve_token_usage_estimates_when_total_missing() -> None:
@@ -112,24 +136,7 @@ def test_build_stream_meta_payload_includes_context_references() -> None:
         context_duration_ms=1.0,
         history_load_duration_ms=1.0,
     )
-    runtime = ChatMessageRuntime(
-        embedding_dim=256,
-        chat_debug_enabled=False,
-        chat_debug_include_raw_text=False,
-        debug_publisher=ChatDebugTelemetryPublisher(
-            console_enabled=False,
-            langfuse_enabled=False,
-            langfuse_public_key=None,
-            langfuse_secret_key=None,
-            langfuse_host="https://example.com",
-        ),
-        get_session=lambda **kwargs: session,
-        run_session_lifecycle_maintenance=lambda **kwargs: LifecycleMaintenanceResult(
-            snapshot_engram_id=None,
-            pruned_engram_ids=[],
-            skipped_reason="autosave_disabled",
-        ),
-    )
+    runtime = _runtime_for_session(session)
 
     payload = runtime.build_stream_meta_payload(prepared=prepared)
 

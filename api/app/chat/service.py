@@ -14,6 +14,7 @@ from app.providers.registry import get_provider_adapter
 from .errors import ChatServiceError
 from .message_runtime import (
     ChatMessageRuntime,
+    ChatMessageRuntimeDependencies,
     PreparedGeneration,
     raise_provider_error,
     resolve_token_usage,
@@ -55,12 +56,14 @@ class ChatService(ChatSessionOperationsMixin):
             langfuse_host=settings.langfuse_host,
         )
         self._runtime = ChatMessageRuntime(
-            embedding_dim=self._embedding_dim,
-            chat_debug_enabled=self._chat_debug_enabled,
-            chat_debug_include_raw_text=self._chat_debug_include_raw_text,
-            debug_publisher=self._debug_publisher,
-            get_session=self.get_session,
-            run_session_lifecycle_maintenance=self._run_session_lifecycle_maintenance,
+            dependencies=ChatMessageRuntimeDependencies(
+                embedding_dim=self._embedding_dim,
+                chat_debug_enabled=self._chat_debug_enabled,
+                chat_debug_include_raw_text=self._chat_debug_include_raw_text,
+                debug_publisher=self._debug_publisher,
+                get_session=self.get_session,
+                run_session_lifecycle_maintenance=self._run_session_lifecycle_maintenance,
+            ),
         )
 
     def _prepare_generation(
