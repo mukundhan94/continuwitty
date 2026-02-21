@@ -21,14 +21,12 @@ import { LoginView } from './components/LoginView'
 import { PinnedEngramPanel } from './components/PinnedEngramPanel'
 import { SaveEngramModal } from './components/SaveEngramModal'
 import { SessionSidebar } from './components/SessionSidebar'
+import { WorkspaceTopNav } from './components/WorkspaceTopNav'
 import { WEB_CONFIG } from './config'
 import {
   AppShell,
   LoadingScreen,
   NoticeBanner,
-  TopNavShell,
-  TopNavTitleBlock,
-  TopNavUserBlock,
   WorkspaceGrid,
 } from './styles/primitives'
 import { useThemeMode } from './styles/useThemeMode'
@@ -294,39 +292,6 @@ function AppScreen() {
     describeError,
   })
 
-  const renderTopNav = (activeUser: UserProfile) => (
-    <TopNavShell>
-      <TopNavTitleBlock>
-        <h1 className="font-display text-lg font-semibold tracking-tight text-ink">Memory Continuity Workbench</h1>
-      </TopNavTitleBlock>
-
-      <TopNavUserBlock>
-        <p className="text-sm text-inkMuted">
-          {activeUser.username} · {activeUser.role}
-        </p>
-        {isAdmin ? (
-          <button type="button" data-testid="open-admin-token-panel" onClick={() => void openAdminTokenPanel()}>
-            MCP Tokens
-          </button>
-        ) : null}
-        {isAdmin ? (
-          <button
-            type="button"
-            onClick={() => navigate(isAdminMemoryRoute ? '/' : '/admin/memory')}
-          >
-            {isAdminMemoryRoute ? 'Chat Workspace' : 'Memory Admin'}
-          </button>
-        ) : null}
-        <button type="button" onClick={toggleMode}>
-          {mode === 'dark' ? 'Light Theme' : 'Dark Theme'}
-        </button>
-        <button type="button" onClick={handleLogout}>
-          Logout
-        </button>
-      </TopNavUserBlock>
-    </TopNavShell>
-  )
-
   const renderWorkspace = () => (
     <WorkspaceGrid>
       <SessionSidebar
@@ -461,7 +426,16 @@ function AppScreen() {
 
   return (
     <AppShell>
-      {renderTopNav(user)}
+      <WorkspaceTopNav
+        user={user}
+        isAdmin={isAdmin}
+        isAdminMemoryRoute={isAdminMemoryRoute}
+        mode={mode}
+        onOpenAdminTokenPanel={openAdminTokenPanel}
+        onToggleAdminMemoryRoute={() => navigate(isAdminMemoryRoute ? '/' : '/admin/memory')}
+        onToggleTheme={toggleMode}
+        onLogout={handleLogout}
+      />
       {notice ? <NoticeBanner>{notice}</NoticeBanner> : null}
       {renderBody()}
       {renderSaveModal()}
