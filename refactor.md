@@ -1508,11 +1508,38 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 56 - MCP Engram Primary Helper Decomposition Phase 1.2 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` decomposition by extracting dedicated primary-route handlers:
+  - added `_dispatch_engram_create_tool(...)`
+  - added `_dispatch_engram_create_from_conversation_tool(...)`
+  - added `_dispatch_engram_update_tool(...)`
+  - reduced `_dispatch_engram_primary_tool(...)` to lambda-based route wiring only
+- [x] Expanded unit tests in `api/tests/test_mcp_service_engram_dispatch_unit.py`:
+  - added primary-route helper wiring coverage for:
+    - `engram.create`
+    - `engram.create_from_conversation`
+    - `engram.update`
+    - `engram.collection_create`
+  - refactored test parametrization to avoid duplication and keep CodeScene test quality at 10.0
+- [x] Validation run:
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_engram_dispatch_unit.py` (passed)
+  - `uv run pytest tests/test_mcp_service_unit.py tests/test_mcp_service_engram_dispatch_unit.py -q` (`38 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`305 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **7.04** (improved from **6.74**)
+  - `api/tests/test_mcp_service_engram_dispatch_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **6.74** | YELLOW |
+| `api/app/mcp/service.py` | **7.04** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |

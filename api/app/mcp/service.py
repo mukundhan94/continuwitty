@@ -1312,6 +1312,78 @@ class McpService:
         handler = handlers.get(method)
         return handler() if handler else None
 
+    def _dispatch_engram_create_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> dict[str, Any]:
+        actor_role = str(actor.get("role", ""))
+        resolved_payload, resolved_project_id, used_default_project = (
+            self._create_engram_payload_with_project_resolution(
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                token_auth=token_auth,
+                payload=MemoryEngramCreate(**params),
+            )
+        )
+        created = create_engram(
+            payload=resolved_payload,
+            embedding_dim=self._embedding_dim,
+            owner_user_id=actor_user_id,
+            enrichment_origin="mcp.engram.create",
+        )
+        engram = created.model_dump(mode="json")
+        engram["resolved_project_id"] = resolved_project_id
+        engram["used_default_project"] = used_default_project
+        return {"engram": engram}
+
+    def _dispatch_engram_create_from_conversation_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,
+    ) -> dict[str, Any]:
+        actor_role = str(actor.get("role", ""))
+        created, report = self._create_engram_from_conversation(
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            token_auth=token_auth,
+            params=params,
+            enrichment_origin="mcp.engram.create_from_conversation",
+        )
+        return {"engram": created, "enrichment_report": report}
+
+    def _dispatch_engram_update_tool(
+        self,
+        *,
+        actor: dict[str, Any],
+        actor_user_id: UUID,
+        params: dict[str, Any],
+        token_auth: McpTokenAuthContext | None,  # noqa: ARG002
+    ) -> dict[str, Any]:
+        engram_id = self._parse_uuid(params, "engram_id")
+        self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
+        updated = self._memory_admin_service.update_engram(
+            engram_id=engram_id,
+            actor_user_id=actor_user_id,
+            payload=AdminEngramUpdateRequest(
+                title=params.get("title"),
+                abstract=params.get("abstract"),
+                detailed_summary_markdown=params.get("detailed_summary_markdown"),
+                tags=params.get("tags"),
+                keywords=params.get("keywords"),
+                visibility_scope=params.get("visibility_scope"),
+                expected_updated_at=params.get("expected_updated_at"),
+                sources=params.get("sources"),
+            ),
+        )
+        return {"engram": updated.model_dump(mode="json")}
+
     def _dispatch_engram_primary_tool(
         self,
         *,
@@ -1323,77 +1395,37 @@ class McpService:
     ) -> dict[str, Any] | None:
         actor_role = str(actor.get("role", ""))
 
-        def _create_engram() -> dict[str, Any]:
-            resolved_payload, resolved_project_id, used_default_project = (
-                self._create_engram_payload_with_project_resolution(
-                    actor_user_id=actor_user_id,
-                    actor_role=actor_role,
-                    token_auth=token_auth,
-                    payload=MemoryEngramCreate(**params),
-                )
-            )
-            created = create_engram(
-                payload=resolved_payload,
-                embedding_dim=self._embedding_dim,
-                owner_user_id=actor_user_id,
-                enrichment_origin="mcp.engram.create",
-            )
-            engram = created.model_dump(mode="json")
-            engram["resolved_project_id"] = resolved_project_id
-            engram["used_default_project"] = used_default_project
-            return {"engram": engram}
-
-        def _create_from_conversation() -> dict[str, Any]:
-            created, report = self._create_engram_from_conversation(
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                token_auth=token_auth,
-                params=params,
-                enrichment_origin="mcp.engram.create_from_conversation",
-            )
-            return {"engram": created, "enrichment_report": report}
-
-        def _update_engram() -> dict[str, Any]:
-            engram_id = self._parse_uuid(params, "engram_id")
-            self._require_engram_access(actor=actor, engram_id=engram_id, include_deleted=True)
-            updated = self._memory_admin_service.update_engram(
-                engram_id=engram_id,
-                actor_user_id=actor_user_id,
-                payload=AdminEngramUpdateRequest(
-                    title=params.get("title"),
-                    abstract=params.get("abstract"),
-                    detailed_summary_markdown=params.get("detailed_summary_markdown"),
-                    tags=params.get("tags"),
-                    keywords=params.get("keywords"),
-                    visibility_scope=params.get("visibility_scope"),
-                    expected_updated_at=params.get("expected_updated_at"),
-                    sources=params.get("sources"),
-                ),
-            )
-            return {"engram": updated.model_dump(mode="json")}
-
-        def _move_project() -> dict[str, Any]:
-            return self._dispatch_engram_move_project_tool(
+        handlers = {
+            "engram.create": lambda: self._dispatch_engram_create_tool(
                 actor=actor,
                 actor_user_id=actor_user_id,
                 params=params,
                 token_auth=token_auth,
-            )
-
-        def _create_collection() -> dict[str, Any]:
-            return self._dispatch_engram_collection_create_tool(
+            ),
+            "engram.create_from_conversation": lambda: self._dispatch_engram_create_from_conversation_tool(
+                actor=actor,
+                actor_user_id=actor_user_id,
+                params=params,
+                token_auth=token_auth,
+            ),
+            "engram.update": lambda: self._dispatch_engram_update_tool(
+                actor=actor,
+                actor_user_id=actor_user_id,
+                params=params,
+                token_auth=token_auth,
+            ),
+            "engram.move_project": lambda: self._dispatch_engram_move_project_tool(
+                actor=actor,
+                actor_user_id=actor_user_id,
+                params=params,
+                token_auth=token_auth,
+            ),
+            "engram.collection_create": lambda: self._dispatch_engram_collection_create_tool(
                 actor_user_id=actor_user_id,
                 actor_role=actor_role,
                 params=params,
                 token_auth=token_auth,
-            )
-
-        handlers = {
-            "engram.create": _create_engram,
-            "engram.create_from_conversation": _create_from_conversation,
-            "engram.update": _update_engram,
-            "engram.move_project": _move_project,
-            "engram.collection_create": _create_collection,
+            ),
         }
         handler = handlers.get(method)
         return handler() if handler else None

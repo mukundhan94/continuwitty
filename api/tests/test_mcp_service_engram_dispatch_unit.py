@@ -21,6 +21,14 @@ class _Dumpable:
         return self.payload
 
 
+@dataclass(frozen=True)
+class _PrimaryDispatchCase:
+    method: str
+    helper_name: str
+    actor_role: str
+    params: dict[str, str]
+
+
 def _build_service() -> tuple[McpService, MagicMock, MagicMock, MagicMock]:
     chat_service = MagicMock()
     project_service = MagicMock()
@@ -162,3 +170,64 @@ def test_dispatch_tool_rehydrate_returns_not_found_when_bundle_missing(monkeypat
 
     assert exc_info.value.code == -32004
     assert exc_info.value.data == {"engram_id": str(engram_id)}
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        _PrimaryDispatchCase(
+            method="engram.create",
+            helper_name="_dispatch_engram_create_tool",
+            actor_role="user",
+            params={"engram_id": "e-1"},
+        ),
+        _PrimaryDispatchCase(
+            method="engram.create_from_conversation",
+            helper_name="_dispatch_engram_create_from_conversation_tool",
+            actor_role="user",
+            params={"engram_id": "e-1"},
+        ),
+        _PrimaryDispatchCase(
+            method="engram.update",
+            helper_name="_dispatch_engram_update_tool",
+            actor_role="user",
+            params={"engram_id": "e-1"},
+        ),
+        _PrimaryDispatchCase(
+            method="engram.collection_create",
+            helper_name="_dispatch_engram_collection_create_tool",
+            actor_role="admin",
+            params={"name": "Collection A"},
+        ),
+    ],
+)
+def test_dispatch_engram_primary_routes_extracted_helpers(
+    monkeypatch,
+    case: _PrimaryDispatchCase,
+) -> None:
+    service, _, _, _ = _build_service()
+    actor_user_id = uuid4()
+    actor = {"user_id": str(actor_user_id), "role": case.actor_role}
+    expected = {"method": case.method}
+    helper = MagicMock(return_value=expected)
+    monkeypatch.setattr(service, case.helper_name, helper)
+
+    result = service._dispatch_engram_primary_tool(
+        actor=actor,
+        actor_user_id=actor_user_id,
+        method=case.method,
+        params=case.params,
+        token_auth=None,
+    )
+
+    assert result == expected
+    expected_call = {
+        "actor_user_id": actor_user_id,
+        "params": case.params,
+        "token_auth": None,
+    }
+    if case.method == "engram.collection_create":
+        expected_call["actor_role"] = case.actor_role
+    else:
+        expected_call["actor"] = actor
+    helper.assert_called_once_with(**expected_call)
