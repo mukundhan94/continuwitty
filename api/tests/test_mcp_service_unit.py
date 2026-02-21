@@ -264,3 +264,67 @@ def test_enforce_token_authorization_rejects_scope_or_project_violations(
 
     assert exc_info.value.code == -32003
     assert exc_info.value.data == expected_data
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "params", "expected_project_id"),
+    [
+        ("engram.create", {"project_id": " project-alpha "}, "project-alpha"),
+        ("chat.list_sessions", {"project_id": "project-beta"}, "project-beta"),
+        ("chat.list_sessions", {}, None),
+    ],
+)
+def test_project_id_for_tool_resolves_project_from_input_params(
+    tool_name: str,
+    params: dict[str, str],
+    expected_project_id: str | None,
+) -> None:
+    service, _, _, _ = _build_service()
+
+    resolved = service._project_id_for_tool(
+        actor_user_id=uuid4(),
+        tool_name=tool_name,
+        params=params,
+    )
+
+    assert resolved == expected_project_id
+
+
+def test_project_id_for_tool_uses_session_project_for_save_as_engram() -> None:
+    service, chat_service, _, _ = _build_service()
+    actor_user_id = uuid4()
+    session_id = uuid4()
+    chat_service.get_session.return_value = SimpleNamespace(project_id="project-session")
+
+    resolved = service._project_id_for_tool(
+        actor_user_id=actor_user_id,
+        tool_name="chat.save_as_engram",
+        params={"session_id": str(session_id)},
+    )
+
+    assert resolved == "project-session"
+    chat_service.get_session.assert_called_once_with(
+        actor_user_id=actor_user_id,
+        session_id=session_id,
+    )
+
+
+def test_project_id_for_tool_resolves_collection_scoped_tool() -> None:
+    service, _, _, memory_admin_service = _build_service()
+    collection_id = uuid4()
+    memory_admin_service.find_collection.return_value = _Dumpable(
+        payload={},
+        project_id="project-collection",
+    )
+
+    resolved = service._project_id_for_tool(
+        actor_user_id=uuid4(),
+        tool_name="engram.collection_update",
+        params={"collection_id": str(collection_id)},
+    )
+
+    assert resolved == "project-collection"
+    memory_admin_service.find_collection.assert_called_once_with(
+        collection_id=collection_id,
+        include_deleted=True,
+    )

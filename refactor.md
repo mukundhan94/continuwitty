@@ -1268,11 +1268,38 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-21 (Checkpoint 46 - MCP Project Resolution Helper Split Phase 1.4 Hardening)
+
+- [x] Continued `api/app/mcp/service.py` refactor by decomposing `_project_id_for_tool(...)`:
+  - added module constant `_COLLECTION_SCOPED_TOOLS`
+  - extracted `_project_id_from_input_params(...)`
+  - extracted `_project_id_for_chat_save_as_engram(...)`
+  - extracted `_project_id_for_engram_scoped_tool(...)`
+  - extracted `_project_id_for_collection_scoped_tool(...)`
+  - extracted `_project_id_for_rehydrate_tool(...)`
+  - reduced `_project_id_for_tool(...)` to tool-family routing only
+- [x] Expanded unit tests in `api/tests/test_mcp_service_unit.py`:
+  - project resolution for explicit-input tools (`engram.create`, `chat.list_sessions`)
+  - `chat.save_as_engram` session-based project resolution
+  - collection-scoped project resolution (`engram.collection_update`)
+- [x] Validation run:
+  - `uv run pytest tests/test_mcp_service_unit.py -q` (`17 passed`)
+  - `uv run pytest tests/test_mcp_api_integration.py -k token_allowed_tools_and_project_guards -q` (`1 passed`)
+  - `make test` (`284 passed`)
+  - `uv run ruff check app/mcp/service.py tests/test_mcp_service_unit.py` (passed)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/mcp/service.py` score: **5.35** (improved from **5.14**)
+  - `api/tests/test_mcp_service_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
 |------|-------|----------|
-| `api/app/mcp/service.py` | **5.14** | YELLOW |
+| `api/app/mcp/service.py` | **5.35** | YELLOW |
 | `api/app/memory_admin/repository.py` | 7.78 | YELLOW |
 | `api/app/chat_repository.py` | 7.78 | YELLOW |
 | `api/app/chat/service.py` | 7.90 | YELLOW |

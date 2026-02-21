@@ -64,6 +64,13 @@ from .catalog import (
 )
 from .errors import McpRpcError
 
+_COLLECTION_SCOPED_TOOLS = {
+    "engram.collection_update",
+    "engram.collection_delete",
+    "engram.collection_add_items",
+    "engram.collection_remove_items",
+}
+
 
 class McpService:
     """JSON-RPC tool dispatcher for MCP-over-SSE.
@@ -405,6 +412,50 @@ class McpService:
         engram = self._memory_admin_service.find_engram(engram_id=engram_id, include_deleted=True)
         return engram.project_id if engram else None
 
+    def _project_id_from_input_params(self, params: dict[str, Any]) -> str | None:
+        raw_project = params.get("project_id")
+        return self._normalize_project_id(str(raw_project) if raw_project else None)
+
+    def _project_id_for_chat_save_as_engram(
+        self, *, actor_user_id: UUID, params: dict[str, Any]
+    ) -> str | None:
+        raw_session_id = params.get("session_id")
+        if raw_session_id:
+            session = self._chat_service.get_session(
+                actor_user_id=actor_user_id,
+                session_id=self._parse_uuid(params, "session_id"),
+            )
+            return session.project_id
+        return self._project_id_from_input_params(params)
+
+    def _project_id_for_engram_scoped_tool(
+        self, *, canonical_tool: str, params: dict[str, Any]
+    ) -> str | None:
+        target_project_id: str | None = None
+        if canonical_tool == "engram.move_project":
+            raw_target = params.get("target_project_id")
+            target_project_id = str(raw_target) if raw_target is not None else None
+        return self._resolve_project_from_engram(
+            engram_id=self._parse_uuid(params, "engram_id"),
+            target_project_id=target_project_id,
+        )
+
+    def _project_id_for_collection_scoped_tool(self, *, params: dict[str, Any]) -> str | None:
+        collection = self._memory_admin_service.find_collection(
+            collection_id=self._parse_uuid(params, "collection_id"),
+            include_deleted=True,
+        )
+        return collection.project_id if collection else None
+
+    def _project_id_for_rehydrate_tool(
+        self, *, actor_user_id: UUID, params: dict[str, Any]
+    ) -> str | None:
+        bundle = get_rehydration_bundle(
+            self._parse_uuid(params, "engram_id"),
+            actor_user_id=actor_user_id,
+        )
+        return bundle.project_id if bundle else None
+
     def _project_id_for_tool(
         self,
         *,
@@ -421,16 +472,9 @@ class McpService:
             "project.set_default",
             "engram.collection_create",
         }
-        collection_scoped_tools = {
-            "engram.collection_update",
-            "engram.collection_delete",
-            "engram.collection_add_items",
-            "engram.collection_remove_items",
-        }
 
         if canonical_tool in project_input_tools:
-            raw_project = params.get("project_id")
-            return self._normalize_project_id(str(raw_project) if raw_project else None)
+            return self._project_id_from_input_params(params)
 
         if canonical_tool in _SESSION_SCOPED_TOOLS:
             return self._resolve_project_from_session(
@@ -438,43 +482,28 @@ class McpService:
             )
 
         if canonical_tool == "chat.save_as_engram":
-            raw_session_id = params.get("session_id")
-            if raw_session_id:
-                session = self._chat_service.get_session(
-                    actor_user_id=actor_user_id,
-                    session_id=self._parse_uuid(params, "session_id"),
-                )
-                return session.project_id
-            raw_project = params.get("project_id")
-            return self._normalize_project_id(str(raw_project) if raw_project else None)
+            return self._project_id_for_chat_save_as_engram(
+                actor_user_id=actor_user_id,
+                params=params,
+            )
 
         if canonical_tool in _ENGRAM_SCOPED_TOOLS:
-            target_project_id: str | None = None
-            if canonical_tool == "engram.move_project":
-                raw_target = params.get("target_project_id")
-                target_project_id = str(raw_target) if raw_target is not None else None
-            return self._resolve_project_from_engram(
-                engram_id=self._parse_uuid(params, "engram_id"),
-                target_project_id=target_project_id,
+            return self._project_id_for_engram_scoped_tool(
+                canonical_tool=canonical_tool,
+                params=params,
             )
 
-        if canonical_tool in collection_scoped_tools:
-            collection = self._memory_admin_service.find_collection(
-                collection_id=self._parse_uuid(params, "collection_id"),
-                include_deleted=True,
-            )
-            return collection.project_id if collection else None
+        if canonical_tool in _COLLECTION_SCOPED_TOOLS:
+            return self._project_id_for_collection_scoped_tool(params=params)
 
         if canonical_tool == "engram.rehydrate":
-            bundle = get_rehydration_bundle(
-                self._parse_uuid(params, "engram_id"),
+            return self._project_id_for_rehydrate_tool(
                 actor_user_id=actor_user_id,
+                params=params,
             )
-            return bundle.project_id if bundle else None
 
         if canonical_tool in _OPTIONAL_PROJECT_TOOLS:
-            raw_project = params.get("project_id")
-            return self._normalize_project_id(str(raw_project) if raw_project else None)
+            return self._project_id_from_input_params(params)
 
         return None
 
