@@ -149,6 +149,25 @@ def test_dispatch_tool_routes_engram_and_project_domains() -> None:
     assert project_result == {"default_project_id": "project-alpha"}
 
 
+def test_dispatch_tool_routes_engram_collection_list() -> None:
+    service, _, _, memory_admin_service = _build_service()
+    actor_user_id = uuid4()
+    actor = {"user_id": str(actor_user_id), "role": "user"}
+    memory_admin_service.list_collections.return_value = [
+        _Dumpable(payload={"collection_id": "c1"})
+    ]
+
+    result = service._dispatch_tool(
+        actor=actor,
+        actor_user_id=actor_user_id,
+        method="engram.collection_list",
+        params={},
+        token_auth=None,
+    )
+
+    assert result == {"collections": [{"collection_id": "c1"}]}
+
+
 def test_dispatch_tool_routes_engram_get_with_include_deleted_flag() -> None:
     service, _, _, memory_admin_service = _build_service()
     actor_user_id = uuid4()

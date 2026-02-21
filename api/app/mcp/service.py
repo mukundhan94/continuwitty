@@ -1227,7 +1227,7 @@ class McpService:
         method: str,
         params: dict[str, Any],
     ) -> dict[str, Any] | None:
-        if method == "engram.query":
+        def _query() -> dict[str, Any]:
             results = query_engrams(
                 request=EngramQueryRequest(**params),
                 embedding_dim=self._embedding_dim,
@@ -1235,7 +1235,7 @@ class McpService:
             )
             return {"results": [item.model_dump(mode="json") for item in results]}
 
-        if method == "engram.rehydrate":
+        def _rehydrate() -> dict[str, Any]:
             engram_id = self._parse_uuid(params, "engram_id")
             bundle = get_rehydration_bundle(engram_id, actor_user_id=actor_user_id)
             if not bundle:
@@ -1246,7 +1246,7 @@ class McpService:
                 )
             return {"bundle": bundle.model_dump(mode="json")}
 
-        if method == "engram.list":
+        def _list_engrams() -> dict[str, Any]:
             session_id_value = params.get("session_id")
             session_id = (
                 self._parse_uuid({"session_id": session_id_value}, "session_id")
@@ -1261,7 +1261,7 @@ class McpService:
             )
             return {"engrams": [item.model_dump(mode="json") for item in listed]}
 
-        if method == "engram.get":
+        def _get_engram() -> dict[str, Any]:
             engram_id = self._parse_uuid(params, "engram_id")
             include_deleted = bool(params.get("include_deleted", True))
             engram = self._require_engram_access(
@@ -1271,7 +1271,7 @@ class McpService:
             )
             return {"engram": engram.model_dump(mode="json")}
 
-        if method == "engram.collection_list":
+        def _list_collections() -> dict[str, Any]:
             collections = self._list_collections_for_actor(
                 actor=actor,
                 actor_user_id=actor_user_id,
@@ -1279,7 +1279,15 @@ class McpService:
             )
             return {"collections": [item.model_dump(mode="json") for item in collections]}
 
-        return None
+        handlers = {
+            "engram.query": _query,
+            "engram.rehydrate": _rehydrate,
+            "engram.list": _list_engrams,
+            "engram.get": _get_engram,
+            "engram.collection_list": _list_collections,
+        }
+        handler = handlers.get(method)
+        return handler() if handler else None
 
     def _dispatch_engram_tool(
         self,
