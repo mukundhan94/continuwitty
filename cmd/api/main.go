@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"engram/internal/admin"
 	internalapi "engram/internal/api"
 	"engram/internal/config"
+	"engram/internal/db"
 )
 
 func main() {
@@ -22,7 +24,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	handler := internalapi.NewRouter(settings)
+	startupCtx := context.Background()
+	pool, err := db.NewPool(startupCtx, settings)
+	if err != nil {
+		logger.Error("failed to initialize db pool", "error", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	if err := db.Ping(startupCtx, pool); err != nil {
+		logger.Error("failed to ping database", "error", err)
+		os.Exit(1)
+	}
+
+	routerDependencies := internalapi.RouterDependencies{}
+	if config.IsProductionEnv(settings) {
+		logger.Warn("memory-admin routes disabled in production until auth migration is complete")
+	} else {
+		logger.Info("enabling memory-admin header actor bridge")
+		routerDependencies = internalapi.RouterDependencies{
+			MemoryAdminService: admin.NewService(pool, settings.EmbeddingDim, admin.PassthroughProjectResolver{}),
+			RequireAdminActor:  internalapi.RequireAdminActorFromHeaders,
+		}
+	}
+
+	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	address := net.JoinHostPort(settings.APIHost, strconv.Itoa(settings.APIPort))
 	server := &http.Server{
 		Addr:              address,

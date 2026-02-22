@@ -25,6 +25,8 @@ var (
 	ErrCollectionStale = errors.New("collection was updated by another operation")
 	// ErrProjectResolverNotConfigured indicates a write operation requiring project resolution cannot proceed.
 	ErrProjectResolverNotConfigured = errors.New("project resolver is not configured")
+	// ErrProjectIDRequired indicates that a write operation is missing project context.
+	ErrProjectIDRequired = errors.New("project_id is required")
 )
 
 // MemoryAdminListRequest captures shared admin list filters.

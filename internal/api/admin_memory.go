@@ -503,6 +503,9 @@ func writeServiceError(writer http.ResponseWriter, err error) {
 		errors.Is(err, admin.ErrCollectionNotFound):
 		statusCode = http.StatusNotFound
 		detail = err.Error()
+	case errors.Is(err, admin.ErrProjectIDRequired):
+		statusCode = http.StatusBadRequest
+		detail = err.Error()
 	case errors.Is(err, admin.ErrEngramStale),
 		errors.Is(err, admin.ErrCollectionStale),
 		errors.Is(err, repository.ErrCollectionNameExists):

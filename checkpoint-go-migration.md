@@ -36,7 +36,8 @@
 | CP21 | 2026-02-22 | Completed | Memory-admin service baseline (`internal/admin` service orchestration + migrated unit tests) |
 | CP22 | 2026-02-22 | Completed | Memory-admin API route baseline (`/api/v1/admin/memory` handlers + migrated unit tests) |
 | CP23 | 2026-02-22 | Completed | API integration baseline (dependency-aware router composition for memory-admin route mounting) |
-| CP24 | 2026-02-22 | In Progress | Runtime integration continuation (DB-backed memory-admin router deps and actor resolver wiring) |
+| CP24 | 2026-02-22 | Completed | Runtime integration baseline (DB-backed memory-admin router deps + migration-time actor/project resolver bridges) |
+| CP25 | 2026-02-22 | In Progress | Runtime hardening continuation (replace migration-time header actor bridge with auth/session-backed actor resolution) |
 
 ## Checkpoint Details
 
@@ -1408,9 +1409,108 @@
   - `internal/repository/user.go` → 9.38
   - `internal/repository/user_test.go` → 10.0
 
-### CP24 - Runtime Integration Continuation (Planned)
+### CP24 - Runtime Integration Baseline
+
+- Added runtime composition wiring for memory-admin routes:
+  - `cmd/api/main.go`
+  - DB pool initialization + ping on startup.
+  - `NewRouterWithDependencies` wiring with DB-backed `admin.Service`.
+  - non-production route enablement with migration-time actor bridge; production keeps routes disabled pending auth/session migration.
+- Added migration-time actor resolver bridge:
+  - `internal/api/admin_actor.go`
+  - parses `X-Engram-Actor-User-ID` + `X-Engram-Actor-Role`, allowing only `admin`.
+- Added migration-time project resolver bridge:
+  - `internal/admin/project_resolver.go`
+  - `PassthroughProjectResolver` validates/returns explicit project IDs for admin write flows.
+- Added/updated migrated tests:
+  - `internal/api/admin_actor_test.go`
+    - `TestRequireAdminActorFromHeadersReturnsActor`
+    - `TestRequireAdminActorFromHeadersRejectsMissingHeaders`
+    - `TestRequireAdminActorFromHeadersRejectsInvalidUserID`
+    - `TestRequireAdminActorFromHeadersRejectsNonAdminRole`
+  - `internal/admin/project_resolver_test.go`
+    - `TestPassthroughProjectResolverReturnsTrimmedProjectID`
+    - `TestPassthroughProjectResolverRejectsEmptyProjectID`
+  - `internal/api/admin_memory_test.go`
+    - `TestMountMemoryAdminRoutesCreateCollectionMapsMissingProjectTo400`
+- Executed migrated tests one-by-one:
+  - `TestPassthroughProjectResolverReturnsTrimmedProjectID`
+  - `TestPassthroughProjectResolverRejectsEmptyProjectID`
+  - `TestRequireAdminActorFromHeadersReturnsActor`
+  - `TestRequireAdminActorFromHeadersRejectsMissingHeaders`
+  - `TestRequireAdminActorFromHeadersRejectsInvalidUserID`
+  - `TestRequireAdminActorFromHeadersRejectsNonAdminRole`
+  - `TestMountMemoryAdminRoutesCreateCollectionMapsMissingProjectTo400`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/admin/project_resolver.go` → 10.0
+  - `internal/admin/project_resolver_test.go` → 10.0
+  - `internal/admin/service.go` → 8.54
+  - `internal/admin/service_test.go` → 9.38
+  - `internal/api/admin_actor.go` → 10.0
+  - `internal/api/admin_actor_test.go` → 10.0
+  - `internal/api/admin_memory.go` → 6.88
+  - `internal/api/admin_memory_test.go` → 9.68
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+- Pre-commit safeguard:
+  - `quality_gates=passed` (stable complexity advisory in `internal/api/admin_memory.go`; no gate failure).
+
+### CP25 - Runtime Hardening Continuation (Planned)
 
 - Continue migration with the next high-value slice:
-  - wire DB-backed memory-admin service dependencies into API runtime composition
-  - add actor-resolution bridge for admin route authorization flow
+  - replace migration-time header actor bridge with auth/session-backed actor resolution
+  - align admin authorization with the canonical role/session flow from Python runtime behavior
 - Keep parity tests migrated and executed one-by-one.

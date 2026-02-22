@@ -296,6 +296,26 @@ func TestMountMemoryAdminRoutesCreateCollectionReturns201(t *testing.T) {
 	requireEqual(t, "Collection", capturedPayload.Name)
 }
 
+func TestMountMemoryAdminRoutesCreateCollectionMapsMissingProjectTo400(t *testing.T) {
+	service := &fakeMemoryAdminService{
+		createCollectionFn: func(_ context.Context, _ uuid.UUID, _ string, _ admin.CollectionCreateRequest) (*models.EngramCollectionRecord, error) {
+			return nil, admin.ErrProjectIDRequired
+		},
+	}
+	router := chi.NewRouter()
+	MountMemoryAdminRoutes(router, service, func(_ *http.Request) (AdminActor, error) {
+		return AdminActor{UserID: uuid.MustParse("00000000-0000-0000-0000-000000000161"), Role: "admin"}, nil
+	})
+
+	response := executeRequest(
+		router,
+		http.MethodPost,
+		"/api/v1/admin/memory/collections",
+		[]byte(`{"project_id":"","name":"Collection","description":"desc"}`),
+	)
+	requireEqual(t, http.StatusBadRequest, response.Code)
+}
+
 func TestMountMemoryAdminRoutesReturnsForbiddenWhenActorCheckFails(t *testing.T) {
 	service := &fakeMemoryAdminService{
 		listSessionsFn: func(_ context.Context, _ admin.MemoryAdminListRequest) ([]models.AdminChatSessionRecord, error) {
