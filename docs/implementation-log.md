@@ -1926,3 +1926,92 @@
    - initial run flagged `Large Method` and `Code Duplication`.
    - follow-up refactor reduced `CollectionSection` size and removed duplicated test structure.
    - final `pre_commit_code_health_safeguard` result: `quality_gates=passed`.
+
+### 2026-02-22 (Go migration CP13: chat messages + session pinning repository parity)
+
+1. Extended chat model parity in Go:
+   - `internal/models/chat.go`
+   - added `ChatSessionAdminRecord`, `ChatMessageRecord`, `PinnedEngramRecord`, `PinnedDocumentRecord`.
+2. Added chat repository continuation operations:
+   - `internal/repository/chat.go`
+   - added `GetChatSessionAdminRecord` parity read path.
+3. Added message repository operations:
+   - `internal/repository/chat_message.go`
+   - `CreateChatMessage`
+   - `ListChatMessages`
+   - `ListSessionLinkedEngrams`
+   - `CountSessionMessagesByRole`
+   - `DeleteSessionAutosaveEngrams`
+4. Added session pinning repository operations:
+   - `internal/repository/chat_pinning.go`
+   - `PinEngramToSession`
+   - `UnpinEngramFromSession`
+   - `ListPinnedEngrams`
+   - `ListPinnedEngramSummaries`
+   - `PinDocumentToSession`
+   - `UnpinDocumentFromSession`
+   - `ListPinnedDocuments`
+5. Added migrated repository tests:
+   - `internal/repository/chat_message_test.go`
+   - `internal/repository/chat_pinning_test.go`
+   - `internal/repository/chat_test.go` (`TestGetChatSessionAdminRecordReturnsRecord`)
+6. Executed migrated tests one-by-one:
+   - `go test ./internal/repository -run '^TestCreateChatMessageReturnsInsertedRecord$' -v`
+   - `go test ./internal/repository -run '^TestCreateChatMessageReturnsNilWhenSessionNotVisible$' -v`
+   - `go test ./internal/repository -run '^TestListChatMessagesParsesJSONAndDefaults$' -v`
+   - `go test ./internal/repository -run '^TestListSessionLinkedEngramsAppliesVisibilityFilters$' -v`
+   - `go test ./internal/repository -run '^TestCountSessionMessagesByRoleReturnsValue$' -v`
+   - `go test ./internal/repository -run '^TestDeleteSessionAutosaveEngramsReturnsDeletedIDs$' -v`
+   - `go test ./internal/repository -run '^TestDeleteSessionAutosaveEngramsSkipsQueryWhenNoIDs$' -v`
+   - `go test ./internal/repository -run '^TestPinEngramToSessionReturnsPinnedRecord$' -v`
+   - `go test ./internal/repository -run '^TestPinDocumentToSessionReturnsNilWhenResourceNotVisible$' -v`
+   - `go test ./internal/repository -run '^TestUnpinEngramFromSessionReturnsTrueWhenRemoved$' -v`
+   - `go test ./internal/repository -run '^TestUnpinDocumentFromSessionReturnsFalseWhenMissing$' -v`
+   - `go test ./internal/repository -run '^TestListPinnedEngramsReturnsRows$' -v`
+   - `go test ./internal/repository -run '^TestListPinnedDocumentsAppliesVisibilityFilter$' -v`
+   - `go test ./internal/repository -run '^TestListPinnedEngramSummariesAppliesVisibilityFilters$' -v`
+   - `go test ./internal/repository -run '^TestGetChatSessionAdminRecordReturnsRecord$' -v`
+7. Full Go verification:
+   - `go test ./...` passed.
+8. File-level CodeScene checks (all Go migration files before commit):
+   - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db_test.go` -> `9.61`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/errors.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/chat.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/engram.go` -> `None` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/project.go` -> `None` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/user.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat.go` -> `9.02`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_message.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_message_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_pinning.go` -> `8.81`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_pinning_test.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_test.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_helpers_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_rehydration.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_rehydration_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_repository_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_store.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_unit_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_write.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_write_test.go` -> `9.26`
+   - `/Users/mukundhan/Projects/engram/internal/repository/project.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/project_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user_test.go` -> `10.0`
+9. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none

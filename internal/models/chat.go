@@ -113,3 +113,40 @@ type ChatSessionRecord struct {
 	CreatedAt               time.Time            `json:"created_at"`
 	UpdatedAt               time.Time            `json:"updated_at"`
 }
+
+// ChatSessionAdminRecord models admin-level session lookup fields.
+type ChatSessionAdminRecord struct {
+	SessionID   uuid.UUID  `json:"session_id"`
+	OwnerUserID uuid.UUID  `json:"owner_user_id"`
+	ProjectID   string     `json:"project_id"`
+	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+}
+
+// ChatMessageRecord models persisted chat message rows.
+type ChatMessageRecord struct {
+	MessageID      uuid.UUID      `json:"message_id"`
+	SessionID      uuid.UUID      `json:"session_id"`
+	Role           string         `json:"role"`
+	ContentText    string         `json:"content_text"`
+	Provider       *string        `json:"provider,omitempty"`
+	ModelID        *string        `json:"model_id,omitempty"`
+	TokenUsageJSON map[string]any `json:"token_usage_json"`
+	UsedEngramIDs  []uuid.UUID    `json:"used_engram_ids"`
+	CreatedAt      time.Time      `json:"created_at"`
+}
+
+// PinnedEngramRecord models engram pins associated to chat sessions.
+type PinnedEngramRecord struct {
+	SessionID      uuid.UUID `json:"session_id"`
+	EngramID       uuid.UUID `json:"engram_id"`
+	PinnedByUserID uuid.UUID `json:"pinned_by_user_id"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// PinnedDocumentRecord models document pins associated to chat sessions.
+type PinnedDocumentRecord struct {
+	SessionID      uuid.UUID `json:"session_id"`
+	DocumentID     uuid.UUID `json:"document_id"`
+	PinnedByUserID uuid.UUID `json:"pinned_by_user_id"`
+	CreatedAt      time.Time `json:"created_at"`
+}

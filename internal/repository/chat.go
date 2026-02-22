@@ -207,6 +207,42 @@ func GetChatSession(
 	return &record, nil
 }
 
+// GetChatSessionAdminRecord returns session ownership/deletion state without actor scoping.
+func GetChatSessionAdminRecord(
+	ctx context.Context,
+	db Queryer,
+	sessionID uuid.UUID,
+) (*models.ChatSessionAdminRecord, error) {
+	row := db.QueryRow(
+		ctx,
+		`
+		SELECT
+			session_id,
+			owner_user_id,
+			project_id,
+			deleted_at
+		FROM chat_sessions
+		WHERE session_id = $1
+		LIMIT 1
+		`,
+		sessionID,
+	)
+	var record models.ChatSessionAdminRecord
+	err := row.Scan(
+		&record.SessionID,
+		&record.OwnerUserID,
+		&record.ProjectID,
+		&record.DeletedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
 // UpdateChatSession updates owner-scoped mutable chat session fields.
 func UpdateChatSession(
 	ctx context.Context,

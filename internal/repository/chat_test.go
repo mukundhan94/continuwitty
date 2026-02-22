@@ -149,6 +149,28 @@ func TestGetChatSessionReturnsNilWhenMissing(t *testing.T) {
 	}
 }
 
+func TestGetChatSessionAdminRecordReturnsRecord(t *testing.T) {
+	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000525")
+	ownerUserID := uuid.MustParse("00000000-0000-0000-0000-000000000526")
+	deletedAt := time.Date(2026, 2, 21, 9, 45, 0, 0, time.UTC)
+	db := &fakeQueryer{
+		queryRowResult: &fakeRow{
+			values: []any{sessionID, ownerUserID, "project-admin", deletedAt},
+		},
+	}
+
+	record, err := GetChatSessionAdminRecord(context.Background(), db, sessionID)
+	requireNoError(t, err)
+	requireNotNil(t, record)
+	requireEqual(t, sessionID, record.SessionID)
+	requireEqual(t, ownerUserID, record.OwnerUserID)
+	requireEqual(t, "project-admin", record.ProjectID)
+	if record.DeletedAt == nil {
+		t.Fatalf("expected deleted_at to be populated")
+	}
+	requireEqual(t, deletedAt, *record.DeletedAt)
+}
+
 func TestUpdateChatSessionReturnsNilWhenNoRows(t *testing.T) {
 	db := &fakeQueryer{
 		queryRowResult: &fakeRow{err: pgx.ErrNoRows},

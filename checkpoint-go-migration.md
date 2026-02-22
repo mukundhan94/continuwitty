@@ -25,7 +25,8 @@
 | CP10 | 2026-02-22 | Completed | Engram write-path parity (`create_engram_with_report` + `create_engram`) with source/artifact insert tests |
 | CP11 | 2026-02-22 | Completed | Chat session repository baseline (`create/list/get/update`) with migrated unit tests |
 | CP12 | 2026-02-22 | Completed | Project repository baseline (`list/get/create/ensure/default-project`) with migrated unit tests |
-| CP13 | 2026-02-22 | In Progress | Repository continuation (document + chat message/pinning repository migration) |
+| CP13 | 2026-02-22 | Completed | Chat repository continuation (`chat_messages`, session-linked engrams, autosave pruning, and session pinning) with migrated unit tests |
+| CP14 | 2026-02-22 | In Progress | Repository continuation (document repository baseline migration) |
 
 ## Checkpoint Details
 
@@ -511,10 +512,94 @@
   - `internal/repository/user.go` → 9.38
   - `internal/repository/user_test.go` → 10.0
 
-### CP13 - Repository Continuation (Planned)
+### CP13 - Chat Repository Continuation
 
-- Continue Phase 2 repository migration with next high-value slices:
+- Extended chat models for repository parity:
+  - `internal/models/chat.go`
+  - `ChatSessionAdminRecord`
+  - `ChatMessageRecord`
+  - `PinnedEngramRecord`
+  - `PinnedDocumentRecord`
+- Added chat message repository operations:
+  - `internal/repository/chat_message.go`
+  - `CreateChatMessage`
+  - `ListChatMessages`
+  - `ListSessionLinkedEngrams`
+  - `CountSessionMessagesByRole`
+  - `DeleteSessionAutosaveEngrams`
+- Added chat pinning repository operations:
+  - `internal/repository/chat_pinning.go`
+  - `PinEngramToSession`
+  - `UnpinEngramFromSession`
+  - `ListPinnedEngrams`
+  - `ListPinnedEngramSummaries`
+  - `PinDocumentToSession`
+  - `UnpinDocumentFromSession`
+  - `ListPinnedDocuments`
+- Added admin session lookup parity operation:
+  - `internal/repository/chat.go`
+  - `GetChatSessionAdminRecord`
+- Added migrated repository tests:
+  - `internal/repository/chat_message_test.go`
+  - `internal/repository/chat_pinning_test.go`
+  - `internal/repository/chat_test.go` (new `GetChatSessionAdminRecord` coverage)
+- Executed migrated tests one-by-one:
+  - `TestCreateChatMessageReturnsInsertedRecord`
+  - `TestCreateChatMessageReturnsNilWhenSessionNotVisible`
+  - `TestListChatMessagesParsesJSONAndDefaults`
+  - `TestListSessionLinkedEngramsAppliesVisibilityFilters`
+  - `TestCountSessionMessagesByRoleReturnsValue`
+  - `TestDeleteSessionAutosaveEngramsReturnsDeletedIDs`
+  - `TestDeleteSessionAutosaveEngramsSkipsQueryWhenNoIDs`
+  - `TestPinEngramToSessionReturnsPinnedRecord`
+  - `TestPinDocumentToSessionReturnsNilWhenResourceNotVisible`
+  - `TestUnpinEngramFromSessionReturnsTrueWhenRemoved`
+  - `TestUnpinDocumentFromSessionReturnsFalseWhenMissing`
+  - `TestListPinnedEngramsReturnsRows`
+  - `TestListPinnedDocumentsAppliesVisibilityFilter`
+  - `TestListPinnedEngramSummariesAppliesVisibilityFilters`
+  - `TestGetChatSessionAdminRecordReturnsRecord`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP14 - Repository Continuation (Planned)
+
+- Continue Phase 2 repository migration with next high-value slice:
   - document repository baseline
-  - chat message repository baseline
-  - chat pinning repository baseline
 - Keep parity tests migrated and executed one-by-one.
