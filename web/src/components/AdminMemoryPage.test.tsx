@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from 'styled-components'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { lightTheme } from '../styles/theme'
 import { AdminMemoryPage } from './AdminMemoryPage'
@@ -23,6 +23,10 @@ vi.mock('../api/memoryAdmin', async () => {
 })
 
 describe('AdminMemoryPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('renders management sections and loads admin datasets', async () => {
     render(
       <ThemeProvider theme={lightTheme}>
@@ -72,6 +76,32 @@ describe('AdminMemoryPage', () => {
       )
       expect(memoryAdminMocks.listCollections).toHaveBeenLastCalledWith(
         expect.objectContaining({ include_deleted: true }),
+      )
+    })
+  })
+
+  it('applies engram query filter when search is submitted', async () => {
+    const user = userEvent.setup()
+    render(
+      <ThemeProvider theme={lightTheme}>
+        <AdminMemoryPage
+          projectId="engram-vault"
+          onProjectChange={vi.fn()}
+          onNotice={vi.fn()}
+        />
+      </ThemeProvider>,
+    )
+
+    await waitFor(() => {
+      expect(memoryAdminMocks.listAdminEngrams).toHaveBeenCalled()
+    })
+
+    await user.type(screen.getByPlaceholderText(/search title \/ abstract \/ markdown/i), 'latency')
+    await user.click(screen.getByRole('button', { name: /^search$/i }))
+
+    await waitFor(() => {
+      expect(memoryAdminMocks.listAdminEngrams).toHaveBeenLastCalledWith(
+        expect.objectContaining({ q: 'latency' }),
       )
     })
   })

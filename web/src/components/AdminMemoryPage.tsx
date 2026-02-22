@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ChangeEvent } from 'react'
 
 import styled from 'styled-components'
 
@@ -88,13 +89,16 @@ const SourceEditor = styled.div`
 const SESSION_LIMIT = 200
 const ENGRAM_LIMIT = 300
 const COLLECTION_LIMIT = 200
+type TextInputChangeEvent = ChangeEvent<HTMLInputElement>
+type TextAreaChangeEvent = ChangeEvent<HTMLTextAreaElement>
+type EngramActionLabel = 'Restored' | 'Deleted'
 
 function toIsoNow() {
   return new Date().toISOString()
 }
 
-function parseCommaSeparated(value: string): string[] {
-  return value
+function parseCommaSeparated(input: { value: string }): string[] {
+  return input.value
     .split(',')
     .map((item) => item.trim())
     .filter((item) => item.length > 0)
@@ -135,8 +139,8 @@ interface SessionManagementSectionProps {
   onIncludeDeletedChange: (nextValue: boolean) => void
   onDeleteLinkedEngramsChange: (nextValue: boolean) => void
   onRefresh: () => void
-  onRestoreSession: (sessionId: string) => void
-  onDeleteSession: (sessionId: string) => void
+  onRestoreSession: (session: AdminChatSessionRecord) => void
+  onDeleteSession: (session: AdminChatSessionRecord) => void
 }
 
 interface EngramDetailEditorProps {
@@ -150,13 +154,15 @@ interface EngramDetailEditorProps {
   moveTargetProject: string
   sourceDraft: AdminEngramSourceInput
   sourceRows: AdminEngramSourceInput[]
-  onEditTitleChange: (value: string) => void
-  onEditAbstractChange: (value: string) => void
-  onEditMarkdownChange: (value: string) => void
-  onEditTagsChange: (value: string) => void
-  onEditKeywordsChange: (value: string) => void
-  onMoveTargetProjectChange: (value: string) => void
-  onSourceDraftFieldChange: (field: keyof AdminEngramSourceInput, value: string) => void
+  onEditTitleChange: (event: TextInputChangeEvent) => void
+  onEditAbstractChange: (event: TextAreaChangeEvent) => void
+  onEditMarkdownChange: (event: TextAreaChangeEvent) => void
+  onEditTagsChange: (event: TextInputChangeEvent) => void
+  onEditKeywordsChange: (event: TextInputChangeEvent) => void
+  onMoveTargetProjectChange: (event: TextInputChangeEvent) => void
+  onSourceUrlChange: (event: TextInputChangeEvent) => void
+  onSourceTitleChange: (event: TextInputChangeEvent) => void
+  onSourceSnippetChange: (event: TextAreaChangeEvent) => void
   onAddSource: () => void
   onClearSources: () => void
   onSave: () => void
@@ -180,16 +186,18 @@ interface EngramManagementSectionProps {
   moveTargetProject: string
   sourceDraft: AdminEngramSourceInput
   sourceRows: AdminEngramSourceInput[]
-  onQueryTextChange: (value: string) => void
+  onQueryTextChange: (event: TextInputChangeEvent) => void
   onRefresh: () => void
-  onSelectEngram: (engramId: string) => void
-  onEditTitleChange: (value: string) => void
-  onEditAbstractChange: (value: string) => void
-  onEditMarkdownChange: (value: string) => void
-  onEditTagsChange: (value: string) => void
-  onEditKeywordsChange: (value: string) => void
-  onMoveTargetProjectChange: (value: string) => void
-  onSourceDraftFieldChange: (field: keyof AdminEngramSourceInput, value: string) => void
+  onSelectEngram: (engram: AdminEngramRecord) => void
+  onEditTitleChange: (event: TextInputChangeEvent) => void
+  onEditAbstractChange: (event: TextAreaChangeEvent) => void
+  onEditMarkdownChange: (event: TextAreaChangeEvent) => void
+  onEditTagsChange: (event: TextInputChangeEvent) => void
+  onEditKeywordsChange: (event: TextInputChangeEvent) => void
+  onMoveTargetProjectChange: (event: TextInputChangeEvent) => void
+  onSourceUrlChange: (event: TextInputChangeEvent) => void
+  onSourceTitleChange: (event: TextInputChangeEvent) => void
+  onSourceSnippetChange: (event: TextAreaChangeEvent) => void
   onAddSource: () => void
   onClearSources: () => void
   onSaveEngram: () => void
@@ -207,16 +215,16 @@ interface CollectionSectionProps {
   collectionDescription: string
   collectionAddEngramId: string
   submitting: boolean
-  onCollectionProjectIdChange: (value: string) => void
-  onCollectionNameChange: (value: string) => void
-  onCollectionDescriptionChange: (value: string) => void
-  onCollectionAddEngramIdChange: (value: string) => void
-  onSelectCollection: (collectionId: string) => void
+  onCollectionProjectIdChange: (event: TextInputChangeEvent) => void
+  onCollectionNameChange: (event: TextInputChangeEvent) => void
+  onCollectionDescriptionChange: (event: TextAreaChangeEvent) => void
+  onCollectionAddEngramIdChange: (event: TextInputChangeEvent) => void
+  onSelectCollection: (collection: EngramCollectionRecord) => void
   onCreateCollection: () => void
   onAddItem: () => void
   onRemoveItem: () => void
   onQuickRenameCollection: (collection: EngramCollectionRecord) => void
-  onDeleteCollection: (collectionId: string) => void
+  onDeleteCollection: (collection: EngramCollectionRecord) => void
 }
 
 function SessionManagementSection({
@@ -277,11 +285,11 @@ function SessionManagementSection({
               {session.deleted_at ? <MutedText>Deleted: {session.deleted_at}</MutedText> : null}
               <RowActions>
                 {session.deleted_at ? (
-                  <button type="button" disabled={submitting} onClick={() => onRestoreSession(session.session_id)}>
+                  <button type="button" disabled={submitting} onClick={() => onRestoreSession(session)}>
                     Restore
                   </button>
                 ) : (
-                  <button type="button" disabled={submitting} onClick={() => onDeleteSession(session.session_id)}>
+                  <button type="button" disabled={submitting} onClick={() => onDeleteSession(session)}>
                     Delete
                   </button>
                 )}
@@ -312,7 +320,9 @@ function EngramDetailEditor({
   onEditTagsChange,
   onEditKeywordsChange,
   onMoveTargetProjectChange,
-  onSourceDraftFieldChange,
+  onSourceUrlChange,
+  onSourceTitleChange,
+  onSourceSnippetChange,
   onAddSource,
   onClearSources,
   onSave,
@@ -325,27 +335,27 @@ function EngramDetailEditor({
       <SectionDivider />
       <Field>
         <span>Title</span>
-        <input value={editTitle} onChange={(event) => onEditTitleChange(event.target.value)} />
+        <input value={editTitle} onChange={onEditTitleChange} />
       </Field>
       <Field>
         <span>Abstract</span>
-        <textarea rows={3} value={editAbstract} onChange={(event) => onEditAbstractChange(event.target.value)} />
+        <textarea rows={3} value={editAbstract} onChange={onEditAbstractChange} />
       </Field>
       <Field>
         <span>Markdown</span>
-        <textarea rows={6} value={editMarkdown} onChange={(event) => onEditMarkdownChange(event.target.value)} />
+        <textarea rows={6} value={editMarkdown} onChange={onEditMarkdownChange} />
       </Field>
       <Field>
         <span>Tags (comma-separated)</span>
-        <input value={editTags} onChange={(event) => onEditTagsChange(event.target.value)} />
+        <input value={editTags} onChange={onEditTagsChange} />
       </Field>
       <Field>
         <span>Keywords (comma-separated)</span>
-        <input value={editKeywords} onChange={(event) => onEditKeywordsChange(event.target.value)} />
+        <input value={editKeywords} onChange={onEditKeywordsChange} />
       </Field>
       <Field>
         <span>Move target project</span>
-        <input value={moveTargetProject} onChange={(event) => onMoveTargetProjectChange(event.target.value)} />
+        <input value={moveTargetProject} onChange={onMoveTargetProjectChange} />
       </Field>
       <SourceEditor>
         <strong className="font-display text-sm text-ink">Sources</strong>
@@ -355,18 +365,18 @@ function EngramDetailEditor({
         <input
           value={sourceDraft.url}
           placeholder="source url"
-          onChange={(event) => onSourceDraftFieldChange('url', event.target.value)}
+          onChange={onSourceUrlChange}
         />
         <input
           value={sourceDraft.title}
           placeholder="source title"
-          onChange={(event) => onSourceDraftFieldChange('title', event.target.value)}
+          onChange={onSourceTitleChange}
         />
         <textarea
           rows={2}
           value={sourceDraft.snippet}
           placeholder="source snippet"
-          onChange={(event) => onSourceDraftFieldChange('snippet', event.target.value)}
+          onChange={onSourceSnippetChange}
         />
         <RowActions>
           <button type="button" onClick={onAddSource}>
@@ -422,7 +432,9 @@ function EngramManagementSection({
   onEditTagsChange,
   onEditKeywordsChange,
   onMoveTargetProjectChange,
-  onSourceDraftFieldChange,
+  onSourceUrlChange,
+  onSourceTitleChange,
+  onSourceSnippetChange,
   onAddSource,
   onClearSources,
   onSaveEngram,
@@ -438,7 +450,7 @@ function EngramManagementSection({
       <Toolbar>
         <input
           value={queryText}
-          onChange={(event) => onQueryTextChange(event.target.value)}
+          onChange={onQueryTextChange}
           placeholder="search title / abstract / markdown"
         />
         <button type="button" disabled={loading || submitting} onClick={onRefresh}>
@@ -452,7 +464,7 @@ function EngramManagementSection({
             <RowCard
               key={engram.engram_id}
               $active={engram.engram_id === selectedEngramId}
-              onClick={() => onSelectEngram(engram.engram_id)}
+              onClick={() => onSelectEngram(engram)}
             >
               <div className="font-display text-sm font-semibold text-ink">{engram.title}</div>
               <MutedText>{engram.project_id}</MutedText>
@@ -482,7 +494,9 @@ function EngramManagementSection({
           onEditTagsChange={onEditTagsChange}
           onEditKeywordsChange={onEditKeywordsChange}
           onMoveTargetProjectChange={onMoveTargetProjectChange}
-          onSourceDraftFieldChange={onSourceDraftFieldChange}
+          onSourceUrlChange={onSourceUrlChange}
+          onSourceTitleChange={onSourceTitleChange}
+          onSourceSnippetChange={onSourceSnippetChange}
           onAddSource={onAddSource}
           onClearSources={onClearSources}
           onSave={onSaveEngram}
@@ -526,20 +540,20 @@ function CollectionSection({
         <span>Collection project</span>
         <input
           value={collectionProjectId}
-          onChange={(event) => onCollectionProjectIdChange(event.target.value)}
+          onChange={onCollectionProjectIdChange}
           placeholder="project id"
         />
       </Field>
       <Field>
         <span>Name</span>
-        <input value={collectionName} onChange={(event) => onCollectionNameChange(event.target.value)} />
+        <input value={collectionName} onChange={onCollectionNameChange} />
       </Field>
       <Field>
         <span>Description</span>
         <textarea
           rows={2}
           value={collectionDescription}
-          onChange={(event) => onCollectionDescriptionChange(event.target.value)}
+          onChange={onCollectionDescriptionChange}
         />
       </Field>
       <button
@@ -554,7 +568,7 @@ function CollectionSection({
         <span>Add engram to selected collection</span>
         <input
           value={collectionAddEngramId}
-          onChange={(event) => onCollectionAddEngramIdChange(event.target.value)}
+          onChange={onCollectionAddEngramIdChange}
           placeholder="engram id"
         />
       </Field>
@@ -580,7 +594,7 @@ function CollectionSection({
             <RowCard
               key={collection.collection_id}
               $active={collection.collection_id === selectedCollectionId}
-              onClick={() => onSelectCollection(collection.collection_id)}
+              onClick={() => onSelectCollection(collection)}
             >
               <div className="font-display text-sm font-semibold text-ink">{collection.name}</div>
               <MutedText>
@@ -600,7 +614,7 @@ function CollectionSection({
                   <button
                     type="button"
                     disabled={submitting}
-                    onClick={() => onDeleteCollection(collection.collection_id)}
+                    onClick={() => onDeleteCollection(collection)}
                   >
                     Delete
                   </button>
@@ -686,7 +700,8 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     void refresh()
   }, [refresh])
 
-  const selectEngram = useCallback(async (engramId: string) => {
+  const selectEngram = useCallback(async (input: { engramId: string }) => {
+    const { engramId } = input
     setSelectedEngramId(engramId)
     setError(null)
     try {
@@ -716,11 +731,33 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     }
   }, [])
 
-  const updateSourceDraftField = (field: keyof AdminEngramSourceInput, value: string) => {
+  const updateSourceDraftField = (input: { field: keyof AdminEngramSourceInput; value: string }) => {
+    const { field, value } = input
     setSourceDraft((current) => ({
       ...current,
       [field]: value,
     }))
+  }
+
+  const handleSourceUrlChange = (event: TextInputChangeEvent) => {
+    updateSourceDraftField({
+      field: 'url',
+      value: event.target.value,
+    })
+  }
+
+  const handleSourceTitleChange = (event: TextInputChangeEvent) => {
+    updateSourceDraftField({
+      field: 'title',
+      value: event.target.value,
+    })
+  }
+
+  const handleSourceSnippetChange = (event: TextAreaChangeEvent) => {
+    updateSourceDraftField({
+      field: 'snippet',
+      value: event.target.value,
+    })
   }
 
   const addSourceRow = () => {
@@ -740,8 +777,8 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
         title: editTitle.trim(),
         abstract: editAbstract.trim(),
         detailed_summary_markdown: editMarkdown,
-        tags: parseCommaSeparated(editTags),
-        keywords: parseCommaSeparated(editKeywords),
+        tags: parseCommaSeparated({ value: editTags }),
+        keywords: parseCommaSeparated({ value: editKeywords }),
         expected_updated_at: selectedEngram.updated_at,
         sources: sourceRows,
       })
@@ -768,24 +805,24 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   }
 
   const runSelectedEngramLifecycleAction = (
-    action: (engramId: string) => Promise<unknown>,
-    noticePrefix: string,
+    action: (input: { engramId: string }) => Promise<unknown>,
+    noticePrefix: EngramActionLabel,
   ) => {
     if (!selectedEngram) {
       return
     }
     const engramId = selectedEngram.engram_id
     void runAction(async () => {
-      await action(engramId)
+      await action({ engramId })
       onNotice(`${noticePrefix} engram ${engramId}`)
-      await selectEngram(engramId)
+      await selectEngram({ engramId })
       await refresh()
     })
   }
 
   const restoreSelectedEngram = () => {
     runSelectedEngramLifecycleAction(
-      async (engramId) => {
+      async ({ engramId }) => {
         await restoreAdminEngram(engramId)
       },
       'Restored',
@@ -794,7 +831,7 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
 
   const deleteSelectedEngram = () => {
     runSelectedEngramLifecycleAction(
-      async (engramId) => {
+      async ({ engramId }) => {
         await deleteAdminEngram(engramId, { reason: 'admin-ui-delete' })
       },
       'Deleted',
@@ -820,8 +857,8 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   }
 
   const runSelectedCollectionItemAction = (
-    action: (collectionId: string, engramId: string) => Promise<void>,
-    noticePrefix: string,
+    action: (input: { collectionId: string; engramId: string }) => Promise<void>,
+    isAddAction: boolean,
   ) => {
     if (!selectedCollection) {
       return
@@ -833,29 +870,29 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     const collectionName = selectedCollection.name
     const collectionId = selectedCollection.collection_id
     void runAction(async () => {
-      await action(collectionId, engramId)
-      onNotice(`${noticePrefix} engram ${engramId} ${noticePrefix === 'Added' ? 'to' : 'from'} collection ${collectionName}`)
+      await action({ collectionId, engramId })
+      onNotice(`${isAddAction ? 'Added' : 'Removed'} engram ${engramId} ${isAddAction ? 'to' : 'from'} collection ${collectionName}`)
       setCollectionAddEngramId('')
     })
   }
 
   const addItemToSelectedCollection = () => {
     runSelectedCollectionItemAction(
-      async (collectionId, engramId) => {
+      async ({ collectionId, engramId }) => {
         await addCollectionItems(collectionId, {
           engram_ids: [engramId],
         })
       },
-      'Added',
+      true,
     )
   }
 
   const removeItemFromSelectedCollection = () => {
     runSelectedCollectionItemAction(
-      async (collectionId, engramId) => {
+      async ({ collectionId, engramId }) => {
         await removeCollectionItem(collectionId, engramId)
       },
-      'Removed',
+      false,
     )
   }
 
@@ -870,7 +907,8 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     })
   }
 
-  const deleteCollectionRecord = (collectionId: string) => {
+  const deleteCollectionRecord = (collection: EngramCollectionRecord) => {
+    const collectionId = collection.collection_id
     void runAction(async () => {
       await deleteCollection(collectionId, { reason: 'admin-ui-delete' })
       onNotice(`Deleted collection ${collectionId}`)
@@ -882,7 +920,8 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     void refresh()
   }
 
-  const restoreSessionById = (sessionId: string) => {
+  const restoreSessionById = (session: AdminChatSessionRecord) => {
+    const sessionId = session.session_id
     void runAction(async () => {
       await restoreAdminSession(sessionId)
       onNotice(`Restored session ${sessionId}`)
@@ -890,7 +929,8 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     })
   }
 
-  const deleteSessionById = (sessionId: string) => {
+  const deleteSessionById = (session: AdminChatSessionRecord) => {
+    const sessionId = session.session_id
     void runAction(async () => {
       await deleteAdminSession(sessionId, {
         delete_linked_engrams: deleteLinkedEngrams,
@@ -901,8 +941,8 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     })
   }
 
-  const selectEngramById = (engramId: string) => {
-    void selectEngram(engramId)
+  const selectEngramRecord = (engram: AdminEngramRecord) => {
+    void selectEngram({ engramId: engram.engram_id })
   }
 
   return (
@@ -937,16 +977,18 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
         moveTargetProject={moveTargetProject}
         sourceDraft={sourceDraft}
         sourceRows={sourceRows}
-        onQueryTextChange={setQueryText}
+        onQueryTextChange={(event) => setQueryText(event.target.value)}
         onRefresh={refreshView}
-        onSelectEngram={selectEngramById}
-        onEditTitleChange={setEditTitle}
-        onEditAbstractChange={setEditAbstract}
-        onEditMarkdownChange={setEditMarkdown}
-        onEditTagsChange={setEditTags}
-        onEditKeywordsChange={setEditKeywords}
-        onMoveTargetProjectChange={setMoveTargetProject}
-        onSourceDraftFieldChange={updateSourceDraftField}
+        onSelectEngram={selectEngramRecord}
+        onEditTitleChange={(event) => setEditTitle(event.target.value)}
+        onEditAbstractChange={(event) => setEditAbstract(event.target.value)}
+        onEditMarkdownChange={(event) => setEditMarkdown(event.target.value)}
+        onEditTagsChange={(event) => setEditTags(event.target.value)}
+        onEditKeywordsChange={(event) => setEditKeywords(event.target.value)}
+        onMoveTargetProjectChange={(event) => setMoveTargetProject(event.target.value)}
+        onSourceUrlChange={handleSourceUrlChange}
+        onSourceTitleChange={handleSourceTitleChange}
+        onSourceSnippetChange={handleSourceSnippetChange}
         onAddSource={addSourceRow}
         onClearSources={clearSourceRows}
         onSaveEngram={saveSelectedEngram}
@@ -964,11 +1006,11 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
         collectionDescription={collectionDescription}
         collectionAddEngramId={collectionAddEngramId}
         submitting={submitting}
-        onCollectionProjectIdChange={setCollectionProjectId}
-        onCollectionNameChange={setCollectionName}
-        onCollectionDescriptionChange={setCollectionDescription}
-        onCollectionAddEngramIdChange={setCollectionAddEngramId}
-        onSelectCollection={setCollectionSelectedId}
+        onCollectionProjectIdChange={(event) => setCollectionProjectId(event.target.value)}
+        onCollectionNameChange={(event) => setCollectionName(event.target.value)}
+        onCollectionDescriptionChange={(event) => setCollectionDescription(event.target.value)}
+        onCollectionAddEngramIdChange={(event) => setCollectionAddEngramId(event.target.value)}
+        onSelectCollection={(collection) => setCollectionSelectedId(collection.collection_id)}
         onCreateCollection={createCollectionRecord}
         onAddItem={addItemToSelectedCollection}
         onRemoveItem={removeItemFromSelectedCollection}
