@@ -2626,3 +2626,31 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP47 - Non-Checkpoint Code-Health Uplift (`internal/repository/admin_engram_update_test.go`)
+
+- Improved legacy non-checkpoint admin engram update repository test file:
+  - `internal/repository/admin_engram_update_test.go`
+  - reduced large/complex update-path test via fixture-driven extraction:
+    - `buildUpdateAdminEngramFixture`
+    - `buildUpdateAdminEngramFakeQueryer`
+    - `setupUpdateAdminEngramStubs`
+    - `assertUpdateAdminEngramRecord`
+    - `assertUpdateAdminEngramWrites`
+  - preserved update payload JSON assertions, SQL argument checks, source replacement verification, and embedding contract checks.
+- Executed migrated tests one-by-one:
+  - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+  - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+  - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+  - `TestReplaceAdminEngramSourcesReplacesRows`
+  - `TestUpdateAdminEngramReturnsNilWhenMissing`
+  - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/admin_engram_update_test.go` score improved from `9.25` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.

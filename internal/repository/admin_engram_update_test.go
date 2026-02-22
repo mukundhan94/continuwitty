@@ -141,6 +141,39 @@ func TestUpdateAdminEngramReturnsNilWhenMissing(t *testing.T) {
 }
 
 func TestUpdateAdminEngramPersistsFieldsAndOptionallySources(t *testing.T) {
+	fixture := buildUpdateAdminEngramFixture()
+	db := buildUpdateAdminEngramFakeQueryer(fixture)
+	setupUpdateAdminEngramStubs(t, fixture)
+
+	record, err := UpdateAdminEngram(
+		context.Background(),
+		db,
+		fixture.Input,
+	)
+	requireNoError(t, err)
+	assertUpdateAdminEngramRecord(t, record)
+	assertUpdateAdminEngramWrites(t, fixture, db)
+}
+
+type updateAdminEngramFixture struct {
+	EngramID          uuid.UUID
+	ActorUserID       uuid.UUID
+	OwnerUserID       uuid.UUID
+	OldSourceID       uuid.UUID
+	NewSourceID       uuid.UUID
+	CreatedAt         time.Time
+	CapturedAt        time.Time
+	FixedNow          time.Time
+	ExpectedTitle     string
+	ExpectedAbstract  string
+	ExpectedDetailed  string
+	ExpectedTags      []string
+	ExpectedKeywords  []string
+	ExpectedRetrieval string
+	Input             AdminEngramUpdateInput
+}
+
+func buildUpdateAdminEngramFixture() updateAdminEngramFixture {
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000e31")
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000e32")
 	ownerUserID := uuid.MustParse("00000000-0000-0000-0000-000000000e33")
@@ -148,53 +181,7 @@ func TestUpdateAdminEngramPersistsFieldsAndOptionallySources(t *testing.T) {
 	newSourceID := uuid.MustParse("00000000-0000-0000-0000-000000000e35")
 	createdAt := time.Date(2026, 2, 22, 19, 10, 0, 0, time.UTC)
 	capturedAt := time.Date(2026, 2, 22, 19, 11, 0, 0, time.UTC)
-	db := &fakeQueryer{
-		queryRowResults: []*fakeRow{
-			{values: adminEngramRowValues(
-				engramID,
-				"project-docs",
-				nil,
-				"Current title",
-				"Current abstract",
-				"Current markdown",
-				[]string{"existing"},
-				[]string{"keyword"},
-				&ownerUserID,
-				"private",
-				nil,
-				createdAt,
-				createdAt,
-				nil,
-				nil,
-				nil,
-			)},
-			{values: []any{engramID}},
-			{values: []any{newSourceID}},
-			{values: adminEngramRowValues(
-				engramID,
-				"project-docs",
-				nil,
-				"Updated title",
-				"Updated abstract",
-				"Updated markdown",
-				[]string{"new-tag"},
-				[]string{"queue", "latency"},
-				&ownerUserID,
-				"project",
-				nil,
-				createdAt,
-				createdAt,
-				nil,
-				nil,
-				nil,
-			)},
-		},
-		queryRowsResults: []*fakeRows{
-			{values: [][]any{adminEngramSourceRowValues(oldSourceID, capturedAt, "https://example.com/old", nil, nil, nil, nil)}},
-			{values: [][]any{{oldSourceID}}},
-			{values: [][]any{adminEngramSourceRowValues(newSourceID, capturedAt, "https://example.com/new", nil, nil, nil, nil)}},
-		},
-	}
+	fixedNow := time.Date(2026, 2, 22, 19, 12, 0, 0, time.UTC)
 	title := "  Updated title  "
 	abstract := "  Updated abstract  "
 	detailed := "Updated markdown"
@@ -205,29 +192,22 @@ func TestUpdateAdminEngramPersistsFieldsAndOptionallySources(t *testing.T) {
 		CapturedAt: capturedAt,
 		URL:        "https://example.com/new",
 	}}
-
-	retrievalText := "Updated title Updated abstract Updated markdown new-tag queue latency"
-	fixedNow := time.Date(2026, 2, 22, 19, 12, 0, 0, time.UTC)
-	originalNow := nowAdminEngramUTC
-	nowAdminEngramUTC = func() time.Time { return fixedNow }
-	t.Cleanup(func() { nowAdminEngramUTC = originalNow })
-
-	originalEmbed := embedAdminEngramText
-	embedAdminEngramText = func(text string, dim int) (embeddings.Result, error) {
-		requireEqual(t, retrievalText, text)
-		requireEqual(t, 8, dim)
-		return embeddings.Result{ProviderID: "deterministic-local", Vector: []float64{1.0, -2.3456789}}, nil
-	}
-	t.Cleanup(func() { embedAdminEngramText = originalEmbed })
-
-	originalNewSourceUUID := newAdminSourceUUID
-	newAdminSourceUUID = func() uuid.UUID { return newSourceID }
-	t.Cleanup(func() { newAdminSourceUUID = originalNewSourceUUID })
-
-	record, err := UpdateAdminEngram(
-		context.Background(),
-		db,
-		AdminEngramUpdateInput{
+	return updateAdminEngramFixture{
+		EngramID:          engramID,
+		ActorUserID:       actorUserID,
+		OwnerUserID:       ownerUserID,
+		OldSourceID:       oldSourceID,
+		NewSourceID:       newSourceID,
+		CreatedAt:         createdAt,
+		CapturedAt:        capturedAt,
+		FixedNow:          fixedNow,
+		ExpectedTitle:     "Updated title",
+		ExpectedAbstract:  "Updated abstract",
+		ExpectedDetailed:  detailed,
+		ExpectedTags:      []string{"new-tag"},
+		ExpectedKeywords:  []string{"queue", "latency"},
+		ExpectedRetrieval: "Updated title Updated abstract Updated markdown new-tag queue latency",
+		Input: AdminEngramUpdateInput{
 			EngramID:                engramID,
 			ActorUserID:             actorUserID,
 			Title:                   &title,
@@ -239,30 +219,108 @@ func TestUpdateAdminEngramPersistsFieldsAndOptionallySources(t *testing.T) {
 			Sources:                 &sources,
 			EmbeddingDim:            8,
 		},
-	)
-	requireNoError(t, err)
+	}
+}
+
+func buildUpdateAdminEngramFakeQueryer(fixture updateAdminEngramFixture) *fakeQueryer {
+	return &fakeQueryer{
+		queryRowResults: []*fakeRow{
+			{values: adminEngramRowValues(
+				fixture.EngramID,
+				"project-docs",
+				nil,
+				"Current title",
+				"Current abstract",
+				"Current markdown",
+				[]string{"existing"},
+				[]string{"keyword"},
+				&fixture.OwnerUserID,
+				"private",
+				nil,
+				fixture.CreatedAt,
+				fixture.CreatedAt,
+				nil,
+				nil,
+				nil,
+			)},
+			{values: []any{fixture.EngramID}},
+			{values: []any{fixture.NewSourceID}},
+			{values: adminEngramRowValues(
+				fixture.EngramID,
+				"project-docs",
+				nil,
+				fixture.ExpectedTitle,
+				fixture.ExpectedAbstract,
+				fixture.ExpectedDetailed,
+				fixture.ExpectedTags,
+				fixture.ExpectedKeywords,
+				&fixture.OwnerUserID,
+				"project",
+				nil,
+				fixture.CreatedAt,
+				fixture.CreatedAt,
+				nil,
+				nil,
+				nil,
+			)},
+		},
+		queryRowsResults: []*fakeRows{
+			{values: [][]any{adminEngramSourceRowValues(fixture.OldSourceID, fixture.CapturedAt, "https://example.com/old", nil, nil, nil, nil)}},
+			{values: [][]any{{fixture.OldSourceID}}},
+			{values: [][]any{adminEngramSourceRowValues(fixture.NewSourceID, fixture.CapturedAt, "https://example.com/new", nil, nil, nil, nil)}},
+		},
+	}
+}
+
+func setupUpdateAdminEngramStubs(t *testing.T, fixture updateAdminEngramFixture) {
+	t.Helper()
+	originalNow := nowAdminEngramUTC
+	nowAdminEngramUTC = func() time.Time { return fixture.FixedNow }
+	t.Cleanup(func() { nowAdminEngramUTC = originalNow })
+
+	originalEmbed := embedAdminEngramText
+	embedAdminEngramText = func(text string, dim int) (embeddings.Result, error) {
+		requireEqual(t, fixture.ExpectedRetrieval, text)
+		requireEqual(t, 8, dim)
+		return embeddings.Result{
+			ProviderID: "deterministic-local",
+			Vector:     []float64{1.0, -2.3456789},
+		}, nil
+	}
+	t.Cleanup(func() { embedAdminEngramText = originalEmbed })
+
+	originalNewSourceUUID := newAdminSourceUUID
+	newAdminSourceUUID = func() uuid.UUID { return fixture.NewSourceID }
+	t.Cleanup(func() { newAdminSourceUUID = originalNewSourceUUID })
+}
+
+func assertUpdateAdminEngramRecord(t *testing.T, record *models.AdminEngramRecord) {
+	t.Helper()
 	requireNotNil(t, record)
 	requireEqual(t, "Updated title", record.Title)
 	requireEqual(t, models.VisibilityScopeProject, record.VisibilityScope)
 	requireEqual(t, 1, len(record.Sources))
+}
 
+func assertUpdateAdminEngramWrites(t *testing.T, fixture updateAdminEngramFixture, db *fakeQueryer) {
+	t.Helper()
 	requireEqual(t, 4, len(db.queryRowArgs))
 	updateArgs := db.queryRowArgs[1]
-	requireEqual(t, "Updated title", updateArgs[0].(string))
-	requireEqual(t, "Updated abstract", updateArgs[1].(string))
-	requireEqual(t, "Updated markdown", updateArgs[2].(string))
-	if !reflect.DeepEqual([]string{"new-tag"}, updateArgs[3]) {
-		t.Fatalf("expected tags arg %#v, got %#v", []string{"new-tag"}, updateArgs[3])
+	requireEqual(t, fixture.ExpectedTitle, updateArgs[0].(string))
+	requireEqual(t, fixture.ExpectedAbstract, updateArgs[1].(string))
+	requireEqual(t, fixture.ExpectedDetailed, updateArgs[2].(string))
+	if !reflect.DeepEqual(fixture.ExpectedTags, updateArgs[3]) {
+		t.Fatalf("expected tags arg %#v, got %#v", fixture.ExpectedTags, updateArgs[3])
 	}
-	if !reflect.DeepEqual([]string{"queue", "latency"}, updateArgs[4]) {
-		t.Fatalf("expected keywords arg %#v, got %#v", []string{"queue", "latency"}, updateArgs[4])
+	if !reflect.DeepEqual(fixture.ExpectedKeywords, updateArgs[4]) {
+		t.Fatalf("expected keywords arg %#v, got %#v", fixture.ExpectedKeywords, updateArgs[4])
 	}
 	requireEqual(t, "project", updateArgs[5].(string))
-	requireEqual(t, retrievalText, updateArgs[6].(string))
+	requireEqual(t, fixture.ExpectedRetrieval, updateArgs[6].(string))
 	requireEqual(t, "deterministic-local", updateArgs[7].(string))
 	requireEqual(t, "[1.000000,-2.345679]", updateArgs[8].(string))
-	requireEqual(t, actorUserID, updateArgs[10].(uuid.UUID))
-	requireEqual(t, engramID, updateArgs[11].(uuid.UUID))
+	requireEqual(t, fixture.ActorUserID, updateArgs[10].(uuid.UUID))
+	requireEqual(t, fixture.EngramID, updateArgs[11].(uuid.UUID))
 
 	payloadJSON, ok := updateArgs[9].(string)
 	if !ok {
@@ -270,18 +328,18 @@ func TestUpdateAdminEngramPersistsFieldsAndOptionallySources(t *testing.T) {
 	}
 	var payload map[string]any
 	requireNoError(t, json.Unmarshal([]byte(payloadJSON), &payload))
-	requireEqual(t, "Updated title", payload["title"])
-	requireEqual(t, "Updated abstract", payload["abstract"])
+	requireEqual(t, fixture.ExpectedTitle, payload["title"].(string))
+	requireEqual(t, fixture.ExpectedAbstract, payload["abstract"].(string))
 	requireEqual(t, "project", payload["visibility_scope"])
-	requireEqual(t, fixedNow.Format("2006-01-02T15:04:05-07:00"), payload["updated_at"].(string))
+	requireEqual(t, fixture.FixedNow.Format("2006-01-02T15:04:05-07:00"), payload["updated_at"].(string))
 
 	requireEqual(t, 3, len(db.queryArgs))
-	if !reflect.DeepEqual([]any{engramID}, db.queryArgs[1]) {
-		t.Fatalf("expected delete-source args %#v, got %#v", []any{engramID}, db.queryArgs[1])
+	if !reflect.DeepEqual([]any{fixture.EngramID}, db.queryArgs[1]) {
+		t.Fatalf("expected delete-source args %#v, got %#v", []any{fixture.EngramID}, db.queryArgs[1])
 	}
 	insertArgs := db.queryRowArgs[2]
-	requireEqual(t, newSourceID, insertArgs[0].(uuid.UUID))
-	requireEqual(t, engramID, insertArgs[1].(uuid.UUID))
+	requireEqual(t, fixture.NewSourceID, insertArgs[0].(uuid.UUID))
+	requireEqual(t, fixture.EngramID, insertArgs[1].(uuid.UUID))
 	requireEqual(t, "https://example.com/new", insertArgs[3].(string))
 }
 
