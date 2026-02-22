@@ -114,6 +114,29 @@ type ChatSessionRecord struct {
 	UpdatedAt               time.Time            `json:"updated_at"`
 }
 
+// AdminChatSessionRecord models admin-level chat session rows including soft-delete metadata.
+type AdminChatSessionRecord struct {
+	SessionID               uuid.UUID            `json:"session_id"`
+	OwnerUserID             uuid.UUID            `json:"owner_user_id"`
+	ProjectID               string               `json:"project_id"`
+	Title                   string               `json:"title"`
+	Provider                ChatProvider         `json:"provider"`
+	ModelID                 string               `json:"model_id"`
+	SystemPrompt            string               `json:"system_prompt"`
+	VisibilityScope         VisibilityScope      `json:"visibility_scope"`
+	AutosaveEnabled         bool                 `json:"autosave_enabled"`
+	AutosaveStrategy        ChatAutosaveStrategy `json:"autosave_strategy"`
+	AutosaveIntervalMinutes int                  `json:"autosave_interval_minutes"`
+	AutosaveMinMessages     int                  `json:"autosave_min_messages"`
+	RetentionDays           int                  `json:"retention_days"`
+	RetentionMaxSnapshots   int                  `json:"retention_max_snapshots"`
+	CreatedAt               time.Time            `json:"created_at"`
+	UpdatedAt               time.Time            `json:"updated_at"`
+	DeletedAt               *time.Time           `json:"deleted_at,omitempty"`
+	DeletedByUserID         *uuid.UUID           `json:"deleted_by_user_id,omitempty"`
+	DeleteReason            *string              `json:"delete_reason,omitempty"`
+}
+
 // ChatSessionAdminRecord models admin-level session lookup fields.
 type ChatSessionAdminRecord struct {
 	SessionID   uuid.UUID  `json:"session_id"`
