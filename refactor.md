@@ -6,7 +6,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 **Business case for the worst file (`mcp/service.py`):** Improving from 3.0 to 5.15 (industry average) predicts 24–48% defect reduction and 3–20% development speed improvement (90% confidence interval).
 
-## Phase Completion Status (as of 2026-02-22, Checkpoint 97)
+## Phase Completion Status (as of 2026-02-22, Checkpoint 98)
 
 - [x] Phase 1 — `api/app/mcp/service.py` refactor and hardening completed (checkpoints 1, 44-68, 80-84, 87)
 - [x] Phase 2 — `api/app/memory_admin/repository.py` refactor completed (checkpoints 2, 16)
@@ -21,7 +21,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 - [x] Phase 11 — `api/app/ingestion/repository.py` refactor completed (checkpoint 11)
 - [x] Phase 12 — `api/app/engram_enrichment/service.py` refactor completed (checkpoint 12)
 - [x] Phase 13 — Green-zone files promoted and stabilized (checkpoints 13-15)
-- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-97)
+- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-98)
 
 ## Execution Checkpoints
 
@@ -2632,6 +2632,38 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-22 (Checkpoint 98 - Chat API Router Decomposition and Unit Coverage Expansion)
+
+- [x] Continued backend hardening in `api/app/chat/api.py`:
+  - decomposed monolithic `create_chat_router(...)` registration flow into focused route registration groups:
+    - `_register_session_routes(...)`
+    - `_register_lifecycle_routes(...)`
+    - `_register_message_routes(...)`
+    - `_register_pinned_routes(...)`
+    - `_register_session_derivative_routes(...)`
+  - introduced reusable session-route operation plumbing:
+    - `_SessionRouteContext`
+    - `_run_session_operation(...)`
+  - normalized pin/document route registration through `_PinnedResourceConfig` and shared route builders to eliminate duplication hotspots
+- [x] Added new backend unit coverage in `api/tests/test_chat_api_unit.py`:
+  - actor UUID resolution helper coverage
+  - service-error mapping coverage
+  - SSE payload encoding coverage
+  - route registration sanity coverage for stream endpoint
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`260 passed, 4 skipped, 82 deselected`)
+  - `make test` (`260 passed, 86 skipped`)
+  - `make web-check` (`32 passed file suites, 122 passed tests`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_score`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/app/chat/api.py` score: **10.0** (improved from **8.62**)
+  - `api/tests/test_chat_api_unit.py` score: **10.0**
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2646,6 +2678,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/app/chat_repository.py` | 10.0 | GREEN |
 | `api/app/chat_repository_pinning.py` | 10.0 | GREEN |
 | `api/app/chat/service.py` | 10.0 | GREEN |
+| `api/app/chat/api.py` | 10.0 | GREEN |
 | `api/app/chat/message_runtime.py` | 10.0 | GREEN |
 | `api/app/chat/session_operations.py` | 10.0 | GREEN |
 | `api/app/chat/session_lifecycle.py` | 10.0 | GREEN |
@@ -2664,6 +2697,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_db.py` | 10.0 | GREEN |
 | `api/tests/test_oauth_repository.py` | 10.0 | GREEN |
 | `api/tests/test_chat_api_integration.py` | 10.0 | GREEN |
+| `api/tests/test_chat_api_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_api_integration.py` | 10.0 | GREEN |
