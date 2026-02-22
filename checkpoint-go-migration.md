@@ -2813,3 +2813,35 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP53 - Admin Engram Update Uplift (`internal/repository/admin_engram_update.go`)
+
+- Improved legacy non-checkpoint admin engram update repository implementation file:
+  - `internal/repository/admin_engram_update.go`
+- Reduced complexity in `UpdateAdminEngram` by extracting DB update execution into:
+  - `updateAdminEngramRecord`
+- Reduced nested branching in source replacement flow via:
+  - `replaceAdminEngramSourcesIfProvided`
+  - `deleteAdminEngramSources`
+  - `insertAdminEngramSources`
+  - `insertAdminEngramSource`
+- Executed migrated tests one-by-one:
+  - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+  - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+  - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+  - `TestReplaceAdminEngramSourcesReplacesRows`
+  - `TestUpdateAdminEngramReturnsNilWhenMissing`
+  - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/admin_engram_update.go`: `9.61` -> `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed `Complex Method` in `UpdateAdminEngram`
+    - fixed `Bumpy Road Ahead` in `replaceAdminEngramSources`
+    - introduced one non-blocking helper arg-count note in `updateAdminEngramRecord`.
+- Additional scan:
+  - no production file under `internal/` scored below `9.5` in the current CodeScene file-level check.

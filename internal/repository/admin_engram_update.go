@@ -74,6 +74,30 @@ func UpdateAdminEngram(
 		return nil, err
 	}
 
+	updated, err := updateAdminEngramRecord(ctx, db, input, updateFields, retrievalText, embedding, engramJSON)
+	if err != nil {
+		return nil, err
+	}
+	if !updated {
+		return nil, nil
+	}
+
+	if err := replaceAdminEngramSourcesIfProvided(ctx, db, input); err != nil {
+		return nil, err
+	}
+
+	return GetAdminEngram(ctx, db, input.EngramID, false)
+}
+
+func updateAdminEngramRecord(
+	ctx context.Context,
+	db Queryer,
+	input AdminEngramUpdateInput,
+	updateFields adminEngramUpdateFields,
+	retrievalText string,
+	embedding embeddings.Result,
+	engramJSON string,
+) (bool, error) {
 	row := db.QueryRow(
 		ctx,
 		`
@@ -110,21 +134,14 @@ func UpdateAdminEngram(
 		input.EngramID,
 	)
 	var updatedID uuid.UUID
-	err = row.Scan(&updatedID)
+	err := row.Scan(&updatedID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+		return false, nil
 	}
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-
-	if input.Sources != nil {
-		if err := replaceAdminEngramSources(ctx, db, input.EngramID, *input.Sources); err != nil {
-			return nil, err
-		}
-	}
-
-	return GetAdminEngram(ctx, db, input.EngramID, false)
+	return true, nil
 }
 
 func buildAdminEngramUpdateFields(
@@ -209,6 +226,20 @@ func replaceAdminEngramSources(
 	engramID uuid.UUID,
 	sources []models.AdminEngramSourceInput,
 ) error {
+	if err := deleteAdminEngramSources(ctx, db, engramID); err != nil {
+		return err
+	}
+	return insertAdminEngramSources(ctx, db, engramID, sources)
+}
+
+func replaceAdminEngramSourcesIfProvided(ctx context.Context, db Queryer, input AdminEngramUpdateInput) error {
+	if input.Sources == nil {
+		return nil
+	}
+	return replaceAdminEngramSources(ctx, db, input.EngramID, *input.Sources)
+}
+
+func deleteAdminEngramSources(ctx context.Context, db Queryer, engramID uuid.UUID) error {
 	rows, err := db.Query(
 		ctx,
 		`DELETE FROM sources WHERE engram_id = $1 RETURNING source_id`,
@@ -217,51 +248,64 @@ func replaceAdminEngramSources(
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
+
 	for rows.Next() {
 		var sourceID uuid.UUID
-		if scanErr := rows.Scan(&sourceID); scanErr != nil {
-			rows.Close()
-			return scanErr
+		if err := rows.Scan(&sourceID); err != nil {
+			return err
 		}
 	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return err
-	}
-	rows.Close()
+	return rows.Err()
+}
 
+func insertAdminEngramSources(
+	ctx context.Context,
+	db Queryer,
+	engramID uuid.UUID,
+	sources []models.AdminEngramSourceInput,
+) error {
 	for _, source := range sources {
-		row := db.QueryRow(
-			ctx,
-			`
-			INSERT INTO sources (
-				source_id,
-				engram_id,
-				captured_at,
-				url,
-				title,
-				snippet,
-				content_text,
-				content_hash
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			RETURNING source_id
-			`,
-			newAdminSourceUUID(),
-			engramID,
-			source.CapturedAt,
-			source.URL,
-			source.Title,
-			source.Snippet,
-			source.ContentText,
-			source.ContentHash,
-		)
-		var insertedSourceID uuid.UUID
-		if err := row.Scan(&insertedSourceID); err != nil {
+		if err := insertAdminEngramSource(ctx, db, engramID, source); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func insertAdminEngramSource(
+	ctx context.Context,
+	db Queryer,
+	engramID uuid.UUID,
+	source models.AdminEngramSourceInput,
+) error {
+	row := db.QueryRow(
+		ctx,
+		`
+		INSERT INTO sources (
+			source_id,
+			engram_id,
+			captured_at,
+			url,
+			title,
+			snippet,
+			content_text,
+			content_hash
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING source_id
+		`,
+		newAdminSourceUUID(),
+		engramID,
+		source.CapturedAt,
+		source.URL,
+		source.Title,
+		source.Snippet,
+		source.ContentText,
+		source.ContentHash,
+	)
+	var insertedSourceID uuid.UUID
+	return row.Scan(&insertedSourceID)
 }
 
 func adminSourcePayload(sources []models.AdminEngramSourceRecord) []map[string]any {
