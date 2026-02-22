@@ -96,45 +96,57 @@ func (row *fakeRow) Scan(dest ...any) error {
 	return nil
 }
 
-func TestWithTransactionCommitsOnSuccess(t *testing.T) {
-	tx := &fakeTx{}
-	runner := &fakeBeginner{tx: tx}
+func TestWithTransaction(t *testing.T) {
+	testCases := []struct {
+		name           string
+		fn             func(tx Transaction) error
+		expectErr      bool
+		expectedCommit int
+		expectedRB     int
+	}{
+		{
+			name:           "commits on success",
+			fn:             func(_ Transaction) error { return nil },
+			expectErr:      false,
+			expectedCommit: 1,
+			expectedRB:     0,
+		},
+		{
+			name:           "rolls back on failure",
+			fn:             func(_ Transaction) error { return errors.New("boom") },
+			expectErr:      true,
+			expectedCommit: 0,
+			expectedRB:     1,
+		},
+	}
 
-	err := WithTransaction(context.Background(), runner, func(_ Transaction) error {
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("expected transaction to succeed: %v", err)
-	}
-	if runner.calls != 1 {
-		t.Fatalf("expected begin to be called once, got %d", runner.calls)
-	}
-	if tx.commitCount != 1 {
-		t.Fatalf("expected one commit, got %d", tx.commitCount)
-	}
-	if tx.rollbackCount != 0 {
-		t.Fatalf("expected no rollback, got %d", tx.rollbackCount)
-	}
-}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			tx := &fakeTx{}
+			runner := &fakeBeginner{tx: tx}
 
-func TestWithTransactionRollsBackOnError(t *testing.T) {
-	tx := &fakeTx{}
-	runner := &fakeBeginner{tx: tx}
+			err := WithTransaction(context.Background(), runner, testCase.fn)
+			if testCase.expectErr {
+				if err == nil {
+					t.Fatalf("expected transaction to fail")
+				}
+				if !strings.Contains(err.Error(), "boom") {
+					t.Fatalf("expected wrapped error to include cause, got %q", err.Error())
+				}
+			} else if err != nil {
+				t.Fatalf("expected transaction to succeed: %v", err)
+			}
 
-	err := WithTransaction(context.Background(), runner, func(_ Transaction) error {
-		return errors.New("boom")
-	})
-	if err == nil {
-		t.Fatalf("expected transaction to fail")
-	}
-	if !strings.Contains(err.Error(), "boom") {
-		t.Fatalf("expected wrapped error to include cause, got %q", err.Error())
-	}
-	if tx.commitCount != 0 {
-		t.Fatalf("expected no commit, got %d", tx.commitCount)
-	}
-	if tx.rollbackCount != 1 {
-		t.Fatalf("expected one rollback, got %d", tx.rollbackCount)
+			if runner.calls != 1 {
+				t.Fatalf("expected begin to be called once, got %d", runner.calls)
+			}
+			if tx.commitCount != testCase.expectedCommit {
+				t.Fatalf("expected %d commit(s), got %d", testCase.expectedCommit, tx.commitCount)
+			}
+			if tx.rollbackCount != testCase.expectedRB {
+				t.Fatalf("expected %d rollback(s), got %d", testCase.expectedRB, tx.rollbackCount)
+			}
+		})
 	}
 }
 
@@ -158,9 +170,11 @@ func TestEnsureSchemaInitializedExecutesSchemaSQL(t *testing.T) {
 	err := EnsureSchemaInitialized(
 		context.Background(),
 		runner,
-		settings,
-		schemaPath,
-		func(password string) (string, error) { return "hashed-" + password, nil },
+		SchemaInitializationOptions{
+			Settings:     settings,
+			SchemaPath:   schemaPath,
+			HashPassword: func(password string) (string, error) { return "hashed-" + password, nil },
+		},
 	)
 	if err != nil {
 		t.Fatalf("expected schema init to succeed: %v", err)
@@ -176,9 +190,22 @@ func TestEnsureSchemaInitializedExecutesSchemaSQL(t *testing.T) {
 	}
 }
 
-func TestHardenBootstrapAdminCredentialsUpdatesDefaultHash(t *testing.T) {
-	tx := &fakeTx{
-		queryRowResult: &fakeRow{value: defaultBootstrapAdminHash},
+func TestHardenBootstrapAdminCredentials(t *testing.T) {
+	testCases := []struct {
+		name         string
+		storedHash   string
+		expectUpdate bool
+	}{
+		{
+			name:         "updates default hash",
+			storedHash:   defaultBootstrapAdminHash,
+			expectUpdate: true,
+		},
+		{
+			name:         "skips non-default hash",
+			storedHash:   "custom-password-hash",
+			expectUpdate: false,
+		},
 	}
 
 	settings := config.Settings{
@@ -188,52 +215,34 @@ func TestHardenBootstrapAdminCredentialsUpdatesDefaultHash(t *testing.T) {
 		OAuthRequireProtectedRegistration: true,
 	}
 
-	err := hardenBootstrapAdminCredentials(
-		context.Background(),
-		tx,
-		settings,
-		func(_ string) (string, error) { return "hashed-replacement", nil },
-	)
-	if err != nil {
-		t.Fatalf("expected credential hardening to succeed: %v", err)
-	}
-	if len(tx.querySQL) == 0 || !strings.Contains(tx.querySQL[0], "SELECT password_hash") {
-		t.Fatalf("expected password hash lookup query to run")
-	}
-	if len(tx.execSQL) == 0 {
-		t.Fatalf("expected update query to run")
-	}
-	if !strings.Contains(tx.execSQL[len(tx.execSQL)-1], "UPDATE users") {
-		t.Fatalf("expected final query to update user hash, got %q", tx.execSQL[len(tx.execSQL)-1])
-	}
-}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			tx := &fakeTx{
+				queryRowResult: &fakeRow{value: testCase.storedHash},
+			}
+			err := hardenBootstrapAdminCredentials(
+				context.Background(),
+				tx,
+				settings,
+				func(_ string) (string, error) { return "hashed-replacement", nil },
+			)
+			if err != nil {
+				t.Fatalf("expected credential hardening to succeed: %v", err)
+			}
+			if len(tx.querySQL) == 0 || !strings.Contains(tx.querySQL[0], "SELECT password_hash") {
+				t.Fatalf("expected password hash lookup query to run")
+			}
 
-func TestHardenBootstrapAdminCredentialsSkipsNonDefaultHash(t *testing.T) {
-	tx := &fakeTx{
-		queryRowResult: &fakeRow{value: "custom-password-hash"},
-	}
-	settings := config.Settings{
-		AppEnv:                            "production",
-		UIDemoUsername:                    "admin",
-		UIDemoPassword:                    "StrongPassword-12345",
-		OAuthRequireProtectedRegistration: true,
-	}
-
-	err := hardenBootstrapAdminCredentials(
-		context.Background(),
-		tx,
-		settings,
-		func(_ string) (string, error) { return "hashed-replacement", nil },
-	)
-	if err != nil {
-		t.Fatalf("expected credential hardening to succeed: %v", err)
-	}
-	if len(tx.querySQL) == 0 || !strings.Contains(tx.querySQL[0], "SELECT password_hash") {
-		t.Fatalf("expected password hash lookup query to run")
-	}
-	for _, sql := range tx.execSQL {
-		if strings.Contains(sql, "UPDATE users") {
-			t.Fatalf("did not expect update query for non-default hash")
-		}
+			updated := false
+			for _, sql := range tx.execSQL {
+				if strings.Contains(sql, "UPDATE users") {
+					updated = true
+					break
+				}
+			}
+			if updated != testCase.expectUpdate {
+				t.Fatalf("expected update=%t, got %t", testCase.expectUpdate, updated)
+			}
+		})
 	}
 }

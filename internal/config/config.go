@@ -126,44 +126,30 @@ type Settings struct {
 }
 
 func applyDefaults(settings *Settings) {
-	if strings.TrimSpace(settings.AppSemanticVersion) == "" {
-		settings.AppSemanticVersion = defaultAppSemanticVersion
+	setStringDefault(&settings.AppSemanticVersion, defaultAppSemanticVersion)
+	setStringDefaultWithFunc(&settings.AppCommitSHA, defaultCommitSHA)
+	setStringDefault(&settings.DatabaseURL, defaultDatabaseURL)
+	setStringDefault(&settings.EmbeddingModel, defaultEmbeddingModel)
+	setStringDefault(&settings.OpenAIBaseURL, defaultOpenAIBaseURL)
+	setStringDefault(&settings.AnthropicBaseURL, defaultAnthropicBaseURL)
+	setStringDefault(&settings.AnthropicVersion, defaultAnthropicVersion)
+	setStringDefault(&settings.LangfuseHost, defaultLangfuseHost)
+	setStringDefault(&settings.APIHost, defaultAPIServerHost)
+	setStringDefault(&settings.DefaultChatProvider, defaultDefaultChatProvider)
+	setStringDefault(&settings.DefaultChatModel, defaultDefaultChatModel)
+	setStringDefault(&settings.AuditLogPath, defaultAuditLogPath)
+	setStringDefault(&settings.LanggraphCheckpointPath, defaultLanggraphCheckpointSQL)
+}
+
+func setStringDefault(target *string, defaultValue string) {
+	if strings.TrimSpace(*target) == "" {
+		*target = defaultValue
 	}
-	if strings.TrimSpace(settings.AppCommitSHA) == "" {
-		settings.AppCommitSHA = defaultCommitSHA()
-	}
-	if strings.TrimSpace(settings.DatabaseURL) == "" {
-		settings.DatabaseURL = defaultDatabaseURL
-	}
-	if strings.TrimSpace(settings.EmbeddingModel) == "" {
-		settings.EmbeddingModel = defaultEmbeddingModel
-	}
-	if strings.TrimSpace(settings.OpenAIBaseURL) == "" {
-		settings.OpenAIBaseURL = defaultOpenAIBaseURL
-	}
-	if strings.TrimSpace(settings.AnthropicBaseURL) == "" {
-		settings.AnthropicBaseURL = defaultAnthropicBaseURL
-	}
-	if strings.TrimSpace(settings.AnthropicVersion) == "" {
-		settings.AnthropicVersion = defaultAnthropicVersion
-	}
-	if strings.TrimSpace(settings.LangfuseHost) == "" {
-		settings.LangfuseHost = defaultLangfuseHost
-	}
-	if strings.TrimSpace(settings.APIHost) == "" {
-		settings.APIHost = defaultAPIServerHost
-	}
-	if strings.TrimSpace(settings.DefaultChatProvider) == "" {
-		settings.DefaultChatProvider = defaultDefaultChatProvider
-	}
-	if strings.TrimSpace(settings.DefaultChatModel) == "" {
-		settings.DefaultChatModel = defaultDefaultChatModel
-	}
-	if strings.TrimSpace(settings.AuditLogPath) == "" {
-		settings.AuditLogPath = defaultAuditLogPath
-	}
-	if strings.TrimSpace(settings.LanggraphCheckpointPath) == "" {
-		settings.LanggraphCheckpointPath = defaultLanggraphCheckpointSQL
+}
+
+func setStringDefaultWithFunc(target *string, defaultValue func() string) {
+	if strings.TrimSpace(*target) == "" {
+		*target = defaultValue()
 	}
 }
 
@@ -229,16 +215,24 @@ func ValidateProductionSecurity(settings Settings) error {
 func BuildDebugSettingsSnapshot(settings Settings) map[string]any {
 	snapshot := settingsMap(settings)
 	for key := range sensitiveSettingKeys {
-		if value, ok := snapshot[key]; ok {
-			switch typed := value.(type) {
-			case string:
-				if strings.TrimSpace(typed) != "" {
-					snapshot[key] = "<redacted>"
-				}
-			}
-		}
+		redactIfSensitive(snapshot, key)
 	}
 	return snapshot
+}
+
+func redactIfSensitive(snapshot map[string]any, key string) {
+	value, exists := snapshot[key]
+	if !exists {
+		return
+	}
+	stringValue, isString := value.(string)
+	if !isString {
+		return
+	}
+	if strings.TrimSpace(stringValue) == "" {
+		return
+	}
+	snapshot[key] = "<redacted>"
 }
 
 func settingsMap(settings Settings) map[string]any {

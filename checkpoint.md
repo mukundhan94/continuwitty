@@ -16,7 +16,7 @@
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
 - **Phase 33 completed:** portable export/import stash workflow with REST + MCP + web transfer flows, owner/admin authorization, and source-fidelity round-trip coverage.
 - **Phase 34 completed:** security audit remediation for production-safe config defaults, distributed login/MCP throttling, protected OAuth registration, and security regression coverage.
-- **Go migration initiated (2026-02-22):** phased Python/FastAPI → Go migration started with dedicated progress tracker in `checkpoint-go-migration.md` (CP1 complete: module scaffold + config parity tests; CP2 complete: DB bootstrap/transaction parity tests).
+- **Go migration initiated (2026-02-22):** phased Python/FastAPI → Go migration started with dedicated progress tracker in `checkpoint-go-migration.md` (CP1 complete: module scaffold + config parity tests; CP2 complete: DB bootstrap/transaction parity tests; CP3 complete: API scaffold + health/version route parity tests).
 
 ---
 

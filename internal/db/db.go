@@ -38,6 +38,13 @@ type TxBeginner interface {
 // PasswordHasher creates a password hash for bootstrap hardening.
 type PasswordHasher func(password string) (string, error)
 
+// SchemaInitializationOptions captures schema bootstrap inputs.
+type SchemaInitializationOptions struct {
+	Settings     config.Settings
+	SchemaPath   string
+	HashPassword PasswordHasher
+}
+
 type pgxTxAdapter struct {
 	tx pgx.Tx
 }
@@ -131,10 +138,12 @@ func WithTransaction(ctx context.Context, beginner TxBeginner, fn func(tx Transa
 func EnsureSchemaInitialized(
 	ctx context.Context,
 	beginner TxBeginner,
-	settings config.Settings,
-	schemaPath string,
-	hashPassword PasswordHasher,
+	options SchemaInitializationOptions,
 ) error {
+	settings := options.Settings
+	schemaPath := options.SchemaPath
+	hashPassword := options.HashPassword
+
 	if hashPassword == nil {
 		return errors.New("hash password function is required")
 	}

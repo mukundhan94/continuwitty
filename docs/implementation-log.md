@@ -54,6 +54,42 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP3: API entrypoint + health/version parity)
+
+1. Added Go API entrypoint:
+   - `cmd/api/main.go`
+2. Added initial Chi router skeleton:
+   - `internal/api/router.go`
+   - `GET /healthz` parity response (`{\"status\":\"ok\"}`)
+   - `GET /api/v1/version` parity response (`semantic_version`, `release`, `commit_id`)
+3. Ported basic API unit tests from `api/tests/test_api_unit.py`:
+   - `internal/api/router_test.go`
+4. Executed migrated tests one-by-one:
+   - `go test ./internal/api -run '^TestHealthz$' -v`
+   - `go test ./internal/api -run '^TestVersionEndpoint$' -v`
+5. Full Go verification:
+   - `go test ./...`
+6. Code health quality pass (file-level checks before commit):
+   - refactored `internal/config/config.go` to reduce nested/complex default handling and redaction logic.
+   - refactored `internal/db/db.go` `EnsureSchemaInitialized` signature to use options struct.
+   - refactored `internal/db/db_test.go` into table-driven tests to reduce duplication.
+   - file-level CodeScene scores:
+     - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/api/router.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/config/config.go` -> `9.68`
+     - `/Users/mukundhan/Projects/engram/internal/config/config_test.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/db/db.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/db/db_test.go` -> `9.61`
+   - attempted non-code file checks for `/Users/mukundhan/Projects/engram/checkpoint-go-migration.md` and `/Users/mukundhan/Projects/engram/go.mod`; CodeScene reported unsupported file types (`.md`, `.mod`).
+7. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - improvements observed:
+     - `internal/config/config.go`: fixed prior `Complex Method` and `Deep, Nested Complexity` findings.
+     - `internal/db/db.go`: fixed prior `Excess Number of Function Arguments` finding.
+     - `internal/db/db_test.go`: fixed prior duplication finding; remaining findings are low-severity test complexity smells.
+
 ### 2026-02-22 (CodeScene pre-commit safeguard for immediate-phase closeout bundle)
 
 1. Ran CodeScene MCP pre-commit health gate on the working tree:

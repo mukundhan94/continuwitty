@@ -15,7 +15,8 @@
 |---|---|---|---|
 | CP1 | 2026-02-22 | Completed | Go module scaffold + `internal/config` port + migrated config tests |
 | CP2 | 2026-02-22 | Completed | `internal/db` port + migrated db tests |
-| CP3 | 2026-02-22 | In Progress | API entrypoint scaffold and phase docs sync |
+| CP3 | 2026-02-22 | Completed | API entrypoint scaffold + health/version route parity tests |
+| CP4 | 2026-02-22 | Pending | Repository layer migration kickoff |
 
 ## Checkpoint Details
 
@@ -49,8 +50,29 @@
   - `TestHardenBootstrapAdminCredentialsUpdatesDefaultHash`
   - `TestHardenBootstrapAdminCredentialsSkipsNonDefaultHash`
 
-### CP3 - API Entrypoint Scaffold (Planned)
+### CP3 - API Entrypoint Scaffold
 
-- Add `cmd/api/main.go` placeholder startup path.
-- Add router/bootstrap stubs needed for side-by-side rollout.
-- Sync migration logs and checkpoint docs.
+- Added API runtime entrypoint:
+  - `cmd/api/main.go`
+- Added initial Chi router wiring:
+  - `internal/api/router.go`
+  - `/healthz`
+  - `/api/v1/version`
+- Ported basic API unit tests from `api/tests/test_api_unit.py`:
+  - `internal/api/router_test.go`
+- Executed migrated tests one-by-one:
+  - `TestHealthz`
+  - `TestVersionEndpoint`
+- Ran file-level CodeScene checks for all migrated Go files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+
+### CP4 - Repository Layer Kickoff (Planned)
+
+- Start with engram repository read/write parity for the first API-backed flows.
+- Migrate repository-focused tests incrementally and keep one-by-one test execution.
