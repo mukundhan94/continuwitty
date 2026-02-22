@@ -29,112 +29,112 @@ var (
 
 // MemoryAdminListRequest captures shared admin list filters.
 type MemoryAdminListRequest struct {
-	ProjectID      *string
-	OwnerUserID    *uuid.UUID
-	IncludeDeleted bool
-	Limit          int
-	Offset         int
+	ProjectID      *string    `json:"project_id,omitempty"`
+	OwnerUserID    *uuid.UUID `json:"owner_user_id,omitempty"`
+	IncludeDeleted bool       `json:"include_deleted"`
+	Limit          int        `json:"limit"`
+	Offset         int        `json:"offset"`
 }
 
 // MemoryAdminEngramListRequest captures admin engram list filters.
 type MemoryAdminEngramListRequest struct {
 	MemoryAdminListRequest
-	SessionID *uuid.UUID
-	QueryText *string
+	SessionID *uuid.UUID `json:"session_id,omitempty"`
+	QueryText *string    `json:"query_text,omitempty"`
 }
 
 // SessionDeleteRequest captures session delete settings.
 type SessionDeleteRequest struct {
-	DeleteLinkedEngrams bool
-	Reason              *string
+	DeleteLinkedEngrams bool    `json:"delete_linked_engrams"`
+	Reason              *string `json:"reason,omitempty"`
 }
 
 // SessionDeleteResponse captures session delete results.
 type SessionDeleteResponse struct {
-	SessionID            uuid.UUID
-	Deleted              bool
-	LinkedEngramsDeleted int
+	SessionID            uuid.UUID `json:"session_id"`
+	Deleted              bool      `json:"deleted"`
+	LinkedEngramsDeleted int       `json:"linked_engrams_deleted"`
 }
 
 // SessionRestoreResponse captures session restore results.
 type SessionRestoreResponse struct {
-	SessionID uuid.UUID
-	Restored  bool
+	SessionID uuid.UUID `json:"session_id"`
+	Restored  bool      `json:"restored"`
 }
 
 // EngramUpdateRequest captures mutable admin engram fields.
 type EngramUpdateRequest struct {
-	ExpectedUpdatedAt       *time.Time
-	Title                   *string
-	Abstract                *string
-	DetailedSummaryMarkdown *string
-	Tags                    *[]string
-	Keywords                *[]string
-	VisibilityScope         *models.VisibilityScope
-	Sources                 *[]models.AdminEngramSourceInput
+	ExpectedUpdatedAt       *time.Time                       `json:"expected_updated_at,omitempty"`
+	Title                   *string                          `json:"title,omitempty"`
+	Abstract                *string                          `json:"abstract,omitempty"`
+	DetailedSummaryMarkdown *string                          `json:"detailed_summary_markdown,omitempty"`
+	Tags                    *[]string                        `json:"tags,omitempty"`
+	Keywords                *[]string                        `json:"keywords,omitempty"`
+	VisibilityScope         *models.VisibilityScope          `json:"visibility_scope,omitempty"`
+	Sources                 *[]models.AdminEngramSourceInput `json:"sources,omitempty"`
 }
 
 // EngramMoveRequest captures admin engram move settings.
 type EngramMoveRequest struct {
-	TargetProjectID   string
-	Reason            *string
-	ExpectedUpdatedAt *time.Time
+	TargetProjectID   string     `json:"target_project_id"`
+	Reason            *string    `json:"reason,omitempty"`
+	ExpectedUpdatedAt *time.Time `json:"expected_updated_at,omitempty"`
 }
 
 // EngramDeleteRequest captures delete reason for an engram.
 type EngramDeleteRequest struct {
-	Reason *string
+	Reason *string `json:"reason,omitempty"`
 }
 
 // EngramDeleteResponse captures engram delete results.
 type EngramDeleteResponse struct {
-	EngramID uuid.UUID
-	Deleted  bool
+	EngramID uuid.UUID `json:"engram_id"`
+	Deleted  bool      `json:"deleted"`
 }
 
 // EngramRestoreResponse captures engram restore results.
 type EngramRestoreResponse struct {
-	EngramID uuid.UUID
-	Restored bool
+	EngramID uuid.UUID `json:"engram_id"`
+	Restored bool      `json:"restored"`
 }
 
 // CollectionCreateRequest captures collection create payload values.
 type CollectionCreateRequest struct {
-	ProjectID   string
-	Name        string
-	Description string
+	ProjectID   string `json:"project_id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // CollectionUpdateRequest captures mutable collection fields.
 type CollectionUpdateRequest struct {
-	ExpectedUpdatedAt *time.Time
-	Name              *string
-	Description       *string
+	ExpectedUpdatedAt *time.Time `json:"expected_updated_at,omitempty"`
+	Name              *string    `json:"name,omitempty"`
+	Description       *string    `json:"description,omitempty"`
 }
 
 // CollectionDeleteRequest captures collection delete settings.
 type CollectionDeleteRequest struct {
-	Reason *string
+	Reason *string `json:"reason,omitempty"`
 }
 
 // CollectionItemsUpdateRequest captures collection item update payload.
 type CollectionItemsUpdateRequest struct {
-	EngramIDs []uuid.UUID
+	EngramIDs []uuid.UUID `json:"engram_ids"`
 }
 
 // CollectionDeleteResponse captures collection delete results.
 type CollectionDeleteResponse struct {
-	Deleted bool
+	Deleted bool `json:"deleted"`
 }
 
 // CollectionItemsAddResponse captures add-item operation results.
 type CollectionItemsAddResponse struct {
-	Added int
+	Added int `json:"added"`
 }
 
 // CollectionItemRemoveResponse captures remove-item operation results.
 type CollectionItemRemoveResponse struct {
-	Removed bool
+	Removed bool `json:"removed"`
 }
 
 // ResolveProjectWriteInput captures project-resolution parameters for write operations.

@@ -34,7 +34,8 @@
 | CP19 | 2026-02-22 | Completed | Memory-admin engram repository baseline (`list/get/sources/move/delete/restore`) with migrated unit tests |
 | CP20 | 2026-02-22 | Completed | Memory-admin engram update/source-replacement parity (`update` + source rewrite) with migrated unit tests |
 | CP21 | 2026-02-22 | Completed | Memory-admin service baseline (`internal/admin` service orchestration + migrated unit tests) |
-| CP22 | 2026-02-22 | In Progress | API-layer continuation (memory-admin route handlers in Go) |
+| CP22 | 2026-02-22 | Completed | Memory-admin API route baseline (`/api/v1/admin/memory` handlers + migrated unit tests) |
+| CP23 | 2026-02-22 | In Progress | API integration continuation (wire memory-admin routes into main Go router dependencies) |
 
 ## Checkpoint Details
 
@@ -1246,8 +1247,93 @@
   - `internal/repository/user.go` → 9.38
   - `internal/repository/user_test.go` → 10.0
 
-### CP22 - API Continuation (Planned)
+### CP22 - Memory-Admin API Route Baseline
+
+- Added memory-admin HTTP route module:
+  - `internal/api/admin_memory.go`
+  - Chi route parity for:
+    - `/api/v1/admin/memory/sessions*`
+    - `/api/v1/admin/memory/engrams*`
+    - `/api/v1/admin/memory/collections*`
+  - request parsing for query/body payloads, actor-resolution hook, and error/status mapping parity.
+- Added migrated API handler tests:
+  - `internal/api/admin_memory_test.go`
+  - `TestMountMemoryAdminRoutesListSessionsForwardsQueryAndActorCheck`
+  - `TestMountMemoryAdminRoutesDeleteSessionUsesActorAndPayload`
+  - `TestMountMemoryAdminRoutesListEngramsUsesRequestObject`
+  - `TestMountMemoryAdminRoutesUpdateEngramMapsStaleTo409`
+  - `TestMountMemoryAdminRoutesCreateCollectionReturns201`
+  - `TestMountMemoryAdminRoutesReturnsForbiddenWhenActorCheckFails`
+- Executed migrated tests one-by-one:
+  - `TestMountMemoryAdminRoutesListSessionsForwardsQueryAndActorCheck`
+  - `TestMountMemoryAdminRoutesDeleteSessionUsesActorAndPayload`
+  - `TestMountMemoryAdminRoutesListEngramsUsesRequestObject`
+  - `TestMountMemoryAdminRoutesUpdateEngramMapsStaleTo409`
+  - `TestMountMemoryAdminRoutesCreateCollectionReturns201`
+  - `TestMountMemoryAdminRoutesReturnsForbiddenWhenActorCheckFails`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/admin/service.go` → 8.54
+  - `internal/admin/service_test.go` → 9.38
+  - `internal/api/admin_memory.go` → 6.88
+  - `internal/api/admin_memory_test.go` → 9.68
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP23 - API Integration Continuation (Planned)
 
 - Continue migration with the next high-value slice:
-  - memory-admin API route handlers parity in Go
+  - wire memory-admin handlers into `internal/api` app composition/dependencies
 - Keep parity tests migrated and executed one-by-one.
