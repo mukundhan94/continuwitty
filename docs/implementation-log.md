@@ -318,6 +318,39 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP44: non-checkpoint code-health uplift for document repository implementation)
+
+1. Improved legacy non-checkpoint document repository implementation:
+   - `internal/repository/document.go`
+   - reduced query-path complexity by extracting focused helpers:
+     - `normalizeDocumentChunkTopK`
+     - `buildDocumentChunkQuerySQLAndParams`
+     - `queryDocumentChunkCandidates`
+     - `buildDocumentChunkQueryResults`
+   - replaced argument-heavy chunk replacement input with:
+     - `documentChunkReplaceInput`
+   - split chunk replacement flow into dedicated helpers:
+     - `deleteDocumentChunks`
+     - `insertDocumentChunk`
+2. Executed document repository tests one-by-one:
+   - `TestUpsertDocumentWithChunksPersistsDocumentAndChunks`
+   - `TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch`
+   - `TestListDocumentsAppliesProjectFilter`
+   - `TestQueryDocumentChunksBuildsQueryAndReranks`
+   - `TestBuildDocumentChunkWhereDefaultsToActorScopeOnly`
+   - `TestUpsertDocumentWithChunksRejectsInvalidVisibility`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/document.go` improved from `8.81` to `9.68`
+   - remaining note is a non-blocking helper arg-count threshold edge.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings:
+     - fixed `Complex Method` and `Overall Code Complexity`
+     - replaced previous argument-count issue on `replaceDocumentChunks` with a helper arg-count note.
+
 ### 2026-02-22 (Go migration CP43: non-checkpoint code-health uplift for document repository tests)
 
 1. Improved legacy non-checkpoint document repository tests:

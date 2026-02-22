@@ -2534,6 +2534,36 @@
     - fixed both `Large Method` findings from the two primary document tests
     - replaced old argument-heavy helper finding with new helper arg-count threshold-edge notes.
 
-### CP44 - Auth/Session Continuation Follow-Up (Planned)
+### CP44 - Non-Checkpoint Code-Health Uplift (`internal/repository/document.go`)
 
-- Continue incremental code-health uplift of legacy non-checkpoint Go files below 9.5 while maintaining one-by-one test execution and migration parity progression.
+- Improved legacy non-checkpoint document repository implementation file:
+  - `internal/repository/document.go`
+  - reduced query-path complexity by extracting focused helpers:
+    - `normalizeDocumentChunkTopK`
+    - `buildDocumentChunkQuerySQLAndParams`
+    - `queryDocumentChunkCandidates`
+    - `buildDocumentChunkQueryResults`
+  - replaced argument-heavy chunk replacement call with structured input:
+    - `documentChunkReplaceInput`
+  - split chunk replacement responsibilities into dedicated helpers:
+    - `deleteDocumentChunks`
+    - `insertDocumentChunk`
+- Executed migrated tests one-by-one:
+  - `TestUpsertDocumentWithChunksPersistsDocumentAndChunks`
+  - `TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch`
+  - `TestListDocumentsAppliesProjectFilter`
+  - `TestQueryDocumentChunksBuildsQueryAndReranks`
+  - `TestBuildDocumentChunkWhereDefaultsToActorScopeOnly`
+  - `TestUpsertDocumentWithChunksRejectsInvalidVisibility`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/document.go` score improved from `8.81` -> `9.68`
+  - `code_health_review` now reports only a non-blocking argument-count note on `insertDocumentChunk`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed `Complex Method` (`QueryDocumentChunks`)
+    - fixed `Overall Code Complexity`
+    - replaced previous arg-count finding on `replaceDocumentChunks` with a non-blocking helper arg-count note.

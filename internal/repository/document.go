@@ -199,6 +199,12 @@ type DocumentChunkQueryInput struct {
 	EmbeddingDim int
 }
 
+type documentChunkReplaceInput struct {
+	Payload         DocumentUpsertPayload
+	Timestamp       time.Time
+	ChunkEmbeddings []embeddings.Result
+}
+
 // UpsertDocumentWithChunks persists document metadata and atomically replaces chunks.
 func UpsertDocumentWithChunks(
 	ctx context.Context,
@@ -248,7 +254,12 @@ func UpsertDocumentWithChunks(
 		return nil, err
 	}
 
-	if err := replaceDocumentChunks(ctx, db, input.Payload, now, chunkEmbeddings); err != nil {
+	replaceInput := documentChunkReplaceInput{
+		Payload:         input.Payload,
+		Timestamp:       now,
+		ChunkEmbeddings: chunkEmbeddings,
+	}
+	if err := replaceDocumentChunks(ctx, db, replaceInput); err != nil {
 		return nil, err
 	}
 	return &record, nil
@@ -315,31 +326,93 @@ func QueryDocumentChunks(
 	db Queryer,
 	input DocumentChunkQueryInput,
 ) ([]models.DocumentChunkQueryResult, error) {
-	topK := input.Request.TopK
-	if topK <= 0 {
-		topK = 6
-	}
+	topK := normalizeDocumentChunkTopK(input.Request.TopK)
 
 	queryEmbedding, err := embedDocumentText(input.Request.Query, input.EmbeddingDim)
 	if err != nil {
 		return nil, err
 	}
-	whereSQL, whereParams := buildDocumentChunkWhere(input.ActorUserID, input.Request)
+	querySQL, params := buildDocumentChunkQuerySQLAndParams(
+		input.ActorUserID,
+		input.Request,
+		queryEmbedding.Vector,
+		topK,
+	)
+	candidates, err := queryDocumentChunkCandidates(ctx, db, querySQL, params)
+	if err != nil {
+		return nil, err
+	}
+
+	reranked := rerankDocumentChunkRows(candidates, input.Request.Query, topK)
+	return buildDocumentChunkQueryResults(reranked), nil
+}
+
+func replaceDocumentChunks(
+	ctx context.Context,
+	db Queryer,
+	input documentChunkReplaceInput,
+) error {
+	if err := deleteDocumentChunks(ctx, db, input.Payload.DocumentID); err != nil {
+		return err
+	}
+
+	for index, chunk := range input.Payload.Chunks {
+		if err := insertDocumentChunk(
+			ctx,
+			db,
+			input.Payload.DocumentID,
+			chunk,
+			input.ChunkEmbeddings[index],
+			input.Timestamp,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func normalizeDocumentChunkTopK(requested int) int {
+	if requested <= 0 {
+		return 6
+	}
+	return requested
+}
+
+func buildDocumentChunkQuerySQLAndParams(
+	actorUserID uuid.UUID,
+	request models.DocumentChunkQueryRequest,
+	queryVector []float64,
+	topK int,
+) (string, []any) {
+	whereSQL, whereParams := buildDocumentChunkWhere(actorUserID, request)
 	whereSQL = percentToPGXPlaceholders(whereSQL, 2)
+	limitPlaceholder := pgxPlaceholder(len(whereParams) + 2)
+	querySQL := fmt.Sprintf(queryDocumentChunksSelectTemplate, whereSQL, limitPlaceholder)
+
+	params := make([]any, 0, len(whereParams)+2)
+	params = append(params, vectorLiteral(queryVector))
+	params = append(params, whereParams...)
+	params = append(params, documentChunkCandidateLimit(topK))
+	return querySQL, params
+}
+
+func documentChunkCandidateLimit(topK int) int {
 	candidateLimit := topK * 4
 	if candidateLimit < topK {
 		candidateLimit = topK
 	}
 	if candidateLimit > 200 {
-		candidateLimit = 200
+		return 200
 	}
-	limitPlaceholder := pgxPlaceholder(len(whereParams) + 2)
-	querySQL := fmt.Sprintf(queryDocumentChunksSelectTemplate, whereSQL, limitPlaceholder)
+	return candidateLimit
+}
 
-	params := []any{vectorLiteral(queryEmbedding.Vector)}
-	params = append(params, whereParams...)
-	params = append(params, candidateLimit)
-
+func queryDocumentChunkCandidates(
+	ctx context.Context,
+	db Queryer,
+	querySQL string,
+	params []any,
+) ([]documentChunkCandidate, error) {
 	rows, err := db.Query(ctx, querySQL, params...)
 	if err != nil {
 		return nil, err
@@ -357,10 +430,12 @@ func QueryDocumentChunks(
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	return candidates, nil
+}
 
-	reranked := rerankDocumentChunkRows(candidates, input.Request.Query, topK)
-	results := make([]models.DocumentChunkQueryResult, 0, len(reranked))
-	for _, row := range reranked {
+func buildDocumentChunkQueryResults(rows []documentChunkCandidate) []models.DocumentChunkQueryResult {
+	results := make([]models.DocumentChunkQueryResult, 0, len(rows))
+	for _, row := range rows {
 		results = append(results, models.DocumentChunkQueryResult{
 			ChunkID:         row.ChunkID,
 			DocumentID:      row.DocumentID,
@@ -374,53 +449,48 @@ func QueryDocumentChunks(
 			Distance:        row.Distance,
 		})
 	}
-	return results, nil
+	return results
 }
 
-func replaceDocumentChunks(
-	ctx context.Context,
-	db Queryer,
-	payload DocumentUpsertPayload,
-	now time.Time,
-	chunkEmbeddings []embeddings.Result,
-) error {
-	rows, err := db.Query(ctx, "DELETE FROM document_chunks WHERE document_id = $1", payload.DocumentID)
+func deleteDocumentChunks(ctx context.Context, db Queryer, documentID uuid.UUID) error {
+	rows, err := db.Query(ctx, "DELETE FROM document_chunks WHERE document_id = $1", documentID)
 	if err != nil {
 		return err
 	}
 	rows.Close()
-	if err := rows.Err(); err != nil {
+	return rows.Err()
+}
+
+func insertDocumentChunk(
+	ctx context.Context,
+	db Queryer,
+	documentID uuid.UUID,
+	chunk DocumentChunkDraft,
+	embedding embeddings.Result,
+	timestamp time.Time,
+) error {
+	metadataJSON, err := marshalJSON(orEmptyMap(chunk.Metadata))
+	if err != nil {
 		return err
 	}
-
-	for index, chunk := range payload.Chunks {
-		embedding := chunkEmbeddings[index]
-		metadataJSON, err := marshalJSON(orEmptyMap(chunk.Metadata))
-		if err != nil {
-			return err
-		}
-		var chunkID uuid.UUID
-		row := db.QueryRow(
-			ctx,
-			insertDocumentChunkSQL,
-			chunk.ChunkID,
-			payload.DocumentID,
-			chunk.ChunkIndex,
-			chunk.ChunkText,
-			chunk.Snippet,
-			chunk.CharStart,
-			chunk.CharEnd,
-			chunk.TokenEstimate,
-			metadataJSON,
-			embedding.ProviderID,
-			vectorLiteral(embedding.Vector),
-			now,
-		)
-		if err := row.Scan(&chunkID); err != nil {
-			return err
-		}
-	}
-	return nil
+	var chunkID uuid.UUID
+	row := db.QueryRow(
+		ctx,
+		insertDocumentChunkSQL,
+		chunk.ChunkID,
+		documentID,
+		chunk.ChunkIndex,
+		chunk.ChunkText,
+		chunk.Snippet,
+		chunk.CharStart,
+		chunk.CharEnd,
+		chunk.TokenEstimate,
+		metadataJSON,
+		embedding.ProviderID,
+		vectorLiteral(embedding.Vector),
+		timestamp,
+	)
+	return row.Scan(&chunkID)
 }
 
 func scanDocumentRecord(row interface {
