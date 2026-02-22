@@ -2712,3 +2712,40 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP50 - Non-Checkpoint Code-Health Uplift (`internal/admin/service.go`)
+
+- Improved legacy non-checkpoint admin service implementation file:
+  - `internal/admin/service.go`
+  - reduced duplicated list input construction across:
+    - `ListSessions`
+    - `ListEngrams`
+    - `ListCollections`
+    via shared request mapping helpers:
+    - `sharedListRequestInput`
+    - `toSharedListRequestInput`
+    - `sessionInput`
+    - `engramInput`
+    - `collectionInput`
+  - centralized repeated bool-result/not-found checks in:
+    - `boolResultNotFoundError`
+  - centralized project resolution for write paths in:
+    - `resolveProjectIDForWrite`
+  - extracted actor-structured move implementation:
+    - `moveEngramWithActor`
+    while preserving public `MoveEngram` API compatibility.
+- Executed migrated tests one-by-one:
+  - `TestListMemoryAdminRequestsForwardSharedObject`
+  - `TestListEngramsUsesRequestObject`
+  - `TestUpdateCollectionRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramUsesRepositoryRequestObject`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/admin/service.go` score improved from `8.54` -> `9.68`
+  - remaining note is a non-blocking argument-count threshold edge on public `MoveEngram`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.

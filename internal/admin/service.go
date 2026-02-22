@@ -139,6 +139,12 @@ type CollectionItemRemoveResponse struct {
 	Removed bool `json:"removed"`
 }
 
+// WriteActor captures actor identity used for write authorization.
+type WriteActor struct {
+	UserID uuid.UUID
+	Role   string
+}
+
 // ResolveProjectWriteInput captures project-resolution parameters for write operations.
 type ResolveProjectWriteInput struct {
 	ActorUserID uuid.UUID
@@ -213,6 +219,14 @@ type Service struct {
 	deps            serviceDeps
 }
 
+type sharedListRequestInput struct {
+	ProjectID      *string
+	OwnerUserID    *uuid.UUID
+	IncludeDeleted bool
+	Limit          int
+	Offset         int
+}
+
 // NewService creates a memory-admin service.
 func NewService(db repository.Queryer, embeddingDim int, projectResolver ProjectResolver) *Service {
 	return &Service{
@@ -225,17 +239,7 @@ func NewService(db repository.Queryer, embeddingDim int, projectResolver Project
 
 // ListSessions returns sessions filtered by request fields.
 func (s *Service) ListSessions(ctx context.Context, request MemoryAdminListRequest) ([]models.AdminChatSessionRecord, error) {
-	return s.deps.listAdminSessions(
-		ctx,
-		s.db,
-		repository.AdminSessionListInput{
-			ProjectID:      request.ProjectID,
-			OwnerUserID:    request.OwnerUserID,
-			IncludeDeleted: request.IncludeDeleted,
-			Limit:          request.Limit,
-			Offset:         request.Offset,
-		},
-	)
+	return s.deps.listAdminSessions(ctx, s.db, toSharedListRequestInput(request).sessionInput())
 }
 
 // GetSession returns a session by id when present.
@@ -282,30 +286,16 @@ func (s *Service) DeleteSession(ctx context.Context, sessionID, actorUserID uuid
 // RestoreSession restores a soft-deleted session.
 func (s *Service) RestoreSession(ctx context.Context, sessionID uuid.UUID) (SessionRestoreResponse, error) {
 	restored, err := s.deps.restoreSession(ctx, s.db, sessionID)
-	if err != nil {
+	if err := boolResultNotFoundError(restored, err, ErrSessionNotFound); err != nil {
 		return SessionRestoreResponse{}, err
-	}
-	if !restored {
-		return SessionRestoreResponse{}, ErrSessionNotFound
 	}
 	return SessionRestoreResponse{SessionID: sessionID, Restored: true}, nil
 }
 
 // ListEngrams returns engrams filtered by request fields.
 func (s *Service) ListEngrams(ctx context.Context, request MemoryAdminEngramListRequest) ([]models.AdminEngramRecord, error) {
-	return s.deps.listAdminEngrams(
-		ctx,
-		s.db,
-		repository.AdminEngramListInput{
-			ProjectID:      request.ProjectID,
-			OwnerUserID:    request.OwnerUserID,
-			IncludeDeleted: request.IncludeDeleted,
-			Limit:          request.Limit,
-			Offset:         request.Offset,
-			SessionID:      request.SessionID,
-			QueryText:      request.QueryText,
-		},
-	)
+	sharedInput := toSharedListRequestInput(request.MemoryAdminListRequest)
+	return s.deps.listAdminEngrams(ctx, s.db, sharedInput.engramInput(request))
 }
 
 // FindEngram returns an engram by id, or nil when absent.
@@ -361,7 +351,26 @@ func (s *Service) UpdateEngram(ctx context.Context, engramID, actorUserID uuid.U
 }
 
 // MoveEngram moves an engram to another project after project resolution.
-func (s *Service) MoveEngram(ctx context.Context, engramID, actorUserID uuid.UUID, actorRole string, payload EngramMoveRequest) (*models.AdminEngramRecord, error) {
+func (s *Service) MoveEngram(
+	ctx context.Context,
+	engramID, actorUserID uuid.UUID,
+	actorRole string,
+	payload EngramMoveRequest,
+) (*models.AdminEngramRecord, error) {
+	return s.moveEngramWithActor(
+		ctx,
+		engramID,
+		WriteActor{UserID: actorUserID, Role: actorRole},
+		payload,
+	)
+}
+
+func (s *Service) moveEngramWithActor(
+	ctx context.Context,
+	engramID uuid.UUID,
+	actor WriteActor,
+	payload EngramMoveRequest,
+) (*models.AdminEngramRecord, error) {
 	current, err := s.GetEngram(ctx, engramID, false)
 	if err != nil {
 		return nil, err
@@ -369,17 +378,7 @@ func (s *Service) MoveEngram(ctx context.Context, engramID, actorUserID uuid.UUI
 	if payload.ExpectedUpdatedAt != nil && !payload.ExpectedUpdatedAt.Equal(current.UpdatedAt) {
 		return nil, ErrEngramStale
 	}
-	if s.projectResolver == nil {
-		return nil, ErrProjectResolverNotConfigured
-	}
-	resolution, err := s.projectResolver.ResolveProjectIDForWrite(
-		ctx,
-		ResolveProjectWriteInput{
-			ActorUserID: actorUserID,
-			ActorRole:   actorRole,
-			ProjectID:   payload.TargetProjectID,
-		},
-	)
+	targetProjectID, err := s.resolveProjectIDForWrite(ctx, actor, payload.TargetProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -388,8 +387,8 @@ func (s *Service) MoveEngram(ctx context.Context, engramID, actorUserID uuid.UUI
 		s.db,
 		repository.AdminEngramMoveProjectInput{
 			EngramID:        engramID,
-			TargetProjectID: resolution.ProjectID,
-			ActorUserID:     actorUserID,
+			TargetProjectID: targetProjectID,
+			ActorUserID:     actor.UserID,
 		},
 	)
 	if err != nil {
@@ -412,11 +411,8 @@ func (s *Service) DeleteEngram(ctx context.Context, engramID, actorUserID uuid.U
 			Reason:          payload.Reason,
 		},
 	)
-	if err != nil {
+	if err := boolResultNotFoundError(deleted, err, ErrEngramNotFound); err != nil {
 		return EngramDeleteResponse{}, err
-	}
-	if !deleted {
-		return EngramDeleteResponse{}, ErrEngramNotFound
 	}
 	return EngramDeleteResponse{EngramID: engramID, Deleted: true}, nil
 }
@@ -424,28 +420,15 @@ func (s *Service) DeleteEngram(ctx context.Context, engramID, actorUserID uuid.U
 // RestoreEngram restores a soft-deleted engram.
 func (s *Service) RestoreEngram(ctx context.Context, engramID uuid.UUID) (EngramRestoreResponse, error) {
 	restored, err := s.deps.restoreEngram(ctx, s.db, engramID)
-	if err != nil {
+	if err := boolResultNotFoundError(restored, err, ErrEngramNotFound); err != nil {
 		return EngramRestoreResponse{}, err
-	}
-	if !restored {
-		return EngramRestoreResponse{}, ErrEngramNotFound
 	}
 	return EngramRestoreResponse{EngramID: engramID, Restored: true}, nil
 }
 
 // ListCollections returns collections filtered by request fields.
 func (s *Service) ListCollections(ctx context.Context, request MemoryAdminListRequest) ([]models.EngramCollectionRecord, error) {
-	return s.deps.listCollections(
-		ctx,
-		s.db,
-		repository.CollectionListInput{
-			ProjectID:      request.ProjectID,
-			OwnerUserID:    request.OwnerUserID,
-			IncludeDeleted: request.IncludeDeleted,
-			Limit:          request.Limit,
-			Offset:         request.Offset,
-		},
-	)
+	return s.deps.listCollections(ctx, s.db, toSharedListRequestInput(request).collectionInput())
 }
 
 // FindCollection returns a collection by id, or nil when absent.
@@ -467,17 +450,7 @@ func (s *Service) GetCollection(ctx context.Context, collectionID uuid.UUID, inc
 
 // CreateCollection creates a collection in a resolved project.
 func (s *Service) CreateCollection(ctx context.Context, actorUserID uuid.UUID, actorRole string, payload CollectionCreateRequest) (*models.EngramCollectionRecord, error) {
-	if s.projectResolver == nil {
-		return nil, ErrProjectResolverNotConfigured
-	}
-	resolution, err := s.projectResolver.ResolveProjectIDForWrite(
-		ctx,
-		ResolveProjectWriteInput{
-			ActorUserID: actorUserID,
-			ActorRole:   actorRole,
-			ProjectID:   payload.ProjectID,
-		},
-	)
+	projectID, err := s.resolveProjectIDForWrite(ctx, WriteActor{UserID: actorUserID, Role: actorRole}, payload.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -485,7 +458,7 @@ func (s *Service) CreateCollection(ctx context.Context, actorUserID uuid.UUID, a
 		ctx,
 		s.db,
 		repository.CollectionCreateInput{
-			ProjectID:   resolution.ProjectID,
+			ProjectID:   projectID,
 			OwnerUserID: actorUserID,
 			Name:        strings.TrimSpace(payload.Name),
 			Description: strings.TrimSpace(payload.Description),
@@ -542,11 +515,8 @@ func (s *Service) DeleteCollection(ctx context.Context, collectionID, actorUserI
 			Reason:          payload.Reason,
 		},
 	)
-	if err != nil {
+	if err := boolResultNotFoundError(deleted, err, ErrCollectionNotFound); err != nil {
 		return CollectionDeleteResponse{}, err
-	}
-	if !deleted {
-		return CollectionDeleteResponse{}, ErrCollectionNotFound
 	}
 	return CollectionDeleteResponse{Deleted: true}, nil
 }
@@ -585,4 +555,74 @@ func (s *Service) RemoveCollectionItem(ctx context.Context, collectionID, engram
 		return CollectionItemRemoveResponse{}, ErrCollectionNotFound
 	}
 	return CollectionItemRemoveResponse{Removed: true}, nil
+}
+
+func toSharedListRequestInput(request MemoryAdminListRequest) sharedListRequestInput {
+	return sharedListRequestInput{
+		ProjectID:      request.ProjectID,
+		OwnerUserID:    request.OwnerUserID,
+		IncludeDeleted: request.IncludeDeleted,
+		Limit:          request.Limit,
+		Offset:         request.Offset,
+	}
+}
+
+func (input sharedListRequestInput) sessionInput() repository.AdminSessionListInput {
+	return repository.AdminSessionListInput{
+		ProjectID:      input.ProjectID,
+		OwnerUserID:    input.OwnerUserID,
+		IncludeDeleted: input.IncludeDeleted,
+		Limit:          input.Limit,
+		Offset:         input.Offset,
+	}
+}
+
+func (input sharedListRequestInput) collectionInput() repository.CollectionListInput {
+	return repository.CollectionListInput{
+		ProjectID:      input.ProjectID,
+		OwnerUserID:    input.OwnerUserID,
+		IncludeDeleted: input.IncludeDeleted,
+		Limit:          input.Limit,
+		Offset:         input.Offset,
+	}
+}
+
+func (input sharedListRequestInput) engramInput(request MemoryAdminEngramListRequest) repository.AdminEngramListInput {
+	return repository.AdminEngramListInput{
+		ProjectID:      input.ProjectID,
+		OwnerUserID:    input.OwnerUserID,
+		IncludeDeleted: input.IncludeDeleted,
+		Limit:          input.Limit,
+		Offset:         input.Offset,
+		SessionID:      request.SessionID,
+		QueryText:      request.QueryText,
+	}
+}
+
+func boolResultNotFoundError(result bool, opErr error, notFoundErr error) error {
+	if opErr != nil {
+		return opErr
+	}
+	if !result {
+		return notFoundErr
+	}
+	return nil
+}
+
+func (s *Service) resolveProjectIDForWrite(ctx context.Context, actor WriteActor, projectID string) (string, error) {
+	if s.projectResolver == nil {
+		return "", ErrProjectResolverNotConfigured
+	}
+	resolution, err := s.projectResolver.ResolveProjectIDForWrite(
+		ctx,
+		ResolveProjectWriteInput{
+			ActorUserID: actor.UserID,
+			ActorRole:   actor.Role,
+			ProjectID:   projectID,
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+	return resolution.ProjectID, nil
 }

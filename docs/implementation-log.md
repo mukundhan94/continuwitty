@@ -318,6 +318,37 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP50: non-checkpoint code-health uplift for admin service implementation)
+
+1. Improved legacy non-checkpoint admin service implementation:
+   - `internal/admin/service.go`
+   - reduced duplicated list input construction across session/engram/collection list operations via shared mapping helpers:
+     - `sharedListRequestInput`
+     - `toSharedListRequestInput`
+     - `sessionInput`
+     - `engramInput`
+     - `collectionInput`
+   - centralized repeated bool-result + not-found handling:
+     - `boolResultNotFoundError`
+   - centralized project resolution for write operations:
+     - `resolveProjectIDForWrite`
+   - extracted actor-structured move implementation in `moveEngramWithActor` while keeping public `MoveEngram` compatibility.
+2. Executed affected admin service tests one-by-one:
+   - `TestListMemoryAdminRequestsForwardSharedObject`
+   - `TestListEngramsUsesRequestObject`
+   - `TestUpdateCollectionRejectsStaleExpectedUpdatedAt`
+   - `TestUpdateEngramRejectsStaleExpectedUpdatedAt`
+   - `TestUpdateEngramUsesRepositoryRequestObject`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/admin/service.go` improved from `8.54` to `9.68`
+   - remaining note is a non-blocking public signature argument-count edge.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none.
+
 ### 2026-02-22 (Go migration CP49: non-checkpoint code-health uplift for admin service tests)
 
 1. Improved legacy non-checkpoint admin service tests:
