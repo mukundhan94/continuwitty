@@ -8,11 +8,13 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
 	// DefaultSessionCookieName is the default cookie used for session state.
 	DefaultSessionCookieName = "session"
+	defaultSessionTTL        = 24 * time.Hour
 )
 
 var (
@@ -31,28 +33,59 @@ type SessionUser struct {
 type SessionState struct {
 	User      *SessionUser `json:"user,omitempty"`
 	CSRFToken string       `json:"csrf_token,omitempty"`
+	IssuedAt  int64        `json:"issued_at,omitempty"`
+}
+
+// SessionManagerOptions configures cookie/session lifecycle behavior.
+type SessionManagerOptions struct {
+	CookieName string
+	TTL        time.Duration
+	Now        func() time.Time
 }
 
 // SessionManager handles signed session cookie encoding/decoding.
 type SessionManager struct {
 	secret     []byte
 	cookieName string
+	ttl        time.Duration
+	now        func() time.Time
 }
 
 // NewSessionManager creates a session manager for a signing secret and cookie name.
 func NewSessionManager(secret, cookieName string) (*SessionManager, error) {
+	return NewSessionManagerWithOptions(
+		secret,
+		SessionManagerOptions{
+			CookieName: cookieName,
+			TTL:        defaultSessionTTL,
+		},
+	)
+}
+
+// NewSessionManagerWithOptions creates a session manager with lifecycle options.
+func NewSessionManagerWithOptions(secret string, options SessionManagerOptions) (*SessionManager, error) {
 	secretValue := strings.TrimSpace(secret)
 	if secretValue == "" {
 		return nil, errInvalidSessionManager
 	}
 
-	cookieValue := strings.TrimSpace(cookieName)
+	cookieValue := strings.TrimSpace(options.CookieName)
 	if cookieValue == "" {
 		cookieValue = DefaultSessionCookieName
+	}
+	ttl := options.TTL
+	if ttl <= 0 {
+		ttl = defaultSessionTTL
+	}
+	now := options.Now
+	if now == nil {
+		now = time.Now
 	}
 	return &SessionManager{
 		secret:     []byte(secretValue),
 		cookieName: cookieValue,
+		ttl:        ttl,
+		now:        now,
 	}, nil
 }
 
@@ -64,10 +97,21 @@ func (manager *SessionManager) CookieName() string {
 	return manager.cookieName
 }
 
+// CookieTTL returns the configured TTL for issued session cookies.
+func (manager *SessionManager) CookieTTL() time.Duration {
+	if manager == nil {
+		return defaultSessionTTL
+	}
+	return manager.ttl
+}
+
 // Encode serializes and signs session state to a cookie token.
 func (manager *SessionManager) Encode(state SessionState) (string, error) {
 	if manager == nil || len(manager.secret) == 0 {
 		return "", errInvalidSessionManager
+	}
+	if state.IssuedAt == 0 {
+		state.IssuedAt = manager.now().Unix()
 	}
 
 	payloadBytes, err := json.Marshal(state)
@@ -102,6 +146,15 @@ func (manager *SessionManager) Decode(token string) (SessionState, error) {
 	var state SessionState
 	if err := json.Unmarshal(payloadBytes, &state); err != nil {
 		return SessionState{}, errInvalidSessionToken
+	}
+	if manager.ttl > 0 {
+		if state.IssuedAt <= 0 {
+			return SessionState{}, errInvalidSessionToken
+		}
+		expiresAt := time.Unix(state.IssuedAt, 0).Add(manager.ttl)
+		if manager.now().After(expiresAt) {
+			return SessionState{}, errInvalidSessionToken
+		}
 	}
 	return state, nil
 }

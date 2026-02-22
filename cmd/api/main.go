@@ -71,6 +71,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 			LookupUserByID:       lookupSessionUser(pool),
 			VerifyPassword:       auth.VerifyPassword,
 			GenerateCSRFToken:    auth.GenerateCSRFToken,
+			CookieSecure:         config.IsProductionEnv(settings),
 		},
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)

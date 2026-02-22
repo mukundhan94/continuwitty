@@ -318,6 +318,63 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP28: session hardening baseline)
+
+1. Hardened session token lifecycle semantics:
+   - `internal/auth/session.go`
+   - added `SessionState.IssuedAt`.
+   - added `SessionManagerOptions` (`CookieName`, `TTL`, `Now`) and `NewSessionManagerWithOptions`.
+   - `NewSessionManager` now applies a default 24-hour TTL.
+   - `Encode` now backfills issued-at when empty; `Decode` rejects missing/invalid/expired issued-at.
+2. Hardened session-auth cookie behavior and improved route maintainability:
+   - `internal/api/session_auth.go`
+   - session cookie write path now sets `Secure`, `MaxAge`, and `Expires` using runtime config and session TTL.
+   - logout clear-cookie path now preserves secure-flag parity.
+   - refactored `MountSessionAuthRoutes` by extracting csrf/login/logout/me handlers and helper functions to satisfy code-health gates.
+3. Updated runtime wiring:
+   - `cmd/api/main.go`
+   - `SessionAuthDependencies` now receives `CookieSecure` from `config.IsProductionEnv`.
+4. Added/updated tests:
+   - `internal/auth/session_test.go`
+     - `TestSessionManagerEncodeDecodeRoundTrip` now validates issued-at population.
+     - `TestSessionManagerDecodeRejectsExpiredToken` verifies TTL expiry handling with deterministic clock injection.
+   - `internal/api/session_auth_test.go`
+     - added `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`.
+     - strengthened `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie` to assert positive cookie `MaxAge`.
+5. Executed migrated tests one-by-one:
+   - `go test ./internal/auth -run '^TestSessionManagerEncodeDecodeRoundTrip$'`
+   - `go test ./internal/auth -run '^TestSessionManagerDecodeRejectsExpiredToken$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesLoginSetsSessionCookie$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesLoginRejectsInvalidCSRF$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesMeUsesSessionActorMiddleware$'`
+6. Full Go verification:
+   - `go test ./...` passed.
+7. File-level CodeScene checks before commit:
+   - scored all Go files in the repository via `code_health_score`.
+   - struct-only model files with unavailable score were explicitly reviewed:
+     - `internal/models/oauth.go`
+     - `internal/models/project.go`
+     - `internal/models/collection.go`
+     - `internal/models/engram.go`
+     - `code_health_review` results: `score=null`, `review=[]`.
+   - changed-file score highlights:
+     - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/api/session_auth.go` -> `8.28`
+     - `/Users/mukundhan/Projects/engram/internal/api/session_auth_test.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/auth/session.go` -> `9.38`
+     - `/Users/mukundhan/Projects/engram/internal/auth/session_test.go` -> `10.0`
+8. CodeScene pre-commit safeguard:
+   - first run failed due complexity findings in `MountSessionAuthRoutes` and `TestSessionManagerEncodeDecodeRoundTrip`.
+   - applied refactors:
+     - extracted session-auth handlers/helpers in `internal/api/session_auth.go`.
+     - extracted assertion helpers in `internal/auth/session_test.go`.
+   - reran tests and safeguard:
+     - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+     - result: `quality_gates=passed`
+     - notes: `MountSessionAuthRoutes` complex-method issue fixed; remaining findings were non-blocking.
+
 ### 2026-02-22 (Go migration CP9: rehydration/source read-path parity)
 
 1. Added rehydration/source repository operations:

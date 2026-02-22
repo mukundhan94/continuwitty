@@ -40,7 +40,8 @@
 | CP25 | 2026-02-22 | Completed | Runtime hardening baseline (context-first admin actor resolution with dev header bridge adapter) |
 | CP26 | 2026-02-22 | Completed | Auth/session integration baseline (session-cookie middleware populates canonical admin actor context) |
 | CP27 | 2026-02-22 | Completed | Auth/session route baseline (`/api/v1/session/*` + `/api/v1/me`) with cookie + CSRF login/logout parity wiring |
-| CP28 | 2026-02-22 | In Progress | Auth/session continuation (session hardening + UI/login parity integration) |
+| CP28 | 2026-02-22 | Completed | Auth/session hardening baseline (session TTL/issued-at validation + secure cookie attributes + route handler health refactor) |
+| CP29 | 2026-02-22 | In Progress | Auth/session continuation (UI/login parity integration and post-hardening endpoint parity) |
 
 ## Checkpoint Details
 
@@ -1824,9 +1825,61 @@
 - Pre-commit safeguard:
   - `quality_gates=passed`.
 
-### CP28 - Auth/Session Continuation (Planned)
+### CP28 - Auth/Session Hardening Baseline
+
+- Hardened session token lifecycle:
+  - `internal/auth/session.go`
+  - added `IssuedAt` to `SessionState`.
+  - added manager options (`CookieName`, `TTL`, `Now`) via `NewSessionManagerWithOptions`.
+  - default manager constructor now uses a 24-hour TTL baseline.
+  - decode now rejects missing/invalid/expired issued-at values.
+- Hardened session-auth cookie handling and route maintainability:
+  - `internal/api/session_auth.go`
+  - cookie write path now sets `Secure`, `MaxAge`, and `Expires` from runtime/session TTL settings.
+  - logout clear-cookie path now preserves secure flag parity.
+  - extracted login/logout/csrf/me route handlers from `MountSessionAuthRoutes` to clear complexity gate violations.
+- Updated runtime wiring for environment-aware secure cookies:
+  - `cmd/api/main.go`
+  - session-auth deps now set `CookieSecure` in production mode.
+- Added/updated migrated tests:
+  - `internal/auth/session_test.go`
+    - `TestSessionManagerEncodeDecodeRoundTrip` validates `IssuedAt` population.
+    - `TestSessionManagerDecodeRejectsExpiredToken` validates TTL expiry behavior.
+  - `internal/api/session_auth_test.go`
+    - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+    - strengthened CSRF cookie assertions for positive `MaxAge`.
+- Executed migrated tests one-by-one:
+  - `TestSessionManagerEncodeDecodeRoundTrip`
+  - `TestSessionManagerDecodeRejectsExpiredToken`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - all `.go` files in the repository were scored.
+  - struct-only models with unavailable score were explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - changed-file score highlights:
+    - `internal/api/session_auth.go` -> `8.28`
+    - `internal/api/session_auth_test.go` -> `10.0`
+    - `internal/auth/session.go` -> `9.38`
+    - `internal/auth/session_test.go` -> `10.0`
+    - `cmd/api/main.go` -> `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - notes: `MountSessionAuthRoutes` complex-method gate was fixed via handler extraction; no blocking findings remained.
+
+### CP29 - Auth/Session Continuation (Planned)
 
 - Continue migration with the next high-value slice:
-  - harden session lifecycle (cookie security attributes, TTL/rotation semantics, and logout invalidation parity)
-  - wire UI/login parity routes on top of session-auth primitives
+  - finalize UI/login parity integration against the hardened session/cookie contract.
+  - complete remaining auth endpoint parity and regression tests.
 - Keep parity tests migrated and executed one-by-one.

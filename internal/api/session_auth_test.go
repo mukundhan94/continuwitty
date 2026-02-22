@@ -36,6 +36,40 @@ func TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie(t *testing.T) {
 	if cookie == nil || cookie.Value == "" {
 		t.Fatalf("expected session cookie to be set")
 	}
+	if cookie.MaxAge <= 0 {
+		t.Fatalf("expected session cookie max age to be positive")
+	}
+}
+
+func TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag(t *testing.T) {
+	manager, err := auth.NewSessionManager("dev-session-secret-for-tests", auth.DefaultSessionCookieName)
+	if err != nil {
+		t.Fatalf("expected manager creation to succeed: %v", err)
+	}
+	router := chi.NewRouter()
+	MountSessionAuthRoutes(
+		router,
+		SessionAuthDependencies{
+			SessionManager:    manager,
+			GenerateCSRFToken: auth.GenerateCSRFToken,
+			CookieSecure:      true,
+		},
+	)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/session/csrf", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.Code)
+	}
+	cookie := findResponseCookie(response, manager.CookieName())
+	if cookie == nil {
+		t.Fatalf("expected session cookie")
+	}
+	if !cookie.Secure {
+		t.Fatalf("expected secure cookie flag to be set")
+	}
 }
 
 func TestMountSessionAuthRoutesLoginSetsSessionCookie(t *testing.T) {

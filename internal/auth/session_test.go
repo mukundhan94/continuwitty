@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestSessionManagerEncodeDecodeRoundTrip(t *testing.T) {
@@ -30,18 +31,16 @@ func TestSessionManagerEncodeDecodeRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected session decoding to succeed: %v", err)
 	}
-	if state.User == nil {
-		t.Fatalf("expected decoded user")
-	}
-	if state.User.UserID != "00000000-0000-0000-0000-000000000511" {
-		t.Fatalf("unexpected user id %q", state.User.UserID)
-	}
-	if state.User.Role != "admin" {
-		t.Fatalf("unexpected role %q", state.User.Role)
-	}
-	if state.CSRFToken != "csrf-token" {
-		t.Fatalf("unexpected csrf token %q", state.CSRFToken)
-	}
+	assertDecodedSessionUser(
+		t,
+		state.User,
+		SessionUser{
+			UserID:   "00000000-0000-0000-0000-000000000511",
+			Username: "admin",
+			Role:     "admin",
+		},
+	)
+	assertDecodedSessionMetadata(t, state, "csrf-token")
 }
 
 func TestSessionManagerDecodeRejectsTamperedToken(t *testing.T) {
@@ -94,5 +93,65 @@ func TestNewSessionManagerRejectsEmptySecret(t *testing.T) {
 	_, err := NewSessionManager("   ", DefaultSessionCookieName)
 	if err == nil {
 		t.Fatalf("expected empty secret to fail")
+	}
+}
+
+func TestSessionManagerDecodeRejectsExpiredToken(t *testing.T) {
+	currentTime := time.Date(2026, 2, 22, 22, 0, 0, 0, time.UTC)
+	manager, err := NewSessionManagerWithOptions(
+		"dev-session-secret-for-tests",
+		SessionManagerOptions{
+			CookieName: DefaultSessionCookieName,
+			TTL:        time.Minute,
+			Now: func() time.Time {
+				return currentTime
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("expected manager creation to succeed: %v", err)
+	}
+	token, err := manager.Encode(
+		SessionState{
+			User: &SessionUser{
+				UserID:   "00000000-0000-0000-0000-000000000513",
+				Username: "admin",
+				Role:     "admin",
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("expected session encoding to succeed: %v", err)
+	}
+
+	currentTime = currentTime.Add(2 * time.Minute)
+	if _, err := manager.Decode(token); err == nil {
+		t.Fatalf("expected expired session token to fail decoding")
+	}
+}
+
+func assertDecodedSessionUser(t *testing.T, actual *SessionUser, expected SessionUser) {
+	t.Helper()
+	if actual == nil {
+		t.Fatalf("expected decoded user")
+	}
+	if actual.UserID != expected.UserID {
+		t.Fatalf("unexpected user id %q", actual.UserID)
+	}
+	if actual.Username != expected.Username {
+		t.Fatalf("unexpected username %q", actual.Username)
+	}
+	if actual.Role != expected.Role {
+		t.Fatalf("unexpected role %q", actual.Role)
+	}
+}
+
+func assertDecodedSessionMetadata(t *testing.T, state SessionState, expectedCSRFToken string) {
+	t.Helper()
+	if state.CSRFToken != expectedCSRFToken {
+		t.Fatalf("unexpected csrf token %q", state.CSRFToken)
+	}
+	if state.IssuedAt == 0 {
+		t.Fatalf("expected issued_at to be set")
 	}
 }
