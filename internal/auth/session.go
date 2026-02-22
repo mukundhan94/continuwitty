@@ -128,33 +128,20 @@ func (manager *SessionManager) Decode(token string) (SessionState, error) {
 	if manager == nil || len(manager.secret) == 0 {
 		return SessionState{}, errInvalidSessionManager
 	}
-	parts := strings.SplitN(strings.TrimSpace(token), ".", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return SessionState{}, errInvalidSessionToken
-	}
 
-	expectedSignature := manager.sign(parts[0])
-	receivedSignature, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil || !hmac.Equal(receivedSignature, expectedSignature) {
-		return SessionState{}, errInvalidSessionToken
-	}
-
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	payload, encodedSignature, err := parseSessionToken(token)
 	if err != nil {
-		return SessionState{}, errInvalidSessionToken
+		return SessionState{}, err
 	}
-	var state SessionState
-	if err := json.Unmarshal(payloadBytes, &state); err != nil {
-		return SessionState{}, errInvalidSessionToken
+	if err := manager.validateSessionTokenSignature(payload, encodedSignature); err != nil {
+		return SessionState{}, err
 	}
-	if manager.ttl > 0 {
-		if state.IssuedAt <= 0 {
-			return SessionState{}, errInvalidSessionToken
-		}
-		expiresAt := time.Unix(state.IssuedAt, 0).Add(manager.ttl)
-		if manager.now().After(expiresAt) {
-			return SessionState{}, errInvalidSessionToken
-		}
+	state, err := decodeSessionStatePayload(payload)
+	if err != nil {
+		return SessionState{}, err
+	}
+	if err := manager.validateSessionTTL(state); err != nil {
+		return SessionState{}, err
 	}
 	return state, nil
 }
@@ -175,4 +162,56 @@ func (manager *SessionManager) sign(payload string) []byte {
 	hash := hmac.New(sha256.New, manager.secret)
 	_, _ = hash.Write([]byte(payload))
 	return hash.Sum(nil)
+}
+
+func parseSessionToken(token string) (string, string, error) {
+	parts := strings.SplitN(strings.TrimSpace(token), ".", 2)
+	if len(parts) != 2 {
+		return "", "", errInvalidSessionToken
+	}
+	if parts[0] == "" {
+		return "", "", errInvalidSessionToken
+	}
+	if parts[1] == "" {
+		return "", "", errInvalidSessionToken
+	}
+	return parts[0], parts[1], nil
+}
+
+func (manager *SessionManager) validateSessionTokenSignature(payload, encodedSignature string) error {
+	expectedSignature := manager.sign(payload)
+	receivedSignature, err := base64.RawURLEncoding.DecodeString(encodedSignature)
+	if err != nil {
+		return errInvalidSessionToken
+	}
+	if !hmac.Equal(receivedSignature, expectedSignature) {
+		return errInvalidSessionToken
+	}
+	return nil
+}
+
+func decodeSessionStatePayload(payload string) (SessionState, error) {
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(payload)
+	if err != nil {
+		return SessionState{}, errInvalidSessionToken
+	}
+	var state SessionState
+	if err := json.Unmarshal(payloadBytes, &state); err != nil {
+		return SessionState{}, errInvalidSessionToken
+	}
+	return state, nil
+}
+
+func (manager *SessionManager) validateSessionTTL(state SessionState) error {
+	if manager.ttl <= 0 {
+		return nil
+	}
+	if state.IssuedAt <= 0 {
+		return errInvalidSessionToken
+	}
+	expiresAt := time.Unix(state.IssuedAt, 0).Add(manager.ttl)
+	if manager.now().After(expiresAt) {
+		return errInvalidSessionToken
+	}
+	return nil
 }

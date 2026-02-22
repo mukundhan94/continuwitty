@@ -318,6 +318,34 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP35: non-checkpoint code-health uplift for session token decode)
+
+1. Improved legacy non-checkpoint auth utility:
+   - `internal/auth/session.go`
+   - refactored `Decode` into focused helpers:
+     - `parseSessionToken`
+     - `validateSessionTokenSignature`
+     - `decodeSessionStatePayload`
+     - `validateSessionTTL`
+   - preserved behavior for invalid tokens, signature verification, and issued-at/TTL expiry handling.
+2. Executed auth session tests one-by-one:
+   - `TestSessionManagerEncodeDecodeRoundTrip`
+   - `TestSessionManagerDecodeRejectsTamperedToken`
+   - `TestSessionManagerDecodeRequestReadsCookie`
+   - `TestNewSessionManagerRejectsEmptySecret`
+   - `TestSessionManagerDecodeRejectsExpiredToken`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/auth/session.go` improved from `9.38` to `9.68`
+   - `code_health_review` now has no `Complex Method` or `Complex Conditional` findings on `Decode`.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings:
+     - fixed `Complex Method` and `Complex Conditional` in `Decode`
+     - introduced non-blocking module-level `String Heavy Function Arguments` note.
+
 ### 2026-02-22 (Go migration CP34: session-auth engram route parity + >9.5 code-health gate)
 
 1. Added session-auth engram route set:
