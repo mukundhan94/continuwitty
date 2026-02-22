@@ -18,7 +18,8 @@
 | CP3 | 2026-02-22 | Completed | API entrypoint scaffold + health/version route parity tests |
 | CP4 | 2026-02-22 | Completed | Auth baseline (`password` + CSRF) parity with migrated tests |
 | CP5 | 2026-02-22 | Completed | User models + user repository parity tests |
-| CP6 | 2026-02-22 | In Progress | Repository layer migration kickoff (engram/document/chat paths) |
+| CP6 | 2026-02-22 | Completed | Embeddings baseline (local + fallback service parity tests) |
+| CP7 | 2026-02-22 | In Progress | Repository layer migration kickoff (engram/document/chat paths) |
 
 ## Checkpoint Details
 
@@ -131,7 +132,46 @@
   - `internal/repository/user.go` → 9.38
   - `internal/repository/user_test.go` → 10.0
 
-### CP6 - Repository Layer Kickoff (Planned)
+### CP6 - Embeddings Baseline
+
+- Added embeddings package:
+  - `internal/embeddings/errors.go`
+  - `internal/embeddings/local.go`
+  - `internal/embeddings/service.go`
+- Ported deterministic local embedding algorithm parity (`embed_text_local`).
+- Added fallback embedding service parity for provider failures.
+- Ported tests from:
+  - `api/tests/test_embedding.py`
+  - `api/tests/test_embeddings_service.py`
+  - new files:
+    - `internal/embeddings/local_test.go`
+    - `internal/embeddings/service_test.go`
+- Executed migrated tests one-by-one:
+  - `TestEmbedTextLocalIsDeterministicAndFixedDim`
+  - `TestEmbedTextLocalHandlesEmptyText`
+  - `TestEmbedTextLocalRejectsInvalidDim`
+  - `TestEmbeddingServiceFallsBackToLocalProvider`
+  - `TestEmbeddingServiceEmbedManyUsesProviderIDFromActiveProvider`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service_test.go` → 10.0
+
+### CP7 - Repository Layer Kickoff (Planned)
 
 - Start with engram repository read/write parity for the first API-backed flows.
 - Migrate repository-focused tests incrementally and keep one-by-one test execution.
