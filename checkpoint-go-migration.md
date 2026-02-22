@@ -2934,3 +2934,47 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP57 - Phase 3 Provider Baseline (`internal/providers/*`)
+
+- Started Phase 3 (Services + LLM Providers) with provider adapter baseline.
+- Added provider contracts and normalized request/response types:
+  - `internal/providers/provider.go`
+- Added provider error hierarchy and status-code mapping:
+  - `internal/providers/errors.go`
+- Ported provider adapters:
+  - `internal/providers/openai.go`
+  - `internal/providers/anthropic.go`
+  - `internal/providers/bedrock.go`
+- Added provider registry wiring from application settings:
+  - `internal/providers/registry.go`
+- Added migrated provider tests:
+  - `internal/providers/registry_test.go`
+  - `internal/providers/adapters_test.go`
+- Executed migrated tests one-by-one:
+  - `TestBuildProviderRegistryCreatesAllAdapters`
+  - `TestGetProviderAdapterReturnsRequestedProvider`
+  - `TestTextProvidersGenerateNormalizeResponse`
+  - `TestBedrockProviderGenerateNormalizesResponse`
+  - `TestOpenAIHealthcheckRequiresAPIKey`
+  - `TestAnthropicHealthcheckRequiresAPIKey`
+  - `TestBedrockHealthcheckRequiresRegion`
+  - `TestBedrockProviderReportsMissingCredentials`
+  - `TestBedrockProviderMapsClientErrors`
+  - `TestBedrockProviderExtractTextIgnoresNonTextContent`
+  - `TestOpenAIProviderBuildsRequestPayloadWithSystemPrompt`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/providers/errors.go`: `10.0`
+  - `internal/providers/openai.go`: `9.68`
+  - `internal/providers/anthropic.go`: `10.0`
+  - `internal/providers/bedrock.go`: `9.68`
+  - `internal/providers/registry.go`: `10.0`
+  - `internal/providers/adapters_test.go`: `9.92`
+  - `internal/providers/registry_test.go`: `9.68`
+  - `internal/providers/provider.go`: score unavailable (declarations-only file)
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
