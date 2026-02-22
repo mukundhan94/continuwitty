@@ -318,6 +318,26 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP37: non-checkpoint code-health uplift for embeddings fallback flow)
+
+1. Improved legacy non-checkpoint embedding service fallback handling:
+   - `internal/embeddings/service.go`
+   - removed duplicated fallback logic by introducing shared generic helper:
+     - `callWithFallback[T any]`
+   - `embedWithFallback` and `embedManyWithFallback` now route through one fallback execution path.
+2. Executed embeddings tests one-by-one:
+   - `TestEmbeddingServiceFallsBackToLocalProvider`
+   - `TestEmbeddingServiceEmbedManyUsesProviderIDFromActiveProvider`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service.go` improved from `9.09` to `9.68`
+   - remaining note is non-blocking module-level `String Heavy Function Arguments`.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (Go migration CP36: non-checkpoint code-health uplift for user repository scans)
 
 1. Improved legacy non-checkpoint repository mapping:

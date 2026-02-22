@@ -53,33 +53,44 @@ func (service *Service) EmbedMany(texts []string, dim int) ([]Result, error) {
 }
 
 func (service *Service) embedWithFallback(text string, dim int) ([]float64, string, error) {
-	vector, err := service.primary.Embed(text, dim)
-	if err == nil {
-		return vector, service.primary.ProviderID(), nil
-	}
-	if !isProviderError(err) || service.fallback == nil {
-		return nil, "", err
-	}
-	fallbackVector, fallbackErr := service.fallback.Embed(text, dim)
-	if fallbackErr != nil {
-		return nil, "", fallbackErr
-	}
-	return fallbackVector, service.fallback.ProviderID(), nil
+	return callWithFallback(
+		service.primary,
+		service.fallback,
+		func(provider Provider) ([]float64, error) {
+			return provider.Embed(text, dim)
+		},
+	)
 }
 
 func (service *Service) embedManyWithFallback(texts []string, dim int) ([][]float64, string, error) {
-	vectors, err := service.primary.EmbedMany(texts, dim)
+	return callWithFallback(
+		service.primary,
+		service.fallback,
+		func(provider Provider) ([][]float64, error) {
+			return provider.EmbedMany(texts, dim)
+		},
+	)
+}
+
+func callWithFallback[T any](
+	primary Provider,
+	fallback Provider,
+	execute func(provider Provider) (T, error),
+) (T, string, error) {
+	value, err := execute(primary)
 	if err == nil {
-		return vectors, service.primary.ProviderID(), nil
+		return value, primary.ProviderID(), nil
 	}
-	if !isProviderError(err) || service.fallback == nil {
-		return nil, "", err
+	if !isProviderError(err) || fallback == nil {
+		var zero T
+		return zero, "", err
 	}
-	fallbackVectors, fallbackErr := service.fallback.EmbedMany(texts, dim)
+	fallbackValue, fallbackErr := execute(fallback)
 	if fallbackErr != nil {
-		return nil, "", fallbackErr
+		var zero T
+		return zero, "", fallbackErr
 	}
-	return fallbackVectors, service.fallback.ProviderID(), nil
+	return fallbackValue, fallback.ProviderID(), nil
 }
 
 func cleanedText(text string) string {

@@ -2342,6 +2342,28 @@
   - result: `quality_gates=passed`
   - findings: none
 
-### CP37 - Auth/Session Continuation Follow-Up (Planned)
+### CP37 - Non-Checkpoint Code-Health Uplift (`internal/embeddings/service.go`)
+
+- Improved legacy non-checkpoint embeddings service file:
+  - `internal/embeddings/service.go`
+  - removed duplicated fallback flow between:
+    - `embedWithFallback`
+    - `embedManyWithFallback`
+  - introduced shared generic helper:
+    - `callWithFallback[T any]`
+- Executed migrated tests one-by-one:
+  - `TestEmbeddingServiceFallsBackToLocalProvider`
+  - `TestEmbeddingServiceEmbedManyUsesProviderIDFromActiveProvider`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/embeddings/service.go` score improved from `9.09` -> `9.68`
+  - `code_health_review` shows only non-blocking module-level `String Heavy Function Arguments`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP38 - Auth/Session Continuation Follow-Up (Planned)
 
 - Continue incremental code-health uplift of legacy non-checkpoint Go files below 9.5 while maintaining one-by-one test execution and migration parity progression.
