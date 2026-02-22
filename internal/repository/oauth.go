@@ -124,8 +124,9 @@ func GetOAuthClient(
 	db Queryer,
 	clientID string,
 ) (*models.OAuthClientRecord, error) {
-	row := db.QueryRow(
+	return queryOptionalRecord(
 		ctx,
+		db,
 		fmt.Sprintf(
 			`
 			SELECT %s
@@ -134,16 +135,9 @@ func GetOAuthClient(
 			`,
 			oauthClientColumns,
 		),
+		scanOAuthClientRecord,
 		clientID,
 	)
-	record, err := scanOAuthClientRecord(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &record, nil
 }
 
 // CreateOAuthAuthorizationCode inserts a new OAuth authorization code row.
@@ -197,8 +191,9 @@ func GetOAuthAuthorizationCodeByHash(
 	db Queryer,
 	codeHash string,
 ) (*models.OAuthAuthorizationCodeRecord, error) {
-	row := db.QueryRow(
+	return queryOptionalRecord(
 		ctx,
+		db,
 		fmt.Sprintf(
 			`
 			SELECT %s
@@ -207,16 +202,9 @@ func GetOAuthAuthorizationCodeByHash(
 			`,
 			oauthAuthorizationCodeColumns,
 		),
+		scanOAuthAuthorizationCodeRecord,
 		codeHash,
 	)
-	record, err := scanOAuthAuthorizationCodeRecord(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &record, nil
 }
 
 // ConsumeOAuthAuthorizationCode marks an auth code as consumed when still active.
@@ -225,8 +213,9 @@ func ConsumeOAuthAuthorizationCode(
 	db Queryer,
 	input OAuthAuthorizationCodeConsumeInput,
 ) (*models.OAuthAuthorizationCodeRecord, error) {
-	row := db.QueryRow(
+	return queryOptionalRecord(
 		ctx,
+		db,
 		fmt.Sprintf(
 			`
 			UPDATE oauth_authorization_codes
@@ -237,10 +226,23 @@ func ConsumeOAuthAuthorizationCode(
 			`,
 			oauthAuthorizationCodeColumns,
 		),
+		scanOAuthAuthorizationCodeRecord,
 		input.ConsumedAt,
 		input.CodeID,
 	)
-	record, err := scanOAuthAuthorizationCodeRecord(row)
+}
+
+func queryOptionalRecord[T any](
+	ctx context.Context,
+	db Queryer,
+	query string,
+	scan func(row interface {
+		Scan(dest ...any) error
+	}) (T, error),
+	args ...any,
+) (*T, error) {
+	row := db.QueryRow(ctx, query, args...)
+	record, err := scan(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

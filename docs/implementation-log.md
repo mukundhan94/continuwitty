@@ -318,6 +318,32 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP38: non-checkpoint code-health uplift for OAuth repository fetch paths)
+
+1. Improved legacy non-checkpoint OAuth repository querying:
+   - `internal/repository/oauth.go`
+   - replaced duplicated `QueryRow + scan + ErrNoRows` patterns with shared helper:
+     - `queryOptionalRecord[T any]`
+   - applied helper in:
+     - `GetOAuthClient`
+     - `GetOAuthAuthorizationCodeByHash`
+     - `ConsumeOAuthAuthorizationCode`
+2. Executed OAuth repository tests one-by-one:
+   - `TestCreateOAuthClientReturnsCreatedRecord`
+   - `TestGetOAuthClientReturnsNilWhenMissing`
+   - `TestCreateOAuthAuthorizationCodeReturnsRecord`
+   - `TestGetOAuthAuthorizationCodeByHashReturnsRecord`
+   - `TestConsumeOAuthAuthorizationCodeReturnsNilWhenAlreadyConsumed`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/oauth.go` improved from `9.38` to `10.0`
+   - `code_health_review` now reports no findings.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (Go migration CP37: non-checkpoint code-health uplift for embeddings fallback flow)
 
 1. Improved legacy non-checkpoint embedding service fallback handling:

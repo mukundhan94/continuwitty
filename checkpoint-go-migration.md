@@ -2364,6 +2364,32 @@
   - result: `quality_gates=passed`
   - findings: none
 
-### CP38 - Auth/Session Continuation Follow-Up (Planned)
+### CP38 - Non-Checkpoint Code-Health Uplift (`internal/repository/oauth.go`)
+
+- Improved legacy non-checkpoint OAuth repository file:
+  - `internal/repository/oauth.go`
+  - removed duplicated optional row-fetch logic across:
+    - `GetOAuthClient`
+    - `GetOAuthAuthorizationCodeByHash`
+    - `ConsumeOAuthAuthorizationCode`
+  - introduced shared helper:
+    - `queryOptionalRecord[T any]`
+- Executed migrated tests one-by-one:
+  - `TestCreateOAuthClientReturnsCreatedRecord`
+  - `TestGetOAuthClientReturnsNilWhenMissing`
+  - `TestCreateOAuthAuthorizationCodeReturnsRecord`
+  - `TestGetOAuthAuthorizationCodeByHashReturnsRecord`
+  - `TestConsumeOAuthAuthorizationCodeReturnsNilWhenAlreadyConsumed`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/oauth.go` score improved from `9.38` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP39 - Auth/Session Continuation Follow-Up (Planned)
 
 - Continue incremental code-health uplift of legacy non-checkpoint Go files below 9.5 while maintaining one-by-one test execution and migration parity progression.
