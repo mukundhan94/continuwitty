@@ -1119,3 +1119,17 @@
 3. Phase 18 follow-up: add explicit consolidation merge/grouping event semantics in timeline rendering.
 4. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
 5. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
+
+### 2026-02-22 (Phase tracking kickoff - export/import stash + audit remediation)
+
+1. Added new roadmap phase definition in `Plan.md`:
+   - **Phase 33**: portable memory export/import stash workflow.
+   - scope decision locked as Option C (full project default + selective collection export).
+   - embedding payload policy locked (exclude by default, optional include flag).
+   - authorization policy locked to project owner + admin.
+2. Added new roadmap phase definition in `Plan.md`:
+   - **Phase 34**: security audit remediation program for prioritized hardening.
+3. Updated `checkpoint.md` current summary and phase timeline to include:
+   - Phase 33 (In Progress)
+   - Phase 34 (Planned)
+4. Updated `todo.md` near-term queue with explicit Phase 33/34 execution items to ensure follow-up pickup in later passes.

@@ -707,6 +707,77 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 33 - Portable Memory Export/Import (Project + Collections + Engrams)
+
+### Status
+
+- In progress.
+- This phase introduces a portable stash workflow to move memory between instances.
+
+### Goals
+
+1. Export project memory as a portable bundle including project metadata, collections, collection membership, engrams, and sources.
+2. Support full-project export by default and selective collection export (Option C).
+3. Import bundles with deterministic conflict handling and owner/admin-safe authorization.
+
+### Locked Decisions
+
+1. Scope: Option C
+   - default: full project export
+   - optional: export subset by `collection_ids[]`.
+2. Embeddings:
+   - exclude by default for portability and bundle size
+   - optional include flag for same-instance fast migrations.
+3. Authorization:
+   - export allowed for project owner and admin
+   - import allowed for project owner and admin on target project.
+
+### Deliverables
+
+1. Backend export/import domain module under `api/app/export/` with typed bundle contracts and services.
+2. REST endpoints for export and import bound to project context.
+3. MCP tools for export/import with scope + ownership checks.
+4. Web actions for project export/import with optional collection subset selection.
+5. Unit, integration, and acceptance coverage for round-trip stash migration.
+
+### Exit Criteria
+
+1. A project owner can export a project and import it into another instance.
+2. Collection-scoped export preserves item membership and source fidelity.
+3. Import conflict policies are deterministic and test-covered.
+4. Owner/admin authorization is enforced across REST, MCP, and web flows.
+
+---
+
+### Phase 34 - Security Audit Remediation Program
+
+### Status
+
+- Planned.
+- This phase executes remediation work from the audit backlog in priority order.
+
+### Goals
+
+1. Remove critical insecure defaults and deployment footguns.
+2. Harden auth/session/OAuth/MCP paths for production operation.
+3. Add regression coverage for identified abuse paths.
+
+### Deliverables
+
+1. Secret/config hardening with fail-fast production validation.
+2. Distributed rate limiting for login and MCP transport.
+3. OAuth hardening (PKCE S256-only and protected registration).
+4. Ingestion and logging hardening from audit findings.
+5. Security-focused regression and acceptance tests.
+
+### Exit Criteria
+
+1. Critical and high-priority findings are remediated with tests.
+2. Production startup fails when unsafe defaults are configured.
+3. Security regression suite guards remediated threat paths.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -734,3 +805,9 @@ Build a local-first memory system where agents and humans can:
 7. Execute Phase 32 after Phase 19 + Phase 24-28 baselines are in place:
    - add `cw>` query protocol
    - enable access-aware federated linked recall across projects
+8. Execute Phase 33 during current cycle before broad collaboration rollout:
+   - ship portable project export/import stash workflow
+   - validate owner/admin authorization across REST + MCP + web
+9. Execute Phase 34 after Phase 33 foundations land:
+   - remediate security audit backlog by priority
+   - enforce production-safe defaults and distributed protection controls

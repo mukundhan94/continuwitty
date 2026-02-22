@@ -14,6 +14,8 @@
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 in progress:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests implemented; docs/skills closeout pending).
+- **Phase 33 in progress:** portable export/import stash workflow (phase tracking started; backend implementation in progress).
+- **Phase 34 planned:** security audit remediation backlog queued for post-export hardening cycle.
 
 ---
 
@@ -161,3 +163,5 @@
 | 21-23 | Observability, Release, EvalOps | Planned |
 | 24-28 | Engram Link Graph | Planned |
 | 32 | ContinuWitty Query Protocol | Planned |
+| 33 | Portable Export/Import Stash | In Progress |
+| 34 | Security Audit Remediation Program | Planned |
