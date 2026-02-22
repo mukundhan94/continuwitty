@@ -35,6 +35,24 @@ type dashboardPageViewModel struct {
 	CSRFToken string
 }
 
+type adminPageViewModel struct {
+	Username  string
+	Role      string
+	CSRFToken string
+}
+
+type loginPageRenderRequest struct {
+	StatusCode   int
+	ErrorMessage string
+	NextPath     string
+}
+
+type uiLoginSuccessRequest struct {
+	Record     *models.UserAuthRecord
+	AttemptKey string
+	NextPath   string
+}
+
 var sessionLoginPageTemplate = template.Must(template.New("session-login-page").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -73,6 +91,25 @@ var sessionDashboardTemplate = template.Must(template.New("session-dashboard-pag
 </body>
 </html>`))
 
+var sessionAdminTemplate = template.Must(template.New("session-admin-page").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Engram Vault Admin</title>
+</head>
+<body>
+  <h1>Engram Vault Admin</h1>
+  <p>{{.Username}}</p>
+  <p>{{.Role}}</p>
+  <p>Migration admin surface enabled.</p>
+  <form method="post" action="/logout">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}" />
+    <button type="submit">Logout</button>
+  </form>
+</body>
+</html>`))
+
 // MountSessionUIRoutes registers the login and dashboard routes used by the migration UI.
 func MountSessionUIRoutes(router chi.Router, dependencies SessionAuthDependencies) {
 	deps := newSessionAuthDependencies(dependencies)
@@ -81,6 +118,7 @@ func MountSessionUIRoutes(router chi.Router, dependencies SessionAuthDependencie
 	router.Post("/login", deps.handleLoginSubmit)
 	router.Post("/logout", deps.handleLogoutSubmit)
 	router.Get("/ui", deps.handleUIDashboard)
+	router.Get("/ui/admin", deps.handleUIAdmin)
 }
 
 func (dependencies sessionAuthDependencies) handleHomeRedirect(writer http.ResponseWriter, request *http.Request) {
@@ -100,7 +138,14 @@ func (dependencies sessionAuthDependencies) handleLoginPage(writer http.Response
 		http.Redirect(writer, request, redirectTarget, http.StatusSeeOther)
 		return
 	}
-	dependencies.renderLoginPage(writer, request, http.StatusOK, "", redirectTarget)
+	dependencies.renderLoginPage(
+		writer,
+		request,
+		loginPageRenderRequest{
+			StatusCode: http.StatusOK,
+			NextPath:   redirectTarget,
+		},
+	)
 }
 
 func (dependencies sessionAuthDependencies) handleLoginSubmit(writer http.ResponseWriter, request *http.Request) {
@@ -120,7 +165,15 @@ func (dependencies sessionAuthDependencies) handleLoginSubmit(writer http.Respon
 		dependencies.handleFailedUILogin(writer, request, payload, attemptKey)
 		return
 	}
-	dependencies.handleSuccessfulUILogin(writer, request, record, attemptKey, payload.NextPath)
+	dependencies.handleSuccessfulUILogin(
+		writer,
+		request,
+		uiLoginSuccessRequest{
+			Record:     record,
+			AttemptKey: attemptKey,
+			NextPath:   payload.NextPath,
+		},
+	)
 }
 
 func parseUILoginFormPayload(writer http.ResponseWriter, request *http.Request) (uiLoginFormPayload, bool) {
@@ -142,7 +195,7 @@ func (dependencies sessionAuthDependencies) validateUILoginCSRF(
 	csrfToken string,
 ) bool {
 	state, err := dependencies.manager.DecodeRequest(request)
-	if err != nil || strings.TrimSpace(state.CSRFToken) == "" || csrfToken != state.CSRFToken {
+	if !isValidSessionCSRF(state, csrfToken, err) {
 		writeJSON(writer, http.StatusForbidden, map[string]string{"detail": "Invalid CSRF token"})
 		return false
 	}
@@ -197,7 +250,7 @@ func (dependencies sessionAuthDependencies) authenticateUILoginRecord(
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
 		return nil, false
 	}
-	if record == nil || !record.IsActive || !dependencies.verifyPassword(payload.Password, record.PasswordHash) {
+	if !isValidLoginRecord(record, payload.Password, dependencies.verifyPassword) {
 		return nil, false
 	}
 	return record, true
@@ -220,34 +273,30 @@ func (dependencies sessionAuthDependencies) handleFailedUILogin(
 			username:  payload.Username,
 		},
 	)
-	dependencies.renderLoginPage(
-		writer,
-		request,
-		http.StatusUnauthorized,
-		"Invalid username or password.",
-		payload.NextPath,
-	)
+	dependencies.renderLoginPage(writer, request, loginPageRenderRequest{
+		StatusCode:   http.StatusUnauthorized,
+		ErrorMessage: "Invalid username or password.",
+		NextPath:     payload.NextPath,
+	})
 }
 
 func (dependencies sessionAuthDependencies) handleSuccessfulUILogin(
 	writer http.ResponseWriter,
 	request *http.Request,
-	record *models.UserAuthRecord,
-	attemptKey string,
-	nextPath string,
+	result uiLoginSuccessRequest,
 ) {
 	if dependencies.loginAttemptGuard != nil {
-		dependencies.loginAttemptGuard.RegisterSuccess(attemptKey)
+		dependencies.loginAttemptGuard.RegisterSuccess(result.AttemptKey)
 	}
 	dependencies.logAuditEventRequest(
 		request,
 		sessionAuditEvent{
 			eventType: "login_success",
 			success:   true,
-			username:  record.Username,
+			username:  result.Record.Username,
 		},
 	)
-	dependencies.writeUILoginSuccess(writer, request, record, nextPath)
+	dependencies.writeUILoginSuccess(writer, request, result.Record, result.NextPath)
 }
 
 func (dependencies sessionAuthDependencies) writeUILoginSuccess(
@@ -329,6 +378,43 @@ func (dependencies sessionAuthDependencies) handleUIDashboard(writer http.Respon
 	)
 }
 
+func (dependencies sessionAuthDependencies) handleUIAdmin(writer http.ResponseWriter, request *http.Request) {
+	record, state, ok := dependencies.resolveSessionUserAndState(writer, request)
+	if !ok {
+		return
+	}
+	if !isAdminRole(record.Role) {
+		writeJSON(writer, http.StatusForbidden, map[string]string{"detail": "Admin role required"})
+		return
+	}
+	renderTemplate(
+		writer,
+		http.StatusOK,
+		sessionAdminTemplate,
+		adminPageViewModel{
+			Username:  record.Username,
+			Role:      string(record.Role),
+			CSRFToken: state.CSRFToken,
+		},
+	)
+}
+
+func (dependencies sessionAuthDependencies) resolveSessionUserAndState(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (*models.UserAuthRecord, auth.SessionState, bool) {
+	record, ok := dependencies.resolveSessionUser(request)
+	if !ok {
+		http.Redirect(writer, request, "/login", http.StatusSeeOther)
+		return nil, auth.SessionState{}, false
+	}
+	state, ok := dependencies.ensureCSRFSessionState(writer, request)
+	if !ok {
+		return nil, auth.SessionState{}, false
+	}
+	return record, state, true
+}
+
 func (dependencies sessionAuthDependencies) resolveSessionUser(request *http.Request) (*models.UserAuthRecord, bool) {
 	state, err := dependencies.manager.DecodeRequest(request)
 	if err != nil {
@@ -346,7 +432,7 @@ func (dependencies sessionAuthDependencies) resolveSessionUser(request *http.Req
 		return &models.UserAuthRecord{UserID: userID, Username: username, Role: parsedRole, IsActive: true}, true
 	}
 	record, lookupErr := dependencies.lookupUserByID(request.Context(), userID)
-	if lookupErr != nil || record == nil || !record.IsActive {
+	if !isActiveUserRecord(record, lookupErr) {
 		return nil, false
 	}
 	return record, true
@@ -376,9 +462,7 @@ func (dependencies sessionAuthDependencies) isAuthenticated(request *http.Reques
 func (dependencies sessionAuthDependencies) renderLoginPage(
 	writer http.ResponseWriter,
 	request *http.Request,
-	statusCode int,
-	errorMessage string,
-	nextPath string,
+	renderRequest loginPageRenderRequest,
 ) {
 	state, ok := dependencies.ensureCSRFSessionState(writer, request)
 	if !ok {
@@ -386,12 +470,12 @@ func (dependencies sessionAuthDependencies) renderLoginPage(
 	}
 	renderTemplate(
 		writer,
-		statusCode,
+		renderRequest.StatusCode,
 		sessionLoginPageTemplate,
 		loginPageViewModel{
-			ErrorMessage: errorMessage,
+			ErrorMessage: renderRequest.ErrorMessage,
 			CSRFToken:    state.CSRFToken,
-			NextPath:     safeNextPath(nextPath),
+			NextPath:     safeNextPath(renderRequest.NextPath),
 		},
 	)
 }
@@ -441,4 +525,37 @@ func requestClientIP(request *http.Request) string {
 		return host
 	}
 	return remoteAddress
+}
+
+func isValidSessionCSRF(state auth.SessionState, csrfToken string, decodeErr error) bool {
+	if decodeErr != nil {
+		return false
+	}
+	expectedToken := strings.TrimSpace(state.CSRFToken)
+	if expectedToken == "" {
+		return false
+	}
+	return csrfToken == expectedToken
+}
+
+func isValidLoginRecord(
+	record *models.UserAuthRecord,
+	password string,
+	verifyPassword func(password, encodedHash string) bool,
+) bool {
+	if !isActiveUserRecord(record, nil) {
+		return false
+	}
+	return verifyPassword != nil && verifyPassword(password, record.PasswordHash)
+}
+
+func isActiveUserRecord(record *models.UserAuthRecord, err error) bool {
+	if err != nil || record == nil {
+		return false
+	}
+	return record.IsActive
+}
+
+func isAdminRole(role models.UserRole) bool {
+	return role == models.UserRoleAdmin
 }

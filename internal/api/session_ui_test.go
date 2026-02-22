@@ -24,34 +24,78 @@ const sessionUITestPassword = "StrongPassword-12345"
 
 var csrfTokenInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
-func TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated(t *testing.T) {
-	handler, _, _ := buildSessionUITestHandler(t)
+type sessionUIFormRequestSpec struct {
+	Method string
+	Path   string
+	Values url.Values
+	Cookie *http.Cookie
+}
 
-	request := httptest.NewRequest(http.MethodGet, "/", nil)
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
+type sessionUILoginCredentials struct {
+	Username string
+	Password string
+}
 
+func assertRedirect(t *testing.T, response *httptest.ResponseRecorder, expectedLocation string) {
+	t.Helper()
 	if response.Code != http.StatusSeeOther {
 		t.Fatalf("expected status 303, got %d", response.Code)
 	}
-	if response.Header().Get("Location") != "/login" {
-		t.Fatalf("expected redirect to /login, got %q", response.Header().Get("Location"))
+	if response.Header().Get("Location") != expectedLocation {
+		t.Fatalf("expected redirect to %q, got %q", expectedLocation, response.Header().Get("Location"))
 	}
+}
+
+func assertRouteRedirectsToLogin(t *testing.T, handler http.Handler, path string) {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, path, nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	assertRedirect(t, response, "/login")
+}
+
+func loginSessionUIUser(
+	t *testing.T,
+	handler http.Handler,
+	manager *auth.SessionManager,
+	credentials sessionUILoginCredentials,
+) *http.Cookie {
+	t.Helper()
+	csrfToken, loginCookie := fetchLoginCSRFTokenAndCookie(t, handler, manager, nil)
+	loginValues := url.Values{}
+	loginValues.Set("username", credentials.Username)
+	loginValues.Set("password", credentials.Password)
+	loginValues.Set("csrf_token", csrfToken)
+
+	loginRequest := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/login",
+		Values: loginValues,
+		Cookie: loginCookie,
+	})
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, loginRequest)
+	assertRedirect(t, loginResponse, "/ui")
+	authenticatedCookie := findResponseCookie(loginResponse, manager.CookieName())
+	if authenticatedCookie == nil {
+		t.Fatalf("expected session cookie after login")
+	}
+	return authenticatedCookie
+}
+
+func TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated(t *testing.T) {
+	handler, _, _ := buildSessionUITestHandler(t)
+	assertRouteRedirectsToLogin(t, handler, "/")
 }
 
 func TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated(t *testing.T) {
 	handler, _, _ := buildSessionUITestHandler(t)
+	assertRouteRedirectsToLogin(t, handler, "/ui")
+}
 
-	request := httptest.NewRequest(http.MethodGet, "/ui", nil)
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusSeeOther {
-		t.Fatalf("expected status 303, got %d", response.Code)
-	}
-	if response.Header().Get("Location") != "/login" {
-		t.Fatalf("expected redirect to /login, got %q", response.Header().Get("Location"))
-	}
+func TestMountSessionUIRoutesAdminRedirectsToLoginWhenUnauthenticated(t *testing.T) {
+	handler, _, _ := buildSessionUITestHandler(t)
+	assertRouteRedirectsToLogin(t, handler, "/ui/admin")
 }
 
 func TestMountSessionUIRoutesLoginRejectsInvalidCredentials(t *testing.T) {
@@ -63,7 +107,12 @@ func TestMountSessionUIRoutesLoginRejectsInvalidCredentials(t *testing.T) {
 	values.Set("password", "wrong")
 	values.Set("csrf_token", csrfToken)
 
-	request := newSessionUIFormRequest(t, http.MethodPost, "/login", values, loginCookie)
+	request := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/login",
+		Values: values,
+		Cookie: loginCookie,
+	})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 
@@ -84,7 +133,12 @@ func TestMountSessionUIRoutesLoginRejectsInvalidCSRF(t *testing.T) {
 	values.Set("password", sessionUITestPassword)
 	values.Set("csrf_token", "bad-token")
 
-	request := newSessionUIFormRequest(t, http.MethodPost, "/login", values, loginCookie)
+	request := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/login",
+		Values: values,
+		Cookie: loginCookie,
+	})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 
@@ -102,7 +156,12 @@ func TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures(t *testing.T) {
 		values.Set("username", "admin")
 		values.Set("password", "wrong")
 		values.Set("csrf_token", csrfToken)
-		request := newSessionUIFormRequest(t, http.MethodPost, "/login", values, loginCookie)
+		request := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+			Method: http.MethodPost,
+			Path:   "/login",
+			Values: values,
+			Cookie: loginCookie,
+		})
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
 		if response.Code != http.StatusUnauthorized {
@@ -115,7 +174,12 @@ func TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures(t *testing.T) {
 	blockedValues.Set("username", "admin")
 	blockedValues.Set("password", "wrong")
 	blockedValues.Set("csrf_token", csrfToken)
-	blockedRequest := newSessionUIFormRequest(t, http.MethodPost, "/login", blockedValues, loginCookie)
+	blockedRequest := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/login",
+		Values: blockedValues,
+		Cookie: loginCookie,
+	})
 	blockedResponse := httptest.NewRecorder()
 	handler.ServeHTTP(blockedResponse, blockedRequest)
 	if blockedResponse.Code != http.StatusTooManyRequests {
@@ -132,27 +196,10 @@ func TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures(t *testing.T) {
 
 func TestMountSessionUIRoutesLoginAndLogoutWorkflow(t *testing.T) {
 	handler, manager, record := buildSessionUITestHandler(t)
-	csrfToken, loginCookie := fetchLoginCSRFTokenAndCookie(t, handler, manager, nil)
-
-	loginValues := url.Values{}
-	loginValues.Set("username", record.Username)
-	loginValues.Set("password", sessionUITestPassword)
-	loginValues.Set("csrf_token", csrfToken)
-
-	loginRequest := newSessionUIFormRequest(t, http.MethodPost, "/login", loginValues, loginCookie)
-	loginResponse := httptest.NewRecorder()
-	handler.ServeHTTP(loginResponse, loginRequest)
-
-	if loginResponse.Code != http.StatusSeeOther {
-		t.Fatalf("expected status 303, got %d", loginResponse.Code)
-	}
-	if loginResponse.Header().Get("Location") != "/ui" {
-		t.Fatalf("expected redirect to /ui, got %q", loginResponse.Header().Get("Location"))
-	}
-	authenticatedCookie := findResponseCookie(loginResponse, manager.CookieName())
-	if authenticatedCookie == nil {
-		t.Fatalf("expected session cookie after login")
-	}
+	authenticatedCookie := loginSessionUIUser(t, handler, manager, sessionUILoginCredentials{
+		Username: record.Username,
+		Password: sessionUITestPassword,
+	})
 
 	dashboardRequest := httptest.NewRequest(http.MethodGet, "/ui", nil)
 	dashboardRequest.AddCookie(authenticatedCookie)
@@ -175,15 +222,15 @@ func TestMountSessionUIRoutesLoginAndLogoutWorkflow(t *testing.T) {
 
 	logoutValues := url.Values{}
 	logoutValues.Set("csrf_token", logoutCSRFToken)
-	logoutRequest := newSessionUIFormRequest(t, http.MethodPost, "/logout", logoutValues, authenticatedCookie)
+	logoutRequest := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/logout",
+		Values: logoutValues,
+		Cookie: authenticatedCookie,
+	})
 	logoutResponse := httptest.NewRecorder()
 	handler.ServeHTTP(logoutResponse, logoutRequest)
-	if logoutResponse.Code != http.StatusSeeOther {
-		t.Fatalf("expected status 303, got %d", logoutResponse.Code)
-	}
-	if logoutResponse.Header().Get("Location") != "/login" {
-		t.Fatalf("expected redirect to /login, got %q", logoutResponse.Header().Get("Location"))
-	}
+	assertRedirect(t, logoutResponse, "/login")
 	clearedCookie := findResponseCookie(logoutResponse, manager.CookieName())
 	if clearedCookie == nil {
 		t.Fatalf("expected clear-session cookie after logout")
@@ -193,11 +240,53 @@ func TestMountSessionUIRoutesLoginAndLogoutWorkflow(t *testing.T) {
 	blockedDashboardRequest.AddCookie(clearedCookie)
 	blockedDashboardResponse := httptest.NewRecorder()
 	handler.ServeHTTP(blockedDashboardResponse, blockedDashboardRequest)
-	if blockedDashboardResponse.Code != http.StatusSeeOther {
-		t.Fatalf("expected status 303, got %d", blockedDashboardResponse.Code)
+	assertRedirect(t, blockedDashboardResponse, "/login")
+}
+
+func TestMountSessionUIRoutesAdminRejectsNonAdminRole(t *testing.T) {
+	handler, manager, record := buildSessionUITestHandler(
+		t,
+		sessionUITestHandlerOptions{
+			userRole: models.UserRoleViewer,
+		},
+	)
+	authenticatedCookie := loginSessionUIUser(t, handler, manager, sessionUILoginCredentials{
+		Username: record.Username,
+		Password: sessionUITestPassword,
+	})
+
+	adminRequest := httptest.NewRequest(http.MethodGet, "/ui/admin", nil)
+	adminRequest.AddCookie(authenticatedCookie)
+	adminResponse := httptest.NewRecorder()
+	handler.ServeHTTP(adminResponse, adminRequest)
+	if adminResponse.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", adminResponse.Code)
 	}
-	if blockedDashboardResponse.Header().Get("Location") != "/login" {
-		t.Fatalf("expected redirect to /login, got %q", blockedDashboardResponse.Header().Get("Location"))
+	var payload map[string]string
+	if err := json.Unmarshal(adminResponse.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected valid json payload, got %v", err)
+	}
+	if payload["detail"] != "Admin role required" {
+		t.Fatalf("expected admin role detail, got %q", payload["detail"])
+	}
+}
+
+func TestMountSessionUIRoutesAdminAllowsAdminRole(t *testing.T) {
+	handler, manager, record := buildSessionUITestHandler(t)
+	authenticatedCookie := loginSessionUIUser(t, handler, manager, sessionUILoginCredentials{
+		Username: record.Username,
+		Password: sessionUITestPassword,
+	})
+
+	adminRequest := httptest.NewRequest(http.MethodGet, "/ui/admin", nil)
+	adminRequest.AddCookie(authenticatedCookie)
+	adminResponse := httptest.NewRecorder()
+	handler.ServeHTTP(adminResponse, adminRequest)
+	if adminResponse.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", adminResponse.Code)
+	}
+	if !strings.Contains(adminResponse.Body.String(), "Engram Vault Admin") {
+		t.Fatalf("expected admin page title")
 	}
 }
 
@@ -222,40 +311,34 @@ func TestMountSessionUIRoutesLoginRedirectPathSanitization(t *testing.T) {
 			values.Set("csrf_token", csrfToken)
 			values.Set("next_path", testCase.nextPath)
 
-			request := newSessionUIFormRequest(t, http.MethodPost, "/login", values, loginCookie)
+			request := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+				Method: http.MethodPost,
+				Path:   "/login",
+				Values: values,
+				Cookie: loginCookie,
+			})
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, request)
-
-			if response.Code != http.StatusSeeOther {
-				t.Fatalf("expected status 303, got %d", response.Code)
-			}
-			if response.Header().Get("Location") != testCase.expectedRedirect {
-				t.Fatalf("expected redirect to %q, got %q", testCase.expectedRedirect, response.Header().Get("Location"))
-			}
+			assertRedirect(t, response, testCase.expectedRedirect)
 		})
 	}
 }
 
 func TestMountSessionUIRoutesLogoutRejectsInvalidCSRF(t *testing.T) {
 	handler, manager, record := buildSessionUITestHandler(t)
-	csrfToken, loginCookie := fetchLoginCSRFTokenAndCookie(t, handler, manager, nil)
-
-	loginValues := url.Values{}
-	loginValues.Set("username", record.Username)
-	loginValues.Set("password", sessionUITestPassword)
-	loginValues.Set("csrf_token", csrfToken)
-
-	loginRequest := newSessionUIFormRequest(t, http.MethodPost, "/login", loginValues, loginCookie)
-	loginResponse := httptest.NewRecorder()
-	handler.ServeHTTP(loginResponse, loginRequest)
-	authenticatedCookie := findResponseCookie(loginResponse, manager.CookieName())
-	if authenticatedCookie == nil {
-		t.Fatalf("expected session cookie after login")
-	}
+	authenticatedCookie := loginSessionUIUser(t, handler, manager, sessionUILoginCredentials{
+		Username: record.Username,
+		Password: sessionUITestPassword,
+	})
 
 	badLogoutValues := url.Values{}
 	badLogoutValues.Set("csrf_token", "bad-token")
-	badLogoutRequest := newSessionUIFormRequest(t, http.MethodPost, "/logout", badLogoutValues, authenticatedCookie)
+	badLogoutRequest := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/logout",
+		Values: badLogoutValues,
+		Cookie: authenticatedCookie,
+	})
 	badLogoutResponse := httptest.NewRecorder()
 	handler.ServeHTTP(badLogoutResponse, badLogoutRequest)
 	if badLogoutResponse.Code != http.StatusForbidden {
@@ -283,7 +366,12 @@ func TestMountSessionUIRoutesLoginFailureWritesAuditLog(t *testing.T) {
 	values.Set("username", "admin")
 	values.Set("password", "wrong")
 	values.Set("csrf_token", csrfToken)
-	request := newSessionUIFormRequest(t, http.MethodPost, "/login", values, loginCookie)
+	request := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/login",
+		Values: values,
+		Cookie: loginCookie,
+	})
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusUnauthorized {
@@ -302,6 +390,7 @@ func TestMountSessionUIRoutesLoginFailureWritesAuditLog(t *testing.T) {
 type sessionUITestHandlerOptions struct {
 	auditLogPath      string
 	loginAttemptGuard SessionLoginAttemptGuard
+	userRole          models.UserRole
 }
 
 func buildSessionUITestHandler(
@@ -309,25 +398,62 @@ func buildSessionUITestHandler(
 	options ...sessionUITestHandlerOptions,
 ) (http.Handler, *auth.SessionManager, *models.UserAuthRecord) {
 	t.Helper()
-	handlerOptions := sessionUITestHandlerOptions{}
-	if len(options) > 0 {
-		handlerOptions = options[0]
+	handlerOptions := resolveSessionUITestHandlerOptions(options)
+	manager := newSessionUITestSessionManager(t)
+	record := newSessionUITestUserRecord(t, handlerOptions.userRole)
+	lookupByUsername, lookupByID := newSessionUITestLookups(record)
+	router := chi.NewRouter()
+	dependencies := SessionAuthDependencies{
+		SessionManager:       manager,
+		LookupUserByUsername: lookupByUsername,
+		LookupUserByID:       lookupByID,
+		VerifyPassword:       auth.VerifyPassword,
+		GenerateCSRFToken:    auth.GenerateCSRFToken,
+		LoginAttemptGuard:    resolveSessionUITestLoginAttemptGuard(handlerOptions.loginAttemptGuard),
+		LogAuditEvent:        newSessionUITestAuditLogger(handlerOptions.auditLogPath),
 	}
+	MountSessionAuthRoutes(router, dependencies)
+	MountSessionUIRoutes(router, dependencies)
+	return SessionActorMiddleware(manager, lookupByID)(router), manager, record
+}
+
+func resolveSessionUITestHandlerOptions(options []sessionUITestHandlerOptions) sessionUITestHandlerOptions {
+	if len(options) == 0 {
+		return sessionUITestHandlerOptions{}
+	}
+	return options[0]
+}
+
+func newSessionUITestSessionManager(t *testing.T) *auth.SessionManager {
+	t.Helper()
 	manager, err := auth.NewSessionManager("dev-session-secret-for-tests", auth.DefaultSessionCookieName)
 	if err != nil {
 		t.Fatalf("expected manager creation to succeed: %v", err)
 	}
+	return manager
+}
+
+func newSessionUITestUserRecord(t *testing.T, role models.UserRole) *models.UserAuthRecord {
+	t.Helper()
 	passwordHash, err := auth.HashPassword(sessionUITestPassword, []byte{0x01, 0x02, 0x03, 0x04})
 	if err != nil {
 		t.Fatalf("expected password hashing to succeed: %v", err)
 	}
-	record := &models.UserAuthRecord{
+	if role == "" {
+		role = models.UserRoleAdmin
+	}
+	return &models.UserAuthRecord{
 		UserID:       uuid.MustParse("00000000-0000-0000-0000-000000000712"),
 		Username:     "admin",
 		PasswordHash: passwordHash,
-		Role:         models.UserRoleAdmin,
+		Role:         role,
 		IsActive:     true,
 	}
+}
+
+func newSessionUITestLookups(
+	record *models.UserAuthRecord,
+) (SessionUserByUsernameLookup, SessionUserLookup) {
 	lookupByUsername := func(_ context.Context, username string) (*models.UserAuthRecord, error) {
 		if username != record.Username {
 			return nil, nil
@@ -340,40 +466,34 @@ func buildSessionUITestHandler(
 		}
 		return record, nil
 	}
-	router := chi.NewRouter()
-	loginAttemptGuard := handlerOptions.loginAttemptGuard
-	if loginAttemptGuard == nil {
-		loginAttemptGuard = auth.NewLoginAttemptGuard(5, 300, 900)
+	return lookupByUsername, lookupByID
+}
+
+func resolveSessionUITestLoginAttemptGuard(guard SessionLoginAttemptGuard) SessionLoginAttemptGuard {
+	if guard != nil {
+		return guard
 	}
-	var logAuditEvent SessionAuditLogger
-	if handlerOptions.auditLogPath != "" {
-		logger := audit.NewLogger(audit.LoggerOptions{
-			Path:          handlerOptions.auditLogPath,
-			MaxEventBytes: 32_768,
-		})
-		logAuditEvent = func(
-			request *http.Request,
-			eventType string,
-			success bool,
-			username string,
-			detail string,
-			metadata map[string]any,
-		) {
-			_ = logger.LogRequestEvent(request, eventType, success, username, detail, metadata)
-		}
+	return auth.NewLoginAttemptGuard(5, 300, 900)
+}
+
+func newSessionUITestAuditLogger(path string) SessionAuditLogger {
+	if path == "" {
+		return nil
 	}
-	dependencies := SessionAuthDependencies{
-		SessionManager:       manager,
-		LookupUserByUsername: lookupByUsername,
-		LookupUserByID:       lookupByID,
-		VerifyPassword:       auth.VerifyPassword,
-		GenerateCSRFToken:    auth.GenerateCSRFToken,
-		LoginAttemptGuard:    loginAttemptGuard,
-		LogAuditEvent:        logAuditEvent,
+	logger := audit.NewLogger(audit.LoggerOptions{
+		Path:          path,
+		MaxEventBytes: 32_768,
+	})
+	return func(
+		request *http.Request,
+		eventType string,
+		success bool,
+		username string,
+		detail string,
+		metadata map[string]any,
+	) {
+		_ = logger.LogRequestEvent(request, eventType, success, username, detail, metadata)
 	}
-	MountSessionAuthRoutes(router, dependencies)
-	MountSessionUIRoutes(router, dependencies)
-	return SessionActorMiddleware(manager, lookupByID)(router), manager, record
 }
 
 func fetchLoginCSRFTokenAndCookie(
@@ -414,16 +534,13 @@ func extractCSRFTokenFromHTML(t *testing.T, html string) string {
 
 func newSessionUIFormRequest(
 	t *testing.T,
-	method string,
-	path string,
-	values url.Values,
-	cookie *http.Cookie,
+	spec sessionUIFormRequestSpec,
 ) *http.Request {
 	t.Helper()
-	request := httptest.NewRequest(method, path, strings.NewReader(values.Encode()))
+	request := httptest.NewRequest(spec.Method, spec.Path, strings.NewReader(spec.Values.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if cookie != nil {
-		request.AddCookie(cookie)
+	if spec.Cookie != nil {
+		request.AddCookie(spec.Cookie)
 	}
 	return request
 }

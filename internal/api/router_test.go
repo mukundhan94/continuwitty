@@ -145,6 +145,13 @@ func TestSessionAuthRoutesNotMountedWithoutDependencies(t *testing.T) {
 	if uiResponse.Code != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d", uiResponse.Code)
 	}
+
+	adminUIRequest := httptest.NewRequest(http.MethodGet, "/ui/admin", nil)
+	adminUIResponse := httptest.NewRecorder()
+	router.ServeHTTP(adminUIResponse, adminUIRequest)
+	if adminUIResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", adminUIResponse.Code)
+	}
 }
 
 func TestSessionAuthRoutesMountedWithDependencies(t *testing.T) {
@@ -178,5 +185,15 @@ func TestSessionAuthRoutesMountedWithDependencies(t *testing.T) {
 
 	if uiResponse.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", uiResponse.Code)
+	}
+
+	adminUIRequest := httptest.NewRequest(http.MethodGet, "/ui/admin", nil)
+	adminUIResponse := httptest.NewRecorder()
+	router.ServeHTTP(adminUIResponse, adminUIRequest)
+	if adminUIResponse.Code != http.StatusSeeOther {
+		t.Fatalf("expected status 303, got %d", adminUIResponse.Code)
+	}
+	if adminUIResponse.Header().Get("Location") != "/login" {
+		t.Fatalf("expected redirect to /login, got %q", adminUIResponse.Header().Get("Location"))
 	}
 }

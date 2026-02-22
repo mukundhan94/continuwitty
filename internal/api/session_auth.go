@@ -147,11 +147,15 @@ func (dependencies sessionAuthDependencies) ensureCSRFSessionState(
 }
 
 func (dependencies sessionAuthDependencies) validateLoginDependencies(writer http.ResponseWriter) bool {
-	if !dependencies.validateCoreDependencies(writer) || dependencies.lookupUserByUsername == nil || dependencies.verifyPassword == nil {
+	if !dependencies.validateCoreDependencies(writer) || !dependencies.hasLoginAuthenticator() {
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "session auth dependencies are not configured"})
 		return false
 	}
 	return true
+}
+
+func (dependencies sessionAuthDependencies) hasLoginAuthenticator() bool {
+	return dependencies.lookupUserByUsername != nil && dependencies.verifyPassword != nil
 }
 
 func (dependencies sessionAuthDependencies) decodeLoginRequest(writer http.ResponseWriter, request *http.Request) (sessionLoginRequest, bool) {
@@ -168,8 +172,7 @@ func (dependencies sessionAuthDependencies) decodeLoginRequest(writer http.Respo
 }
 
 func (dependencies sessionAuthDependencies) validateLoginCSRF(writer http.ResponseWriter, request *http.Request, csrfToken string) bool {
-	state, err := dependencies.manager.DecodeRequest(request)
-	if err != nil || strings.TrimSpace(state.CSRFToken) == "" || csrfToken != state.CSRFToken {
+	if !dependencies.validateCSRFToken(request, csrfToken, true) {
 		writeJSON(writer, http.StatusForbidden, map[string]string{"detail": "invalid csrf token"})
 		return false
 	}
@@ -187,7 +190,7 @@ func (dependencies sessionAuthDependencies) authenticateLogin(
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
 		return nil, false
 	}
-	if record == nil || !record.IsActive || !dependencies.verifyPassword(password, record.PasswordHash) {
+	if !isAuthenticatedLoginRecord(record, password, dependencies.verifyPassword) {
 		writeJSON(writer, http.StatusUnauthorized, map[string]string{"detail": "invalid credentials"})
 		return nil, false
 	}
@@ -251,8 +254,7 @@ func (dependencies sessionAuthDependencies) validateLogoutCSRF(
 	request *http.Request,
 	csrfToken string,
 ) bool {
-	state, err := dependencies.manager.DecodeRequest(request)
-	if err == nil && strings.TrimSpace(state.CSRFToken) != "" && csrfToken != state.CSRFToken {
+	if !dependencies.validateCSRFToken(request, csrfToken, false) {
 		writeJSON(writer, http.StatusForbidden, map[string]string{"detail": "invalid csrf token"})
 		return false
 	}
@@ -345,4 +347,37 @@ func (dependencies sessionAuthDependencies) writeSessionCookie(writer http.Respo
 	}
 	http.SetCookie(writer, cookie)
 	return true
+}
+
+func isAuthenticatedLoginRecord(
+	record *models.UserAuthRecord,
+	password string,
+	verifyPassword func(password, encodedHash string) bool,
+) bool {
+	if record == nil {
+		return false
+	}
+	if !record.IsActive {
+		return false
+	}
+	if verifyPassword == nil {
+		return false
+	}
+	return verifyPassword(password, record.PasswordHash)
+}
+
+func (dependencies sessionAuthDependencies) validateCSRFToken(
+	request *http.Request,
+	csrfToken string,
+	required bool,
+) bool {
+	state, err := dependencies.manager.DecodeRequest(request)
+	if err != nil {
+		return !required
+	}
+	expectedToken := strings.TrimSpace(state.CSRFToken)
+	if expectedToken == "" {
+		return !required
+	}
+	return csrfToken == expectedToken
 }

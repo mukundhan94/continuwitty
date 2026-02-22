@@ -373,6 +373,71 @@
    - result: `quality_gates=passed`
    - findings: non-blocking arg-count warning in test helper (`assertConsumeBlocked`)
 
+### 2026-02-22 (Go migration CP32: UI/admin auth integration hardening)
+
+1. Added admin UI route parity with role enforcement:
+   - `/Users/mukundhan/Projects/engram/internal/api/session_ui.go`
+   - added `GET /ui/admin` behavior:
+     - redirects unauthenticated requests to `/login`
+     - returns `403` JSON (`Admin role required`) for authenticated non-admin actors
+     - renders admin migration page for admin users
+2. Hardened auth/session UI helpers and reduced complexity:
+   - `/Users/mukundhan/Projects/engram/internal/api/session_ui.go`
+   - added shared user+csrf state resolver for UI route handlers.
+   - replaced argument-heavy helpers with request structs.
+   - encapsulated repeated auth/session conditionals.
+3. Hardened session auth CSRF + auth record validation:
+   - `/Users/mukundhan/Projects/engram/internal/api/session_auth.go`
+   - unified required/optional CSRF validation paths.
+   - reduced duplicated and complex conditional branches in login/logout validation helpers.
+4. Expanded migrated tests:
+   - `/Users/mukundhan/Projects/engram/internal/api/session_ui_test.go`
+     - added:
+       - `TestMountSessionUIRoutesAdminRedirectsToLoginWhenUnauthenticated`
+       - `TestMountSessionUIRoutesAdminRejectsNonAdminRole`
+       - `TestMountSessionUIRoutesAdminAllowsAdminRole`
+     - refactored test helpers to reduce duplication/complexity.
+   - `/Users/mukundhan/Projects/engram/internal/api/router_test.go`
+     - route mount assertions now include `/ui/admin` behavior when session routes are mounted/unmounted.
+5. Executed migrated tests one-by-one:
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestSessionAuthRoutesNotMountedWithoutDependencies$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestSessionAuthRoutesMountedWithDependencies$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesAdminRedirectsToLoginWhenUnauthenticated$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesLoginRejectsInvalidCredentials$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesLoginRejectsInvalidCSRF$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesLoginAndLogoutWorkflow$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesAdminRejectsNonAdminRole$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesAdminAllowsAdminRole$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesLoginRedirectPathSanitization$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesLogoutRejectsInvalidCSRF$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesLoginFailureWritesAuditLog$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionAuthRoutesLoginSetsSessionCookie$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionAuthRoutesLoginRejectsInvalidCSRF$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionAuthRoutesMeUsesSessionActorMiddleware$' -v`
+6. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+7. File-level CodeScene checks (all Go files before commit):
+   - scored all `.go` files in repository (78 files at this checkpoint).
+   - struct-only model files reviewed:
+     - `/Users/mukundhan/Projects/engram/internal/models/collection.go` -> `score=null`, findings none
+     - `/Users/mukundhan/Projects/engram/internal/models/engram.go` -> `score=null`, findings none
+     - `/Users/mukundhan/Projects/engram/internal/models/oauth.go` -> `score=null`, findings none
+     - `/Users/mukundhan/Projects/engram/internal/models/project.go` -> `score=null`, findings none
+   - CP32 touched files:
+     - `/Users/mukundhan/Projects/engram/internal/api/session_ui.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/api/session_auth.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/api/session_ui_test.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+8. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (Go migration CP30: login guard + audit parity baseline)
 
 1. Added Go login/rate-limit primitives:
