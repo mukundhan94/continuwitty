@@ -43,25 +43,56 @@ func resolveSessionActor(
 	if request == nil {
 		return AdminActor{}, false
 	}
-	state, err := manager.DecodeRequest(request)
-	if err != nil || state.User == nil {
+	userID, ok := resolveSessionUserID(request, manager)
+	if !ok {
 		return AdminActor{}, false
 	}
-
-	userID, err := uuid.Parse(strings.TrimSpace(state.User.UserID))
-	if err != nil {
+	record, ok := lookupActiveSessionUserRecord(ctx, lookup, userID)
+	if !ok {
 		return AdminActor{}, false
 	}
-	record, err := lookup(ctx, userID)
-	if err != nil || record == nil || !record.IsActive {
-		return AdminActor{}, false
-	}
-	role := strings.ToLower(strings.TrimSpace(string(record.Role)))
-	if role == "" {
+	role, ok := normalizeActorRole(record.Role)
+	if !ok {
 		return AdminActor{}, false
 	}
 	return AdminActor{
 		UserID: record.UserID,
 		Role:   role,
 	}, true
+}
+
+func resolveSessionUserID(request *http.Request, manager *auth.SessionManager) (uuid.UUID, bool) {
+	state, err := manager.DecodeRequest(request)
+	if err != nil || state.User == nil {
+		return uuid.Nil, false
+	}
+	return parseSessionActorUserID(state.User.UserID)
+}
+
+func parseSessionActorUserID(value string) (uuid.UUID, bool) {
+	parsedUserID, err := uuid.Parse(strings.TrimSpace(value))
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return parsedUserID, true
+}
+
+func lookupActiveSessionUserRecord(
+	ctx context.Context,
+	lookup SessionUserLookup,
+	userID uuid.UUID,
+) (*models.UserAuthRecord, bool) {
+	record, err := lookup(ctx, userID)
+	if err != nil || record == nil || !record.IsActive {
+		return nil, false
+	}
+	return record, true
+}
+
+func normalizeActorRole(role models.UserRole) (string, bool) {
+	normalizedRole := strings.ToLower(strings.TrimSpace(string(role)))
+	if normalizedRole == "" {
+		return "", false
+	}
+	return normalizedRole, true
 }

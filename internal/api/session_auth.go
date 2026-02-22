@@ -10,6 +10,7 @@ import (
 	"engram/internal/models"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // SessionUserByUsernameLookup resolves an auth-capable user record by username.
@@ -42,6 +43,10 @@ type SessionAuthDependencies struct {
 	CookieSecure         bool
 	LoginAttemptGuard    SessionLoginAttemptGuard
 	LogAuditEvent        SessionAuditLogger
+	ListUsers            func(ctx context.Context, limit, offset int) ([]models.UserRecord, error)
+	CreateUser           func(ctx context.Context, input SessionUserCreateInput) (*models.UserRecord, error)
+	UpdateUser           func(ctx context.Context, userID uuid.UUID, input SessionUserUpdateInput) (*models.UserRecord, error)
+	HashPassword         func(password string) (string, error)
 }
 
 type sessionAuthDependencies struct {
@@ -53,6 +58,10 @@ type sessionAuthDependencies struct {
 	cookieSecure         bool
 	loginAttemptGuard    SessionLoginAttemptGuard
 	logAuditEvent        SessionAuditLogger
+	listUsers            func(ctx context.Context, limit, offset int) ([]models.UserRecord, error)
+	createUser           func(ctx context.Context, input SessionUserCreateInput) (*models.UserRecord, error)
+	updateUser           func(ctx context.Context, userID uuid.UUID, input SessionUserUpdateInput) (*models.UserRecord, error)
+	hashPassword         func(password string) (string, error)
 }
 
 type sessionLoginRequest struct {
@@ -83,6 +92,10 @@ func newSessionAuthDependencies(dependencies SessionAuthDependencies) sessionAut
 		cookieSecure:         dependencies.CookieSecure,
 		loginAttemptGuard:    dependencies.LoginAttemptGuard,
 		logAuditEvent:        dependencies.LogAuditEvent,
+		listUsers:            dependencies.ListUsers,
+		createUser:           dependencies.CreateUser,
+		updateUser:           dependencies.UpdateUser,
+		hashPassword:         dependencies.HashPassword,
 	}
 }
 
@@ -96,6 +109,9 @@ func MountSessionAuthRoutes(router chi.Router, dependencies SessionAuthDependenc
 	})
 
 	router.Get("/api/v1/me", deps.handleCurrentUser)
+	router.Get("/api/v1/users", deps.handleListUsers)
+	router.Post("/api/v1/users", deps.handleCreateUser)
+	router.Patch("/api/v1/users/{user_id}", deps.handleUpdateUser)
 }
 
 func (dependencies sessionAuthDependencies) handleCSRF(writer http.ResponseWriter, request *http.Request) {
@@ -274,22 +290,8 @@ func (dependencies sessionAuthDependencies) clearSessionCookie(writer http.Respo
 }
 
 func (dependencies sessionAuthDependencies) handleCurrentUser(writer http.ResponseWriter, request *http.Request) {
-	if dependencies.lookupUserByID == nil {
-		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "session auth dependencies are not configured"})
-		return
-	}
-	actor, ok := AdminActorFromContext(request.Context())
+	record, ok := dependencies.requireAuthenticatedAPIActor(writer, request)
 	if !ok {
-		writeJSON(writer, http.StatusUnauthorized, map[string]string{"detail": "authentication required"})
-		return
-	}
-	record, err := dependencies.lookupUserByID(request.Context(), actor.UserID)
-	if err != nil {
-		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
-		return
-	}
-	if record == nil || !record.IsActive {
-		writeJSON(writer, http.StatusUnauthorized, map[string]string{"detail": "authentication required"})
 		return
 	}
 	writeJSON(

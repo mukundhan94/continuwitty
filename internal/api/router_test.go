@@ -138,6 +138,13 @@ func TestSessionAuthRoutesNotMountedWithoutDependencies(t *testing.T) {
 		t.Fatalf("expected status 404, got %d", response.Code)
 	}
 
+	usersRequest := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+	usersResponse := httptest.NewRecorder()
+	router.ServeHTTP(usersResponse, usersRequest)
+	if usersResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected users status 404, got %d", usersResponse.Code)
+	}
+
 	uiRequest := httptest.NewRequest(http.MethodGet, "/login", nil)
 	uiResponse := httptest.NewRecorder()
 	router.ServeHTTP(uiResponse, uiRequest)
@@ -195,5 +202,12 @@ func TestSessionAuthRoutesMountedWithDependencies(t *testing.T) {
 	}
 	if adminUIResponse.Header().Get("Location") != "/login" {
 		t.Fatalf("expected redirect to /login, got %q", adminUIResponse.Header().Get("Location"))
+	}
+
+	usersRequest := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+	usersResponse := httptest.NewRecorder()
+	router.ServeHTTP(usersResponse, usersRequest)
+	if usersResponse.Code != http.StatusInternalServerError {
+		t.Fatalf("expected users status 500 when user dependencies are missing, got %d", usersResponse.Code)
 	}
 }

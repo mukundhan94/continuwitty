@@ -318,6 +318,72 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP33: role-aware `/api/v1/users` parity + auth/session code-health uplift)
+
+1. Added session-auth user-management API routes:
+   - `internal/api/session_users.go` (new)
+   - mounted under `internal/api/session_auth.go`:
+     - `GET /api/v1/users` (admin-only list with limit/offset validation)
+     - `POST /api/v1/users` (admin-only create with role/password/username validation + duplicate conflict mapping)
+     - `PATCH /api/v1/users/{user_id}` (admin-only partial update with empty-payload guard)
+   - preserved `/api/v1/me` behavior via shared authenticated actor resolution helper.
+2. Wired runtime dependencies for new routes:
+   - `cmd/api/main.go`
+   - added repository-backed list/create/update callbacks and password hashing dependency to `SessionAuthDependencies`.
+3. Added/updated migrated tests:
+   - `internal/api/session_users_test.go` (new):
+     - `TestMountSessionAuthRoutesAdminCanManageUsers`
+     - `TestMountSessionAuthRoutesNonAdminCannotAccessAdminRoutes`
+     - `TestMountSessionAuthRoutesCreateUserReturnsConflictForDuplicateUsername`
+     - `TestMountSessionAuthRoutesUpdateUserRequiresFields`
+   - `internal/api/router_test.go`:
+     - route-mount assertions for `/api/v1/users` with and without session-auth dependencies.
+4. Executed migrated tests one-by-one:
+   - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+   - `TestSessionAuthRoutesMountedWithDependencies`
+   - `TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated`
+   - `TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated`
+   - `TestMountSessionUIRoutesAdminRedirectsToLoginWhenUnauthenticated`
+   - `TestMountSessionUIRoutesLoginRejectsInvalidCredentials`
+   - `TestMountSessionUIRoutesLoginRejectsInvalidCSRF`
+   - `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+   - `TestMountSessionUIRoutesLoginAndLogoutWorkflow`
+   - `TestMountSessionUIRoutesAdminRejectsNonAdminRole`
+   - `TestMountSessionUIRoutesAdminAllowsAdminRole`
+   - `TestMountSessionUIRoutesLoginRedirectPathSanitization`
+   - `TestMountSessionUIRoutesLogoutRejectsInvalidCSRF`
+   - `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+   - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+   - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+   - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+   - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+   - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+   - `TestSessionActorMiddlewareInjectsActorFromSessionCookie`
+   - `TestSessionActorMiddlewareSkipsInactiveUsers`
+   - `TestSessionActorMiddlewareIgnoresInvalidSessionCookie`
+   - `TestMountSessionAuthRoutesAdminCanManageUsers`
+   - `TestMountSessionAuthRoutesNonAdminCannotAccessAdminRoutes`
+   - `TestMountSessionAuthRoutesCreateUserReturnsConflictForDuplicateUsername`
+   - `TestMountSessionAuthRoutesUpdateUserRequiresFields`
+5. Additional code-health uplift while in this slice:
+   - `internal/api/session_actor_middleware.go`: extracted actor-resolution helpers to reduce complexity.
+   - `cmd/api/main.go`: split runtime auth wiring into smaller helper functions to satisfy CodeScene pre-commit gate.
+6. Full Go verification:
+   - `go test ./...` passed.
+7. CodeScene health checks:
+   - scored all `.go` files in repository (79 files), including struct-only model review follow-up.
+   - touched/uplifted file scores:
+     - `cmd/api/main.go` -> `10.0`
+     - `internal/api/session_auth.go` -> `10.0`
+     - `internal/api/session_users.go` -> `10.0`
+     - `internal/api/session_users_test.go` -> `9.68`
+     - `internal/api/session_actor_middleware.go` -> `9.68`
+     - `internal/api/router_test.go` -> `10.0`
+8. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (Go migration CP31: distributed limiter parity baseline)
 
 1. Added distributed `rate_limit_state` persistence for Go auth limiter state:

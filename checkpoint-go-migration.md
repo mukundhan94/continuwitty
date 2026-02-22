@@ -45,7 +45,8 @@
 | CP30 | 2026-02-22 | Completed | Login guard + audit parity baseline (rate-limit lockout semantics and auth audit events wired in Go runtime/UI flow) |
 | CP31 | 2026-02-22 | Completed | Distributed limiter parity baseline (`rate_limit_state`-backed auth limiter state + process-local fallback hardening) |
 | CP32 | 2026-02-22 | Completed | UI/admin auth integration hardening (`/ui/admin` role-gating parity + auth/session code-health uplift) |
-| CP33 | 2026-02-22 | In Progress | Auth/session continuation (role-aware API/UI hardening and parity expansion) |
+| CP33 | 2026-02-22 | Completed | Auth/session continuation (`/api/v1/users` role-aware API parity + session/user route health uplift) |
+| CP34 | 2026-02-22 | In Progress | Auth/session continuation follow-up (incremental non-checkpoint file code-health uplift toward >9.5 baseline) |
 
 ## Checkpoint Details
 
@@ -2158,8 +2159,86 @@
   - result: `quality_gates=passed`
   - findings: none
 
-### CP33 - Auth/Session Continuation (Planned)
+### CP33 - Auth/Session Continuation
 
-- Continue migration with the next high-value slice:
-  - role-aware API/UI hardening and parity expansion on top of CP32 admin route contract.
-  - maintain one-by-one parity test execution for each incremental auth/session route change.
+- Added role-aware user-management API parity on session-auth routes:
+  - `internal/api/session_auth.go`
+  - `internal/api/session_users.go`
+  - mounted:
+    - `GET /api/v1/users` (admin-only list with `limit`/`offset` parity bounds)
+    - `POST /api/v1/users` (admin-only create with username/password/role/is_active validation + conflict mapping)
+    - `PATCH /api/v1/users/{user_id}` (admin-only update with partial field semantics + empty-update guard)
+  - preserved `/api/v1/me` behavior while reusing shared authenticated actor resolution.
+  - added auth audit event parity for user-management flows:
+    - `user_created`
+    - `user_create_conflict`
+    - `user_updated`
+    - `user_update_missing`
+- Wired runtime dependencies for new routes:
+  - `cmd/api/main.go`
+  - injected repository-backed list/create/update user callbacks and password hashing dependency into `SessionAuthDependencies`.
+- Expanded migrated tests:
+  - `internal/api/session_users_test.go` (new)
+    - `TestMountSessionAuthRoutesAdminCanManageUsers`
+    - `TestMountSessionAuthRoutesNonAdminCannotAccessAdminRoutes`
+    - `TestMountSessionAuthRoutesCreateUserReturnsConflictForDuplicateUsername`
+    - `TestMountSessionAuthRoutesUpdateUserRequiresFields`
+  - `internal/api/router_test.go`
+    - updated session route mount assertions for `/api/v1/users` with and without session-auth dependencies.
+- Additional code-health uplift (non-checkpoint file improvement during this slice):
+  - `internal/api/session_actor_middleware.go`
+    - refactored actor resolution path into focused helpers to reduce complexity.
+  - `cmd/api/main.go`
+    - refactored runtime auth/session dependency construction into smaller helpers to satisfy pre-commit quality gate.
+- Executed migrated tests one-by-one:
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesAdminRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCredentials`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+  - `TestMountSessionUIRoutesLoginAndLogoutWorkflow`
+  - `TestMountSessionUIRoutesAdminRejectsNonAdminRole`
+  - `TestMountSessionUIRoutesAdminAllowsAdminRole`
+  - `TestMountSessionUIRoutesLoginRedirectPathSanitization`
+  - `TestMountSessionUIRoutesLogoutRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+  - `TestSessionActorMiddlewareInjectsActorFromSessionCookie`
+  - `TestSessionActorMiddlewareSkipsInactiveUsers`
+  - `TestSessionActorMiddlewareIgnoresInvalidSessionCookie`
+  - `TestMountSessionAuthRoutesAdminCanManageUsers`
+  - `TestMountSessionAuthRoutesNonAdminCannotAccessAdminRoutes`
+  - `TestMountSessionAuthRoutesCreateUserReturnsConflictForDuplicateUsername`
+  - `TestMountSessionAuthRoutesUpdateUserRequiresFields`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - scored all `.go` files in repository (79 files at this checkpoint).
+  - struct-only models explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - CP33-touched and uplifted file scores (all above 9.5):
+    - `cmd/api/main.go` -> `10.0`
+    - `internal/api/session_auth.go` -> `10.0`
+    - `internal/api/session_users.go` -> `10.0`
+    - `internal/api/session_users_test.go` -> `9.68`
+    - `internal/api/session_actor_middleware.go` -> `9.68`
+    - `internal/api/router_test.go` -> `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP34 - Auth/Session Continuation Follow-Up (Planned)
+
+- Continue incremental code-health uplift of legacy non-checkpoint Go files that remain below 9.5, while keeping auth/session migration parity progression and one-by-one test execution discipline.
