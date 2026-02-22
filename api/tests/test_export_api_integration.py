@@ -58,6 +58,31 @@ def _create_engram(client, *, project_id: str, title: str) -> str:  # noqa: ANN0
     return response.json()["engram_id"]
 
 
+def _attach_engram_source(
+    client,
+    *,
+    engram_id: str,
+    url: str,
+    snippet: str,
+) -> None:  # noqa: ANN001
+    response = client.patch(
+        f"/api/v1/admin/memory/engrams/{engram_id}",
+        json={
+            "sources": [
+                {
+                    "captured_at": "2026-02-22T00:00:00Z",
+                    "url": url,
+                    "title": "Source title",
+                    "snippet": snippet,
+                    "content_text": "source content",
+                    "content_hash": "abc123",
+                }
+            ]
+        },
+    )
+    assert response.status_code == 200
+
+
 def _create_collection(client, *, project_id: str, name: str) -> str:  # noqa: ANN001
     response = client.post(
         "/api/v1/admin/memory/collections",
@@ -70,7 +95,7 @@ def _create_collection(client, *, project_id: str, name: str) -> str:  # noqa: A
 @pytest.mark.integration
 def test_project_export_json_with_collection_filter_returns_subset(client, clean_db) -> None:
     _login_admin(client)
-    project_id = f"phase33-{uuid.uuid4().hex[:8]}"
+    project_id = f"export-{uuid.uuid4().hex[:8]}"
     _create_project(client, project_id=project_id)
 
     engram_a = _create_engram(client, project_id=project_id, title="A")
@@ -102,7 +127,7 @@ def test_project_export_json_with_collection_filter_returns_subset(client, clean
 @pytest.mark.integration
 def test_project_export_zip_returns_archive(client, clean_db) -> None:
     _login_admin(client)
-    project_id = f"phase33-{uuid.uuid4().hex[:8]}"
+    project_id = f"export-{uuid.uuid4().hex[:8]}"
     _create_project(client, project_id=project_id)
     _create_engram(client, project_id=project_id, title="Zip Engram")
 
@@ -124,7 +149,7 @@ def test_project_export_zip_returns_archive(client, clean_db) -> None:
 @pytest.mark.integration
 def test_project_export_denies_non_owner_non_admin(client, clean_db) -> None:
     _login_admin(client)
-    project_id = f"phase33-{uuid.uuid4().hex[:8]}"
+    project_id = f"export-{uuid.uuid4().hex[:8]}"
     _create_project(client, project_id=project_id)
 
     viewer_username = f"viewer_{uuid.uuid4().hex[:8]}"
@@ -154,8 +179,8 @@ def test_project_export_denies_non_owner_non_admin(client, clean_db) -> None:
 def test_project_import_json_bundle_with_skip_policy(client, clean_db) -> None:
     _login_admin(client)
 
-    source_project_id = f"phase33-src-{uuid.uuid4().hex[:8]}"
-    target_project_id = f"phase33-dst-{uuid.uuid4().hex[:8]}"
+    source_project_id = f"export-src-{uuid.uuid4().hex[:8]}"
+    target_project_id = f"export-dst-{uuid.uuid4().hex[:8]}"
     _create_project(client, project_id=source_project_id)
     _create_project(client, project_id=target_project_id)
 
@@ -190,8 +215,8 @@ def test_project_import_json_bundle_with_skip_policy(client, clean_db) -> None:
 def test_project_import_zip_bundle_with_rename_policy(client, clean_db) -> None:
     _login_admin(client)
 
-    source_project_id = f"phase33-src-{uuid.uuid4().hex[:8]}"
-    target_project_id = f"phase33-dst-{uuid.uuid4().hex[:8]}"
+    source_project_id = f"export-src-{uuid.uuid4().hex[:8]}"
+    target_project_id = f"export-dst-{uuid.uuid4().hex[:8]}"
     _create_project(client, project_id=source_project_id)
     _create_project(client, project_id=target_project_id)
 
@@ -221,3 +246,94 @@ def test_project_import_zip_bundle_with_rename_policy(client, clean_db) -> None:
     assert listed.status_code == 200
     titles = [item["title"] for item in listed.json()]
     assert any(title.startswith("Collision (imported") for title in titles)
+
+
+@pytest.mark.integration
+def test_project_export_import_round_trip_preserves_engram_sources(client, clean_db) -> None:
+    _login_admin(client)
+
+    source_project_id = f"export-src-{uuid.uuid4().hex[:8]}"
+    target_project_id = f"export-dst-{uuid.uuid4().hex[:8]}"
+    _create_project(client, project_id=source_project_id)
+    _create_project(client, project_id=target_project_id)
+
+    source_engram_id = _create_engram(client, project_id=source_project_id, title="Source fidelity")
+    _attach_engram_source(
+        client,
+        engram_id=source_engram_id,
+        url="https://example.com/export-source",
+        snippet="Evidence for export source fidelity.",
+    )
+
+    exported = client.get(f"/api/v1/projects/{source_project_id}/export")
+    assert exported.status_code == 200
+    exported_bundle = exported.json()
+    exported_engram = next(
+        item for item in exported_bundle["engrams"] if item["engram_id"] == source_engram_id
+    )
+    assert len(exported_engram["sources"]) == 1
+    assert exported_engram["sources"][0]["url"] == "https://example.com/export-source"
+
+    imported = client.post(
+        f"/api/v1/projects/{target_project_id}/import",
+        params={"conflict_policy": "skip"},
+        files={"file": ("export.json", exported.content, "application/json")},
+    )
+    assert imported.status_code == 200
+    assert imported.json()["imported_engrams"] == 1
+
+    listed = client.get(
+        "/api/v1/admin/memory/engrams",
+        params={"project_id": target_project_id, "limit": 100, "offset": 0},
+    )
+    assert listed.status_code == 200
+    imported_engram_id = next(
+        item["engram_id"] for item in listed.json() if item["title"] == "Source fidelity"
+    )
+
+    imported_engram = client.get(f"/api/v1/admin/memory/engrams/{imported_engram_id}")
+    assert imported_engram.status_code == 200
+    imported_sources = imported_engram.json()["sources"]
+    assert len(imported_sources) == 1
+    assert imported_sources[0]["url"] == "https://example.com/export-source"
+    assert imported_sources[0]["snippet"] == "Evidence for export source fidelity."
+
+
+@pytest.mark.integration
+def test_project_import_denies_non_owner_non_admin(client, clean_db) -> None:
+    _login_admin(client)
+
+    source_project_id = f"export-src-{uuid.uuid4().hex[:8]}"
+    target_project_id = f"export-dst-{uuid.uuid4().hex[:8]}"
+    _create_project(client, project_id=source_project_id)
+    _create_project(client, project_id=target_project_id)
+    _create_engram(client, project_id=source_project_id, title="Import deny seed")
+
+    exported = client.get(f"/api/v1/projects/{source_project_id}/export")
+    assert exported.status_code == 200
+
+    viewer_username = f"viewer_{uuid.uuid4().hex[:8]}"
+    created = client.post(
+        "/api/v1/users",
+        json={
+            "username": viewer_username,
+            "password": "StrongPass123",
+            "role": "viewer",
+            "is_active": True,
+        },
+    )
+    assert created.status_code == 201
+
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    viewer_client = TestClient(app)
+    _login(viewer_client, username=viewer_username, password="StrongPass123")
+
+    denied = viewer_client.post(
+        f"/api/v1/projects/{target_project_id}/import",
+        params={"conflict_policy": "skip"},
+        files={"file": ("export.json", exported.content, "application/json")},
+    )
+    assert denied.status_code == 404

@@ -41,7 +41,7 @@ describe('export api', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       mockBlobResponse({
         body: '{"schema_version":"1.0"}',
-        contentDisposition: 'attachment; filename="phase33-export.json"',
+        contentDisposition: 'attachment; filename="project-export.json"',
       }),
     )
 
@@ -52,7 +52,7 @@ describe('export api', () => {
       collectionIds: ['col-1', 'col-2'],
     })
 
-    expect(payload.filename).toBe('phase33-export.json')
+    expect(payload.filename).toBe('project-export.json')
     const [path] = fetchMock.mock.calls[0]
     const resolved = String(path)
     expect(resolved).toContain('/api/v1/projects/engram-vault/export?')
@@ -80,7 +80,7 @@ describe('export api', () => {
   it('posts multipart import payload with conflict policy', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       mockJsonResponse({
-        target_project_id: 'phase33-target',
+        target_project_id: 'project-target',
         imported_engrams: 2,
         skipped_engrams: 0,
         overwritten_engrams: 0,
@@ -93,14 +93,14 @@ describe('export api', () => {
 
     const file = new File(['{}'], 'export.json', { type: 'application/json' })
     const payload = await importProjectBundle({
-      projectId: 'phase33-target',
+      projectId: 'project-target',
       file,
       conflictPolicy: 'rename',
     })
 
-    expect(payload.target_project_id).toBe('phase33-target')
+    expect(payload.target_project_id).toBe('project-target')
     const [path, init] = fetchMock.mock.calls[0]
-    expect(String(path)).toContain('/api/v1/projects/phase33-target/import?conflict_policy=rename')
+    expect(String(path)).toContain('/api/v1/projects/project-target/import?conflict_policy=rename')
     expect((init as RequestInit).method).toBe('POST')
     expect((init as RequestInit).body instanceof FormData).toBe(true)
   })

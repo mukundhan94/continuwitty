@@ -13,6 +13,7 @@ _READ_TOOL_NAMES = {
     "chat.list_pinned_documents",
     "chat.list_project_documents",
     "project.list",
+    "project.export_bundle",
     "project.get_default",
     "engram.list",
     "engram.get",
@@ -36,6 +37,7 @@ _WRITE_TOOL_NAMES = {
     "chat.delete_session",
     "chat.restore_session",
     "project.create",
+    "project.import_bundle",
     "project.set_default",
     "engram.create",
     "engram.create_from_conversation",
@@ -487,6 +489,46 @@ _TOOL_CATALOG: tuple[dict[str, Any], ...] = (
             "type": "object",
             "required": ["project_id"],
             "properties": {"project_id": {"type": "string"}},
+        },
+    },
+    {
+        "name": "project.export_bundle",
+        "description": (
+            "Export a project memory bundle with optional collection filters and "
+            "optional embedding inclusion flag."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["project_id"],
+            "properties": {
+                "project_id": {"type": "string"},
+                "collection_ids": {
+                    "type": "array",
+                    "items": {"type": "string", "format": "uuid"},
+                },
+                "include_embeddings": {"type": "boolean"},
+            },
+        },
+    },
+    {
+        "name": "project.import_bundle",
+        "description": (
+            "Import a project bundle into a target project with deterministic "
+            "conflict handling. Provide either bundle (object) or bundle_json (string)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["project_id"],
+            "properties": {
+                "project_id": {"type": "string"},
+                "conflict_policy": {
+                    "type": "string",
+                    "enum": ["skip", "overwrite", "rename"],
+                },
+                "bundle": {"type": "object"},
+                "bundle_json": {"type": "string"},
+            },
+            "anyOf": [{"required": ["bundle"]}, {"required": ["bundle_json"]}],
         },
     },
     {

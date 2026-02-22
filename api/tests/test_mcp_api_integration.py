@@ -98,6 +98,8 @@ def test_mcp_initialize_and_tools_list_contract(client, clean_db) -> None:
     assert "project_create" in tool_names
     assert "project_get_default" in tool_names
     assert "project_set_default" in tool_names
+    assert "project_export_bundle" in tool_names
+    assert "project_import_bundle" in tool_names
     assert "chat_send_message" in tool_names
     assert "engram_list" in tool_names
     assert "engram_get" in tool_names

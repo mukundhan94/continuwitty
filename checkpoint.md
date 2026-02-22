@@ -14,7 +14,7 @@
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
-- **Phase 33 in progress:** portable export/import stash workflow (backend export+import APIs and new web transfer page shipped; full cross-surface closeout still in progress).
+- **Phase 33 completed:** portable export/import stash workflow with REST + MCP + web transfer flows, owner/admin authorization, and source-fidelity round-trip coverage.
 - **Phase 34 planned:** security audit remediation backlog queued for post-export hardening cycle.
 
 ---
@@ -134,6 +134,12 @@
 - Repository-level centralization across all create paths
 - MCP `engram.create_from_conversation` for conversation-only persistence
 
+### Milestone 33 — Portable Export/Import Stash (Completed)
+- REST project export/import endpoints with deterministic conflict handling
+- MCP `project.export_bundle` and `project.import_bundle` tools
+- Transfer page export/import workflow with searchable project/collection IDs
+- Round-trip tests for collection membership and engram source fidelity
+
 ### Milestone 19 — Collaboration (Planned)
 - Project membership model, scoped sharing/revocation, audit-visible events
 
@@ -164,5 +170,5 @@
 | 21-23 | Observability, Release, EvalOps | Planned |
 | 24-28 | Engram Link Graph | Planned |
 | 32 | ContinuWitty Query Protocol | Planned |
-| 33 | Portable Export/Import Stash | In Progress |
+| 33 | Portable Export/Import Stash | Completed |
 | 34 | Security Audit Remediation Program | Planned |

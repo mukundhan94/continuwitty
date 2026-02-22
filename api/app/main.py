@@ -111,6 +111,7 @@ mcp_service = McpService(
         memory_admin_service=memory_admin_service,
         embedding_dim=settings.embedding_dim,
         ingestion_service=ingestion_service,
+        export_service=export_service,
     ),
     server_version=settings.app_semantic_version,
 )

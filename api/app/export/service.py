@@ -16,6 +16,9 @@ from app.memory_admin.service import (
     MemoryAdminService,
 )
 from app.models import (
+    AdminEngramRecord,
+    AdminEngramSourceInput,
+    AdminEngramSourceRecord,
     EngramCollectionCreateRequest,
     EngramCollectionItemsUpdateRequest,
     MemoryEngramCreate,
@@ -113,7 +116,7 @@ class ExportService:
             cur.execute(
                 """
                 UPDATE engrams
-                SET deleted_at = now(), deleted_by_user_id = %s, delete_reason = 'phase33_import_overwrite'
+                SET deleted_at = now(), deleted_by_user_id = %s, delete_reason = 'import_overwrite'
                 WHERE engram_id = %s
                 """,
                 (actor_user_id, engram_id),
@@ -139,7 +142,13 @@ class ExportService:
                 candidate = f"{base_name} (imported {index})"
                 index += 1
 
-    def _resolve_engram_title(self, *, existing_id: UUID | None, request: ImportProjectRequest, base_title: str) -> str | None:
+    def _resolve_engram_title(
+        self,
+        *,
+        existing_id: UUID | None,
+        request: ImportProjectRequest,
+        base_title: str,
+    ) -> str | None:
         if not existing_id:
             return base_title
         if request.conflict_policy == ProjectImportConflictPolicy.skip:
@@ -210,7 +219,11 @@ class ExportService:
                 ),
                 embedding_dim=self._embedding_dim,
                 owner_user_id=request.actor_user_id,
-                enrichment_origin="phase33.import",
+                enrichment_origin="export.import",
+            )
+            self._replace_engram_sources(
+                engram_id=created.engram_id,
+                sources=exported_engram.sources,
             )
             engram_id_map[exported_engram.engram_id] = created.engram_id
             imported_engrams += 1
@@ -358,6 +371,97 @@ class ExportService:
             result[row["collection_id"]].append(row["engram_id"])
         return result
 
+    @staticmethod
+    def _replace_engram_sources(
+        *,
+        engram_id: UUID,
+        sources: list[AdminEngramSourceInput],
+    ) -> None:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM sources WHERE engram_id = %s", (engram_id,))
+            for source in sources:
+                cur.execute(
+                    """
+                    INSERT INTO sources (
+                        source_id,
+                        engram_id,
+                        captured_at,
+                        url,
+                        title,
+                        snippet,
+                        content_text,
+                        content_hash
+                    )
+                    VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        engram_id,
+                        source.captured_at,
+                        source.url,
+                        source.title,
+                        source.snippet,
+                        source.content_text,
+                        source.content_hash,
+                    ),
+                )
+
+    @staticmethod
+    def _list_engram_sources_map(
+        *,
+        engram_ids: list[UUID],
+    ) -> dict[UUID, list[AdminEngramSourceRecord]]:
+        if not engram_ids:
+            return {}
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    source_id,
+                    engram_id,
+                    captured_at,
+                    url,
+                    title,
+                    snippet,
+                    content_text,
+                    content_hash
+                FROM sources
+                WHERE engram_id = ANY(%s::UUID[])
+                ORDER BY engram_id, captured_at DESC
+                """,
+                (engram_ids,),
+            )
+            rows = cur.fetchall()
+        grouped: dict[UUID, list[AdminEngramSourceRecord]] = {
+            engram_id: [] for engram_id in engram_ids
+        }
+        for row in rows:
+            grouped[row["engram_id"]].append(
+                AdminEngramSourceRecord(
+                    source_id=row["source_id"],
+                    captured_at=row["captured_at"],
+                    url=row["url"],
+                    title=row["title"],
+                    snippet=row["snippet"],
+                    content_text=row["content_text"],
+                    content_hash=row["content_hash"],
+                )
+            )
+        return grouped
+
+    @classmethod
+    def _attach_engram_sources(
+        cls,
+        *,
+        engrams: list[AdminEngramRecord],
+    ) -> list[AdminEngramRecord]:
+        source_map = cls._list_engram_sources_map(
+            engram_ids=[engram.engram_id for engram in engrams]
+        )
+        return [
+            engram.model_copy(update={"sources": source_map.get(engram.engram_id, [])})
+            for engram in engrams
+        ]
+
     def build_project_export_bundle(
         self,
         *,
@@ -427,6 +531,7 @@ class ExportService:
                     query_text=None,
                 )
             )
+            engrams = self._attach_engram_sources(engrams=engrams)
 
         collection_items = [
             ProjectExportCollectionItemsRecord(

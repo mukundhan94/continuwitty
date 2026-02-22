@@ -22,6 +22,8 @@ _PROJECT_INPUT_TOOLS = {
     "engram.create",
     "engram.create_from_conversation",
     "project.create",
+    "project.export_bundle",
+    "project.import_bundle",
     "project.set_default",
     "engram.collection_create",
 }

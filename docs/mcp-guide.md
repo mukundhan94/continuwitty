@@ -199,6 +199,15 @@ curl -s -b "$COOKIE_JAR" \
 - `engram.rehydrate`
 - `engram.pin_to_session`
 
+### Project Tools
+
+- `project.list`
+- `project.create`
+- `project.get_default`
+- `project.set_default`
+- `project.export_bundle`
+- `project.import_bundle`
+
 ### User Tools
 
 - `user.get_profile`

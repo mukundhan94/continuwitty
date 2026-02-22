@@ -15,6 +15,136 @@ from tests.mcp_api_integration_helpers import (
 )
 
 
+def _create_project(client, project_id: str) -> None:  # noqa: ANN001
+    created = client.post(
+        "/api/v1/projects",
+        json={
+            "project_id": project_id,
+            "name": project_id,
+            "description": "token auth transfer test",
+        },
+    )
+    assert created.status_code == 201
+
+
+def _seed_project_engram(client, project_id: str) -> None:  # noqa: ANN001
+    seeded = client.post(
+        "/api/v1/engrams",
+        json={
+            "project_id": project_id,
+            "title": "Token transfer seed",
+            "abstract": "seed",
+            "detailed_summary_markdown": "seed body",
+            "visibility_scope": "project",
+        },
+    )
+    assert seeded.status_code == 200
+
+
+def _error_frame(frames: list[dict]) -> dict:
+    return [item for item in frames if "error" in item][0]
+
+
+def _read_token_export_bundle(  # noqa: ANN001
+    client,
+    bearer_client: TestClient,
+    *,
+    source_project_id: str,
+) -> tuple[dict, dict[str, str]]:
+    read_token = _create_mcp_token(
+        client,
+        name="transfer-read",
+        scope="read",
+        allowed_project_ids=[source_project_id],
+    )
+    read_headers = {"Authorization": f"Bearer {read_token['token']}"}
+    export_frames = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={
+            "name": "project.export_bundle",
+            "arguments": {"project_id": source_project_id},
+        },
+        request_id="token-transfer-export",
+        headers=read_headers,
+    )
+    exported_bundle = _final_result_frame(export_frames)["result"]["structuredContent"]["bundle"]
+    return exported_bundle, read_headers
+
+
+def _assert_read_token_transfer_denials(  # noqa: ANN001
+    bearer_client: TestClient,
+    *,
+    target_project_id: str,
+    exported_bundle: dict,
+    read_headers: dict[str, str],
+) -> None:
+    denied_export_error = _error_frame(
+        _mcp_frames(
+            bearer_client,
+            method="tools/call",
+            params={
+                "name": "project.export_bundle",
+                "arguments": {"project_id": target_project_id},
+            },
+            request_id="token-transfer-export-denied",
+            headers=read_headers,
+        )
+    )["error"]
+    assert denied_export_error["code"] == -32003
+    assert denied_export_error["data"]["project_id"] == target_project_id
+
+    denied_import_error = _error_frame(
+        _mcp_frames(
+            bearer_client,
+            method="tools/call",
+            params={
+                "name": "project.import_bundle",
+                "arguments": {
+                    "project_id": target_project_id,
+                    "bundle": exported_bundle,
+                    "conflict_policy": "skip",
+                },
+            },
+            request_id="token-transfer-import-read-denied",
+            headers=read_headers,
+        )
+    )["error"]
+    assert denied_import_error["code"] == -32003
+    assert denied_import_error["data"]["required_scope"] == "write"
+
+
+def _write_token_import_summary(  # noqa: ANN001
+    client,
+    bearer_client: TestClient,
+    *,
+    target_project_id: str,
+    exported_bundle: dict,
+) -> dict:
+    write_token = _create_mcp_token(
+        client,
+        name="transfer-write",
+        scope="write",
+        allowed_project_ids=[target_project_id],
+    )
+    write_headers = {"Authorization": f"Bearer {write_token['token']}"}
+    imported = _mcp_frames(
+        bearer_client,
+        method="tools/call",
+        params={
+            "name": "project.import_bundle",
+            "arguments": {
+                "project_id": target_project_id,
+                "bundle": exported_bundle,
+                "conflict_policy": "skip",
+            },
+        },
+        request_id="token-transfer-import-allowed",
+        headers=write_headers,
+    )
+    return _final_result_frame(imported)["result"]["structuredContent"]["summary"]
+
+
 @pytest.mark.integration
 def test_mcp_token_project_fallback_for_engram_create_paths(client, clean_db) -> None:
     _login(client)
@@ -305,6 +435,40 @@ def test_mcp_token_allowed_tools_and_project_guards(client, clean_db) -> None:
         headers=single_headers,
     )
     assert _final_result_frame(auto_project_frames)["result"]["tool_name"] == "engram.query"
+
+
+@pytest.mark.integration
+def test_mcp_token_authorization_for_project_transfer_tools(client, clean_db) -> None:
+    _login(client)
+
+    source_project_id = f"mcp-token-export-src-{uuid4().hex[:8]}"
+    target_project_id = f"mcp-token-export-dst-{uuid4().hex[:8]}"
+    _create_project(client, source_project_id)
+    _create_project(client, target_project_id)
+    _seed_project_engram(client, source_project_id)
+
+    bearer_client = TestClient(app)
+    exported_bundle, read_headers = _read_token_export_bundle(
+        client,
+        bearer_client,
+        source_project_id=source_project_id,
+    )
+    assert exported_bundle["project"]["project_id"] == source_project_id
+
+    _assert_read_token_transfer_denials(
+        bearer_client,
+        target_project_id=target_project_id,
+        exported_bundle=exported_bundle,
+        read_headers=read_headers,
+    )
+    summary = _write_token_import_summary(
+        client,
+        bearer_client,
+        target_project_id=target_project_id,
+        exported_bundle=exported_bundle,
+    )
+    assert summary["target_project_id"] == target_project_id
+    assert summary["imported_engrams"] == 1
 
 
 @pytest.mark.integration

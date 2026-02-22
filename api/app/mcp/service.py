@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from app.chat.service import ChatService
+from app.export import ExportService
 from app.ingestion.service import DocumentIngestionService
 from app.mcp_tokens import McpTokenAuthContext
 from app.memory_admin import MemoryAdminService
@@ -47,6 +48,10 @@ from .engram_dispatch import (
     dispatch_engram_read_tool,
 )
 from .errors import McpRpcError
+from .project_transfer_dispatch import (
+    ProjectTransferDispatchDependencies,
+    dispatch_project_transfer_tool,
+)
 from .project_user_dispatch import dispatch_project_tool, dispatch_user_tool
 from .service_access import McpServiceAccessMixin
 from .service_stream import (
@@ -96,6 +101,7 @@ class McpServiceDependencies:
     memory_admin_service: MemoryAdminService
     embedding_dim: int
     ingestion_service: DocumentIngestionService | None = None
+    export_service: ExportService | None = None
 
 
 class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
@@ -119,6 +125,7 @@ class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
         self._memory_admin_service = dependencies.memory_admin_service
         self._embedding_dim = dependencies.embedding_dim
         self._ingestion_service = dependencies.ingestion_service
+        self._export_service = dependencies.export_service
         self._server_version = server_version
 
     @staticmethod
@@ -652,6 +659,16 @@ class McpService(McpServiceAccessMixin, McpServiceStreamMixin):
         )
         if engram_result is not None:
             return engram_result
+
+        project_bundle_result = dispatch_project_transfer_tool(
+            dependencies=ProjectTransferDispatchDependencies(
+                export_service=self._export_service,
+                parse_uuid_list=self._parse_uuid_list,
+            ),
+            context=context,
+        )
+        if project_bundle_result is not None:
+            return project_bundle_result
 
         project_result = dispatch_project_tool(
             project_service=self._project_service,

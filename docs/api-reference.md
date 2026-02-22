@@ -89,6 +89,8 @@ Sign in via `POST /login` with form credentials to obtain a session cookie.
 | `POST` | `/api/v1/projects` | Create project |
 | `GET` | `/api/v1/projects/default` | Get default project |
 | `PATCH` | `/api/v1/projects/default` | Set default project |
+| `GET` | `/api/v1/projects/{project_id}/export` | Export project bundle (JSON/ZIP, optional collection filter) |
+| `POST` | `/api/v1/projects/{project_id}/import` | Import project bundle with conflict policy (`skip`/`overwrite`/`rename`) |
 
 ### Admin Memory Management
 

@@ -711,8 +711,8 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress.
-- This phase introduces a portable stash workflow to move memory between instances.
+- Completed.
+- Portable stash workflow is available across REST, MCP, and web transfer surfaces.
 
 ### Goals
 

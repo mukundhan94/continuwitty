@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 
 from app.config import get_settings
@@ -16,6 +18,108 @@ from tests.mcp_api_integration_helpers import (
     _save_as_engram_without_session,
     _tools_call_structured_content,
 )
+
+
+def _create_project(client, project_id: str) -> None:  # noqa: ANN001
+    created = client.post(
+        "/api/v1/projects",
+        json={
+            "project_id": project_id,
+            "name": project_id,
+            "description": "mcp project transfer test",
+        },
+    )
+    assert created.status_code == 201
+
+
+def _create_engram_seed(  # noqa: ANN001
+    client,
+    *,
+    project_id: str,
+    title: str,
+    markdown: str,
+) -> str:
+    response = client.post(
+        "/api/v1/engrams",
+        json={
+            "project_id": project_id,
+            "title": title,
+            "abstract": f"{title} abstract",
+            "detailed_summary_markdown": markdown,
+            "visibility_scope": "project",
+        },
+    )
+    assert response.status_code == 200
+    return response.json()["engram_id"]
+
+
+def _set_engram_source(client, *, engram_id: str) -> None:  # noqa: ANN001
+    source_update = client.patch(
+        f"/api/v1/admin/memory/engrams/{engram_id}",
+        json={
+            "sources": [
+                {
+                    "captured_at": "2026-02-22T00:00:00Z",
+                    "url": "https://example.com/mcp-export-source",
+                    "title": "MCP source",
+                    "snippet": "MCP export source snippet",
+                    "content_text": "source body",
+                    "content_hash": "hash-mcp-source",
+                }
+            ]
+        },
+    )
+    assert source_update.status_code == 200
+
+
+def _create_collection_with_item(  # noqa: ANN001
+    client,
+    *,
+    project_id: str,
+    engram_id: str,
+) -> str:
+    created = client.post(
+        "/api/v1/admin/memory/collections",
+        json={
+            "project_id": project_id,
+            "name": f"mcp-transfer-{uuid4().hex[:6]}",
+            "description": "subset",
+        },
+    )
+    assert created.status_code == 201
+    collection_id = created.json()["collection_id"]
+    added = client.post(
+        f"/api/v1/admin/memory/collections/{collection_id}/items",
+        json={"engram_ids": [engram_id]},
+    )
+    assert added.status_code == 200
+    assert added.json()["added"] == 1
+    return collection_id
+
+
+def _imported_engram_sources(  # noqa: ANN001
+    client,
+    *,
+    target_project_id: str,
+    title: str,
+) -> list[dict]:
+    target_engrams = client.get(
+        "/api/v1/admin/memory/engrams",
+        params={"project_id": target_project_id, "limit": 100, "offset": 0},
+    )
+    assert target_engrams.status_code == 200
+    imported_engram_id = next(
+        item["engram_id"] for item in target_engrams.json() if item["title"] == title
+    )
+    imported_engram = client.get(f"/api/v1/admin/memory/engrams/{imported_engram_id}")
+    assert imported_engram.status_code == 200
+    return imported_engram.json()["sources"]
+
+
+def _assert_source_fidelity(sources: list[dict]) -> None:
+    assert len(sources) == 1
+    assert sources[0]["url"] == "https://example.com/mcp-export-source"
+    assert sources[0]["snippet"] == "MCP export source snippet"
 
 
 @pytest.mark.integration
@@ -457,6 +561,79 @@ def test_mcp_lifecycle_policy_and_timeline_tools(client, clean_db, monkeypatch) 
     )
     events = _final_result_frame(timeline_frames)["result"]["structuredContent"]["events"]
     assert any(item["event_type"] == "autosave_snapshot" for item in events)
+
+
+@pytest.mark.integration
+def test_mcp_project_export_import_bundle_round_trip(client, clean_db) -> None:
+    _login(client)
+
+    source_project_id = f"mcp-export-src-{uuid4().hex[:8]}"
+    target_project_id = f"mcp-export-dst-{uuid4().hex[:8]}"
+    _create_project(client, source_project_id)
+    _create_project(client, target_project_id)
+    first_engram_id = _create_engram_seed(
+        client,
+        project_id=source_project_id,
+        title="MCP transfer source",
+        markdown="source markdown",
+    )
+    second_engram_id = _create_engram_seed(
+        client,
+        project_id=source_project_id,
+        title="MCP transfer excluded",
+        markdown="excluded markdown",
+    )
+    _set_engram_source(client, engram_id=first_engram_id)
+    collection_id = _create_collection_with_item(
+        client,
+        project_id=source_project_id,
+        engram_id=first_engram_id,
+    )
+
+    exported = _tools_call_structured_content(
+        client,
+        "mcp-project-export-bundle",
+        {
+            "name": "project.export_bundle",
+            "arguments": {
+                "project_id": source_project_id,
+                "collection_ids": [collection_id],
+                "include_embeddings": True,
+            },
+        },
+    )["bundle"]
+    assert exported["project"]["project_id"] == source_project_id
+    assert exported["selected_collection_ids"] == [collection_id]
+    assert exported["include_embeddings"] is True
+    exported_ids = [item["engram_id"] for item in exported["engrams"]]
+    assert exported_ids == [first_engram_id]
+    assert second_engram_id not in exported_ids
+    assert exported["engrams"][0]["sources"][0]["url"] == "https://example.com/mcp-export-source"
+
+    imported = _tools_call_structured_content(
+        client,
+        "mcp-project-import-bundle",
+        {
+            "name": "project.import_bundle",
+            "arguments": {
+                "project_id": target_project_id,
+                "conflict_policy": "skip",
+                "bundle": exported,
+            },
+        },
+    )["summary"]
+    assert imported["target_project_id"] == target_project_id
+    assert imported["imported_engrams"] == 1
+    assert imported["imported_collections"] == 1
+    assert imported["imported_collection_items"] == 1
+    assert imported["conflict_policy"] == "skip"
+
+    imported_sources = _imported_engram_sources(
+        client,
+        target_project_id=target_project_id,
+        title="MCP transfer source",
+    )
+    _assert_source_fidelity(imported_sources)
 
 
 @pytest.mark.integration

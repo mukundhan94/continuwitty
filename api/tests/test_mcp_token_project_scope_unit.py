@@ -76,6 +76,27 @@ def test_resolve_project_id_for_optional_tool_normalizes_project_input() -> None
     dependencies.parse_uuid.assert_not_called()
 
 
+def test_resolve_project_id_for_project_transfer_tools_uses_project_input() -> None:
+    dependencies = _scope_dependencies(uuid4())
+
+    export_project = resolve_project_id_for_canonical_tool(
+        dependencies=dependencies,
+        actor_user_id=uuid4(),
+        canonical_tool="project.export_bundle",
+        params={"project_id": "  project-export  "},
+    )
+    import_project = resolve_project_id_for_canonical_tool(
+        dependencies=dependencies,
+        actor_user_id=uuid4(),
+        canonical_tool="project.import_bundle",
+        params={"project_id": "project-import"},
+    )
+
+    assert export_project == "project-export"
+    assert import_project == "project-import"
+    dependencies.parse_uuid.assert_not_called()
+
+
 def test_resolve_project_id_for_rehydrate_uses_bundle_project() -> None:
     actor_user_id = uuid4()
     engram_id = uuid4()
