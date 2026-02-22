@@ -318,6 +318,33 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP51: non-checkpoint code-health uplift for chat pinning repository tests)
+
+1. Improved legacy non-checkpoint chat pinning repository tests:
+   - `internal/repository/chat_pinning_test.go`
+   - consolidated duplicated missing-row pin/unpin tests into:
+     - `TestPinnedDocumentOperationsReturnZeroValueWhenRowMissing`
+   - consolidated duplicated pinned-list tests into:
+     - `TestListPinnedResourcesBuildsExpectedQueryAndArgs`
+   - preserved engram/document query SQL assertions and argument contract checks.
+2. Executed chat pinning tests one-by-one:
+   - `TestPinEngramToSessionReturnsPinnedRecord`
+   - `TestUnpinEngramFromSessionReturnsTrueWhenRemoved`
+   - `TestPinnedDocumentOperationsReturnZeroValueWhenRowMissing`
+   - `TestListPinnedResourcesBuildsExpectedQueryAndArgs`
+   - `TestListPinnedEngramSummariesAppliesVisibilityFilters`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_pinning_test.go` improved from `9.38` to `9.51`
+   - remaining note is a non-blocking large-test threshold edge.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings:
+     - duplication fixed across the prior four pinning tests
+     - one non-blocking large-method note introduced for the consolidated list test.
+
 ### 2026-02-22 (Go migration CP50: non-checkpoint code-health uplift for admin service implementation)
 
 1. Improved legacy non-checkpoint admin service implementation:

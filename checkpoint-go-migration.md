@@ -2749,3 +2749,30 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP51 - Non-Checkpoint Code-Health Uplift (`internal/repository/chat_pinning_test.go`)
+
+- Improved legacy non-checkpoint chat pinning repository test file:
+  - `internal/repository/chat_pinning_test.go`
+  - consolidated duplicated missing-row tests into:
+    - `TestPinnedDocumentOperationsReturnZeroValueWhenRowMissing`
+  - consolidated duplicated pinned-list assertions into:
+    - `TestListPinnedResourcesBuildsExpectedQueryAndArgs`
+  - preserved query/argument assertions for engram and document paths.
+- Executed migrated tests one-by-one:
+  - `TestPinEngramToSessionReturnsPinnedRecord`
+  - `TestUnpinEngramFromSessionReturnsTrueWhenRemoved`
+  - `TestPinnedDocumentOperationsReturnZeroValueWhenRowMissing`
+  - `TestListPinnedResourcesBuildsExpectedQueryAndArgs`
+  - `TestListPinnedEngramSummariesAppliesVisibilityFilters`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/chat_pinning_test.go` score improved from `9.38` -> `9.51`
+  - remaining note is a non-blocking large-test threshold edge (`88` lines).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed previous duplication findings in four pinning tests
+    - introduced one non-blocking large-method note in consolidated list test.
