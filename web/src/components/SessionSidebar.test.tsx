@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from 'styled-components'
 import { describe, expect, it, vi } from 'vitest'
@@ -117,6 +117,30 @@ describe('SessionSidebar', () => {
           autosave_min_messages: 6,
           retention_days: 30,
           retention_max_snapshots: 60,
+        }),
+      )
+    })
+  })
+
+  it('submits message_count autosave payload when autosave is enabled', async () => {
+    const user = userEvent.setup()
+    const onCreateSession = vi.fn(async () => {})
+    renderSidebar({ onCreateSession })
+
+    await user.click(screen.getByLabelText(/enable autosave snapshots/i))
+    await user.selectOptions(screen.getByLabelText(/autosave strategy/i), 'message_count')
+
+    const minMessagesInput = screen.getByLabelText(/autosave every n assistant messages/i)
+    fireEvent.change(minMessagesInput, { target: { value: '3' } })
+
+    await user.click(screen.getByRole('button', { name: /create session/i }))
+
+    await waitFor(() => {
+      expect(onCreateSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          autosave_enabled: true,
+          autosave_strategy: 'message_count',
+          autosave_min_messages: 3,
         }),
       )
     })

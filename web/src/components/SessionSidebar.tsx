@@ -113,6 +113,12 @@ const SessionListSection = styled(ScrollColumn)`
   padding-top: 0.2rem;
 `
 
+const DEFAULT_SESSION_TITLE = 'New chat session'
+const DEFAULT_AUTOSAVE_INTERVAL_MINUTES = 30
+const DEFAULT_AUTOSAVE_MIN_MESSAGES = 6
+const DEFAULT_RETENTION_DAYS = 30
+const DEFAULT_RETENTION_MAX_SNAPSHOTS = 60
+
 interface CreateSessionRequest {
   project_id: string
   title: string
@@ -145,6 +151,410 @@ interface SessionSidebarProps {
   onCreateSession: (payload: CreateSessionRequest) => Promise<void>
 }
 
+interface CreatorState {
+  title: string
+  provider: ChatProvider
+  modelId: string
+  systemPrompt: string
+  visibilityScope: VisibilityScope
+  autosaveEnabled: boolean
+  autosaveStrategy: ChatAutosaveStrategy
+  autosaveIntervalMinutes: number
+  autosaveMinMessages: number
+  retentionDays: number
+  retentionMaxSnapshots: number
+}
+
+interface AutosaveControlsProps {
+  autosaveStrategy: ChatAutosaveStrategy
+  autosaveIntervalMinutes: number
+  autosaveMinMessages: number
+  retentionDays: number
+  retentionMaxSnapshots: number
+  onAutosaveStrategyChange: (value: ChatAutosaveStrategy) => void
+  onAutosaveIntervalMinutesChange: (value: number) => void
+  onAutosaveMinMessagesChange: (value: number) => void
+  onRetentionDaysChange: (value: number) => void
+  onRetentionMaxSnapshotsChange: (value: number) => void
+}
+
+interface SessionCreatorPanelProps {
+  showCreator: boolean
+  projectId: string
+  defaultProjectId: string | null
+  settingDefaultProject: boolean
+  creating: boolean
+  creatorState: CreatorState
+  onProjectChange: (projectId: string) => void
+  onSetDefaultProject?: () => Promise<void> | void
+  onTitleChange: (value: string) => void
+  onProviderChange: (value: ChatProvider) => void
+  onVisibilityScopeChange: (value: VisibilityScope) => void
+  onModelIdChange: (value: string) => void
+  onSystemPromptChange: (value: string) => void
+  onAutosaveEnabledChange: (value: boolean) => void
+  onAutosaveStrategyChange: (value: ChatAutosaveStrategy) => void
+  onAutosaveIntervalMinutesChange: (value: number) => void
+  onAutosaveMinMessagesChange: (value: number) => void
+  onRetentionDaysChange: (value: number) => void
+  onRetentionMaxSnapshotsChange: (value: number) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
+}
+
+interface SessionHistoryPanelProps {
+  loading: boolean
+  sessions: ChatSession[]
+  selectedSessionId: string | null
+  onSelectSession: (sessionId: string) => void
+}
+
+interface ProjectSelectionFieldProps {
+  projectId: string
+  defaultProjectId: string | null
+  settingDefaultProject: boolean
+  onProjectChange: (projectId: string) => void
+  onSetDefaultProject?: () => Promise<void> | void
+}
+
+interface SessionCreatorFieldsProps {
+  creatorState: CreatorState
+  onTitleChange: (value: string) => void
+  onProviderChange: (value: ChatProvider) => void
+  onVisibilityScopeChange: (value: VisibilityScope) => void
+  onModelIdChange: (value: string) => void
+  onSystemPromptChange: (value: string) => void
+  onAutosaveEnabledChange: (value: boolean) => void
+  onAutosaveStrategyChange: (value: ChatAutosaveStrategy) => void
+  onAutosaveIntervalMinutesChange: (value: number) => void
+  onAutosaveMinMessagesChange: (value: number) => void
+  onRetentionDaysChange: (value: number) => void
+  onRetentionMaxSnapshotsChange: (value: number) => void
+}
+
+function parsePositiveNumber(value: string, fallback: number): number {
+  const parsedValue = Number(value)
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback
+}
+
+function sortedByNewest(sessions: ChatSession[]): ChatSession[] {
+  return [...sessions].sort((left, right) => right.created_at.localeCompare(left.created_at))
+}
+
+function buildCreateSessionPayload(projectId: string, state: CreatorState): CreateSessionRequest {
+  return {
+    project_id: projectId,
+    title: state.title.trim(),
+    provider: state.provider,
+    model_id: state.modelId.trim(),
+    system_prompt: state.systemPrompt.trim(),
+    visibility_scope: state.visibilityScope,
+    autosave_enabled: state.autosaveEnabled,
+    autosave_strategy: state.autosaveEnabled ? state.autosaveStrategy : 'off',
+    autosave_interval_minutes: state.autosaveIntervalMinutes,
+    autosave_min_messages: state.autosaveMinMessages,
+    retention_days: state.retentionDays,
+    retention_max_snapshots: state.retentionMaxSnapshots,
+  }
+}
+
+function AutosaveControls({
+  autosaveStrategy,
+  autosaveIntervalMinutes,
+  autosaveMinMessages,
+  retentionDays,
+  retentionMaxSnapshots,
+  onAutosaveStrategyChange,
+  onAutosaveIntervalMinutesChange,
+  onAutosaveMinMessagesChange,
+  onRetentionDaysChange,
+  onRetentionMaxSnapshotsChange,
+}: AutosaveControlsProps) {
+  return (
+    <>
+      <FieldBlock>
+        <label htmlFor="autosave-strategy">Autosave Strategy</label>
+        <select
+          id="autosave-strategy"
+          value={autosaveStrategy}
+          onChange={(event) => onAutosaveStrategyChange(event.target.value as ChatAutosaveStrategy)}
+        >
+          <option value="interval">Interval</option>
+          <option value="message_count">Message Count</option>
+        </select>
+      </FieldBlock>
+
+      {autosaveStrategy === 'interval' ? (
+        <FieldBlock>
+          <label htmlFor="autosave-interval-minutes">Autosave Interval (minutes)</label>
+          <input
+            id="autosave-interval-minutes"
+            type="number"
+            min={1}
+            value={autosaveIntervalMinutes}
+            onChange={(event) => onAutosaveIntervalMinutesChange(parsePositiveNumber(event.target.value, 1))}
+          />
+        </FieldBlock>
+      ) : (
+        <FieldBlock>
+          <label htmlFor="autosave-min-messages">Autosave Every N Assistant Messages</label>
+          <input
+            id="autosave-min-messages"
+            type="number"
+            min={1}
+            value={autosaveMinMessages}
+            onChange={(event) => onAutosaveMinMessagesChange(parsePositiveNumber(event.target.value, 1))}
+          />
+        </FieldBlock>
+      )}
+
+      <SplitGrid>
+        <FieldBlock>
+          <label htmlFor="retention-days">Retention Days</label>
+          <input
+            id="retention-days"
+            type="number"
+            min={1}
+            value={retentionDays}
+            onChange={(event) => onRetentionDaysChange(parsePositiveNumber(event.target.value, 1))}
+          />
+        </FieldBlock>
+
+        <FieldBlock>
+          <label htmlFor="retention-max-snapshots">Max Snapshots</label>
+          <input
+            id="retention-max-snapshots"
+            type="number"
+            min={1}
+            value={retentionMaxSnapshots}
+            onChange={(event) => onRetentionMaxSnapshotsChange(parsePositiveNumber(event.target.value, 1))}
+          />
+        </FieldBlock>
+      </SplitGrid>
+    </>
+  )
+}
+
+function ProjectSelectionField({
+  projectId,
+  defaultProjectId,
+  settingDefaultProject,
+  onProjectChange,
+  onSetDefaultProject,
+}: ProjectSelectionFieldProps) {
+  return (
+    <FieldBlock>
+      <label htmlFor="project-id">Project ID</label>
+      <SplitGrid>
+        <input
+          id="project-id"
+          value={projectId}
+          onChange={(event) => onProjectChange(event.target.value)}
+          placeholder="project-id"
+        />
+        <button
+          type="button"
+          disabled={settingDefaultProject || !projectId.trim() || !onSetDefaultProject}
+          onClick={() => {
+            void onSetDefaultProject?.()
+          }}
+        >
+          {settingDefaultProject ? 'Saving…' : 'Set Default'}
+        </button>
+      </SplitGrid>
+      <MutedText>
+        Default Project: <strong>{defaultProjectId || 'not configured'}</strong>
+      </MutedText>
+    </FieldBlock>
+  )
+}
+
+function SessionCreatorFields({
+  creatorState,
+  onTitleChange,
+  onProviderChange,
+  onVisibilityScopeChange,
+  onModelIdChange,
+  onSystemPromptChange,
+  onAutosaveEnabledChange,
+  onAutosaveStrategyChange,
+  onAutosaveIntervalMinutesChange,
+  onAutosaveMinMessagesChange,
+  onRetentionDaysChange,
+  onRetentionMaxSnapshotsChange,
+}: SessionCreatorFieldsProps) {
+  return (
+    <>
+      <label htmlFor="session-title">Title</label>
+      <input
+        id="session-title"
+        value={creatorState.title}
+        onChange={(event) => onTitleChange(event.target.value)}
+        required
+      />
+
+      <SplitGrid>
+        <FieldBlock>
+          <label htmlFor="provider">Provider</label>
+          <select
+            id="provider"
+            value={creatorState.provider}
+            onChange={(event) => onProviderChange(event.target.value as ChatProvider)}
+          >
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="bedrock">Bedrock</option>
+          </select>
+        </FieldBlock>
+
+        <FieldBlock>
+          <label htmlFor="visibility">Visibility</label>
+          <select
+            id="visibility"
+            value={creatorState.visibilityScope}
+            onChange={(event) => onVisibilityScopeChange(event.target.value as VisibilityScope)}
+          >
+            <option value="private">Private</option>
+            <option value="project">Project</option>
+          </select>
+        </FieldBlock>
+      </SplitGrid>
+
+      <label htmlFor="model-id">Model</label>
+      <input
+        id="model-id"
+        value={creatorState.modelId}
+        onChange={(event) => onModelIdChange(event.target.value)}
+        required
+      />
+
+      <label htmlFor="system-prompt">System Prompt</label>
+      <textarea
+        id="system-prompt"
+        value={creatorState.systemPrompt}
+        onChange={(event) => onSystemPromptChange(event.target.value)}
+        rows={3}
+        placeholder="Optional guidance for the assistant"
+      />
+
+      <CheckboxRow htmlFor="autosave-enabled">
+        <input
+          id="autosave-enabled"
+          type="checkbox"
+          checked={creatorState.autosaveEnabled}
+          onChange={(event) => onAutosaveEnabledChange(event.target.checked)}
+        />
+        <span>Enable autosave snapshots</span>
+      </CheckboxRow>
+
+      {creatorState.autosaveEnabled ? (
+        <AutosaveControls
+          autosaveStrategy={creatorState.autosaveStrategy}
+          autosaveIntervalMinutes={creatorState.autosaveIntervalMinutes}
+          autosaveMinMessages={creatorState.autosaveMinMessages}
+          retentionDays={creatorState.retentionDays}
+          retentionMaxSnapshots={creatorState.retentionMaxSnapshots}
+          onAutosaveStrategyChange={onAutosaveStrategyChange}
+          onAutosaveIntervalMinutesChange={onAutosaveIntervalMinutesChange}
+          onAutosaveMinMessagesChange={onAutosaveMinMessagesChange}
+          onRetentionDaysChange={onRetentionDaysChange}
+          onRetentionMaxSnapshotsChange={onRetentionMaxSnapshotsChange}
+        />
+      ) : null}
+    </>
+  )
+}
+
+function SessionCreatorPanel({
+  showCreator,
+  projectId,
+  defaultProjectId,
+  settingDefaultProject,
+  creating,
+  creatorState,
+  onProjectChange,
+  onSetDefaultProject,
+  onTitleChange,
+  onProviderChange,
+  onVisibilityScopeChange,
+  onModelIdChange,
+  onSystemPromptChange,
+  onAutosaveEnabledChange,
+  onAutosaveStrategyChange,
+  onAutosaveIntervalMinutesChange,
+  onAutosaveMinMessagesChange,
+  onRetentionDaysChange,
+  onRetentionMaxSnapshotsChange,
+  onSubmit,
+}: SessionCreatorPanelProps) {
+  return (
+    <CreatorPanel data-testid="session-create-panel">
+      {showCreator ? (
+        <CreatorForm onSubmit={(event) => void onSubmit(event)}>
+          <CreatorFields>
+            <ProjectSelectionField
+              projectId={projectId}
+              defaultProjectId={defaultProjectId}
+              settingDefaultProject={settingDefaultProject}
+              onProjectChange={onProjectChange}
+              onSetDefaultProject={onSetDefaultProject}
+            />
+            <SessionCreatorFields
+              creatorState={creatorState}
+              onTitleChange={onTitleChange}
+              onProviderChange={onProviderChange}
+              onVisibilityScopeChange={onVisibilityScopeChange}
+              onModelIdChange={onModelIdChange}
+              onSystemPromptChange={onSystemPromptChange}
+              onAutosaveEnabledChange={onAutosaveEnabledChange}
+              onAutosaveStrategyChange={onAutosaveStrategyChange}
+              onAutosaveIntervalMinutesChange={onAutosaveIntervalMinutesChange}
+              onAutosaveMinMessagesChange={onAutosaveMinMessagesChange}
+              onRetentionDaysChange={onRetentionDaysChange}
+              onRetentionMaxSnapshotsChange={onRetentionMaxSnapshotsChange}
+            />
+          </CreatorFields>
+
+          <CreatorStickyFooter>
+            <button type="submit" disabled={creating || !projectId.trim() || !creatorState.title.trim()}>
+              {creating ? 'Creating...' : 'Create Session'}
+            </button>
+          </CreatorStickyFooter>
+        </CreatorForm>
+      ) : null}
+    </CreatorPanel>
+  )
+}
+
+function SessionHistoryPanel({ loading, sessions, selectedSessionId, onSelectSession }: SessionHistoryPanelProps) {
+  return (
+    <SessionListPanel data-testid="session-list-panel">
+      <SessionListHeader>
+        <SectionLabel>Previous Sessions</SectionLabel>
+      </SessionListHeader>
+
+      <SessionListSection>
+        {loading ? <MutedText>Loading sessions...</MutedText> : null}
+        {!loading && sessions.length === 0 ? <MutedText>No sessions for this project.</MutedText> : null}
+
+        {sessions.map((session) => (
+          <SessionItemButton
+            key={session.session_id}
+            $active={selectedSessionId === session.session_id}
+            aria-current={selectedSessionId === session.session_id ? 'true' : undefined}
+            type="button"
+            onClick={() => onSelectSession(session.session_id)}
+          >
+            <span className="font-semibold">{session.title}</span>
+            <SessionMeta>
+              {session.provider}/{session.model_id}
+            </SessionMeta>
+          </SessionItemButton>
+        ))}
+      </SessionListSection>
+    </SessionListPanel>
+  )
+}
+
 export function SessionSidebar({
   sessions,
   selectedSessionId,
@@ -161,46 +571,44 @@ export function SessionSidebar({
   onSelectSession,
   onCreateSession,
 }: SessionSidebarProps) {
-  const [title, setTitle] = useState('New chat session')
+  const [title, setTitle] = useState(DEFAULT_SESSION_TITLE)
   const [provider, setProvider] = useState<ChatProvider>(defaultProvider)
-  const [modelId, setModelId] = useState(modelDefaults[defaultProvider])
+  const [modelId, setModelId] = useState(modelDefaults[defaultProvider] ?? '')
   const [systemPrompt, setSystemPrompt] = useState('')
   const [visibilityScope, setVisibilityScope] = useState<VisibilityScope>(defaultVisibilityScope)
   const [autosaveEnabled, setAutosaveEnabled] = useState(false)
   const [autosaveStrategy, setAutosaveStrategy] = useState<ChatAutosaveStrategy>('interval')
-  const [autosaveIntervalMinutes, setAutosaveIntervalMinutes] = useState(30)
-  const [autosaveMinMessages, setAutosaveMinMessages] = useState(6)
-  const [retentionDays, setRetentionDays] = useState(30)
-  const [retentionMaxSnapshots, setRetentionMaxSnapshots] = useState(60)
+  const [autosaveIntervalMinutes, setAutosaveIntervalMinutes] = useState(DEFAULT_AUTOSAVE_INTERVAL_MINUTES)
+  const [autosaveMinMessages, setAutosaveMinMessages] = useState(DEFAULT_AUTOSAVE_MIN_MESSAGES)
+  const [retentionDays, setRetentionDays] = useState(DEFAULT_RETENTION_DAYS)
+  const [retentionMaxSnapshots, setRetentionMaxSnapshots] = useState(DEFAULT_RETENTION_MAX_SNAPSHOTS)
   const [showCreator, setShowCreator] = useState(true)
 
-  const sortedSessions = useMemo(
-    () => [...sessions].sort((a, b) => b.created_at.localeCompare(a.created_at)),
-    [sessions],
-  )
+  const sortedSessions = useMemo(() => sortedByNewest(sessions), [sessions])
+
+  const creatorState: CreatorState = {
+    title,
+    provider,
+    modelId,
+    systemPrompt,
+    visibilityScope,
+    autosaveEnabled,
+    autosaveStrategy,
+    autosaveIntervalMinutes,
+    autosaveMinMessages,
+    retentionDays,
+    retentionMaxSnapshots,
+  }
 
   const handleProviderChange = (nextProvider: ChatProvider) => {
     setProvider(nextProvider)
-    setModelId(modelDefaults[nextProvider])
+    setModelId(modelDefaults[nextProvider] ?? '')
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    await onCreateSession({
-      project_id: projectId,
-      title: title.trim(),
-      provider,
-      model_id: modelId.trim(),
-      system_prompt: systemPrompt.trim(),
-      visibility_scope: visibilityScope,
-      autosave_enabled: autosaveEnabled,
-      autosave_strategy: autosaveEnabled ? autosaveStrategy : 'off',
-      autosave_interval_minutes: autosaveIntervalMinutes,
-      autosave_min_messages: autosaveMinMessages,
-      retention_days: retentionDays,
-      retention_max_snapshots: retentionMaxSnapshots,
-    })
-    setTitle('New chat session')
+    await onCreateSession(buildCreateSessionPayload(projectId, creatorState))
+    setTitle(DEFAULT_SESSION_TITLE)
   }
 
   return (
@@ -213,190 +621,35 @@ export function SessionSidebar({
       </PaneHeader>
 
       <SidebarBody $showCreator={showCreator}>
-        <CreatorPanel data-testid="session-create-panel">
-          {showCreator ? (
-            <CreatorForm onSubmit={handleSubmit}>
-              <CreatorFields>
-                <FieldBlock>
-                  <label htmlFor="project-id">Project ID</label>
-                  <SplitGrid>
-                    <input
-                      id="project-id"
-                      value={projectId}
-                      onChange={(event) => onProjectChange(event.target.value)}
-                      placeholder="project-id"
-                    />
-                    <button
-                      type="button"
-                      disabled={settingDefaultProject || !projectId.trim() || !onSetDefaultProject}
-                      onClick={() => {
-                        void onSetDefaultProject?.()
-                      }}
-                    >
-                      {settingDefaultProject ? 'Saving…' : 'Set Default'}
-                    </button>
-                  </SplitGrid>
-                  <MutedText>
-                    Default Project: <strong>{defaultProjectId || 'not configured'}</strong>
-                  </MutedText>
-                </FieldBlock>
+        <SessionCreatorPanel
+          showCreator={showCreator}
+          projectId={projectId}
+          defaultProjectId={defaultProjectId}
+          settingDefaultProject={settingDefaultProject}
+          creating={creating}
+          creatorState={creatorState}
+          onProjectChange={onProjectChange}
+          onSetDefaultProject={onSetDefaultProject}
+          onTitleChange={setTitle}
+          onProviderChange={handleProviderChange}
+          onVisibilityScopeChange={setVisibilityScope}
+          onModelIdChange={setModelId}
+          onSystemPromptChange={setSystemPrompt}
+          onAutosaveEnabledChange={setAutosaveEnabled}
+          onAutosaveStrategyChange={setAutosaveStrategy}
+          onAutosaveIntervalMinutesChange={setAutosaveIntervalMinutes}
+          onAutosaveMinMessagesChange={setAutosaveMinMessages}
+          onRetentionDaysChange={setRetentionDays}
+          onRetentionMaxSnapshotsChange={setRetentionMaxSnapshots}
+          onSubmit={handleSubmit}
+        />
 
-                <label htmlFor="session-title">Title</label>
-                <input
-                  id="session-title"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  required
-                />
-
-                <SplitGrid>
-                  <FieldBlock>
-                    <label htmlFor="provider">Provider</label>
-                    <select
-                      id="provider"
-                      value={provider}
-                      onChange={(event) => handleProviderChange(event.target.value as ChatProvider)}
-                    >
-                      <option value="openai">OpenAI</option>
-                      <option value="anthropic">Anthropic</option>
-                      <option value="bedrock">Bedrock</option>
-                    </select>
-                  </FieldBlock>
-
-                  <FieldBlock>
-                    <label htmlFor="visibility">Visibility</label>
-                    <select
-                      id="visibility"
-                      value={visibilityScope}
-                      onChange={(event) => setVisibilityScope(event.target.value as VisibilityScope)}
-                    >
-                      <option value="private">Private</option>
-                      <option value="project">Project</option>
-                    </select>
-                  </FieldBlock>
-                </SplitGrid>
-
-                <label htmlFor="model-id">Model</label>
-                <input id="model-id" value={modelId} onChange={(event) => setModelId(event.target.value)} required />
-
-                <label htmlFor="system-prompt">System Prompt</label>
-                <textarea
-                  id="system-prompt"
-                  value={systemPrompt}
-                  onChange={(event) => setSystemPrompt(event.target.value)}
-                  rows={3}
-                  placeholder="Optional guidance for the assistant"
-                />
-
-                <CheckboxRow htmlFor="autosave-enabled">
-                  <input
-                    id="autosave-enabled"
-                    type="checkbox"
-                    checked={autosaveEnabled}
-                    onChange={(event) => setAutosaveEnabled(event.target.checked)}
-                  />
-                  <span>Enable autosave snapshots</span>
-                </CheckboxRow>
-
-                {autosaveEnabled ? (
-                  <>
-                    <FieldBlock>
-                      <label htmlFor="autosave-strategy">Autosave Strategy</label>
-                      <select
-                        id="autosave-strategy"
-                        value={autosaveStrategy}
-                        onChange={(event) => setAutosaveStrategy(event.target.value as ChatAutosaveStrategy)}
-                      >
-                        <option value="interval">Interval</option>
-                        <option value="message_count">Message Count</option>
-                      </select>
-                    </FieldBlock>
-
-                    {autosaveStrategy === 'interval' ? (
-                      <FieldBlock>
-                        <label htmlFor="autosave-interval-minutes">Autosave Interval (minutes)</label>
-                        <input
-                          id="autosave-interval-minutes"
-                          type="number"
-                          min={1}
-                          value={autosaveIntervalMinutes}
-                          onChange={(event) => setAutosaveIntervalMinutes(Number(event.target.value) || 1)}
-                        />
-                      </FieldBlock>
-                    ) : (
-                      <FieldBlock>
-                        <label htmlFor="autosave-min-messages">Autosave Every N Assistant Messages</label>
-                        <input
-                          id="autosave-min-messages"
-                          type="number"
-                          min={1}
-                          value={autosaveMinMessages}
-                          onChange={(event) => setAutosaveMinMessages(Number(event.target.value) || 1)}
-                        />
-                      </FieldBlock>
-                    )}
-
-                    <SplitGrid>
-                      <FieldBlock>
-                        <label htmlFor="retention-days">Retention Days</label>
-                        <input
-                          id="retention-days"
-                          type="number"
-                          min={1}
-                          value={retentionDays}
-                          onChange={(event) => setRetentionDays(Number(event.target.value) || 1)}
-                        />
-                      </FieldBlock>
-
-                      <FieldBlock>
-                        <label htmlFor="retention-max-snapshots">Max Snapshots</label>
-                        <input
-                          id="retention-max-snapshots"
-                          type="number"
-                          min={1}
-                          value={retentionMaxSnapshots}
-                          onChange={(event) => setRetentionMaxSnapshots(Number(event.target.value) || 1)}
-                        />
-                      </FieldBlock>
-                    </SplitGrid>
-                  </>
-                ) : null}
-              </CreatorFields>
-
-              <CreatorStickyFooter>
-                <button type="submit" disabled={creating || !projectId.trim() || !title.trim()}>
-                  {creating ? 'Creating...' : 'Create Session'}
-                </button>
-              </CreatorStickyFooter>
-            </CreatorForm>
-          ) : null}
-        </CreatorPanel>
-
-        <SessionListPanel data-testid="session-list-panel">
-          <SessionListHeader>
-            <SectionLabel>Previous Sessions</SectionLabel>
-          </SessionListHeader>
-
-          <SessionListSection>
-            {loading ? <MutedText>Loading sessions...</MutedText> : null}
-            {!loading && sortedSessions.length === 0 ? <MutedText>No sessions for this project.</MutedText> : null}
-
-            {sortedSessions.map((session) => (
-              <SessionItemButton
-                key={session.session_id}
-                $active={selectedSessionId === session.session_id}
-                aria-current={selectedSessionId === session.session_id ? 'true' : undefined}
-                type="button"
-                onClick={() => onSelectSession(session.session_id)}
-              >
-                <span className="font-semibold">{session.title}</span>
-                <SessionMeta>
-                  {session.provider}/{session.model_id}
-                </SessionMeta>
-              </SessionItemButton>
-            ))}
-          </SessionListSection>
-        </SessionListPanel>
+        <SessionHistoryPanel
+          loading={loading}
+          sessions={sortedSessions}
+          selectedSessionId={selectedSessionId}
+          onSelectSession={onSelectSession}
+        />
       </SidebarBody>
     </GlassPane>
   )
