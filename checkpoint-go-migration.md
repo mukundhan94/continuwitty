@@ -16,7 +16,8 @@
 | CP1 | 2026-02-22 | Completed | Go module scaffold + `internal/config` port + migrated config tests |
 | CP2 | 2026-02-22 | Completed | `internal/db` port + migrated db tests |
 | CP3 | 2026-02-22 | Completed | API entrypoint scaffold + health/version route parity tests |
-| CP4 | 2026-02-22 | Pending | Repository layer migration kickoff |
+| CP4 | 2026-02-22 | Completed | Auth baseline (`password` + CSRF) parity with migrated tests |
+| CP5 | 2026-02-22 | In Progress | Repository layer migration kickoff |
 
 ## Checkpoint Details
 
@@ -72,7 +73,31 @@
   - `internal/db/db.go` → 10.0
   - `internal/db/db_test.go` → 9.61
 
-### CP4 - Repository Layer Kickoff (Planned)
+### CP4 - Auth Baseline
+
+- Added `internal/auth/password.go` with Python-parity behavior:
+  - `GenerateCSRFToken` (URL-safe random token)
+  - `HashPassword` (`pbkdf2_sha256$390000$<salt>$<digest>`)
+  - `VerifyPassword` parser + constant-time compare
+- Ported auth tests to `internal/auth/password_test.go`.
+- Executed migrated tests one-by-one:
+  - `TestHashPasswordWithProvidedSaltProducesExpectedFormat`
+  - `TestVerifyPasswordRoundTrip`
+  - `TestVerifyPasswordMatchesBootstrapAdminHash`
+  - `TestVerifyPasswordRejectsInvalidEncodings`
+  - `TestGenerateCSRFTokenIsURLSafeAndRandom`
+- Ran file-level CodeScene checks for current Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+
+### CP5 - Repository Layer Kickoff (Planned)
 
 - Start with engram repository read/write parity for the first API-backed flows.
 - Migrate repository-focused tests incrementally and keep one-by-one test execution.

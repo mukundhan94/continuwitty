@@ -90,6 +90,37 @@
      - `internal/db/db.go`: fixed prior `Excess Number of Function Arguments` finding.
      - `internal/db/db_test.go`: fixed prior duplication finding; remaining findings are low-severity test complexity smells.
 
+### 2026-02-22 (Go migration CP4: auth parity)
+
+1. Added Go auth primitives:
+   - `internal/auth/password.go`
+   - `GenerateCSRFToken` with URL-safe random encoding.
+   - `HashPassword` + `VerifyPassword` with Python-compatible `pbkdf2_sha256` format and 390000 iterations.
+2. Ported auth tests:
+   - `internal/auth/password_test.go`
+3. Executed migrated tests one-by-one:
+   - `go test ./internal/auth -run '^TestHashPasswordWithProvidedSaltProducesExpectedFormat$' -v`
+   - `go test ./internal/auth -run '^TestVerifyPasswordRoundTrip$' -v`
+   - `go test ./internal/auth -run '^TestVerifyPasswordMatchesBootstrapAdminHash$' -v`
+   - `go test ./internal/auth -run '^TestVerifyPasswordRejectsInvalidEncodings$' -v`
+   - `go test ./internal/auth -run '^TestGenerateCSRFTokenIsURLSafeAndRandom$' -v`
+4. Full Go verification:
+   - `go test ./...`
+5. File-level CodeScene checks (all current Go migration files before commit):
+   - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/config/config.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db_test.go` -> `9.61`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password_test.go` -> `9.68`
+6. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (CodeScene pre-commit safeguard for immediate-phase closeout bundle)
 
 1. Ran CodeScene MCP pre-commit health gate on the working tree:
