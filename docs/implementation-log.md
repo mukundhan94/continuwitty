@@ -498,6 +498,75 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP12: project repository baseline)
+
+1. Added project model:
+   - `internal/models/project.go`
+   - `ProjectRecord`
+2. Added project repository operations:
+   - `internal/repository/project.go`
+   - `ListProjectsForActor`
+   - `GetProjectForActor`
+   - `CreateProject`
+   - `EnsureProjectExists`
+   - `GetUserDefaultProjectID`
+   - `SetUserDefaultProjectID`
+3. Added project repository tests:
+   - `internal/repository/project_test.go`
+   - `TestListProjectsForActorScopesNonAdminAndArchived`
+   - `TestGetProjectForActorReturnsNilWhenMissing`
+   - `TestCreateProjectReturnsRecord`
+   - `TestEnsureProjectExistsReturnsExistingBeforeCreate`
+   - `TestGetUserDefaultProjectIDReturnsValueAndNil`
+   - `TestSetUserDefaultProjectIDReturnsBool`
+4. Executed migrated tests one-by-one:
+   - `go test ./internal/repository -run '^TestListProjectsForActorScopesNonAdminAndArchived$' -v`
+   - `go test ./internal/repository -run '^TestGetProjectForActorReturnsNilWhenMissing$' -v`
+   - `go test ./internal/repository -run '^TestCreateProjectReturnsRecord$' -v`
+   - `go test ./internal/repository -run '^TestEnsureProjectExistsReturnsExistingBeforeCreate$' -v`
+   - `go test ./internal/repository -run '^TestGetUserDefaultProjectIDReturnsValueAndNil$' -v`
+   - `go test ./internal/repository -run '^TestSetUserDefaultProjectIDReturnsBool$' -v`
+5. Full Go verification:
+   - `go test ./...`
+6. File-level CodeScene checks (all current Go migration files before commit):
+   - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db_test.go` -> `9.61`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/errors.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/chat.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/engram.go` -> `N/A` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/project.go` -> `N/A` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/user.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat.go` -> `9.02`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_test.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_helpers_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_rehydration.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_rehydration_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_repository_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_store.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_unit_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_write.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_write_test.go` -> `9.26`
+   - `/Users/mukundhan/Projects/engram/internal/repository/project.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/project_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user_test.go` -> `10.0`
+7. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (CodeScene pre-commit safeguard for immediate-phase closeout bundle)
 
 1. Ran CodeScene MCP pre-commit health gate on the working tree:
