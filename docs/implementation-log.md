@@ -30,6 +30,30 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP2: DB transaction/bootstrap parity)
+
+1. Added Go DB baseline package:
+   - `internal/db/db.go`
+2. Ported DB runtime behavior from Python:
+   - transaction commit/rollback semantics via `WithTransaction`
+   - schema bootstrap execution via `EnsureSchemaInitialized`
+   - production bootstrap-admin credential hardening parity
+   - pgx pool wiring helpers (`NewPool`, `Ping`, `PgxPoolBeginner`)
+3. Ported DB tests from `api/tests/test_db.py`:
+   - `internal/db/db_test.go`
+4. Executed migrated Go tests one-by-one:
+   - `go test ./internal/db -run '^TestWithTransactionCommitsOnSuccess$' -v`
+   - `go test ./internal/db -run '^TestWithTransactionRollsBackOnError$' -v`
+   - `go test ./internal/db -run '^TestEnsureSchemaInitializedExecutesSchemaSQL$' -v`
+   - `go test ./internal/db -run '^TestHardenBootstrapAdminCredentialsUpdatesDefaultHash$' -v`
+   - `go test ./internal/db -run '^TestHardenBootstrapAdminCredentialsSkipsNonDefaultHash$' -v`
+5. Package-level verification:
+   - `go test ./internal/config ./internal/db`
+6. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (CodeScene pre-commit safeguard for immediate-phase closeout bundle)
 
 1. Ran CodeScene MCP pre-commit health gate on the working tree:

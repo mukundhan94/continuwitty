@@ -14,8 +14,8 @@
 | Checkpoint | Date | Status | Scope |
 |---|---|---|---|
 | CP1 | 2026-02-22 | Completed | Go module scaffold + `internal/config` port + migrated config tests |
-| CP2 | 2026-02-22 | In Progress | `internal/db` port + migrated db tests |
-| CP3 | 2026-02-22 | Pending | API entrypoint scaffold and phase docs sync |
+| CP2 | 2026-02-22 | Completed | `internal/db` port + migrated db tests |
+| CP3 | 2026-02-22 | In Progress | API entrypoint scaffold and phase docs sync |
 
 ## Checkpoint Details
 
@@ -34,11 +34,20 @@
   - `TestProductionSettingsRejectInsecureDefaults`
   - `TestProductionSettingsAcceptHardenedValues`
 
-### CP2 - DB Baseline (Planned)
+### CP2 - DB Baseline
 
-- Port DB connection helpers and schema bootstrap logic into `internal/db`.
-- Port `api/tests/test_db.py` behavior into Go tests.
-- Execute migrated DB tests one-by-one before commit.
+- Added `internal/db/db.go` with:
+  - transaction wrapper semantics (`WithTransaction`) with commit/rollback parity
+  - schema bootstrap entrypoint (`EnsureSchemaInitialized`) and default schema path resolver
+  - production bootstrap-admin hash hardening parity
+  - pgx pool helper wiring (`NewPool`, `Ping`, `PgxPoolBeginner`)
+- Ported `api/tests/test_db.py` behavior to `internal/db/db_test.go`.
+- Executed migrated tests one-by-one:
+  - `TestWithTransactionCommitsOnSuccess`
+  - `TestWithTransactionRollsBackOnError`
+  - `TestEnsureSchemaInitializedExecutesSchemaSQL`
+  - `TestHardenBootstrapAdminCredentialsUpdatesDefaultHash`
+  - `TestHardenBootstrapAdminCredentialsSkipsNonDefaultHash`
 
 ### CP3 - API Entrypoint Scaffold (Planned)
 
