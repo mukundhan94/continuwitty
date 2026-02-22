@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"engram/internal/models"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -19,18 +21,15 @@ func TestListCollectionsBuildsFilters(t *testing.T) {
 	createdAt := time.Date(2026, 2, 22, 16, 0, 0, 0, time.UTC)
 	db := &fakeQueryer{
 		queryRowsResult: &fakeRows{values: [][]any{
-			collectionRowValues(
-				collectionID,
-				"project-docs",
-				ownerUserID,
-				"Ops",
-				"Runbooks",
-				createdAt,
-				createdAt,
-				nil,
-				nil,
-				nil,
-			),
+			collectionRowValues(collectionRowFixture{
+				CollectionID: collectionID,
+				ProjectID:    "project-docs",
+				OwnerUserID:  ownerUserID,
+				Name:         "Ops",
+				Description:  "Runbooks",
+				CreatedAt:    createdAt,
+				UpdatedAt:    createdAt,
+			}),
 		}},
 	}
 	projectID := "project-docs"
@@ -66,18 +65,47 @@ func TestListCollectionsBuildsFilters(t *testing.T) {
 	}
 }
 
-func TestGetCollectionReturnsNilWhenMissing(t *testing.T) {
+func TestGetAndUpdateCollectionReturnNilWhenMissing(t *testing.T) {
 	db := &fakeQueryer{queryRowResult: &fakeRow{err: pgx.ErrNoRows}}
-
-	record, err := GetCollection(
-		context.Background(),
-		db,
-		uuid.MustParse("00000000-0000-0000-0000-000000000b11"),
-		false,
-	)
-	requireNoError(t, err)
-	if record != nil {
-		t.Fatalf("expected nil collection when missing")
+	testCases := []struct {
+		name    string
+		execute func() (*models.EngramCollectionRecord, error)
+	}{
+		{
+			name: "get",
+			execute: func() (*models.EngramCollectionRecord, error) {
+				return GetCollection(
+					context.Background(),
+					db,
+					uuid.MustParse("00000000-0000-0000-0000-000000000b11"),
+					false,
+				)
+			},
+		},
+		{
+			name: "update",
+			execute: func() (*models.EngramCollectionRecord, error) {
+				name := "Updated"
+				return UpdateCollection(
+					context.Background(),
+					db,
+					CollectionUpdateInput{
+						CollectionID: uuid.MustParse("00000000-0000-0000-0000-000000000b41"),
+						Name:         &name,
+					},
+				)
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			record, err := testCase.execute()
+			requireNoError(t, err)
+			if record != nil {
+				t.Fatalf("expected nil collection when missing")
+			}
+		})
 	}
 }
 
@@ -86,18 +114,15 @@ func TestCreateCollectionUsesGeneratedID(t *testing.T) {
 	ownerUserID := uuid.MustParse("00000000-0000-0000-0000-000000000b22")
 	createdAt := time.Date(2026, 2, 22, 16, 10, 0, 0, time.UTC)
 	db := &fakeQueryer{
-		queryRowResult: &fakeRow{values: collectionRowValues(
-			collectionID,
-			"project-docs",
-			ownerUserID,
-			"Ops",
-			"Runbooks",
-			createdAt,
-			createdAt,
-			nil,
-			nil,
-			nil,
-		)},
+		queryRowResult: &fakeRow{values: collectionRowValues(collectionRowFixture{
+			CollectionID: collectionID,
+			ProjectID:    "project-docs",
+			OwnerUserID:  ownerUserID,
+			Name:         "Ops",
+			Description:  "Runbooks",
+			CreatedAt:    createdAt,
+			UpdatedAt:    createdAt,
+		})},
 	}
 
 	originalCollectionUUID := newCollectionUUID
@@ -148,24 +173,6 @@ func TestCreateCollectionMapsDuplicateNameError(t *testing.T) {
 	}
 	if record != nil {
 		t.Fatalf("expected nil collection on duplicate error")
-	}
-}
-
-func TestUpdateCollectionReturnsNilWhenMissing(t *testing.T) {
-	db := &fakeQueryer{queryRowResult: &fakeRow{err: pgx.ErrNoRows}}
-	name := "Updated"
-
-	record, err := UpdateCollection(
-		context.Background(),
-		db,
-		CollectionUpdateInput{
-			CollectionID: uuid.MustParse("00000000-0000-0000-0000-000000000b41"),
-			Name:         &name,
-		},
-	)
-	requireNoError(t, err)
-	if record != nil {
-		t.Fatalf("expected nil collection when update affects no rows")
 	}
 }
 
@@ -274,38 +281,40 @@ func TestRemoveCollectionItemReturnsBool(t *testing.T) {
 	}
 }
 
-func collectionRowValues(
-	collectionID uuid.UUID,
-	projectID string,
-	ownerUserID uuid.UUID,
-	name string,
-	description string,
-	createdAt time.Time,
-	updatedAt time.Time,
-	deletedAt *time.Time,
-	deletedByUserID *uuid.UUID,
-	deleteReason *string,
-) []any {
+type collectionRowFixture struct {
+	CollectionID    uuid.UUID
+	ProjectID       string
+	OwnerUserID     uuid.UUID
+	Name            string
+	Description     string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	DeletedAt       *time.Time
+	DeletedByUserID *uuid.UUID
+	DeleteReason    *string
+}
+
+func collectionRowValues(fixture collectionRowFixture) []any {
 	var deletedAtValue any
-	if deletedAt != nil {
-		deletedAtValue = *deletedAt
+	if fixture.DeletedAt != nil {
+		deletedAtValue = *fixture.DeletedAt
 	}
 	var deletedByUserIDValue any
-	if deletedByUserID != nil {
-		deletedByUserIDValue = *deletedByUserID
+	if fixture.DeletedByUserID != nil {
+		deletedByUserIDValue = *fixture.DeletedByUserID
 	}
 	var deleteReasonValue any
-	if deleteReason != nil {
-		deleteReasonValue = *deleteReason
+	if fixture.DeleteReason != nil {
+		deleteReasonValue = *fixture.DeleteReason
 	}
 	return []any{
-		collectionID,
-		projectID,
-		ownerUserID,
-		name,
-		description,
-		createdAt,
-		updatedAt,
+		fixture.CollectionID,
+		fixture.ProjectID,
+		fixture.OwnerUserID,
+		fixture.Name,
+		fixture.Description,
+		fixture.CreatedAt,
+		fixture.UpdatedAt,
 		deletedAtValue,
 		deletedByUserIDValue,
 		deleteReasonValue,

@@ -318,6 +318,34 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP42: non-checkpoint code-health uplift for collection repository tests)
+
+1. Improved legacy non-checkpoint collection repository tests:
+   - `internal/repository/collection_test.go`
+   - replaced high-argument row-value helper with fixture struct:
+     - `collectionRowFixture`
+     - `collectionRowValues(fixture collectionRowFixture)`
+   - consolidated duplicated missing-row tests:
+     - merged `TestGetCollectionReturnsNilWhenMissing` and `TestUpdateCollectionReturnsNilWhenMissing`
+       into `TestGetAndUpdateCollectionReturnNilWhenMissing` with subtests.
+2. Executed collection repository tests one-by-one:
+   - `TestListCollectionsBuildsFilters`
+   - `TestGetAndUpdateCollectionReturnNilWhenMissing`
+   - `TestCreateCollectionUsesGeneratedID`
+   - `TestCreateCollectionMapsDuplicateNameError`
+   - `TestSoftDeleteCollectionReturnsBool`
+   - `TestAddCollectionItemsReturnsCountAndSkipsEmpty`
+   - `TestRemoveCollectionItemReturnsBool`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/collection_test.go` improved from `9.09` to `10.0`
+   - `code_health_review` now reports no findings.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (Go migration CP41: non-checkpoint code-health uplift for OAuth repository tests)
 
 1. Improved legacy non-checkpoint OAuth repository tests:
