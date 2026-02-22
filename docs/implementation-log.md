@@ -318,6 +318,31 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP46: non-checkpoint code-health uplift for engram write repository tests)
+
+1. Improved legacy non-checkpoint engram write repository tests:
+   - `internal/repository/engram_write_test.go`
+   - reduced large/complex primary write-path test by extracting fixture-driven helpers:
+     - `buildCreateEngramWithReportFixture`
+     - `buildCreateEngramWithReportFakeQueryer`
+     - `setupCreateEngramWithReportStubs`
+     - `assertCreateEngramWithReportResult`
+     - `assertCreateEngramWithReportWrites`
+   - preserved SQL/argument assertions and enrichment report behavior while reducing method size/complexity.
+2. Executed engram write tests one-by-one:
+   - `TestCreateEngramWithReportPersistsEngramSourcesAndArtifacts`
+   - `TestCreateEngramWithReportReturnsEmbedErrorAndSkipsWrites`
+   - `TestCreateEngramReturnsCreatedResponse`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_write_test.go` improved from `9.26` to `10.0`
+   - no remaining findings.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none.
+
 ### 2026-02-22 (Go migration CP45: non-checkpoint code-health uplift for chat pinning repository implementation)
 
 1. Improved legacy non-checkpoint chat pinning repository implementation:

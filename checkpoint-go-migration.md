@@ -2601,3 +2601,28 @@
     - fixed code-duplication findings across pin/unpin/list wrappers
     - fixed argument-count findings on `pinResourceToSession` and `unpinResourceFromSession`
     - introduced one non-blocking helper arg-count note on `listPinnedResourceRecords`.
+
+### CP46 - Non-Checkpoint Code-Health Uplift (`internal/repository/engram_write_test.go`)
+
+- Improved legacy non-checkpoint engram write repository test file:
+  - `internal/repository/engram_write_test.go`
+  - reduced large/complex primary write-path test by extracting fixture-driven helpers:
+    - `buildCreateEngramWithReportFixture`
+    - `buildCreateEngramWithReportFakeQueryer`
+    - `setupCreateEngramWithReportStubs`
+    - `assertCreateEngramWithReportResult`
+    - `assertCreateEngramWithReportWrites`
+  - preserved all behavioral assertions around SQL shape, embedded payload args, and enrichment report contract.
+- Executed migrated tests one-by-one:
+  - `TestCreateEngramWithReportPersistsEngramSourcesAndArtifacts`
+  - `TestCreateEngramWithReportReturnsEmbedErrorAndSkipsWrites`
+  - `TestCreateEngramReturnsCreatedResponse`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/engram_write_test.go` score improved from `9.26` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
