@@ -47,6 +47,7 @@ func NewRouterWithDependencies(settings config.Settings, dependencies RouterDepe
 	}
 	if dependencies.SessionAuth.SessionManager != nil {
 		MountSessionAuthRoutes(router, dependencies.SessionAuth)
+		MountSessionUIRoutes(router, dependencies.SessionAuth)
 	}
 
 	return router

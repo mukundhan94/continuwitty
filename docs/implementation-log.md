@@ -318,6 +318,61 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP29: UI/login parity baseline)
+
+1. Added session-backed UI auth routes:
+   - `internal/api/session_ui.go`
+   - `GET /` redirects to `/login` when unauthenticated and `/ui` when authenticated.
+   - `GET /login` renders login form with hidden `csrf_token`.
+   - `POST /login` authenticates against user repository and refreshes session/CSRF state.
+   - `POST /logout` validates form CSRF token and clears session cookie.
+   - `GET /ui` renders authenticated dashboard and logout form with CSRF token.
+2. Updated router composition to mount UI routes alongside session API routes:
+   - `internal/api/router.go`
+3. Refactored shared session helpers for route parity:
+   - `internal/api/session_auth.go`
+   - extracted reusable CSRF session-state helper and authenticated-session state builder.
+4. Added migrated tests:
+   - `internal/api/session_ui_test.go`
+   - updated `internal/api/router_test.go` for `/login` mounting expectations.
+5. Executed migrated tests one-by-one:
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLoginRejectsInvalidCredentials$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLoginRejectsInvalidCSRF$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLoginAndLogoutWorkflow$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLoginRedirectPathSanitization$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLogoutRejectsInvalidCSRF$'`
+   - `go test ./internal/api -run '^TestSessionAuthRoutesNotMountedWithoutDependencies$'`
+   - `go test ./internal/api -run '^TestSessionAuthRoutesMountedWithDependencies$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesLoginSetsSessionCookie$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesLoginRejectsInvalidCSRF$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesMeUsesSessionActorMiddleware$'`
+   - `go test ./internal/auth -run '^TestSessionManagerEncodeDecodeRoundTrip$'`
+   - `go test ./internal/auth -run '^TestSessionManagerDecodeRejectsExpiredToken$'`
+6. Full Go verification:
+   - `go test ./...` passed.
+7. File-level CodeScene checks before commit:
+   - scored all 71 Go files via `code_health_score`.
+   - struct-only model files explicitly reviewed:
+     - `internal/models/oauth.go`
+     - `internal/models/project.go`
+     - `internal/models/collection.go`
+     - `internal/models/engram.go`
+     - `code_health_review` results: `score=null`, `review=[]`.
+   - changed-file score highlights:
+     - `/Users/mukundhan/Projects/engram/internal/api/router.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/api/session_auth.go` -> `8.28`
+     - `/Users/mukundhan/Projects/engram/internal/api/session_ui.go` -> `8.81`
+     - `/Users/mukundhan/Projects/engram/internal/api/session_ui_test.go` -> `8.81`
+8. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (Go migration CP28: session hardening baseline)
 
 1. Hardened session token lifecycle semantics:

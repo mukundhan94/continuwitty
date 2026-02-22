@@ -137,6 +137,14 @@ func TestSessionAuthRoutesNotMountedWithoutDependencies(t *testing.T) {
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d", response.Code)
 	}
+
+	uiRequest := httptest.NewRequest(http.MethodGet, "/login", nil)
+	uiResponse := httptest.NewRecorder()
+	router.ServeHTTP(uiResponse, uiRequest)
+
+	if uiResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", uiResponse.Code)
+	}
 }
 
 func TestSessionAuthRoutesMountedWithDependencies(t *testing.T) {
@@ -162,5 +170,13 @@ func TestSessionAuthRoutesMountedWithDependencies(t *testing.T) {
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", response.Code)
+	}
+
+	uiRequest := httptest.NewRequest(http.MethodGet, "/login", nil)
+	uiResponse := httptest.NewRecorder()
+	router.ServeHTTP(uiResponse, uiRequest)
+
+	if uiResponse.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", uiResponse.Code)
 	}
 }

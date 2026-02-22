@@ -41,7 +41,8 @@
 | CP26 | 2026-02-22 | Completed | Auth/session integration baseline (session-cookie middleware populates canonical admin actor context) |
 | CP27 | 2026-02-22 | Completed | Auth/session route baseline (`/api/v1/session/*` + `/api/v1/me`) with cookie + CSRF login/logout parity wiring |
 | CP28 | 2026-02-22 | Completed | Auth/session hardening baseline (session TTL/issued-at validation + secure cookie attributes + route handler health refactor) |
-| CP29 | 2026-02-22 | In Progress | Auth/session continuation (UI/login parity integration and post-hardening endpoint parity) |
+| CP29 | 2026-02-22 | Completed | UI/login parity baseline (`/`, `/login`, `/logout`, `/ui`) with form CSRF/session contract on hardened auth state |
+| CP30 | 2026-02-22 | In Progress | Auth/session continuation (rate-limit/audit parity and remaining UI/auth integration gaps) |
 
 ## Checkpoint Details
 
@@ -1877,9 +1878,73 @@
   - result: `quality_gates=passed`
   - notes: `MountSessionAuthRoutes` complex-method gate was fixed via handler extraction; no blocking findings remained.
 
-### CP29 - Auth/Session Continuation (Planned)
+### CP29 - UI/Login Parity Baseline
+
+- Added migration UI auth routes:
+  - `internal/api/session_ui.go`
+  - `GET /` redirects to `/login` when unauthenticated and `/ui` when authenticated.
+  - `GET /login` renders form-based login page with hidden `csrf_token` and optional `next` sanitization.
+  - `POST /login` authenticates using canonical session dependencies and redirects with refreshed session state.
+  - `POST /logout` validates form CSRF token and clears session cookie.
+  - `GET /ui` serves authenticated dashboard with logout form CSRF token.
+- Updated router composition to mount UI/session routes with session auth dependencies:
+  - `internal/api/router.go`
+- Refactored shared session helpers for UI/API cohesion:
+  - `internal/api/session_auth.go`
+  - extracted reusable CSRF session-state helper and authenticated-session state builder.
+- Added migrated tests:
+  - `internal/api/session_ui_test.go`
+    - `TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated`
+    - `TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated`
+    - `TestMountSessionUIRoutesLoginRejectsInvalidCredentials`
+    - `TestMountSessionUIRoutesLoginRejectsInvalidCSRF`
+    - `TestMountSessionUIRoutesLoginAndLogoutWorkflow`
+    - `TestMountSessionUIRoutesLoginRedirectPathSanitization`
+    - `TestMountSessionUIRoutesLogoutRejectsInvalidCSRF`
+  - `internal/api/router_test.go`
+    - session-auth route mount tests now also assert `/login` route availability parity.
+- Executed migrated tests one-by-one:
+  - `TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCredentials`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginAndLogoutWorkflow`
+  - `TestMountSessionUIRoutesLoginRedirectPathSanitization`
+  - `TestMountSessionUIRoutesLogoutRejectsInvalidCSRF`
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+  - `TestSessionManagerEncodeDecodeRoundTrip`
+  - `TestSessionManagerDecodeRejectsExpiredToken`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - all `.go` files in the repository were scored.
+  - struct-only models with unavailable score were explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - changed-file score highlights:
+    - `internal/api/router.go` -> `10.0`
+    - `internal/api/router_test.go` -> `10.0`
+    - `internal/api/session_auth.go` -> `8.28`
+    - `internal/api/session_ui.go` -> `8.81`
+    - `internal/api/session_ui_test.go` -> `8.81`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP30 - Auth/Session Continuation (Planned)
 
 - Continue migration with the next high-value slice:
-  - finalize UI/login parity integration against the hardened session/cookie contract.
-  - complete remaining auth endpoint parity and regression tests.
+  - port login-attempt guard/rate-limit behavior from Python (`login_guard.py`) into Go auth middleware.
+  - add audit event parity for UI login/logout failure/success paths.
+  - close remaining UI/auth integration gaps after baseline route parity.
 - Keep parity tests migrated and executed one-by-one.

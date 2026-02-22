@@ -68,19 +68,8 @@ func MountSessionAuthRoutes(router chi.Router, dependencies SessionAuthDependenc
 }
 
 func (dependencies sessionAuthDependencies) handleCSRF(writer http.ResponseWriter, request *http.Request) {
-	if !dependencies.validateCoreDependencies(writer) {
-		return
-	}
-	state, _ := dependencies.manager.DecodeRequest(request)
-	if strings.TrimSpace(state.CSRFToken) == "" {
-		token, err := dependencies.generateCSRFToken()
-		if err != nil {
-			writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "failed to generate csrf token"})
-			return
-		}
-		state.CSRFToken = token
-	}
-	if !dependencies.writeSessionCookie(writer, state) {
+	state, ok := dependencies.ensureCSRFSessionState(writer, request)
+	if !ok {
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]string{"csrf_token": state.CSRFToken})
@@ -102,6 +91,28 @@ func (dependencies sessionAuthDependencies) handleLogin(writer http.ResponseWrit
 		return
 	}
 	dependencies.writeLoginSuccess(writer, record)
+}
+
+func (dependencies sessionAuthDependencies) ensureCSRFSessionState(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (auth.SessionState, bool) {
+	if !dependencies.validateCoreDependencies(writer) {
+		return auth.SessionState{}, false
+	}
+	state, _ := dependencies.manager.DecodeRequest(request)
+	if strings.TrimSpace(state.CSRFToken) == "" {
+		token, err := dependencies.generateCSRFToken()
+		if err != nil {
+			writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "failed to generate csrf token"})
+			return auth.SessionState{}, false
+		}
+		state.CSRFToken = token
+	}
+	if !dependencies.writeSessionCookie(writer, state) {
+		return auth.SessionState{}, false
+	}
+	return state, true
 }
 
 func (dependencies sessionAuthDependencies) validateLoginDependencies(writer http.ResponseWriter) bool {
@@ -152,6 +163,17 @@ func (dependencies sessionAuthDependencies) authenticateLogin(
 	return record, true
 }
 
+func buildAuthenticatedSessionState(record *models.UserAuthRecord, csrfToken string) auth.SessionState {
+	return auth.SessionState{
+		User: &auth.SessionUser{
+			UserID:   record.UserID.String(),
+			Username: record.Username,
+			Role:     string(record.Role),
+		},
+		CSRFToken: csrfToken,
+	}
+}
+
 func (dependencies sessionAuthDependencies) writeLoginSuccess(
 	writer http.ResponseWriter,
 	record *models.UserAuthRecord,
@@ -161,14 +183,7 @@ func (dependencies sessionAuthDependencies) writeLoginSuccess(
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "failed to generate csrf token"})
 		return
 	}
-	nextState := auth.SessionState{
-		User: &auth.SessionUser{
-			UserID:   record.UserID.String(),
-			Username: record.Username,
-			Role:     string(record.Role),
-		},
-		CSRFToken: nextCSRFToken,
-	}
+	nextState := buildAuthenticatedSessionState(record, nextCSRFToken)
 	if !dependencies.writeSessionCookie(writer, nextState) {
 		return
 	}
