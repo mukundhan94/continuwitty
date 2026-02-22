@@ -433,6 +433,71 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP11: chat session repository baseline)
+
+1. Added chat models and enum parsers:
+   - `internal/models/chat.go`
+   - `ChatProvider`, `VisibilityScope`, `ChatAutosaveStrategy`
+   - `ChatSessionCreateRequest`, `ChatSessionUpdateRequest`, `ChatSessionRecord`
+2. Added chat session repository operations:
+   - `internal/repository/chat.go`
+   - `CreateChatSession`
+   - `ListChatSessions`
+   - `GetChatSession`
+   - `UpdateChatSession`
+3. Added chat repository tests:
+   - `internal/repository/chat_test.go`
+   - `TestCreateChatSessionReturnsInsertedRecord`
+   - `TestListChatSessionsAppliesVisibilityAndProjectFilter`
+   - `TestGetChatSessionReturnsNilWhenMissing`
+   - `TestUpdateChatSessionReturnsNilWhenNoRows`
+   - `TestUpdateChatSessionValidatesProviderValue`
+   - `TestNormalizeCreatePayloadRejectsInvalidVisibility`
+4. Executed migrated tests one-by-one:
+   - `go test ./internal/repository -run '^TestCreateChatSessionReturnsInsertedRecord$' -v`
+   - `go test ./internal/repository -run '^TestListChatSessionsAppliesVisibilityAndProjectFilter$' -v`
+   - `go test ./internal/repository -run '^TestGetChatSessionReturnsNilWhenMissing$' -v`
+   - `go test ./internal/repository -run '^TestUpdateChatSessionReturnsNilWhenNoRows$' -v`
+   - `go test ./internal/repository -run '^TestUpdateChatSessionValidatesProviderValue$' -v`
+   - `go test ./internal/repository -run '^TestNormalizeCreatePayloadRejectsInvalidVisibility$' -v`
+5. Full Go verification:
+   - `go test ./...`
+6. File-level CodeScene checks (all current Go migration files before commit):
+   - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db_test.go` -> `9.61`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/errors.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/chat.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/engram.go` -> `N/A` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/user.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat.go` -> `9.02`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_test.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_helpers_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_rehydration.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_rehydration_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_repository_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_store.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_unit_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_write.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_write_test.go` -> `9.26`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user_test.go` -> `10.0`
+7. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (CodeScene pre-commit safeguard for immediate-phase closeout bundle)
 
 1. Ran CodeScene MCP pre-commit health gate on the working tree:
