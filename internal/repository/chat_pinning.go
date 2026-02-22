@@ -33,6 +33,17 @@ type ChatPinnedListInput struct {
 	ActorUserID uuid.UUID
 }
 
+type chatPinResourceInput struct {
+	SessionID   uuid.UUID
+	ResourceID  uuid.UUID
+	ActorUserID uuid.UUID
+}
+
+type pinnedResourceMutationInput struct {
+	Config   pinnedResourceMutationConfig
+	Resource chatPinResourceInput
+}
+
 type pinnedResourceMutationConfig struct {
 	table                string
 	idColumn             string
@@ -89,27 +100,12 @@ func PinEngramToSession(
 	db Queryer,
 	input ChatPinEngramInput,
 ) (*models.PinnedEngramRecord, error) {
-	row, err := pinResourceToSession(
+	return pinResourceRecord(
 		ctx,
 		db,
-		engramPinMutationConfig,
-		input.SessionID,
-		input.EngramID,
-		input.ActorUserID,
+		engramMutationInput(input.resourceInput()),
+		pinnedEngramRecordFromRow,
 	)
-	if err != nil {
-		return nil, err
-	}
-	if row == nil {
-		return nil, nil
-	}
-	record := models.PinnedEngramRecord{
-		SessionID:      row.SessionID,
-		EngramID:       row.ResourceID,
-		PinnedByUserID: row.PinnedByUserID,
-		CreatedAt:      row.CreatedAt,
-	}
-	return &record, nil
 }
 
 // PinDocumentToSession pins a document when both session and document are visible.
@@ -118,27 +114,12 @@ func PinDocumentToSession(
 	db Queryer,
 	input ChatPinDocumentInput,
 ) (*models.PinnedDocumentRecord, error) {
-	row, err := pinResourceToSession(
+	return pinResourceRecord(
 		ctx,
 		db,
-		documentPinMutationConfig,
-		input.SessionID,
-		input.DocumentID,
-		input.ActorUserID,
+		documentMutationInput(input.resourceInput()),
+		pinnedDocumentRecordFromRow,
 	)
-	if err != nil {
-		return nil, err
-	}
-	if row == nil {
-		return nil, nil
-	}
-	record := models.PinnedDocumentRecord{
-		SessionID:      row.SessionID,
-		DocumentID:     row.ResourceID,
-		PinnedByUserID: row.PinnedByUserID,
-		CreatedAt:      row.CreatedAt,
-	}
-	return &record, nil
 }
 
 // UnpinEngramFromSession removes an engram pin for visible sessions.
@@ -147,14 +128,7 @@ func UnpinEngramFromSession(
 	db Queryer,
 	input ChatPinEngramInput,
 ) (bool, error) {
-	return unpinResourceFromSession(
-		ctx,
-		db,
-		engramPinMutationConfig,
-		input.SessionID,
-		input.EngramID,
-		input.ActorUserID,
-	)
+	return unpinResourceFromSession(ctx, db, engramMutationInput(input.resourceInput()))
 }
 
 // UnpinDocumentFromSession removes a document pin for visible sessions.
@@ -163,14 +137,7 @@ func UnpinDocumentFromSession(
 	db Queryer,
 	input ChatPinDocumentInput,
 ) (bool, error) {
-	return unpinResourceFromSession(
-		ctx,
-		db,
-		documentPinMutationConfig,
-		input.SessionID,
-		input.DocumentID,
-		input.ActorUserID,
-	)
+	return unpinResourceFromSession(ctx, db, documentMutationInput(input.resourceInput()))
 }
 
 // ListPinnedEngrams returns pinned engram rows for a visible session.
@@ -179,20 +146,7 @@ func ListPinnedEngrams(
 	db Queryer,
 	input ChatPinnedListInput,
 ) ([]models.PinnedEngramRecord, error) {
-	rows, err := listPinnedResources(ctx, db, engramPinListConfig, input)
-	if err != nil {
-		return nil, err
-	}
-	records := make([]models.PinnedEngramRecord, 0, len(rows))
-	for _, row := range rows {
-		records = append(records, models.PinnedEngramRecord{
-			SessionID:      row.SessionID,
-			EngramID:       row.ResourceID,
-			PinnedByUserID: row.PinnedByUserID,
-			CreatedAt:      row.CreatedAt,
-		})
-	}
-	return records, nil
+	return listPinnedResourceRecords(ctx, db, engramPinListConfig, input, pinnedEngramRecordFromRow)
 }
 
 // ListPinnedEngramSummaries returns visible engram summaries from session pins.
@@ -257,30 +211,15 @@ func ListPinnedDocuments(
 	db Queryer,
 	input ChatPinnedListInput,
 ) ([]models.PinnedDocumentRecord, error) {
-	rows, err := listPinnedResources(ctx, db, documentPinListConfig, input)
-	if err != nil {
-		return nil, err
-	}
-	records := make([]models.PinnedDocumentRecord, 0, len(rows))
-	for _, row := range rows {
-		records = append(records, models.PinnedDocumentRecord{
-			SessionID:      row.SessionID,
-			DocumentID:     row.ResourceID,
-			PinnedByUserID: row.PinnedByUserID,
-			CreatedAt:      row.CreatedAt,
-		})
-	}
-	return records, nil
+	return listPinnedResourceRecords(ctx, db, documentPinListConfig, input, pinnedDocumentRecordFromRow)
 }
 
 func pinResourceToSession(
 	ctx context.Context,
 	db Queryer,
-	config pinnedResourceMutationConfig,
-	sessionID uuid.UUID,
-	resourceID uuid.UUID,
-	actorUserID uuid.UUID,
+	input pinnedResourceMutationInput,
 ) (*pinnedResourceRow, error) {
+	config := input.Config
 	resourceAccessClause := config.resourceAccessClause
 	if strings.Contains(resourceAccessClause, "%s") {
 		resourceAccessClause = fmt.Sprintf(resourceAccessClause, pgxPlaceholder(4))
@@ -335,11 +274,11 @@ func pinResourceToSession(
 			config.idColumn,
 			config.idColumn,
 		),
-		sessionID,
-		actorUserID,
-		resourceID,
-		actorUserID,
-		actorUserID,
+		input.Resource.SessionID,
+		input.Resource.ActorUserID,
+		input.Resource.ResourceID,
+		input.Resource.ActorUserID,
+		input.Resource.ActorUserID,
 		nowChatUTC(),
 	)
 	record, err := scanPinnedResourceRow(row)
@@ -355,11 +294,9 @@ func pinResourceToSession(
 func unpinResourceFromSession(
 	ctx context.Context,
 	db Queryer,
-	config pinnedResourceMutationConfig,
-	sessionID uuid.UUID,
-	resourceID uuid.UUID,
-	actorUserID uuid.UUID,
+	input pinnedResourceMutationInput,
 ) (bool, error) {
+	config := input.Config
 	row := db.QueryRow(
 		ctx,
 		fmt.Sprintf(
@@ -377,9 +314,9 @@ func unpinResourceFromSession(
 			config.table,
 			config.idColumn,
 		),
-		sessionID,
-		resourceID,
-		actorUserID,
+		input.Resource.SessionID,
+		input.Resource.ResourceID,
+		input.Resource.ActorUserID,
 	)
 	var removedSessionID uuid.UUID
 	err := row.Scan(&removedSessionID)
@@ -456,6 +393,96 @@ type pinnedResourceRow struct {
 	ResourceID     uuid.UUID
 	PinnedByUserID uuid.UUID
 	CreatedAt      time.Time
+}
+
+func (input ChatPinEngramInput) resourceInput() chatPinResourceInput {
+	return chatPinResourceInput{
+		SessionID:   input.SessionID,
+		ResourceID:  input.EngramID,
+		ActorUserID: input.ActorUserID,
+	}
+}
+
+func (input ChatPinDocumentInput) resourceInput() chatPinResourceInput {
+	return chatPinResourceInput{
+		SessionID:   input.SessionID,
+		ResourceID:  input.DocumentID,
+		ActorUserID: input.ActorUserID,
+	}
+}
+
+func engramMutationInput(resource chatPinResourceInput) pinnedResourceMutationInput {
+	return pinnedResourceMutationInput{
+		Config:   engramPinMutationConfig,
+		Resource: resource,
+	}
+}
+
+func documentMutationInput(resource chatPinResourceInput) pinnedResourceMutationInput {
+	return pinnedResourceMutationInput{
+		Config:   documentPinMutationConfig,
+		Resource: resource,
+	}
+}
+
+func pinResourceRecord[T any](
+	ctx context.Context,
+	db Queryer,
+	input pinnedResourceMutationInput,
+	mapper func(pinnedResourceRow) T,
+) (*T, error) {
+	row, err := pinResourceToSession(ctx, db, input)
+	if err != nil {
+		return nil, err
+	}
+	if row == nil {
+		return nil, nil
+	}
+	record := mapper(*row)
+	return &record, nil
+}
+
+func listPinnedResourceRecords[T any](
+	ctx context.Context,
+	db Queryer,
+	config pinnedResourceListConfig,
+	input ChatPinnedListInput,
+	mapper func(pinnedResourceRow) T,
+) ([]T, error) {
+	rows, err := listPinnedResources(ctx, db, config, input)
+	if err != nil {
+		return nil, err
+	}
+	return mapPinnedResourceRows(rows, mapper), nil
+}
+
+func mapPinnedResourceRows[T any](
+	rows []pinnedResourceRow,
+	mapper func(pinnedResourceRow) T,
+) []T {
+	records := make([]T, 0, len(rows))
+	for _, row := range rows {
+		records = append(records, mapper(row))
+	}
+	return records
+}
+
+func pinnedEngramRecordFromRow(row pinnedResourceRow) models.PinnedEngramRecord {
+	return models.PinnedEngramRecord{
+		SessionID:      row.SessionID,
+		EngramID:       row.ResourceID,
+		PinnedByUserID: row.PinnedByUserID,
+		CreatedAt:      row.CreatedAt,
+	}
+}
+
+func pinnedDocumentRecordFromRow(row pinnedResourceRow) models.PinnedDocumentRecord {
+	return models.PinnedDocumentRecord{
+		SessionID:      row.SessionID,
+		DocumentID:     row.ResourceID,
+		PinnedByUserID: row.PinnedByUserID,
+		CreatedAt:      row.CreatedAt,
+	}
 }
 
 func scanPinnedResourceRow(row interface {

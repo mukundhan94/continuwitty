@@ -2567,3 +2567,37 @@
     - fixed `Complex Method` (`QueryDocumentChunks`)
     - fixed `Overall Code Complexity`
     - replaced previous arg-count finding on `replaceDocumentChunks` with a non-blocking helper arg-count note.
+
+### CP45 - Non-Checkpoint Code-Health Uplift (`internal/repository/chat_pinning.go`)
+
+- Improved legacy non-checkpoint chat pinning repository implementation file:
+  - `internal/repository/chat_pinning.go`
+  - reduced duplicated wrapper logic across pin/unpin/list operations by extracting generic resource helpers:
+    - `pinResourceRecord`
+    - `listPinnedResourceRecords`
+    - `mapPinnedResourceRows`
+  - introduced shared typed mutation builders:
+    - `engramMutationInput`
+    - `documentMutationInput`
+  - replaced high-argument internal mutation helpers with structured input:
+    - `pinnedResourceMutationInput`
+- Executed migrated tests one-by-one:
+  - `TestPinEngramToSessionReturnsPinnedRecord`
+  - `TestPinDocumentToSessionReturnsNilWhenResourceNotVisible`
+  - `TestUnpinEngramFromSessionReturnsTrueWhenRemoved`
+  - `TestUnpinDocumentFromSessionReturnsFalseWhenMissing`
+  - `TestListPinnedEngramsReturnsRows`
+  - `TestListPinnedDocumentsAppliesVisibilityFilter`
+  - `TestListPinnedEngramSummariesAppliesVisibilityFilters`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/chat_pinning.go` score improved from `8.81` -> `9.68`
+  - `code_health_review` now reports only a non-blocking argument-count note on `listPinnedResourceRecords`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed code-duplication findings across pin/unpin/list wrappers
+    - fixed argument-count findings on `pinResourceToSession` and `unpinResourceFromSession`
+    - introduced one non-blocking helper arg-count note on `listPinnedResourceRecords`.

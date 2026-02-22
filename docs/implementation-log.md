@@ -318,6 +318,40 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP45: non-checkpoint code-health uplift for chat pinning repository implementation)
+
+1. Improved legacy non-checkpoint chat pinning repository implementation:
+   - `internal/repository/chat_pinning.go`
+   - reduced duplicated wrapper logic by extracting generic helpers:
+     - `pinResourceRecord`
+     - `listPinnedResourceRecords`
+     - `mapPinnedResourceRows`
+   - introduced shared mutation builders:
+     - `engramMutationInput`
+     - `documentMutationInput`
+   - replaced high-argument internal mutation helper signatures with:
+     - `pinnedResourceMutationInput`
+2. Executed chat pinning tests one-by-one:
+   - `TestPinEngramToSessionReturnsPinnedRecord`
+   - `TestPinDocumentToSessionReturnsNilWhenResourceNotVisible`
+   - `TestUnpinEngramFromSessionReturnsTrueWhenRemoved`
+   - `TestUnpinDocumentFromSessionReturnsFalseWhenMissing`
+   - `TestListPinnedEngramsReturnsRows`
+   - `TestListPinnedDocumentsAppliesVisibilityFilter`
+   - `TestListPinnedEngramSummariesAppliesVisibilityFilters`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_pinning.go` improved from `8.81` to `9.68`
+   - remaining note is a non-blocking helper argument-count threshold edge.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings:
+     - fixed code duplication across pin/unpin/list wrappers
+     - fixed argument-count findings on `pinResourceToSession` and `unpinResourceFromSession`
+     - introduced one non-blocking helper arg-count note.
+
 ### 2026-02-22 (Go migration CP44: non-checkpoint code-health uplift for document repository implementation)
 
 1. Improved legacy non-checkpoint document repository implementation:
