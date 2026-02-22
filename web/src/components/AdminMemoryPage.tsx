@@ -20,6 +20,7 @@ import {
   updateAdminEngram,
   updateCollection,
 } from '../api/memoryAdmin'
+import { listProjects } from '../api/projects'
 import type {
   AdminChatSessionRecord,
   AdminEngramRecord,
@@ -27,6 +28,7 @@ import type {
   EngramCollectionRecord,
 } from '../api/types'
 import { ErrorText, GlassPane, MutedText, PaneHeader, ScrollColumn, SectionDivider } from '../styles/primitives'
+import { SmartIdDropdown } from './SmartIdDropdown'
 
 const AdminLayout = styled.main`
   display: grid;
@@ -104,6 +106,18 @@ function parseCommaSeparated(input: { value: string }): string[] {
     .filter((item) => item.length > 0)
 }
 
+function sortedUniqueProjectIds(values: string[]): string[] {
+  const unique = new Set<string>()
+  for (const rawValue of values) {
+    const normalized = rawValue.trim()
+    if (!normalized) {
+      continue
+    }
+    unique.add(normalized)
+  }
+  return Array.from(unique).sort((left, right) => left.localeCompare(right))
+}
+
 function buildSourceDraft(): AdminEngramSourceInput {
   return {
     captured_at: toIsoNow(),
@@ -130,6 +144,7 @@ interface AdminMemoryPageProps {
 
 interface SessionManagementSectionProps {
   projectId: string
+  projectIdOptions: string[]
   includeDeleted: boolean
   deleteLinkedEngrams: boolean
   loading: boolean
@@ -151,6 +166,7 @@ interface EngramDetailEditorProps {
   editMarkdown: string
   editTags: string
   editKeywords: string
+  projectIdOptions: string[]
   moveTargetProject: string
   sourceDraft: AdminEngramSourceInput
   sourceRows: AdminEngramSourceInput[]
@@ -159,7 +175,7 @@ interface EngramDetailEditorProps {
   onEditMarkdownChange: (event: TextAreaChangeEvent) => void
   onEditTagsChange: (event: TextInputChangeEvent) => void
   onEditKeywordsChange: (event: TextInputChangeEvent) => void
-  onMoveTargetProjectChange: (event: TextInputChangeEvent) => void
+  onMoveTargetProjectChange: (value: string) => void
   onSourceUrlChange: (event: TextInputChangeEvent) => void
   onSourceTitleChange: (event: TextInputChangeEvent) => void
   onSourceSnippetChange: (event: TextAreaChangeEvent) => void
@@ -183,6 +199,7 @@ interface EngramManagementSectionProps {
   editMarkdown: string
   editTags: string
   editKeywords: string
+  projectIdOptions: string[]
   moveTargetProject: string
   sourceDraft: AdminEngramSourceInput
   sourceRows: AdminEngramSourceInput[]
@@ -194,7 +211,7 @@ interface EngramManagementSectionProps {
   onEditMarkdownChange: (event: TextAreaChangeEvent) => void
   onEditTagsChange: (event: TextInputChangeEvent) => void
   onEditKeywordsChange: (event: TextInputChangeEvent) => void
-  onMoveTargetProjectChange: (event: TextInputChangeEvent) => void
+  onMoveTargetProjectChange: (value: string) => void
   onSourceUrlChange: (event: TextInputChangeEvent) => void
   onSourceTitleChange: (event: TextInputChangeEvent) => void
   onSourceSnippetChange: (event: TextAreaChangeEvent) => void
@@ -210,12 +227,13 @@ interface CollectionSectionProps {
   collections: EngramCollectionRecord[]
   selectedCollectionId: string | null
   selectedCollection: EngramCollectionRecord | null
+  projectIdOptions: string[]
   collectionProjectId: string
   collectionName: string
   collectionDescription: string
   collectionAddEngramId: string
   submitting: boolean
-  onCollectionProjectIdChange: (event: TextInputChangeEvent) => void
+  onCollectionProjectIdChange: (value: string) => void
   onCollectionNameChange: (event: TextInputChangeEvent) => void
   onCollectionDescriptionChange: (event: TextAreaChangeEvent) => void
   onCollectionAddEngramIdChange: (event: TextInputChangeEvent) => void
@@ -227,8 +245,18 @@ interface CollectionSectionProps {
   onDeleteCollection: (collection: EngramCollectionRecord) => void
 }
 
+interface CollectionListProps {
+  collections: EngramCollectionRecord[]
+  selectedCollectionId: string | null
+  submitting: boolean
+  onSelectCollection: (collection: EngramCollectionRecord) => void
+  onQuickRenameCollection: (collection: EngramCollectionRecord) => void
+  onDeleteCollection: (collection: EngramCollectionRecord) => void
+}
+
 function SessionManagementSection({
   projectId,
+  projectIdOptions,
   includeDeleted,
   deleteLinkedEngrams,
   loading,
@@ -247,10 +275,15 @@ function SessionManagementSection({
         <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Session Management</h2>
       </PaneHeader>
       <Toolbar>
-        <input
+        <SmartIdDropdown
+          id="admin-session-project-id-field"
           value={projectId}
-          onChange={(event) => onProjectChange(event.target.value)}
+          options={projectIdOptions}
+          onChange={onProjectChange}
           placeholder="project-id filter"
+          inputTestId="admin-session-project-id-input"
+          optionsTestId="admin-session-project-id-options"
+          showMatchCount={false}
         />
         <label>
           <input
@@ -311,6 +344,7 @@ function EngramDetailEditor({
   editMarkdown,
   editTags,
   editKeywords,
+  projectIdOptions,
   moveTargetProject,
   sourceDraft,
   sourceRows,
@@ -355,7 +389,16 @@ function EngramDetailEditor({
       </Field>
       <Field>
         <span>Move target project</span>
-        <input value={moveTargetProject} onChange={onMoveTargetProjectChange} />
+        <SmartIdDropdown
+          id="admin-move-target-project-id-field"
+          value={moveTargetProject}
+          options={projectIdOptions}
+          onChange={onMoveTargetProjectChange}
+          placeholder="target project id"
+          inputTestId="admin-move-target-project-id-input"
+          optionsTestId="admin-move-target-project-id-options"
+          showMatchCount={false}
+        />
       </Field>
       <SourceEditor>
         <strong className="font-display text-sm text-ink">Sources</strong>
@@ -420,6 +463,7 @@ function EngramManagementSection({
   editMarkdown,
   editTags,
   editKeywords,
+  projectIdOptions,
   moveTargetProject,
   sourceDraft,
   sourceRows,
@@ -485,6 +529,7 @@ function EngramManagementSection({
           editMarkdown={editMarkdown}
           editTags={editTags}
           editKeywords={editKeywords}
+          projectIdOptions={projectIdOptions}
           moveTargetProject={moveTargetProject}
           sourceDraft={sourceDraft}
           sourceRows={sourceRows}
@@ -511,10 +556,60 @@ function EngramManagementSection({
   )
 }
 
+function CollectionList({
+  collections,
+  selectedCollectionId,
+  submitting,
+  onSelectCollection,
+  onQuickRenameCollection,
+  onDeleteCollection,
+}: CollectionListProps) {
+  return (
+    <ScrollColumn>
+      <TableLike>
+        {collections.map((collection) => (
+          <RowCard
+            key={collection.collection_id}
+            $active={collection.collection_id === selectedCollectionId}
+            onClick={() => onSelectCollection(collection)}
+          >
+            <div className="font-display text-sm font-semibold text-ink">{collection.name}</div>
+            <MutedText>
+              {collection.project_id} · {collection.collection_id}
+            </MutedText>
+            <RowActions>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => onQuickRenameCollection(collection)}
+              >
+                Quick Rename
+              </button>
+              {collection.deleted_at ? (
+                <MutedText>Deleted</MutedText>
+              ) : (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => onDeleteCollection(collection)}
+                >
+                  Delete
+                </button>
+              )}
+            </RowActions>
+          </RowCard>
+        ))}
+        {collections.length === 0 ? <MutedText>No collections found for selected filters.</MutedText> : null}
+      </TableLike>
+    </ScrollColumn>
+  )
+}
+
 function CollectionSection({
   collections,
   selectedCollectionId,
   selectedCollection,
+  projectIdOptions,
   collectionProjectId,
   collectionName,
   collectionDescription,
@@ -538,10 +633,15 @@ function CollectionSection({
       </PaneHeader>
       <Field>
         <span>Collection project</span>
-        <input
+        <SmartIdDropdown
+          id="admin-collection-project-id-field"
           value={collectionProjectId}
+          options={projectIdOptions}
           onChange={onCollectionProjectIdChange}
           placeholder="project id"
+          inputTestId="admin-collection-project-id-input"
+          optionsTestId="admin-collection-project-id-options"
+          showMatchCount={false}
         />
       </Field>
       <Field>
@@ -588,43 +688,14 @@ function CollectionSection({
           Remove Item
         </button>
       </RowActions>
-      <ScrollColumn>
-        <TableLike>
-          {collections.map((collection) => (
-            <RowCard
-              key={collection.collection_id}
-              $active={collection.collection_id === selectedCollectionId}
-              onClick={() => onSelectCollection(collection)}
-            >
-              <div className="font-display text-sm font-semibold text-ink">{collection.name}</div>
-              <MutedText>
-                {collection.project_id} · {collection.collection_id}
-              </MutedText>
-              <RowActions>
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => onQuickRenameCollection(collection)}
-                >
-                  Quick Rename
-                </button>
-                {collection.deleted_at ? (
-                  <MutedText>Deleted</MutedText>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => onDeleteCollection(collection)}
-                  >
-                    Delete
-                  </button>
-                )}
-              </RowActions>
-            </RowCard>
-          ))}
-          {collections.length === 0 ? <MutedText>No collections found for selected filters.</MutedText> : null}
-        </TableLike>
-      </ScrollColumn>
+      <CollectionList
+        collections={collections}
+        selectedCollectionId={selectedCollectionId}
+        submitting={submitting}
+        onSelectCollection={onSelectCollection}
+        onQuickRenameCollection={onQuickRenameCollection}
+        onDeleteCollection={onDeleteCollection}
+      />
     </GlassPane>
   )
 }
@@ -646,6 +717,7 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const [sourceDraft, setSourceDraft] = useState<AdminEngramSourceInput>(buildSourceDraft)
   const [sourceRows, setSourceRows] = useState<AdminEngramSourceInput[]>([])
   const [collectionProjectId, setCollectionProjectId] = useState(projectId)
+  const [projectSuggestions, setProjectSuggestions] = useState<string[]>([])
   const [collectionName, setCollectionName] = useState('')
   const [collectionDescription, setCollectionDescription] = useState('')
   const [collectionSelectedId, setCollectionSelectedId] = useState<string | null>(null)
@@ -658,6 +730,55 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const selectedCollection = useMemo(
     () => collections.find((item) => item.collection_id === collectionSelectedId) ?? null,
     [collectionSelectedId, collections],
+  )
+
+  useEffect(() => {
+    setCollectionProjectId((current) => (current.trim() ? current : projectId))
+  }, [projectId])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadProjectSuggestions = async () => {
+      try {
+        const projects = await listProjects(true)
+        if (cancelled) {
+          return
+        }
+        setProjectSuggestions(projects.map((project) => project.project_id))
+      } catch {
+        if (!cancelled) {
+          setProjectSuggestions([])
+        }
+      }
+    }
+
+    void loadProjectSuggestions()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const projectIdOptions = useMemo(
+    () =>
+      sortedUniqueProjectIds([
+        projectId,
+        collectionProjectId,
+        moveTargetProject,
+        ...projectSuggestions,
+        ...sessions.map((session) => session.project_id),
+        ...engrams.map((engram) => engram.project_id),
+        ...collections.map((collection) => collection.project_id),
+      ]),
+    [
+      collectionProjectId,
+      collections,
+      engrams,
+      moveTargetProject,
+      projectId,
+      projectSuggestions,
+      sessions,
+    ],
   )
 
   const refresh = useCallback(async () => {
@@ -949,6 +1070,7 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     <AdminLayout>
       <SessionManagementSection
         projectId={projectId}
+        projectIdOptions={projectIdOptions}
         includeDeleted={includeDeleted}
         deleteLinkedEngrams={deleteLinkedEngrams}
         loading={loading}
@@ -974,6 +1096,7 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
         editMarkdown={editMarkdown}
         editTags={editTags}
         editKeywords={editKeywords}
+        projectIdOptions={projectIdOptions}
         moveTargetProject={moveTargetProject}
         sourceDraft={sourceDraft}
         sourceRows={sourceRows}
@@ -985,7 +1108,7 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
         onEditMarkdownChange={(event) => setEditMarkdown(event.target.value)}
         onEditTagsChange={(event) => setEditTags(event.target.value)}
         onEditKeywordsChange={(event) => setEditKeywords(event.target.value)}
-        onMoveTargetProjectChange={(event) => setMoveTargetProject(event.target.value)}
+        onMoveTargetProjectChange={setMoveTargetProject}
         onSourceUrlChange={handleSourceUrlChange}
         onSourceTitleChange={handleSourceTitleChange}
         onSourceSnippetChange={handleSourceSnippetChange}
@@ -1001,12 +1124,13 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
         collections={collections}
         selectedCollectionId={collectionSelectedId}
         selectedCollection={selectedCollection}
+        projectIdOptions={projectIdOptions}
         collectionProjectId={collectionProjectId}
         collectionName={collectionName}
         collectionDescription={collectionDescription}
         collectionAddEngramId={collectionAddEngramId}
         submitting={submitting}
-        onCollectionProjectIdChange={(event) => setCollectionProjectId(event.target.value)}
+        onCollectionProjectIdChange={setCollectionProjectId}
         onCollectionNameChange={(event) => setCollectionName(event.target.value)}
         onCollectionDescriptionChange={(event) => setCollectionDescription(event.target.value)}
         onCollectionAddEngramIdChange={(event) => setCollectionAddEngramId(event.target.value)}

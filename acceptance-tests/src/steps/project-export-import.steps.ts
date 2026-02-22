@@ -155,6 +155,14 @@ async function ensureProjectTransferPage(page: Page): Promise<void> {
   await expect(transferPage).toBeVisible()
 }
 
+async function datalistOptionValues(page: Page, listSelector: string): Promise<string[]> {
+  return page.locator(`${listSelector} option`).evaluateAll((nodes) =>
+    nodes
+      .map((node) => (node as HTMLOptionElement).value.trim())
+      .filter((value) => value.length > 0),
+  )
+}
+
 async function downloadExportFromUi(page: Page): Promise<{ bundle: ExportBundle; filename: string }> {
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: /^Export Bundle$/i }).click()
@@ -256,6 +264,22 @@ When('I prepare a project dataset for export tests', async ({ page }) => {
   latestExportBundle = null
   latestExportFilename = null
 })
+
+Then(
+  'the transfer form should expose search suggestions for the prepared dataset',
+  async ({ page }) => {
+    if (!exportDataset) {
+      throw new Error('Missing export dataset')
+    }
+
+    await expect.poll(async () => datalistOptionValues(page, '#export-project-id-field-list')).toEqual(
+      expect.arrayContaining([exportDataset.projectId]),
+    )
+    await expect.poll(async () => datalistOptionValues(page, '#export-collection-id-field-list')).toEqual(
+      expect.arrayContaining(exportDataset.collectionIds),
+    )
+  },
+)
 
 When('I export the prepared project as JSON', async ({ page }) => {
   if (!exportDataset) {

@@ -1206,3 +1206,34 @@
 5. CodeScene health gate:
    - `mcp_analyze_change_set` against `origin/main` -> `quality_gates=passed`.
    - findings flagged complexity/duplication in `api/app/export/service.py`; accepted for this slice and queued for follow-up refactor pass.
+
+### 2026-02-22 (UI smart ID search rollout - project + collection fields)
+
+1. Added reusable searchable dropdown component in `web/src/components/SmartIdDropdown.tsx`:
+   - ranked suggestion matching (prefix before contains),
+   - de-duplicated option lists,
+   - optional match-count visibility for compact toolbars.
+2. Applied smart ID search in all relevant project/collection input surfaces:
+   - `web/src/components/SessionSidebar.tsx` project ID selector,
+   - `web/src/components/ProjectTransferPage.tsx` export/import project IDs and export collection ID selector,
+   - `web/src/components/AdminMemoryPage.tsx` session project filter, engram move-target project, and collection project input.
+3. Improved export collection ID UX in `web/src/components/ProjectTransferPage.tsx`:
+   - searchable collection ID input with add/remove chips,
+   - support for comma/whitespace paste and dedupe,
+   - persisted behavior where typed-but-not-added IDs are still honored on export submit.
+4. Added/updated tests:
+   - `web/src/components/SmartIdDropdown.test.tsx`
+   - `web/src/components/SessionSidebar.test.tsx`
+   - `web/src/components/ProjectTransferPage.test.tsx`
+   - `web/src/components/AdminMemoryPage.test.tsx`
+   - `acceptance-tests/features/project-export-import.feature`
+   - `acceptance-tests/src/steps/project-export-import.steps.ts`
+5. Validation:
+   - `npm run test` in `web/` passed (`35 files`, `134 tests`).
+   - `npm run lint` in `web/` passed.
+   - `npm run bdd:gen` in `acceptance-tests/` passed.
+   - `npm run typecheck` in `acceptance-tests/` passed.
+6. CodeScene pre-commit safeguard:
+   - initial run flagged `Large Method` and `Code Duplication`.
+   - follow-up refactor reduced `CollectionSection` size and removed duplicated test structure.
+   - final `pre_commit_code_health_safeguard` result: `quality_gates=passed`.

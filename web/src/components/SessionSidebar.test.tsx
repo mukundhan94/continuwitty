@@ -68,6 +68,11 @@ describe('SessionSidebar', () => {
   it('shows previous sessions section label', () => {
     renderSidebar()
     expect(screen.getByText('Previous Sessions')).toBeInTheDocument()
+    const options = screen
+      .getByTestId('session-project-id-options')
+      .querySelectorAll('option')
+    const values = [...options].map((item) => item.getAttribute('value'))
+    expect(values).toContain('engram-vault')
   })
 
   it('supports hiding and showing creator section', async () => {

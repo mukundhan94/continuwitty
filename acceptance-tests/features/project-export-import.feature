@@ -7,6 +7,11 @@ Feature: Project export and import web workflow
   Background:
     Given I am signed in
 
+  Scenario: Transfer form exposes searchable project and collection suggestions
+    When I prepare a project dataset for export tests
+    And I open the project transfer page
+    Then the transfer form should expose search suggestions for the prepared dataset
+
   Scenario: JSON export defaults to full project and embeddings disabled
     When I prepare a project dataset for export tests
     And I open the project transfer page

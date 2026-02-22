@@ -13,6 +13,7 @@ import {
   SessionMeta,
   SplitGrid,
 } from '../styles/primitives'
+import { SmartIdDropdown } from './SmartIdDropdown'
 
 const FieldBlock = styled.div`
   display: grid;
@@ -181,6 +182,7 @@ interface AutosaveControlsProps {
 interface SessionCreatorPanelProps {
   showCreator: boolean
   projectId: string
+  projectIdOptions: string[]
   defaultProjectId: string | null
   settingDefaultProject: boolean
   creating: boolean
@@ -210,6 +212,7 @@ interface SessionHistoryPanelProps {
 
 interface ProjectSelectionFieldProps {
   projectId: string
+  projectIdOptions: string[]
   defaultProjectId: string | null
   settingDefaultProject: boolean
   onProjectChange: (projectId: string) => void
@@ -336,6 +339,7 @@ function AutosaveControls({
 
 function ProjectSelectionField({
   projectId,
+  projectIdOptions,
   defaultProjectId,
   settingDefaultProject,
   onProjectChange,
@@ -345,11 +349,15 @@ function ProjectSelectionField({
     <FieldBlock>
       <label htmlFor="project-id">Project ID</label>
       <SplitGrid>
-        <input
+        <SmartIdDropdown
           id="project-id"
           value={projectId}
-          onChange={(event) => onProjectChange(event.target.value)}
+          options={projectIdOptions}
+          onChange={onProjectChange}
           placeholder="project-id"
+          inputTestId="session-project-id-input"
+          optionsTestId="session-project-id-options"
+          matchCountTestId="session-project-id-matches"
         />
         <button
           type="button"
@@ -467,6 +475,7 @@ function SessionCreatorFields({
 function SessionCreatorPanel({
   showCreator,
   projectId,
+  projectIdOptions,
   defaultProjectId,
   settingDefaultProject,
   creating,
@@ -493,6 +502,7 @@ function SessionCreatorPanel({
           <CreatorFields>
             <ProjectSelectionField
               projectId={projectId}
+              projectIdOptions={projectIdOptions}
               defaultProjectId={defaultProjectId}
               settingDefaultProject={settingDefaultProject}
               onProjectChange={onProjectChange}
@@ -585,6 +595,18 @@ export function SessionSidebar({
   const [showCreator, setShowCreator] = useState(true)
 
   const sortedSessions = useMemo(() => sortedByNewest(sessions), [sessions])
+  const projectIdOptions = useMemo(() => {
+    const unique = new Set<string>()
+    const candidates = [projectId, defaultProjectId ?? '', ...sessions.map((item) => item.project_id)]
+    for (const candidate of candidates) {
+      const normalized = candidate.trim()
+      if (!normalized) {
+        continue
+      }
+      unique.add(normalized)
+    }
+    return Array.from(unique).sort((left, right) => left.localeCompare(right))
+  }, [defaultProjectId, projectId, sessions])
 
   const creatorState: CreatorState = {
     title,
@@ -624,6 +646,7 @@ export function SessionSidebar({
         <SessionCreatorPanel
           showCreator={showCreator}
           projectId={projectId}
+          projectIdOptions={projectIdOptions}
           defaultProjectId={defaultProjectId}
           settingDefaultProject={settingDefaultProject}
           creating={creating}

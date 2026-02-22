@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ChangeEvent, FormEvent } from 'react'
+import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 
 import styled from 'styled-components'
 
 import { exportProjectBundle, importProjectBundle } from '../api/export'
+import { listCollections } from '../api/memoryAdmin'
+import { listProjects } from '../api/projects'
 import type {
   ProjectExportFormat,
   ProjectImportConflictPolicy,
@@ -19,6 +21,7 @@ import {
   SectionDivider,
   SessionMeta,
 } from '../styles/primitives'
+import { SmartIdDropdown } from './SmartIdDropdown'
 
 const TransferLayout = styled.main`
   display: grid;
@@ -66,6 +69,43 @@ const ResultGrid = styled.div`
   background: var(--surface-raised);
 `
 
+const CollectionPickerRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: start;
+`
+
+const ChipRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+`
+
+const Chip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  background: var(--surface-mute);
+  font-size: 0.78rem;
+  padding: 0.2rem 0.5rem;
+
+  button {
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-ink-muted);
+    width: 1rem;
+    height: 1rem;
+    line-height: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+  }
+`
+
 function parseCollectionIdInput(input: string): string[] {
   const values: string[] = []
   const seen = new Set<string>()
@@ -80,6 +120,24 @@ function parseCollectionIdInput(input: string): string[] {
   }
 
   return values
+}
+
+function uniqueIds(values: string[]): string[] {
+  const unique = new Set<string>()
+  const result: string[] = []
+  for (const rawValue of values) {
+    const normalized = rawValue.trim()
+    if (!normalized || unique.has(normalized)) {
+      continue
+    }
+    unique.add(normalized)
+    result.push(normalized)
+  }
+  return result
+}
+
+function sortedUniqueIds(values: string[]): string[] {
+  return uniqueIds(values).sort((left, right) => left.localeCompare(right))
 }
 
 function triggerDownload(blob: Blob, filename: string): void {
@@ -107,6 +165,9 @@ export function ProjectTransferPage({
   const [exportFormat, setExportFormat] = useState<ProjectExportFormat>('json')
   const [includeEmbeddings, setIncludeEmbeddings] = useState(false)
   const [collectionInput, setCollectionInput] = useState('')
+  const [collectionSelectionIds, setCollectionSelectionIds] = useState<string[]>([])
+  const [projectSuggestions, setProjectSuggestions] = useState<string[]>([])
+  const [collectionSuggestions, setCollectionSuggestions] = useState<string[]>([])
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
 
@@ -122,10 +183,111 @@ export function ProjectTransferPage({
     setImportProjectId((current) => (current.trim().length > 0 ? current : projectId))
   }, [projectId])
 
-  const selectedCollectionIds = useMemo(
+  useEffect(() => {
+    let cancelled = false
+
+    const loadProjectSuggestions = async () => {
+      try {
+        const projects = await listProjects(true)
+        if (cancelled) {
+          return
+        }
+        setProjectSuggestions(projects.map((project) => project.project_id))
+      } catch {
+        if (!cancelled) {
+          setProjectSuggestions([])
+        }
+      }
+    }
+
+    void loadProjectSuggestions()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const normalizedProjectId = projectId.trim()
+    if (!normalizedProjectId) {
+      setCollectionSuggestions([])
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const loadCollectionSuggestions = async () => {
+      try {
+        const collections = await listCollections({
+          project_id: normalizedProjectId,
+          include_deleted: false,
+          limit: 200,
+          offset: 0,
+        })
+        if (cancelled) {
+          return
+        }
+        setCollectionSuggestions(collections.map((collection) => collection.collection_id))
+      } catch {
+        if (!cancelled) {
+          setCollectionSuggestions([])
+        }
+      }
+    }
+
+    void loadCollectionSuggestions()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
+
+  const pendingCollectionIds = useMemo(
     () => parseCollectionIdInput(collectionInput),
     [collectionInput],
   )
+  const selectedCollectionIds = useMemo(
+    () => uniqueIds([...collectionSelectionIds, ...pendingCollectionIds]),
+    [collectionSelectionIds, pendingCollectionIds],
+  )
+  const projectIdOptions = useMemo(
+    () =>
+      sortedUniqueIds([
+        projectId,
+        importProjectId,
+        ...projectSuggestions,
+      ]),
+    [importProjectId, projectId, projectSuggestions],
+  )
+  const collectionIdOptions = useMemo(
+    () =>
+      sortedUniqueIds([
+        ...collectionSuggestions,
+        ...collectionSelectionIds,
+        ...pendingCollectionIds,
+      ]),
+    [collectionSelectionIds, collectionSuggestions, pendingCollectionIds],
+  )
+
+  const addSelectedCollectionIds = () => {
+    const parsedCollectionIds = parseCollectionIdInput(collectionInput)
+    if (parsedCollectionIds.length === 0) {
+      return
+    }
+    setCollectionSelectionIds((current) => uniqueIds([...current, ...parsedCollectionIds]))
+    setCollectionInput('')
+  }
+
+  const removeSelectedCollectionId = (collectionId: string) => {
+    setCollectionSelectionIds((current) => current.filter((item) => item !== collectionId))
+  }
+
+  const handleCollectionInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') {
+      return
+    }
+    event.preventDefault()
+    addSelectedCollectionIds()
+  }
 
   const handleExport = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -205,11 +367,15 @@ export function ProjectTransferPage({
         <FormStack onSubmit={(event) => void handleExport(event)}>
           <Field>
             <span>Workspace Project ID</span>
-            <input
+            <SmartIdDropdown
+              id="export-project-id-field"
               value={projectId}
-              onChange={(event) => onProjectChange(event.target.value)}
+              options={projectIdOptions}
+              onChange={onProjectChange}
               placeholder="engram-vault"
-              data-testid="export-project-id"
+              inputTestId="export-project-id"
+              optionsTestId="export-project-id-options"
+              matchCountTestId="export-project-id-matches"
             />
           </Field>
           <Field>
@@ -227,13 +393,43 @@ export function ProjectTransferPage({
           </Field>
           <Field>
             <span>Collection IDs (optional)</span>
-            <textarea
-              rows={3}
-              value={collectionInput}
-              onChange={(event) => setCollectionInput(event.target.value)}
-              placeholder="UUIDs separated by commas or whitespace"
-              data-testid="export-collection-ids"
-            />
+            <CollectionPickerRow>
+              <SmartIdDropdown
+                id="export-collection-id-field"
+                value={collectionInput}
+                options={collectionIdOptions}
+                onChange={setCollectionInput}
+                onKeyDown={handleCollectionInputKeyDown}
+                placeholder="collection ID or comma-separated IDs"
+                inputTestId="export-collection-ids"
+                optionsTestId="export-collection-id-options"
+                matchCountTestId="export-collection-id-matches"
+              />
+              <button
+                type="button"
+                disabled={!collectionInput.trim()}
+                onClick={addSelectedCollectionIds}
+                data-testid="export-collection-id-add"
+              >
+                Add
+              </button>
+            </CollectionPickerRow>
+            {collectionSelectionIds.length > 0 ? (
+              <ChipRow data-testid="export-selected-collection-ids">
+                {collectionSelectionIds.map((collectionId) => (
+                  <Chip key={collectionId}>
+                    {collectionId}
+                    <button
+                      type="button"
+                      aria-label={`remove collection ${collectionId}`}
+                      onClick={() => removeSelectedCollectionId(collectionId)}
+                    >
+                      ×
+                    </button>
+                  </Chip>
+                ))}
+              </ChipRow>
+            ) : null}
             <SessionMeta>
               {selectedCollectionIds.length === 0
                 ? 'Full project export selected.'
@@ -269,11 +465,15 @@ export function ProjectTransferPage({
         <FormStack onSubmit={(event) => void handleImport(event)}>
           <Field>
             <span>Target Project ID</span>
-            <input
+            <SmartIdDropdown
+              id="import-project-id-field"
               value={importProjectId}
-              onChange={(event) => setImportProjectId(event.target.value)}
+              options={projectIdOptions}
+              onChange={setImportProjectId}
               placeholder="engram-vault"
-              data-testid="import-project-id"
+              inputTestId="import-project-id"
+              optionsTestId="import-project-id-options"
+              matchCountTestId="import-project-id-matches"
             />
           </Field>
           <Field>
