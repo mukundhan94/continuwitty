@@ -1,0 +1,267 @@
+package repository
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"engram/internal/models"
+
+	"github.com/google/uuid"
+)
+
+func TestBuildEngramQueryWhereIncludesAllFilters(t *testing.T) {
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	createdAfter := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	createdBefore := time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC)
+	projectID := "engram-vault"
+	request := models.EngramQueryRequest{
+		Query:         "durable memory",
+		TopK:          5,
+		ProjectID:     &projectID,
+		Tags:          []string{"memory"},
+		Keywords:      []string{"checkpoint"},
+		CreatedAfter:  &createdAfter,
+		CreatedBefore: &createdBefore,
+	}
+
+	whereSQL, params := buildEngramQueryWhere(request, &actorUserID, "[0.1,0.2,0.3]")
+
+	expectedFragments := []string{
+		"WHERE deleted_at IS NULL",
+		"project_id = %s",
+		"tags && %s",
+		"keywords && %s",
+		"created_at >= %s",
+		"created_at <= %s",
+		"visibility_scope = 'project'",
+	}
+	for _, fragment := range expectedFragments {
+		if !strings.Contains(whereSQL, fragment) {
+			t.Fatalf("expected where sql to contain %q, got %q", fragment, whereSQL)
+		}
+	}
+
+	expectedParams := []any{
+		"[0.1,0.2,0.3]",
+		"engram-vault",
+		actorUserID,
+		[]string{"memory"},
+		[]string{"checkpoint"},
+		createdAfter,
+		createdBefore,
+	}
+	if !reflect.DeepEqual(params, expectedParams) {
+		t.Fatalf("expected params %#v, got %#v", expectedParams, params)
+	}
+}
+
+func TestRerankByCombinedScorePrefersLexicalOverlap(t *testing.T) {
+	rows := []map[string]any{
+		{
+			"engram_id":      uuid.MustParse("00000000-0000-0000-0000-000000000111"),
+			"project_id":     "engram-vault",
+			"title":          "Dense Match",
+			"abstract":       "",
+			"created_at":     time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
+			"tags":           []string{},
+			"keywords":       []string{},
+			"retrieval_text": "unrelated text",
+			"distance":       0.2,
+		},
+		{
+			"engram_id":      uuid.MustParse("00000000-0000-0000-0000-000000000222"),
+			"project_id":     "engram-vault",
+			"title":          "Lexical Match",
+			"abstract":       "",
+			"created_at":     time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC),
+			"tags":           []string{},
+			"keywords":       []string{"durable", "checkpoint"},
+			"retrieval_text": "durable checkpoint lifecycle",
+			"distance":       0.25,
+		},
+	}
+
+	reranked := rerankByCombinedScore(rows, "durable checkpoint", 1)
+	if len(reranked) != 1 {
+		t.Fatalf("expected one reranked result, got %d", len(reranked))
+	}
+	if title, _ := reranked[0]["title"].(string); title != "Lexical Match" {
+		t.Fatalf("expected lexical match to rank first, got %q", title)
+	}
+}
+
+func TestFormatCitationsTruncatesAndStripsNewlines(t *testing.T) {
+	title := "Primary source"
+	citationText := formatCitations(
+		[]models.RehydrationCitation{
+			{
+				URL:        "https://example.com/source",
+				Title:      &title,
+				Snippet:    "line1\n" + strings.Repeat("x", 200),
+				CapturedAt: time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC),
+			},
+		},
+	)
+
+	if !strings.HasPrefix(citationText, "- Primary source (https://example.com/source):") {
+		t.Fatalf("unexpected citation prefix: %q", citationText)
+	}
+	pieces := strings.SplitN(citationText, ":", 2)
+	if len(pieces) != 2 {
+		t.Fatalf("expected citation with snippet section, got %q", citationText)
+	}
+	if strings.Contains(pieces[1], "\n") {
+		t.Fatalf("expected no newlines in snippet, got %q", pieces[1])
+	}
+	if !strings.HasSuffix(citationText, "...") {
+		t.Fatalf("expected truncated snippet to end with ellipsis, got %q", citationText)
+	}
+}
+
+func TestFormatCitationsReturnsDefaultForEmptyList(t *testing.T) {
+	if formatCitations([]models.RehydrationCitation{}) != "- No citations available" {
+		t.Fatalf("expected default citations text for empty list")
+	}
+}
+
+func TestFormatDecisionsFormatsEntriesAndDefaults(t *testing.T) {
+	decisionsText := formatDecisions(
+		[]map[string]any{
+			{
+				"decision":  "Use durable checkpoints",
+				"rationale": "Prevents context loss",
+			},
+		},
+	)
+	if decisionsText != "- Use durable checkpoints: Prevents context loss" {
+		t.Fatalf("unexpected decisions text %q", decisionsText)
+	}
+	if formatDecisions([]map[string]any{}) != "- None" {
+		t.Fatalf("expected decisions default text")
+	}
+}
+
+func TestFormatOpenQuestionsFormatsEntriesAndDefaults(t *testing.T) {
+	if got := formatOpenQuestions([]string{"What caused drift?"}); got != "- What caused drift?" {
+		t.Fatalf("unexpected open questions text %q", got)
+	}
+	if got := formatOpenQuestions([]string{}); got != "- None" {
+		t.Fatalf("expected open questions default text")
+	}
+}
+
+func TestBuildRehydrationContextMarkdownIncludesExpectedSections(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		detailedExcerpt        string
+		expectsDetailedSection bool
+	}{
+		{
+			name:                   "with detailed excerpt",
+			detailedExcerpt:        "Detailed analysis excerpt.",
+			expectsDetailedSection: true,
+		},
+		{
+			name:                   "without detailed excerpt",
+			detailedExcerpt:        "",
+			expectsDetailedSection: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			title := "Source"
+			markdown := buildRehydrationContextMarkdown(
+				rehydrationContextParts{
+					Title:           "Checkpoint Summary",
+					CompactSummary:  "Compact summary body.",
+					DetailedExcerpt: testCase.detailedExcerpt,
+					Decisions: []map[string]any{
+						{
+							"decision":  "Use snapshots",
+							"rationale": "Improves continuity",
+						},
+					},
+					OpenQuestions: []string{"Need retention policy?"},
+					Citations: []models.RehydrationCitation{
+						{
+							URL:        "https://example.com/source",
+							Title:      &title,
+							Snippet:    "Key evidence.",
+							CapturedAt: time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC),
+						},
+					},
+				},
+			)
+
+			if !strings.HasPrefix(markdown, "# Rehydration Context: Checkpoint Summary") {
+				t.Fatalf("unexpected markdown prefix: %q", markdown)
+			}
+			if !strings.Contains(markdown, "## Compact Summary\nCompact summary body.") {
+				t.Fatalf("missing compact summary section: %q", markdown)
+			}
+			hasDetailedSection := strings.Contains(markdown, "## Detailed Notes Excerpt")
+			if hasDetailedSection != testCase.expectsDetailedSection {
+				t.Fatalf(
+					"expected detailed section present=%v, got %v",
+					testCase.expectsDetailedSection,
+					hasDetailedSection,
+				)
+			}
+			if !strings.Contains(markdown, "## Key Decisions\n- Use snapshots: Improves continuity") {
+				t.Fatalf("missing decisions section: %q", markdown)
+			}
+			if !strings.Contains(markdown, "## Open Questions\n- Need retention policy?") {
+				t.Fatalf("missing open questions section: %q", markdown)
+			}
+			if !strings.Contains(markdown, "## Top Citations\n- Source (https://example.com/source): Key evidence.") {
+				t.Fatalf("missing top citations section: %q", markdown)
+			}
+		})
+	}
+}
+
+func TestBuildEngramJSONPayloadSerializesReportAndSourceSessionID(t *testing.T) {
+	sourceSessionID := uuid.MustParse("00000000-0000-0000-0000-000000009999")
+	payload := buildEngramJSONPayload(
+		models.MemoryEngramCreate{
+			ProjectID:               "project-1",
+			ThreadID:                ptr("thread-1"),
+			Title:                   "Checkpoint",
+			Abstract:                "Summary",
+			DetailedSummaryMarkdown: "Detailed body",
+			SourceSessionID:         &sourceSessionID,
+		},
+		map[string]any{"enrichment_applied": true, "schema_version": "1.0"},
+		time.Date(2026, 2, 20, 12, 0, 0, 0, time.UTC),
+	)
+
+	if got := payload["project_id"]; got != "project-1" {
+		t.Fatalf("expected project_id project-1, got %#v", got)
+	}
+	if got := payload["thread_id"]; got != "thread-1" {
+		t.Fatalf("expected thread_id thread-1, got %#v", got)
+	}
+	if got := payload["title"]; got != "Checkpoint" {
+		t.Fatalf("expected title Checkpoint, got %#v", got)
+	}
+	if got := payload["source_session_id"]; got != sourceSessionID.String() {
+		t.Fatalf("expected source_session_id %q, got %#v", sourceSessionID.String(), got)
+	}
+	autoMetadata, ok := payload["auto_metadata"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected auto_metadata map, got %#v", payload["auto_metadata"])
+	}
+	if got := autoMetadata["enrichment_applied"]; got != true {
+		t.Fatalf("expected enrichment_applied true, got %#v", got)
+	}
+	if got := payload["created_at"]; got != "2026-02-20T12:00:00+00:00" {
+		t.Fatalf("expected created_at 2026-02-20T12:00:00+00:00, got %#v", got)
+	}
+}
+
+func ptr(value string) *string {
+	return &value
+}

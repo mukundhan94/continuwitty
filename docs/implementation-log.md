@@ -199,6 +199,73 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP7: engram repository helper/query parity)
+
+1. Added engram model primitives required for repository helper migration:
+   - `internal/models/engram.go`
+2. Added engram repository helper baseline:
+   - `internal/repository/engram.go`
+   - ported helper logic from Python repository:
+     - retrieval text composition
+     - vector literal formatting
+     - lexical overlap + combined rerank scoring
+     - engram query `WHERE` clause builder
+     - citation/decision/open-question formatting
+     - rehydration context markdown composition
+     - compact summary resolution + assistant excerpt extraction
+     - engram JSON payload serialization
+3. Ported helper-focused tests from:
+   - `api/tests/test_repository_helpers.py`
+   - `api/tests/test_repository_unit.py`
+   - new files:
+     - `internal/repository/engram_helpers_test.go`
+     - `internal/repository/engram_unit_test.go`
+4. Executed migrated tests one-by-one:
+   - `go test ./internal/repository -run '^TestVectorLiteralFormat$' -v`
+   - `go test ./internal/repository -run '^TestBuildRetrievalTextUsesOverride$' -v`
+   - `go test ./internal/repository -run '^TestBuildRetrievalTextFallbackComposesFields$' -v`
+   - `go test ./internal/repository -run '^TestLexicalOverlapScorePrefersMatchingTerms$' -v`
+   - `go test ./internal/repository -run '^TestCombinedRankScoreUsesDenseAndLexicalSignals$' -v`
+   - `go test ./internal/repository -run '^TestPackCitationsDeduplicatesURLs$' -v`
+   - `go test ./internal/repository -run '^TestResolveCompactSummaryUsesDetailedForGenericChatSnapshot$' -v`
+   - `go test ./internal/repository -run '^TestExtractDetailedExcerptPrefersAssistantSection$' -v`
+   - `go test ./internal/repository -run '^TestBuildEngramQueryWhereIncludesAllFilters$' -v`
+   - `go test ./internal/repository -run '^TestRerankByCombinedScorePrefersLexicalOverlap$' -v`
+   - `go test ./internal/repository -run '^TestFormatCitationsTruncatesAndStripsNewlines$' -v`
+   - `go test ./internal/repository -run '^TestFormatCitationsReturnsDefaultForEmptyList$' -v`
+   - `go test ./internal/repository -run '^TestFormatDecisionsFormatsEntriesAndDefaults$' -v`
+   - `go test ./internal/repository -run '^TestFormatOpenQuestionsFormatsEntriesAndDefaults$' -v`
+   - `go test ./internal/repository -run '^TestBuildRehydrationContextMarkdownIncludesExpectedSections$' -v`
+   - `go test ./internal/repository -run '^TestBuildEngramJSONPayloadSerializesReportAndSourceSessionID$' -v`
+5. Full Go verification:
+   - `go test ./...`
+6. File-level CodeScene checks (all current Go migration files before commit):
+   - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db_test.go` -> `9.61`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/errors.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/engram.go` -> `N/A` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/user.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram.go` -> `9.11`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_helpers_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_unit_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user_test.go` -> `10.0`
+7. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (CodeScene pre-commit safeguard for immediate-phase closeout bundle)
 
 1. Ran CodeScene MCP pre-commit health gate on the working tree:

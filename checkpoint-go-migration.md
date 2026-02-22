@@ -19,7 +19,8 @@
 | CP4 | 2026-02-22 | Completed | Auth baseline (`password` + CSRF) parity with migrated tests |
 | CP5 | 2026-02-22 | Completed | User models + user repository parity tests |
 | CP6 | 2026-02-22 | Completed | Embeddings baseline (local + fallback service parity tests) |
-| CP7 | 2026-02-22 | In Progress | Repository layer migration kickoff (engram/document/chat paths) |
+| CP7 | 2026-02-22 | Completed | Repository helper baseline for engram query/rerank/rehydration formatting parity |
+| CP8 | 2026-02-22 | In Progress | Engram repository DB read/write parity (`create/list/query/rehydration` core flows) |
 
 ## Checkpoint Details
 
@@ -171,7 +172,72 @@
   - `internal/embeddings/local_test.go` → 9.68
   - `internal/embeddings/service_test.go` → 10.0
 
-### CP7 - Repository Layer Kickoff (Planned)
+### CP7 - Repository Helper Baseline
 
-- Start with engram repository read/write parity for the first API-backed flows.
-- Migrate repository-focused tests incrementally and keep one-by-one test execution.
+- Added engram model primitives required for repository layer migration:
+  - `internal/models/engram.go`
+- Added engram repository helper baseline:
+  - `internal/repository/engram.go`
+  - helper parity for:
+    - retrieval text assembly
+    - vector literal formatting
+    - lexical overlap + combined rerank score
+    - query `WHERE` clause builder
+    - citation/decision/open-question formatting
+    - rehydration context markdown composition
+    - compact summary + assistant excerpt extraction
+    - engram JSON payload serialization
+- Ported helper/unit tests from:
+  - `api/tests/test_repository_helpers.py`
+  - `api/tests/test_repository_unit.py`
+  - new files:
+    - `internal/repository/engram_helpers_test.go`
+    - `internal/repository/engram_unit_test.go`
+- Executed migrated tests one-by-one:
+  - `TestVectorLiteralFormat`
+  - `TestBuildRetrievalTextUsesOverride`
+  - `TestBuildRetrievalTextFallbackComposesFields`
+  - `TestLexicalOverlapScorePrefersMatchingTerms`
+  - `TestCombinedRankScoreUsesDenseAndLexicalSignals`
+  - `TestPackCitationsDeduplicatesURLs`
+  - `TestResolveCompactSummaryUsesDetailedForGenericChatSnapshot`
+  - `TestExtractDetailedExcerptPrefersAssistantSection`
+  - `TestBuildEngramQueryWhereIncludesAllFilters`
+  - `TestRerankByCombinedScorePrefersLexicalOverlap`
+  - `TestFormatCitationsTruncatesAndStripsNewlines`
+  - `TestFormatCitationsReturnsDefaultForEmptyList`
+  - `TestFormatDecisionsFormatsEntriesAndDefaults`
+  - `TestFormatOpenQuestionsFormatsEntriesAndDefaults`
+  - `TestBuildRehydrationContextMarkdownIncludesExpectedSections`
+  - `TestBuildEngramJSONPayloadSerializesReportAndSourceSessionID`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/engram.go` → 9.11
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP8 - Engram Repository DB Parity (Planned)
+
+- Port engram DB operations next:
+  - `create_engram`
+  - `list_engrams`
+  - `query_engrams`
+  - `get_rehydration_bundle`
+- Migrate DB-backed parity tests incrementally with one-by-one execution.
