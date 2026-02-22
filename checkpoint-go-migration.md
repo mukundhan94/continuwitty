@@ -32,7 +32,8 @@
 | CP17 | 2026-02-22 | Completed | Collection repository baseline (`engram_collections` + `engram_collection_items`) with migrated unit tests |
 | CP18 | 2026-02-22 | Completed | Memory-admin session repository baseline (`chat_sessions` admin ops + linked engram soft-delete) with migrated unit tests |
 | CP19 | 2026-02-22 | Completed | Memory-admin engram repository baseline (`list/get/sources/move/delete/restore`) with migrated unit tests |
-| CP20 | 2026-02-22 | In Progress | Repository continuation (memory-admin engram update/source replacement migration) |
+| CP20 | 2026-02-22 | Completed | Memory-admin engram update/source-replacement parity (`update` + source rewrite) with migrated unit tests |
+| CP21 | 2026-02-22 | In Progress | Service-layer continuation (memory-admin service migration in Go) |
 
 ## Checkpoint Details
 
@@ -1079,8 +1080,91 @@
   - `internal/repository/user.go` → 9.38
   - `internal/repository/user_test.go` → 10.0
 
-### CP20 - Repository Continuation (Planned)
+### CP20 - Memory-Admin Engram Update/Source Replacement Parity
 
-- Continue Phase 2 repository migration with next high-value slice:
-  - memory-admin engram update + source replacement repository parity
+- Added memory-admin engram update repository operations:
+  - `internal/repository/admin_engram_update.go`
+  - `UpdateAdminEngram`
+  - `replaceAdminEngramSources`
+  - helper parity for:
+    - update-field merge defaults
+    - retrieval text composition
+    - engram JSON payload refresh
+    - embedding + vector literal persistence
+- Added migrated update-focused repository tests:
+  - `internal/repository/admin_engram_update_test.go`
+  - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+  - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+  - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+  - `TestReplaceAdminEngramSourcesReplacesRows`
+  - `TestUpdateAdminEngramReturnsNilWhenMissing`
+  - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+- Executed migrated tests one-by-one:
+  - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+  - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+  - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+  - `TestReplaceAdminEngramSourcesReplacesRows`
+  - `TestUpdateAdminEngramReturnsNilWhenMissing`
+  - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP21 - Service Continuation (Planned)
+
+- Continue migration with the next high-value slice:
+  - memory-admin service parity in Go (`memory_admin/service.py` path)
 - Keep parity tests migrated and executed one-by-one.
