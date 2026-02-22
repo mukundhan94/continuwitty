@@ -19,6 +19,7 @@ import { ChatPanel } from './components/ChatPanel'
 import { DocumentIngestionPanel } from './components/DocumentIngestionPanel'
 import { LoginView } from './components/LoginView'
 import { PinnedEngramPanel } from './components/PinnedEngramPanel'
+import { ProjectTransferPage } from './components/ProjectTransferPage'
 import { SaveEngramModal } from './components/SaveEngramModal'
 import { SessionSidebar } from './components/SessionSidebar'
 import { WorkspaceTopNav } from './components/WorkspaceTopNav'
@@ -62,6 +63,7 @@ function AppScreen() {
   const navigate = useNavigate()
   const location = useLocation()
   const isAdminMemoryRoute = location.pathname === '/admin/memory'
+  const isProjectTransferRoute = location.pathname === '/projects/transfer'
   const { mode, toggleMode } = useThemeMode()
   const [authChecking, setAuthChecking] = useState(true)
   const [authSubmitting, setAuthSubmitting] = useState(false)
@@ -371,11 +373,26 @@ function AppScreen() {
         />
       )
     }
+    if (isProjectTransferRoute) {
+      return (
+        <ProjectTransferPage
+          projectId={projectId}
+          onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
+          onNotice={(message) => setNotice(message)}
+        />
+      )
+    }
     return renderWorkspace()
   }
 
   const renderSaveModal = () => {
-    if (isAdminMemoryRoute || !saveModalOpen) {
+    if (!saveModalOpen) {
+      return null
+    }
+    if (isAdminMemoryRoute) {
+      return null
+    }
+    if (isProjectTransferRoute) {
       return null
     }
     return (
@@ -430,9 +447,13 @@ function AppScreen() {
         user={user}
         isAdmin={isAdmin}
         isAdminMemoryRoute={isAdminMemoryRoute}
+        isProjectTransferRoute={isProjectTransferRoute}
         mode={mode}
         onOpenAdminTokenPanel={openAdminTokenPanel}
         onToggleAdminMemoryRoute={() => navigate(isAdminMemoryRoute ? '/' : '/admin/memory')}
+        onToggleProjectTransferRoute={() =>
+          navigate(isProjectTransferRoute ? '/' : '/projects/transfer')
+        }
         onToggleTheme={toggleMode}
         onLogout={handleLogout}
       />
@@ -449,6 +470,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<AppScreen />} />
       <Route path="/admin/memory" element={<AppScreen />} />
+      <Route path="/projects/transfer" element={<AppScreen />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

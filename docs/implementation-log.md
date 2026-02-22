@@ -7,6 +7,40 @@
 
 ## Implementation Log
 
+### 2026-02-22 (Phase 33 web export/import page + test coverage)
+
+1. Added a dedicated Phase 33 project transfer page in `web/src/components/ProjectTransferPage.tsx`:
+   - new export form (format, optional collection subset, optional embeddings flag).
+   - new import form (bundle upload + deterministic conflict policy selector).
+   - import result summary panel with per-counter visibility.
+2. Added frontend export/import API client in `web/src/api/export.ts`:
+   - `exportProjectBundle(...)` handles query construction, authenticated download, and filename parsing.
+   - `importProjectBundle(...)` handles multipart upload with conflict-policy query.
+3. Wired route and navigation integration:
+   - `web/src/App.tsx` new route: `/projects/transfer`.
+   - `web/src/components/WorkspaceTopNav.tsx` new top-nav action: `Export / Import`.
+4. Added frontend regression tests:
+   - `web/src/components/ProjectTransferPage.test.tsx`
+   - `web/src/api/export.test.ts`
+   - updated `web/src/components/WorkspaceTopNav.test.tsx`
+5. Added acceptance scenarios for export/import options using real API endpoints:
+   - creates real projects/engrams/collections during setup.
+   - covers separate scenarios for `include_embeddings`, `collection_ids`, `json/zip` export formats, and import conflict policies (`skip`, `rename`, `overwrite`).
+   - files:
+     - `acceptance-tests/features/project-export-import.feature`
+     - `acceptance-tests/src/steps/project-export-import.steps.ts`
+6. Verification:
+   - `cd web && npm run lint`
+   - `cd web && npm run test`
+   - `cd web && npm run build`
+   - `cd acceptance-tests && npm run bdd:gen`
+   - `cd acceptance-tests && npm run typecheck`
+7. Tightened contribution contract in `AGENT.md`:
+   - CodeScene pre-commit safeguard is now required before **every** commit (via `skills/codescene/SKILL.md` workflow), not only non-trivial changes.
+8. CodeScene pre-commit safeguard re-run after acceptance-step refactor:
+   - `pre_commit_code_health_safeguard` -> `quality_gates=passed`.
+   - remaining finding: minor duplication across three export step wrappers in `acceptance-tests/src/steps/project-export-import.steps.ts`; retained for readability of explicit scenario-step mapping.
+
 ### 2026-02-22 (Phase 33 export service code-health pass)
 
 1. Refactored `api/app/export/service.py` to remove duplicated lookup patterns in import flows and consolidate lookup logic through a shared helper.

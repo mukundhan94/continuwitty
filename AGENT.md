@@ -30,7 +30,7 @@ Use it as the default workflow when adding or refactoring features.
 - Keep all frontend colors/typography/shadows in `web/src/styles/theme.ts` and consume via shared primitives/utilities.
 - Keep engram auto-metadata enrichment fill-empty-only: derive `abstract/tags/keywords` only when empty and never overwrite non-empty caller values.
 - Keep API data contracts in the same package: prefer `api/app/models.py` for shared request/response models; only add domain-local models under `api/app/<domain>/models.py` when they are truly domain-internal.
-- Before committing non-trivial changes, run a CodeScene MCP health check on the changed files or change set and record outcome in the implementation log.
+- Before every commit, follow `skills/codescene/SKILL.md` and run a CodeScene MCP pre-commit health check (`pre_commit_code_health_safeguard`) on the current change set; record the outcome in the implementation log.
 
 ## 3. Daily Workflow
 1. Pull latest and inspect `git status`.

@@ -221,6 +221,20 @@ export interface ProjectDefaultResponse {
   default_project_id: string | null
 }
 
+export type ProjectExportFormat = 'json' | 'zip'
+export type ProjectImportConflictPolicy = 'skip' | 'overwrite' | 'rename'
+
+export interface ProjectImportResponse {
+  target_project_id: string
+  imported_engrams: number
+  skipped_engrams: number
+  overwritten_engrams: number
+  imported_collections: number
+  reused_collections: number
+  imported_collection_items: number
+  conflict_policy: ProjectImportConflictPolicy
+}
+
 export interface AdminChatSessionRecord {
   session_id: string
   owner_user_id: string

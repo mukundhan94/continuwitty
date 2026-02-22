@@ -14,7 +14,7 @@
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 in progress:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests implemented; docs/skills closeout pending).
-- **Phase 33 in progress:** portable export/import stash workflow (phase tracking started; backend implementation in progress).
+- **Phase 33 in progress:** portable export/import stash workflow (backend export+import APIs and new web transfer page shipped; full cross-surface closeout still in progress).
 - **Phase 34 planned:** security audit remediation backlog queued for post-export hardening cycle.
 
 ---

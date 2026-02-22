@@ -6,9 +6,11 @@ interface WorkspaceTopNavProps {
   user: UserProfile
   isAdmin: boolean
   isAdminMemoryRoute: boolean
+  isProjectTransferRoute: boolean
   mode: ThemeMode
   onOpenAdminTokenPanel: () => void | Promise<void>
   onToggleAdminMemoryRoute: () => void
+  onToggleProjectTransferRoute: () => void
   onToggleTheme: () => void
   onLogout: () => void
 }
@@ -17,9 +19,11 @@ export function WorkspaceTopNav({
   user,
   isAdmin,
   isAdminMemoryRoute,
+  isProjectTransferRoute,
   mode,
   onOpenAdminTokenPanel,
   onToggleAdminMemoryRoute,
+  onToggleProjectTransferRoute,
   onToggleTheme,
   onLogout,
 }: WorkspaceTopNavProps) {
@@ -43,6 +47,13 @@ export function WorkspaceTopNav({
             {isAdminMemoryRoute ? 'Chat Workspace' : 'Memory Admin'}
           </button>
         ) : null}
+        <button
+          type="button"
+          data-testid="open-project-transfer"
+          onClick={onToggleProjectTransferRoute}
+        >
+          {isProjectTransferRoute ? 'Chat Workspace' : 'Export / Import'}
+        </button>
         <button type="button" onClick={onToggleTheme}>
           {mode === 'dark' ? 'Light Theme' : 'Dark Theme'}
         </button>
