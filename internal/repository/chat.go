@@ -343,31 +343,50 @@ func normalizeUpdatePayload(payload models.ChatSessionUpdateRequest) (chatSessio
 }
 
 func applyCreatePayloadDefaults(payload models.ChatSessionCreateRequest) models.ChatSessionCreateRequest {
-	if payload.Provider == "" {
-		payload.Provider = models.ChatProviderOpenAI
-	}
-	if payload.ModelID == "" {
-		payload.ModelID = "gpt-4o-mini"
-	}
-	if payload.VisibilityScope == "" {
-		payload.VisibilityScope = models.VisibilityScopePrivate
-	}
-	if payload.AutosaveStrategy == "" {
-		payload.AutosaveStrategy = models.ChatAutosaveStrategyOff
-	}
-	if payload.AutosaveIntervalMinutes == 0 {
-		payload.AutosaveIntervalMinutes = 30
-	}
-	if payload.AutosaveMinMessages == 0 {
-		payload.AutosaveMinMessages = 6
-	}
-	if payload.RetentionDays == 0 {
-		payload.RetentionDays = 30
-	}
-	if payload.RetentionMaxSnapshots == 0 {
-		payload.RetentionMaxSnapshots = 60
-	}
+	payload.Provider = defaultCreateProvider(payload.Provider)
+	payload.ModelID = defaultString(payload.ModelID, "gpt-4o-mini")
+	payload.VisibilityScope = defaultCreateVisibilityScope(payload.VisibilityScope)
+	payload.AutosaveStrategy = defaultCreateAutosaveStrategy(payload.AutosaveStrategy)
+	payload.AutosaveIntervalMinutes = defaultInt(payload.AutosaveIntervalMinutes, 30)
+	payload.AutosaveMinMessages = defaultInt(payload.AutosaveMinMessages, 6)
+	payload.RetentionDays = defaultInt(payload.RetentionDays, 30)
+	payload.RetentionMaxSnapshots = defaultInt(payload.RetentionMaxSnapshots, 60)
 	return payload
+}
+
+func defaultCreateProvider(value models.ChatProvider) models.ChatProvider {
+	if value == "" {
+		return models.ChatProviderOpenAI
+	}
+	return value
+}
+
+func defaultCreateVisibilityScope(value models.VisibilityScope) models.VisibilityScope {
+	if value == "" {
+		return models.VisibilityScopePrivate
+	}
+	return value
+}
+
+func defaultCreateAutosaveStrategy(value models.ChatAutosaveStrategy) models.ChatAutosaveStrategy {
+	if value == "" {
+		return models.ChatAutosaveStrategyOff
+	}
+	return value
+}
+
+func defaultString(value string, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+func defaultInt(value int, fallback int) int {
+	if value == 0 {
+		return fallback
+	}
+	return value
 }
 
 func validateCreatePayloadEnums(payload models.ChatSessionCreateRequest) error {
