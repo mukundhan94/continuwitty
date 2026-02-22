@@ -2904,3 +2904,33 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP56 - Collection List Query Uplift (`internal/repository/collection.go`)
+
+- Improved legacy non-checkpoint collection repository implementation file:
+  - `internal/repository/collection.go`
+- Reduced `ListCollections` complexity by extracting composable list-query builder primitives:
+  - `collectionListQueryBuilder`
+  - `newCollectionListQueryBuilder`
+  - `addClause`
+  - `addParam`
+  - `addOptionalProjectFilter`
+  - `addOptionalOwnerFilter`
+  - `buildCollectionListQuery`
+- Preserved filter SQL behavior and argument ordering across project/owner/deleted/limit/offset handling.
+- Executed migrated tests one-by-one:
+  - `TestListCollectionsBuildsFilters`
+  - `TestGetAndUpdateCollectionReturnNilWhenMissing`
+  - `TestCreateCollectionUsesGeneratedID`
+  - `TestCreateCollectionMapsDuplicateNameError`
+  - `TestSoftDeleteCollectionReturnsBool`
+  - `TestAddCollectionItemsReturnsCountAndSkipsEmpty`
+  - `TestRemoveCollectionItemReturnsBool`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/collection.go`: `9.68` -> `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.

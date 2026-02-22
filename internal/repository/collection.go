@@ -82,35 +82,7 @@ func ListCollections(
 	db Queryer,
 	input CollectionListInput,
 ) ([]models.EngramCollectionRecord, error) {
-	whereClauses := []string{"1=1"}
-	params := make([]any, 0)
-	if input.ProjectID != nil && *input.ProjectID != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("project_id = %s", pgxPlaceholder(len(params)+1)))
-		params = append(params, *input.ProjectID)
-	}
-	if input.OwnerUserID != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("owner_user_id = %s", pgxPlaceholder(len(params)+1)))
-		params = append(params, *input.OwnerUserID)
-	}
-	if !input.IncludeDeleted {
-		whereClauses = append(whereClauses, "deleted_at IS NULL")
-	}
-
-	sql := fmt.Sprintf(
-		`
-		SELECT %s
-		FROM engram_collections
-		WHERE %s
-		ORDER BY created_at DESC
-		LIMIT %s OFFSET %s
-		`,
-		collectionColumns,
-		strings.Join(whereClauses, " AND "),
-		pgxPlaceholder(len(params)+1),
-		pgxPlaceholder(len(params)+2),
-	)
-	params = append(params, input.Limit, input.Offset)
-
+	sql, params := buildCollectionListQuery(input)
 	rows, err := db.Query(ctx, sql, params...)
 	if err != nil {
 		return nil, err
@@ -129,6 +101,73 @@ func ListCollections(
 		return nil, err
 	}
 	return records, nil
+}
+
+type collectionListQueryBuilder struct {
+	whereClauses []string
+	params       []any
+}
+
+func newCollectionListQueryBuilder() collectionListQueryBuilder {
+	return collectionListQueryBuilder{
+		whereClauses: []string{"1=1"},
+		params:       make([]any, 0),
+	}
+}
+
+func (builder *collectionListQueryBuilder) addClause(clause string) {
+	builder.whereClauses = append(builder.whereClauses, clause)
+}
+
+func (builder *collectionListQueryBuilder) addParam(value any) string {
+	builder.params = append(builder.params, value)
+	return pgxPlaceholder(len(builder.params))
+}
+
+func (builder *collectionListQueryBuilder) addOptionalProjectFilter(projectID *string) {
+	if projectID == nil {
+		return
+	}
+	trimmed := strings.TrimSpace(*projectID)
+	if trimmed == "" {
+		return
+	}
+	placeholder := builder.addParam(trimmed)
+	builder.addClause(fmt.Sprintf("project_id = %s", placeholder))
+}
+
+func (builder *collectionListQueryBuilder) addOptionalOwnerFilter(ownerUserID *uuid.UUID) {
+	if ownerUserID == nil {
+		return
+	}
+	placeholder := builder.addParam(*ownerUserID)
+	builder.addClause(fmt.Sprintf("owner_user_id = %s", placeholder))
+}
+
+func buildCollectionListQuery(input CollectionListInput) (string, []any) {
+	builder := newCollectionListQueryBuilder()
+	builder.addOptionalProjectFilter(input.ProjectID)
+	builder.addOptionalOwnerFilter(input.OwnerUserID)
+	if !input.IncludeDeleted {
+		builder.addClause("deleted_at IS NULL")
+	}
+
+	limitPlaceholder := builder.addParam(input.Limit)
+	offsetPlaceholder := builder.addParam(input.Offset)
+
+	return fmt.Sprintf(
+		`
+		SELECT %s
+		FROM engram_collections
+		WHERE %s
+		ORDER BY created_at DESC
+		LIMIT %s OFFSET %s
+		`,
+		collectionColumns,
+		strings.Join(builder.whereClauses, " AND "),
+		limitPlaceholder,
+		offsetPlaceholder,
+	), builder.params
 }
 
 // GetCollection fetches a collection by ID with optional deleted filtering.
