@@ -121,6 +121,44 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP5: user model + repository parity)
+
+1. Added Go user model primitives:
+   - `internal/models/user.go`
+   - `UserRole`, role parser, `UserRecord`, `UserAuthRecord`
+2. Added Go user repository baseline:
+   - `internal/repository/user.go`
+   - `GetUserAuthRecord`, `GetUserAuthRecordByID`, `ListUsers`, `CreateUser`, `UpdateUser`
+   - duplicate username mapping to `ErrUsernameExists`
+3. Ported repository tests from `api/tests/test_user_repository.py`:
+   - `internal/repository/user_test.go`
+4. Executed migrated tests one-by-one:
+   - `go test ./internal/repository -run '^TestGetUserAuthRecordLooksUpUsername$' -v`
+   - `go test ./internal/repository -run '^TestListUsersReturnsRecords$' -v`
+   - `go test ./internal/repository -run '^TestCreateUserReturnsCreatedUser$' -v`
+   - `go test ./internal/repository -run '^TestCreateUserReturnsUsernameExistsOnDuplicate$' -v`
+   - `go test ./internal/repository -run '^TestUpdateUserReturnsNilWhenNotFound$' -v`
+   - `go test ./internal/repository -run '^TestUpdateUserAppliesProvidedFields$' -v`
+5. Full Go verification:
+   - `go test ./...`
+6. File-level CodeScene checks (all current Go migration files before commit):
+   - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db_test.go` -> `9.61`
+   - `/Users/mukundhan/Projects/engram/internal/models/user.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user_test.go` -> `10.0`
+7. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (CodeScene pre-commit safeguard for immediate-phase closeout bundle)
 
 1. Ran CodeScene MCP pre-commit health gate on the working tree:
