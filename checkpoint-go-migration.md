@@ -2776,3 +2776,40 @@
   - findings:
     - fixed previous duplication findings in four pinning tests
     - introduced one non-blocking large-method note in consolidated list test.
+
+### CP52 - Memory Admin Route Refactor (`internal/api/admin_memory*.go` + parser call-site normalization)
+
+- Refactored memory-admin API routes into focused files while preserving endpoint behavior:
+  - `internal/api/admin_memory.go`
+  - `internal/api/admin_memory_sessions.go`
+  - `internal/api/admin_memory_engrams.go`
+  - `internal/api/admin_memory_collections.go`
+- Centralized shared parsing and error mapping in `internal/api/admin_memory.go` and reduced route-level duplication through focused collection-route composition.
+- Normalized optional int query parser usage in session route files:
+  - `internal/api/session_engrams.go`
+  - `internal/api/session_users.go`
+- Executed migrated tests one-by-one:
+  - `TestMountMemoryAdminRoutesListSessionsForwardsQueryAndActorCheck`
+  - `TestMountMemoryAdminRoutesDeleteSessionUsesActorAndPayload`
+  - `TestMountMemoryAdminRoutesListEngramsUsesRequestObject`
+  - `TestMountMemoryAdminRoutesUpdateEngramMapsStaleTo409`
+  - `TestMountMemoryAdminRoutesCreateCollectionReturns201`
+  - `TestMountMemoryAdminRoutesCreateCollectionMapsMissingProjectTo400`
+  - `TestMountMemoryAdminRoutesReturnsForbiddenWhenActorCheckFails`
+  - `TestMountSessionAuthRoutesListEngramSourcesUsesRepository`
+  - `TestMountSessionAuthRoutesEngramCollectionRoutesUseRepository`
+  - `TestMountSessionAuthRoutesAdminCanManageUsers`
+  - `TestMountSessionAuthRoutesNonAdminCannotAccessAdminRoutes`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/admin_memory.go`: `7.78` -> `10.0`
+  - `internal/api/admin_memory_sessions.go`: `10.0`
+  - `internal/api/admin_memory_engrams.go`: `10.0`
+  - `internal/api/admin_memory_collections.go`: `10.0`
+  - `internal/api/session_engrams.go`: `10.0`
+  - `internal/api/session_users.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.

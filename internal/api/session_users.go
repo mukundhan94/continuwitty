@@ -77,11 +77,21 @@ func (dependencies sessionAuthDependencies) handleListUsers(writer http.Response
 		return
 	}
 
-	limit, ok := parseOptionalIntQuery(writer, request, "limit", 200, 1, 500)
+	limit, ok := parseOptionalIntQuery(
+		writer,
+		request,
+		"limit",
+		intQuerySpec{Default: 200, Min: 1, Max: 500},
+	)
 	if !ok {
 		return
 	}
-	offset, ok := parseOptionalIntQuery(writer, request, "offset", 0, 0, 1_000_000)
+	offset, ok := parseOptionalIntQuery(
+		writer,
+		request,
+		"offset",
+		intQuerySpec{Default: 0, Min: 0, Max: 1_000_000},
+	)
 	if !ok {
 		return
 	}

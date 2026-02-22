@@ -68,11 +68,21 @@ func (dependencies sessionAuthDependencies) handleListEngrams(writer http.Respon
 		return
 	}
 
-	limit, ok := parseOptionalIntQuery(writer, request, "limit", defaultEngramListLimit, 1, 200)
+	limit, ok := parseOptionalIntQuery(
+		writer,
+		request,
+		"limit",
+		intQuerySpec{Default: defaultEngramListLimit, Min: 1, Max: 200},
+	)
 	if !ok {
 		return
 	}
-	offset, ok := parseOptionalIntQuery(writer, request, "offset", 0, 0, 1_000_000)
+	offset, ok := parseOptionalIntQuery(
+		writer,
+		request,
+		"offset",
+		intQuerySpec{Default: 0, Min: 0, Max: 1_000_000},
+	)
 	if !ok {
 		return
 	}
@@ -121,7 +131,12 @@ func (dependencies sessionAuthDependencies) handleListEngramSources(writer http.
 	if !ok {
 		return
 	}
-	limit, ok := parseOptionalIntQuery(writer, request, "limit", defaultEngramSourceLimit, 1, 500)
+	limit, ok := parseOptionalIntQuery(
+		writer,
+		request,
+		"limit",
+		intQuerySpec{Default: defaultEngramSourceLimit, Min: 1, Max: 500},
+	)
 	if !ok {
 		return
 	}
