@@ -70,3 +70,31 @@ type RehydrationCitation struct {
 	Snippet    string    `json:"snippet"`
 	CapturedAt time.Time `json:"captured_at"`
 }
+
+// EngramSummary models list-engrams response rows.
+type EngramSummary struct {
+	EngramID        uuid.UUID  `json:"engram_id"`
+	ProjectID       string     `json:"project_id"`
+	ThreadID        *string    `json:"thread_id,omitempty"`
+	Title           string     `json:"title"`
+	Abstract        string     `json:"abstract"`
+	CreatedAt       time.Time  `json:"created_at"`
+	Tags            []string   `json:"tags,omitempty"`
+	Keywords        []string   `json:"keywords,omitempty"`
+	OwnerUserID     *uuid.UUID `json:"owner_user_id,omitempty"`
+	VisibilityScope string     `json:"visibility_scope"`
+}
+
+// EngramQueryResult models query-engrams response rows.
+type EngramQueryResult struct {
+	EngramID        uuid.UUID  `json:"engram_id"`
+	ProjectID       string     `json:"project_id"`
+	Title           string     `json:"title"`
+	Abstract        string     `json:"abstract"`
+	CreatedAt       time.Time  `json:"created_at"`
+	Tags            []string   `json:"tags,omitempty"`
+	Keywords        []string   `json:"keywords,omitempty"`
+	OwnerUserID     *uuid.UUID `json:"owner_user_id,omitempty"`
+	VisibilityScope string     `json:"visibility_scope"`
+	Distance        float64    `json:"distance"`
+}

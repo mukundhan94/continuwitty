@@ -96,34 +96,40 @@ func extractDetailedExcerpt(markdown string, maxChars int) string {
 		return ""
 	}
 
-	excerpt := text
-	lines := strings.Split(text, "\n")
-	for lineIndex, line := range lines {
-		heading := strings.ToLower(strings.TrimSpace(line))
-		if !strings.HasPrefix(heading, "## assistant") {
-			continue
-		}
-
-		bodyLines := make([]string, 0)
-		for innerIndex := lineIndex + 1; innerIndex < len(lines); innerIndex++ {
-			trimmed := strings.TrimSpace(lines[innerIndex])
-			if strings.HasPrefix(trimmed, "## ") {
-				break
-			}
-			bodyLines = append(bodyLines, lines[innerIndex])
-		}
-
-		candidate := strings.TrimSpace(strings.Join(bodyLines, "\n"))
-		if candidate != "" {
-			excerpt = candidate
-		}
-		break
-	}
-
+	excerpt := assistantExcerpt(text)
 	if excerpt == "" {
-		return ""
+		excerpt = text
 	}
 	return truncateText(excerpt, maxChars)
+}
+
+func assistantExcerpt(markdown string) string {
+	lines := strings.Split(markdown, "\n")
+	assistantStart := assistantSectionStart(lines)
+	if assistantStart < 0 {
+		return ""
+	}
+	return sectionBody(lines, assistantStart)
+}
+
+func assistantSectionStart(lines []string) int {
+	for index, line := range lines {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "## assistant") {
+			return index + 1
+		}
+	}
+	return -1
+}
+
+func sectionBody(lines []string, start int) string {
+	bodyLines := make([]string, 0)
+	for index := start; index < len(lines); index++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[index]), "## ") {
+			break
+		}
+		bodyLines = append(bodyLines, lines[index])
+	}
+	return strings.TrimSpace(strings.Join(bodyLines, "\n"))
 }
 
 func resolveCompactSummary(abstract, detailedSummaryMarkdown string, maxChars int) string {
@@ -152,23 +158,32 @@ func lexicalOverlapScore(query string, candidateParts []string) float64 {
 		return 0
 	}
 
-	documentTokens := make(map[string]struct{})
-	for _, part := range candidateParts {
-		for token := range tokenize(part) {
-			documentTokens[token] = struct{}{}
-		}
-	}
+	documentTokens := collectTokens(candidateParts)
 	if len(documentTokens) == 0 {
 		return 0
 	}
 
+	return float64(overlapCount(queryTokens, documentTokens)) / float64(len(queryTokens))
+}
+
+func collectTokens(parts []string) map[string]struct{} {
+	tokens := make(map[string]struct{})
+	for _, part := range parts {
+		for token := range tokenize(part) {
+			tokens[token] = struct{}{}
+		}
+	}
+	return tokens
+}
+
+func overlapCount(source map[string]struct{}, target map[string]struct{}) int {
 	overlap := 0
-	for token := range queryTokens {
-		if _, exists := documentTokens[token]; exists {
+	for token := range source {
+		if _, exists := target[token]; exists {
 			overlap += 1
 		}
 	}
-	return float64(overlap) / float64(len(queryTokens))
+	return overlap
 }
 
 func combinedRankScore(distance, lexicalOverlap float64) float64 {
@@ -357,44 +372,76 @@ func buildEngramJSONPayload(
 	enrichmentReport map[string]any,
 	createdAt time.Time,
 ) map[string]any {
-	decisions := make([]map[string]any, 0, len(payload.Decisions))
-	for _, decision := range payload.Decisions {
-		decisions = append(
-			decisions,
+	return map[string]any{
+		"schema_version":            "1.0",
+		"project_id":                payload.ProjectID,
+		"thread_id":                 threadIDValue(payload),
+		"title":                     payload.Title,
+		"abstract":                  payload.Abstract,
+		"detailed_summary_markdown": payload.DetailedSummaryMarkdown,
+		"decisions":                 decisionPayload(payload.Decisions),
+		"assumptions":               payload.Assumptions,
+		"open_questions":            payload.OpenQuestions,
+		"claims":                    claimPayload(payload.Claims),
+		"tags":                      payload.Tags,
+		"keywords":                  payload.Keywords,
+		"artifacts":                 artifactPayload(payload.Artifacts),
+		"visibility_scope":          visibilityScopeValue(payload),
+		"source_session_id":         sourceSessionIDValue(payload),
+		"auto_metadata":             enrichmentReport,
+		"created_at":                createdAt.Format("2006-01-02T15:04:05-07:00"),
+	}
+}
+
+func decisionPayload(decisions []models.Decision) []map[string]any {
+	payload := make([]map[string]any, 0, len(decisions))
+	for _, decision := range decisions {
+		payload = append(
+			payload,
 			map[string]any{
 				"decision":  decision.Decision,
 				"rationale": decision.Rationale,
 			},
 		)
 	}
+	return payload
+}
 
-	claims := make([]map[string]any, 0, len(payload.Claims))
-	for _, claim := range payload.Claims {
-		supportingSources := make([]map[string]any, 0, len(claim.SupportingSources))
-		for _, source := range claim.SupportingSources {
-			supportingSources = append(
-				supportingSources,
-				map[string]any{
-					"url":         source.URL,
-					"title":       source.Title,
-					"snippet":     source.Snippet,
-					"captured_at": source.CapturedAt,
-				},
-			)
-		}
-		claims = append(
-			claims,
+func claimPayload(claims []models.Claim) []map[string]any {
+	payload := make([]map[string]any, 0, len(claims))
+	for _, claim := range claims {
+		payload = append(
+			payload,
 			map[string]any{
 				"claim":              claim.Claim,
-				"supporting_sources": supportingSources,
+				"supporting_sources": supportingSourcePayload(claim.SupportingSources),
 			},
 		)
 	}
+	return payload
+}
 
-	artifacts := make([]map[string]any, 0, len(payload.Artifacts))
-	for _, artifact := range payload.Artifacts {
-		artifacts = append(
-			artifacts,
+func supportingSourcePayload(sources []models.SupportingSource) []map[string]any {
+	payload := make([]map[string]any, 0, len(sources))
+	for _, source := range sources {
+		payload = append(
+			payload,
+			map[string]any{
+				"url":         source.URL,
+				"title":       source.Title,
+				"snippet":     source.Snippet,
+				"captured_at": source.CapturedAt,
+			},
+		)
+	}
+	return payload
+}
+
+func artifactPayload(artifacts []models.ArtifactIn) []map[string]any {
+	payload := make([]map[string]any, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		payload = append(
+			payload,
 			map[string]any{
 				"artifact_type": artifact.ArtifactType,
 				"storage_uri":   artifact.StorageURI,
@@ -402,41 +449,28 @@ func buildEngramJSONPayload(
 			},
 		)
 	}
+	return payload
+}
 
-	visibilityScope := payload.VisibilityScope
-	if visibilityScope == "" {
-		visibilityScope = "private"
+func visibilityScopeValue(payload models.MemoryEngramCreate) string {
+	if payload.VisibilityScope == "" {
+		return "private"
 	}
+	return payload.VisibilityScope
+}
 
-	var threadID any
-	if payload.ThreadID != nil {
-		threadID = *payload.ThreadID
+func threadIDValue(payload models.MemoryEngramCreate) any {
+	if payload.ThreadID == nil {
+		return nil
 	}
+	return *payload.ThreadID
+}
 
-	var sourceSessionID any
-	if payload.SourceSessionID != nil {
-		sourceSessionID = payload.SourceSessionID.String()
+func sourceSessionIDValue(payload models.MemoryEngramCreate) any {
+	if payload.SourceSessionID == nil {
+		return nil
 	}
-
-	return map[string]any{
-		"schema_version":            "1.0",
-		"project_id":                payload.ProjectID,
-		"thread_id":                 threadID,
-		"title":                     payload.Title,
-		"abstract":                  payload.Abstract,
-		"detailed_summary_markdown": payload.DetailedSummaryMarkdown,
-		"decisions":                 decisions,
-		"assumptions":               payload.Assumptions,
-		"open_questions":            payload.OpenQuestions,
-		"claims":                    claims,
-		"tags":                      payload.Tags,
-		"keywords":                  payload.Keywords,
-		"artifacts":                 artifacts,
-		"visibility_scope":          visibilityScope,
-		"source_session_id":         sourceSessionID,
-		"auto_metadata":             enrichmentReport,
-		"created_at":                createdAt.Format("2006-01-02T15:04:05-07:00"),
-	}
+	return payload.SourceSessionID.String()
 }
 
 func stringFromAny(value any) string {
