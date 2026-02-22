@@ -62,52 +62,7 @@ func ListAdminEngrams(
 	db Queryer,
 	input AdminEngramListInput,
 ) ([]models.AdminEngramRecord, error) {
-	whereClauses := []string{"1=1"}
-	params := make([]any, 0)
-	if !input.IncludeDeleted {
-		whereClauses = append(whereClauses, "e.deleted_at IS NULL")
-	}
-	if input.ProjectID != nil && *input.ProjectID != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("e.project_id = %s", pgxPlaceholder(len(params)+1)))
-		params = append(params, *input.ProjectID)
-	}
-	if input.SessionID != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("e.source_session_id = %s", pgxPlaceholder(len(params)+1)))
-		params = append(params, *input.SessionID)
-	}
-	if input.OwnerUserID != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("e.owner_user_id = %s", pgxPlaceholder(len(params)+1)))
-		params = append(params, *input.OwnerUserID)
-	}
-	if input.QueryText != nil && strings.TrimSpace(*input.QueryText) != "" {
-		like := "%" + strings.TrimSpace(*input.QueryText) + "%"
-		whereClauses = append(
-			whereClauses,
-			fmt.Sprintf(
-				"(e.title ILIKE %s OR e.abstract ILIKE %s OR e.engram_markdown ILIKE %s)",
-				pgxPlaceholder(len(params)+1),
-				pgxPlaceholder(len(params)+2),
-				pgxPlaceholder(len(params)+3),
-			),
-		)
-		params = append(params, like, like, like)
-	}
-
-	sql := fmt.Sprintf(
-		`
-		SELECT %s
-		FROM engrams e
-		WHERE %s
-		ORDER BY e.created_at DESC
-		LIMIT %s OFFSET %s
-		`,
-		adminEngramColumns,
-		strings.Join(whereClauses, " AND "),
-		pgxPlaceholder(len(params)+1),
-		pgxPlaceholder(len(params)+2),
-	)
-	params = append(params, input.Limit, input.Offset)
-
+	sql, params := buildAdminEngramListQuery(input)
 	rows, err := db.Query(ctx, sql, params...)
 	if err != nil {
 		return nil, err
@@ -127,6 +82,97 @@ func ListAdminEngrams(
 		return nil, err
 	}
 	return records, nil
+}
+
+type adminEngramListQueryBuilder struct {
+	whereClauses []string
+	params       []any
+}
+
+func newAdminEngramListQueryBuilder() adminEngramListQueryBuilder {
+	return adminEngramListQueryBuilder{
+		whereClauses: []string{"1=1"},
+		params:       make([]any, 0),
+	}
+}
+
+func (builder *adminEngramListQueryBuilder) addClause(clause string) {
+	builder.whereClauses = append(builder.whereClauses, clause)
+}
+
+func (builder *adminEngramListQueryBuilder) addParam(value any) string {
+	builder.params = append(builder.params, value)
+	return pgxPlaceholder(len(builder.params))
+}
+
+func (builder *adminEngramListQueryBuilder) addOptionalStringFilter(column string, value *string) {
+	if value == nil {
+		return
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return
+	}
+	placeholder := builder.addParam(trimmed)
+	builder.addClause(fmt.Sprintf("%s = %s", column, placeholder))
+}
+
+func (builder *adminEngramListQueryBuilder) addOptionalUUIDFilter(column string, value *uuid.UUID) {
+	if value == nil {
+		return
+	}
+	placeholder := builder.addParam(*value)
+	builder.addClause(fmt.Sprintf("%s = %s", column, placeholder))
+}
+
+func (builder *adminEngramListQueryBuilder) addOptionalQueryTextFilter(queryText *string) {
+	if queryText == nil {
+		return
+	}
+	trimmed := strings.TrimSpace(*queryText)
+	if trimmed == "" {
+		return
+	}
+	like := "%" + trimmed + "%"
+	titlePlaceholder := builder.addParam(like)
+	abstractPlaceholder := builder.addParam(like)
+	markdownPlaceholder := builder.addParam(like)
+	builder.addClause(
+		fmt.Sprintf(
+			"(e.title ILIKE %s OR e.abstract ILIKE %s OR e.engram_markdown ILIKE %s)",
+			titlePlaceholder,
+			abstractPlaceholder,
+			markdownPlaceholder,
+		),
+	)
+}
+
+func buildAdminEngramListQuery(input AdminEngramListInput) (string, []any) {
+	builder := newAdminEngramListQueryBuilder()
+	if !input.IncludeDeleted {
+		builder.addClause("e.deleted_at IS NULL")
+	}
+	builder.addOptionalStringFilter("e.project_id", input.ProjectID)
+	builder.addOptionalUUIDFilter("e.source_session_id", input.SessionID)
+	builder.addOptionalUUIDFilter("e.owner_user_id", input.OwnerUserID)
+	builder.addOptionalQueryTextFilter(input.QueryText)
+
+	limitPlaceholder := builder.addParam(input.Limit)
+	offsetPlaceholder := builder.addParam(input.Offset)
+
+	return fmt.Sprintf(
+		`
+		SELECT %s
+		FROM engrams e
+		WHERE %s
+		ORDER BY e.created_at DESC
+		LIMIT %s OFFSET %s
+		`,
+		adminEngramColumns,
+		strings.Join(builder.whereClauses, " AND "),
+		limitPlaceholder,
+		offsetPlaceholder,
+	), builder.params
 }
 
 // ListAdminEngramSources returns source rows for an engram ordered by capture time.

@@ -2845,3 +2845,35 @@
     - introduced one non-blocking helper arg-count note in `updateAdminEngramRecord`.
 - Additional scan:
   - no production file under `internal/` scored below `9.5` in the current CodeScene file-level check.
+
+### CP54 - Admin Engram List Query Uplift (`internal/repository/admin_engram.go`)
+
+- Improved legacy non-checkpoint admin engram repository implementation file:
+  - `internal/repository/admin_engram.go`
+- Reduced `ListAdminEngrams` complexity by extracting composable query builder primitives:
+  - `adminEngramListQueryBuilder`
+  - `newAdminEngramListQueryBuilder`
+  - `addClause`
+  - `addParam`
+  - `addOptionalStringFilter`
+  - `addOptionalUUIDFilter`
+  - `addOptionalQueryTextFilter`
+  - `buildAdminEngramListQuery`
+- Preserved filter SQL shape and parameter ordering semantics verified by existing tests.
+- Executed migrated tests one-by-one:
+  - `TestListAdminEngramsBuildsFiltersAndSearch`
+  - `TestListAdminEngramSourcesReturnsRows`
+  - `TestGetAdminEngramReturnsNilWhenMissing`
+  - `TestGetAdminEngramHydratesSources`
+  - `TestMoveAdminEngramProjectReturnsUpdatedRecordAndRunsDetachQuery`
+  - `TestMoveAdminEngramProjectReturnsNilWhenNotFound`
+  - `TestSoftDeleteEngramReturnsBool`
+  - `TestRestoreEngramReturnsBool`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/admin_engram.go`: `9.68` -> `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
