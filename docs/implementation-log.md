@@ -318,6 +318,36 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP43: non-checkpoint code-health uplift for document repository tests)
+
+1. Improved legacy non-checkpoint document repository tests:
+   - `internal/repository/document_test.go`
+   - replaced high-argument row helper with fixture struct:
+     - `documentRecordRowFixture`
+     - `documentRecordRowValues(fixture documentRecordRowFixture)`
+   - reduced large tests by extracting focused setup/assertion helpers for:
+     - deterministic clock and embed stubs
+     - payload construction
+     - SQL/args/result assertions
+2. Executed document repository tests one-by-one:
+   - `TestUpsertDocumentWithChunksPersistsDocumentAndChunks`
+   - `TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch`
+   - `TestListDocumentsAppliesProjectFilter`
+   - `TestQueryDocumentChunksBuildsQueryAndReranks`
+   - `TestBuildDocumentChunkWhereDefaultsToActorScopeOnly`
+   - `TestUpsertDocumentWithChunksRejectsInvalidVisibility`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/document_test.go` improved from `8.72` to `9.68`
+   - remaining notes are non-blocking helper arg-count threshold edges.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings:
+     - fixed both large-method findings
+     - replaced old argument-heavy helper finding with new helper arg-count notes.
+
 ### 2026-02-22 (Go migration CP42: non-checkpoint code-health uplift for collection repository tests)
 
 1. Improved legacy non-checkpoint collection repository tests:

@@ -23,98 +23,37 @@ func TestUpsertDocumentWithChunksPersistsDocumentAndChunks(t *testing.T) {
 	mimeType := "text/markdown"
 	db := &fakeQueryer{
 		queryRowResults: []*fakeRow{
-			{values: documentRecordRowValues(
-				documentID,
-				actorUserID,
-				"project-docs",
-				"Runbook",
-				"text",
-				&sourceName,
-				&mimeType,
-				"project",
-				"hash-value",
-				2,
-				createdAt,
-				createdAt,
-			)},
+			{values: documentRecordRowValues(documentRecordRowFixture{
+				DocumentID:      documentID,
+				OwnerUserID:     actorUserID,
+				ProjectID:       "project-docs",
+				Title:           "Runbook",
+				SourceType:      "text",
+				SourceName:      &sourceName,
+				MimeType:        &mimeType,
+				VisibilityScope: "project",
+				ContentHash:     "hash-value",
+				ChunkCount:      2,
+				CreatedAt:       createdAt,
+				UpdatedAt:       createdAt,
+			})},
 			{values: []any{chunkA}},
 			{values: []any{chunkB}},
 		},
 	}
-
-	originalNow := nowDocumentUTC
-	nowDocumentUTC = func() time.Time { return createdAt }
-	t.Cleanup(func() { nowDocumentUTC = originalNow })
-
-	originalEmbedMany := embedDocumentMany
-	embedDocumentMany = func(texts []string, dim int) ([]embeddings.Result, error) {
-		requireEqual(t, 2, len(texts))
-		requireEqual(t, 8, dim)
-		return []embeddings.Result{
-			{ProviderID: "local-deterministic-v1", Vector: []float64{0.1, 0.2}},
-			{ProviderID: "local-deterministic-v1", Vector: []float64{0.3, 0.4}},
-		}, nil
-	}
-	t.Cleanup(func() { embedDocumentMany = originalEmbedMany })
-
+	setDocumentNow(t, createdAt)
+	stubTwoChunkDocumentEmbeddings(t, 8)
+	payload := buildDocumentUpsertPayloadForPersistenceTest(documentID, sourceName, mimeType, chunkA, chunkB)
 	record, err := UpsertDocumentWithChunks(
 		context.Background(),
 		db,
 		DocumentUpsertInput{
 			ActorUserID:  actorUserID,
 			EmbeddingDim: 8,
-			Payload: DocumentUpsertPayload{
-				DocumentID:      documentID,
-				ProjectID:       "project-docs",
-				Title:           "Runbook",
-				SourceType:      models.DocumentSourceTypeText,
-				SourceName:      &sourceName,
-				MimeType:        &mimeType,
-				VisibilityScope: models.VisibilityScopeProject,
-				ContentText:     "queue depth exceeded",
-				ContentHash:     "hash-value",
-				Metadata:        map[string]any{"owner": "ops"},
-				Chunks: []DocumentChunkDraft{
-					{
-						ChunkID:       chunkA,
-						ChunkIndex:    0,
-						ChunkText:     "queue depth exceeded",
-						Snippet:       "queue depth exceeded",
-						CharStart:     0,
-						CharEnd:       20,
-						TokenEstimate: 3,
-						Metadata:      map[string]any{"chunk": 0},
-					},
-					{
-						ChunkID:       chunkB,
-						ChunkIndex:    1,
-						ChunkText:     "retry worker burst",
-						Snippet:       "retry worker burst",
-						CharStart:     21,
-						CharEnd:       40,
-						TokenEstimate: 3,
-						Metadata:      map[string]any{"chunk": 1},
-					},
-				},
-			},
+			Payload:      payload,
 		},
 	)
-	requireNoError(t, err)
-	requireNotNil(t, record)
-	requireEqual(t, documentID, record.DocumentID)
-	requireEqual(t, models.DocumentSourceTypeText, record.SourceType)
-	requireEqual(t, models.VisibilityScopeProject, record.VisibilityScope)
-	requireEqual(t, 1, len(db.querySQL))
-	if !strings.Contains(db.querySQL[0], "DELETE FROM document_chunks") {
-		t.Fatalf("expected delete old chunks query, got %q", db.querySQL[0])
-	}
-	requireEqual(t, 3, len(db.queryRowArgs))
-	if gotMetadata, ok := db.queryRowArgs[0][10].(string); !ok || !strings.Contains(gotMetadata, "\"owner\":\"ops\"") {
-		t.Fatalf("expected document metadata json arg, got %#v", db.queryRowArgs[0][10])
-	}
-	if gotVector, ok := db.queryRowArgs[1][10].(string); !ok || gotVector != "[0.100000,0.200000]" {
-		t.Fatalf("expected first chunk vector literal, got %#v", db.queryRowArgs[1][10])
-	}
+	assertDocumentUpsertPersistenceResult(t, err, record, db, documentID)
 }
 
 func TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch(t *testing.T) {
@@ -171,20 +110,20 @@ func TestListDocumentsAppliesProjectFilter(t *testing.T) {
 	projectID := "project-docs"
 	db := &fakeQueryer{
 		queryRowsResult: &fakeRows{values: [][]any{
-			documentRecordRowValues(
-				documentID,
-				actorUserID,
-				projectID,
-				"Runbook",
-				"text",
-				nil,
-				nil,
-				"private",
-				"hash-value",
-				1,
-				createdAt,
-				createdAt,
-			),
+			documentRecordRowValues(documentRecordRowFixture{
+				DocumentID:      documentID,
+				OwnerUserID:     actorUserID,
+				ProjectID:       projectID,
+				Title:           "Runbook",
+				SourceType:      "text",
+				SourceName:      nil,
+				MimeType:        nil,
+				VisibilityScope: "private",
+				ContentHash:     "hash-value",
+				ChunkCount:      1,
+				CreatedAt:       createdAt,
+				UpdatedAt:       createdAt,
+			}),
 		}},
 	}
 
@@ -222,6 +161,7 @@ func TestQueryDocumentChunksBuildsQueryAndReranks(t *testing.T) {
 	projectID := "project-docs"
 	visibility := "project"
 	sourceName := "ops.md"
+	documentIDs := []uuid.UUID{documentA, documentB}
 	db := &fakeQueryer{
 		queryRowsResult: &fakeRows{values: [][]any{
 			{
@@ -252,14 +192,7 @@ func TestQueryDocumentChunksBuildsQueryAndReranks(t *testing.T) {
 			},
 		}},
 	}
-
-	originalEmbedText := embedDocumentText
-	embedDocumentText = func(text string, dim int) (embeddings.Result, error) {
-		requireEqual(t, "queue depth threshold", text)
-		requireEqual(t, 16, dim)
-		return embeddings.Result{ProviderID: "local-deterministic-v1", Vector: []float64{0.4, 0.6}}, nil
-	}
-	t.Cleanup(func() { embedDocumentText = originalEmbedText })
+	stubDocumentQueryEmbedding(t, "queue depth threshold", 16, []float64{0.4, 0.6})
 
 	results, err := QueryDocumentChunks(
 		context.Background(),
@@ -270,36 +203,13 @@ func TestQueryDocumentChunksBuildsQueryAndReranks(t *testing.T) {
 			Request: models.DocumentChunkQueryRequest{
 				Query:       "queue depth threshold",
 				ProjectID:   &projectID,
-				DocumentIDs: []uuid.UUID{documentA, documentB},
+				DocumentIDs: documentIDs,
 				TopK:        1,
 			},
 		},
 	)
-	requireNoError(t, err)
-	requireEqual(t, 1, len(results))
-	requireEqual(t, chunkB, results[0].ChunkID)
-	requireEqual(t, models.VisibilityScopeProject, results[0].VisibilityScope)
-
-	query := db.querySQL[0]
-	if !strings.Contains(query, "d.project_id = $3") {
-		t.Fatalf("expected project clause in query, got %q", query)
-	}
-	if !strings.Contains(query, "d.document_id = ANY($4::uuid[])") {
-		t.Fatalf("expected document-id clause in query, got %q", query)
-	}
-	if !strings.Contains(query, "LIMIT $5") {
-		t.Fatalf("expected candidate limit placeholder in query, got %q", query)
-	}
-	expectedArgs := []any{
-		"[0.400000,0.600000]",
-		actorUserID,
-		projectID,
-		[]uuid.UUID{documentA, documentB},
-		4,
-	}
-	if !reflect.DeepEqual(expectedArgs, db.queryArgs[0]) {
-		t.Fatalf("expected args %#v, got %#v", expectedArgs, db.queryArgs[0])
-	}
+	assertDocumentChunkQueryResult(t, err, results, chunkB)
+	assertDocumentChunkQuerySQLAndArgs(t, db, actorUserID, projectID, documentIDs)
 }
 
 func TestBuildDocumentChunkWhereDefaultsToActorScopeOnly(t *testing.T) {
@@ -348,40 +258,186 @@ func TestUpsertDocumentWithChunksRejectsInvalidVisibility(t *testing.T) {
 	}
 }
 
-func documentRecordRowValues(
+func setDocumentNow(t *testing.T, timestamp time.Time) {
+	t.Helper()
+	originalNow := nowDocumentUTC
+	nowDocumentUTC = func() time.Time { return timestamp }
+	t.Cleanup(func() { nowDocumentUTC = originalNow })
+}
+
+func stubTwoChunkDocumentEmbeddings(t *testing.T, expectedDim int) {
+	t.Helper()
+	originalEmbedMany := embedDocumentMany
+	embedDocumentMany = func(texts []string, dim int) ([]embeddings.Result, error) {
+		requireEqual(t, 2, len(texts))
+		requireEqual(t, expectedDim, dim)
+		return []embeddings.Result{
+			{ProviderID: "local-deterministic-v1", Vector: []float64{0.1, 0.2}},
+			{ProviderID: "local-deterministic-v1", Vector: []float64{0.3, 0.4}},
+		}, nil
+	}
+	t.Cleanup(func() { embedDocumentMany = originalEmbedMany })
+}
+
+func buildDocumentUpsertPayloadForPersistenceTest(
 	documentID uuid.UUID,
-	ownerUserID uuid.UUID,
+	sourceName string,
+	mimeType string,
+	chunkA uuid.UUID,
+	chunkB uuid.UUID,
+) DocumentUpsertPayload {
+	return DocumentUpsertPayload{
+		DocumentID:      documentID,
+		ProjectID:       "project-docs",
+		Title:           "Runbook",
+		SourceType:      models.DocumentSourceTypeText,
+		SourceName:      &sourceName,
+		MimeType:        &mimeType,
+		VisibilityScope: models.VisibilityScopeProject,
+		ContentText:     "queue depth exceeded",
+		ContentHash:     "hash-value",
+		Metadata:        map[string]any{"owner": "ops"},
+		Chunks: []DocumentChunkDraft{
+			{
+				ChunkID:       chunkA,
+				ChunkIndex:    0,
+				ChunkText:     "queue depth exceeded",
+				Snippet:       "queue depth exceeded",
+				CharStart:     0,
+				CharEnd:       20,
+				TokenEstimate: 3,
+				Metadata:      map[string]any{"chunk": 0},
+			},
+			{
+				ChunkID:       chunkB,
+				ChunkIndex:    1,
+				ChunkText:     "retry worker burst",
+				Snippet:       "retry worker burst",
+				CharStart:     21,
+				CharEnd:       40,
+				TokenEstimate: 3,
+				Metadata:      map[string]any{"chunk": 1},
+			},
+		},
+	}
+}
+
+func assertDocumentUpsertPersistenceResult(
+	t *testing.T,
+	err error,
+	record *models.DocumentRecord,
+	db *fakeQueryer,
+	documentID uuid.UUID,
+) {
+	t.Helper()
+	requireNoError(t, err)
+	requireNotNil(t, record)
+	requireEqual(t, documentID, record.DocumentID)
+	requireEqual(t, models.DocumentSourceTypeText, record.SourceType)
+	requireEqual(t, models.VisibilityScopeProject, record.VisibilityScope)
+	requireEqual(t, 1, len(db.querySQL))
+	if !strings.Contains(db.querySQL[0], "DELETE FROM document_chunks") {
+		t.Fatalf("expected delete old chunks query, got %q", db.querySQL[0])
+	}
+	requireEqual(t, 3, len(db.queryRowArgs))
+	if gotMetadata, ok := db.queryRowArgs[0][10].(string); !ok || !strings.Contains(gotMetadata, "\"owner\":\"ops\"") {
+		t.Fatalf("expected document metadata json arg, got %#v", db.queryRowArgs[0][10])
+	}
+	if gotVector, ok := db.queryRowArgs[1][10].(string); !ok || gotVector != "[0.100000,0.200000]" {
+		t.Fatalf("expected first chunk vector literal, got %#v", db.queryRowArgs[1][10])
+	}
+}
+
+func stubDocumentQueryEmbedding(t *testing.T, expectedQuery string, expectedDim int, vector []float64) {
+	t.Helper()
+	originalEmbedText := embedDocumentText
+	embedDocumentText = func(text string, dim int) (embeddings.Result, error) {
+		requireEqual(t, expectedQuery, text)
+		requireEqual(t, expectedDim, dim)
+		return embeddings.Result{ProviderID: "local-deterministic-v1", Vector: vector}, nil
+	}
+	t.Cleanup(func() { embedDocumentText = originalEmbedText })
+}
+
+func assertDocumentChunkQueryResult(
+	t *testing.T,
+	err error,
+	results []models.DocumentChunkQueryResult,
+	expectedChunkID uuid.UUID,
+) {
+	t.Helper()
+	requireNoError(t, err)
+	requireEqual(t, 1, len(results))
+	requireEqual(t, expectedChunkID, results[0].ChunkID)
+	requireEqual(t, models.VisibilityScopeProject, results[0].VisibilityScope)
+}
+
+func assertDocumentChunkQuerySQLAndArgs(
+	t *testing.T,
+	db *fakeQueryer,
+	actorUserID uuid.UUID,
 	projectID string,
-	title string,
-	sourceType string,
-	sourceName *string,
-	mimeType *string,
-	visibilityScope string,
-	contentHash string,
-	chunkCount int,
-	createdAt time.Time,
-	updatedAt time.Time,
-) []any {
+	documentIDs []uuid.UUID,
+) {
+	t.Helper()
+	query := db.querySQL[0]
+	if !strings.Contains(query, "d.project_id = $3") {
+		t.Fatalf("expected project clause in query, got %q", query)
+	}
+	if !strings.Contains(query, "d.document_id = ANY($4::uuid[])") {
+		t.Fatalf("expected document-id clause in query, got %q", query)
+	}
+	if !strings.Contains(query, "LIMIT $5") {
+		t.Fatalf("expected candidate limit placeholder in query, got %q", query)
+	}
+	expectedArgs := []any{
+		"[0.400000,0.600000]",
+		actorUserID,
+		projectID,
+		documentIDs,
+		4,
+	}
+	if !reflect.DeepEqual(expectedArgs, db.queryArgs[0]) {
+		t.Fatalf("expected args %#v, got %#v", expectedArgs, db.queryArgs[0])
+	}
+}
+
+type documentRecordRowFixture struct {
+	DocumentID      uuid.UUID
+	OwnerUserID     uuid.UUID
+	ProjectID       string
+	Title           string
+	SourceType      string
+	SourceName      *string
+	MimeType        *string
+	VisibilityScope string
+	ContentHash     string
+	ChunkCount      int
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+func documentRecordRowValues(fixture documentRecordRowFixture) []any {
 	var sourceNameValue any
-	if sourceName != nil {
-		sourceNameValue = *sourceName
+	if fixture.SourceName != nil {
+		sourceNameValue = *fixture.SourceName
 	}
 	var mimeTypeValue any
-	if mimeType != nil {
-		mimeTypeValue = *mimeType
+	if fixture.MimeType != nil {
+		mimeTypeValue = *fixture.MimeType
 	}
 	return []any{
-		documentID,
-		ownerUserID,
-		projectID,
-		title,
-		sourceType,
+		fixture.DocumentID,
+		fixture.OwnerUserID,
+		fixture.ProjectID,
+		fixture.Title,
+		fixture.SourceType,
 		sourceNameValue,
 		mimeTypeValue,
-		visibilityScope,
-		contentHash,
-		chunkCount,
-		createdAt,
-		updatedAt,
+		fixture.VisibilityScope,
+		fixture.ContentHash,
+		fixture.ChunkCount,
+		fixture.CreatedAt,
+		fixture.UpdatedAt,
 	}
 }

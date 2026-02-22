@@ -2504,6 +2504,36 @@
   - result: `quality_gates=passed`
   - findings: none
 
-### CP43 - Auth/Session Continuation Follow-Up (Planned)
+### CP43 - Non-Checkpoint Code-Health Uplift (`internal/repository/document_test.go`)
+
+- Improved legacy non-checkpoint document repository test file:
+  - `internal/repository/document_test.go`
+  - replaced high-argument document row helper inputs with fixture struct:
+    - `documentRecordRowFixture`
+    - `documentRecordRowValues(fixture documentRecordRowFixture)`
+  - reduced large test methods by extracting focused helpers for:
+    - deterministic timestamp + embedding stubs
+    - payload construction
+    - result/assertion blocks for upsert/query behavior
+- Executed migrated tests one-by-one:
+  - `TestUpsertDocumentWithChunksPersistsDocumentAndChunks`
+  - `TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch`
+  - `TestListDocumentsAppliesProjectFilter`
+  - `TestQueryDocumentChunksBuildsQueryAndReranks`
+  - `TestBuildDocumentChunkWhereDefaultsToActorScopeOnly`
+  - `TestUpsertDocumentWithChunksRejectsInvalidVisibility`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/document_test.go` score improved from `8.72` -> `9.68`
+  - `code_health_review` now reports only non-blocking helper arg-count findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed both `Large Method` findings from the two primary document tests
+    - replaced old argument-heavy helper finding with new helper arg-count threshold-edge notes.
+
+### CP44 - Auth/Session Continuation Follow-Up (Planned)
 
 - Continue incremental code-health uplift of legacy non-checkpoint Go files below 9.5 while maintaining one-by-one test execution and migration parity progression.
