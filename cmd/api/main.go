@@ -37,18 +37,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	routerDependencies := internalapi.RouterDependencies{}
-	if config.IsProductionEnv(settings) {
-		logger.Warn("memory-admin routes disabled in production until auth migration is complete")
+	routerDependencies := internalapi.RouterDependencies{
+		MemoryAdminService: admin.NewService(pool, settings.EmbeddingDim, admin.PassthroughProjectResolver{}),
+		RequireAdminActor:  internalapi.RequireAdminActorFromContext,
+	}
+	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
+	if !config.IsProductionEnv(settings) {
+		logger.Info("enabling migration-time header admin actor bridge")
+		handler = internalapi.AdminActorHeaderBridge(handler)
 	} else {
-		logger.Info("enabling memory-admin header actor bridge")
-		routerDependencies = internalapi.RouterDependencies{
-			MemoryAdminService: admin.NewService(pool, settings.EmbeddingDim, admin.PassthroughProjectResolver{}),
-			RequireAdminActor:  internalapi.RequireAdminActorFromHeaders,
-		}
+		logger.Info("memory-admin routes require authenticated context actor")
 	}
 
-	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	address := net.JoinHostPort(settings.APIHost, strconv.Itoa(settings.APIPort))
 	server := &http.Server{
 		Addr:              address,
