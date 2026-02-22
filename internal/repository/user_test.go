@@ -16,18 +16,25 @@ import (
 )
 
 type fakeQueryer struct {
-	queryRowResult  *fakeRow
-	queryRowsResult *fakeRows
-	queryRowSQL     []string
-	queryRowArgs    [][]any
-	querySQL        []string
-	queryArgs       [][]any
-	queryErr        error
+	queryRowResult   *fakeRow
+	queryRowResults  []*fakeRow
+	queryRowsResult  *fakeRows
+	queryRowsResults []*fakeRows
+	queryRowSQL      []string
+	queryRowArgs     [][]any
+	querySQL         []string
+	queryArgs        [][]any
+	queryErr         error
 }
 
 func (f *fakeQueryer) QueryRow(_ context.Context, sql string, args ...any) pgx.Row {
 	f.queryRowSQL = append(f.queryRowSQL, sql)
 	f.queryRowArgs = append(f.queryRowArgs, append([]any(nil), args...))
+	if len(f.queryRowResults) > 0 {
+		next := f.queryRowResults[0]
+		f.queryRowResults = f.queryRowResults[1:]
+		return next
+	}
 	if f.queryRowResult == nil {
 		return &fakeRow{err: pgx.ErrNoRows}
 	}
@@ -39,6 +46,11 @@ func (f *fakeQueryer) Query(_ context.Context, sql string, args ...any) (pgx.Row
 	f.queryArgs = append(f.queryArgs, append([]any(nil), args...))
 	if f.queryErr != nil {
 		return nil, f.queryErr
+	}
+	if len(f.queryRowsResults) > 0 {
+		next := f.queryRowsResults[0]
+		f.queryRowsResults = f.queryRowsResults[1:]
+		return next, nil
 	}
 	if f.queryRowsResult == nil {
 		return &fakeRows{}, nil

@@ -99,6 +99,14 @@ type EngramQueryResult struct {
 	Distance        float64    `json:"distance"`
 }
 
+// EngramCreateResponse is returned when a new engram is persisted.
+type EngramCreateResponse struct {
+	EngramID           uuid.UUID `json:"engram_id"`
+	CreatedAt          time.Time `json:"created_at"`
+	ResolvedProjectID  *string   `json:"resolved_project_id,omitempty"`
+	UsedDefaultProject bool      `json:"used_default_project"`
+}
+
 // RehydrationBundle models context returned for rehydration consumers.
 type RehydrationBundle struct {
 	EngramID                uuid.UUID             `json:"engram_id"`

@@ -22,7 +22,8 @@
 | CP7 | 2026-02-22 | Completed | Repository helper baseline for engram query/rerank/rehydration formatting parity |
 | CP8 | 2026-02-22 | Completed | Engram repository DB read parity (`list_engrams` + `query_engrams`) with migrated tests |
 | CP9 | 2026-02-22 | Completed | Engram rehydration/source read parity (`get_rehydration_bundle` + `get_engram_sources`) |
-| CP10 | 2026-02-22 | In Progress | Engram write-path parity (`create_engram` + source/artifact inserts) |
+| CP10 | 2026-02-22 | Completed | Engram write-path parity (`create_engram_with_report` + `create_engram`) with source/artifact insert tests |
+| CP11 | 2026-02-22 | In Progress | Repository layer continuation (chat/document/project repository migration kickoff) |
 
 ## Checkpoint Details
 
@@ -330,10 +331,66 @@
   - `internal/repository/user.go` → 9.38
   - `internal/repository/user_test.go` → 10.0
 
-### CP10 - Engram Write Path Parity (Planned)
+### CP10 - Engram Write Path Parity
 
-- Port write-path operations next:
-  - `create_engram_with_report`
-  - `create_engram`
-  - source/artifact insert paths
-- Migrate parity tests incrementally with one-by-one execution.
+- Added engram write-path repository operations:
+  - `internal/repository/engram_write.go`
+  - `CreateEngramWithReport`
+  - `CreateEngram`
+  - insert helpers:
+    - `insertEngramRow`
+    - `insertClaimSources`
+    - `insertArtifacts`
+- Added create response model:
+  - `internal/models/engram.go`
+  - `EngramCreateResponse`
+- Added deterministic write seams for testability:
+  - UUID generation hooks (`newEngramUUID`, `newWriteUUID`)
+  - clock hook (`nowUTC`)
+  - embedding hook (`embedEngramText`)
+  - enrichment payload resolver hook (`resolveEnrichedPayload`)
+- Added write-path tests:
+  - `internal/repository/engram_write_test.go`
+  - `TestCreateEngramWithReportPersistsEngramSourcesAndArtifacts`
+  - `TestCreateEngramWithReportReturnsEmbedErrorAndSkipsWrites`
+  - `TestCreateEngramReturnsCreatedResponse`
+- Executed migrated tests one-by-one:
+  - `TestCreateEngramWithReportPersistsEngramSourcesAndArtifacts`
+  - `TestCreateEngramWithReportReturnsEmbedErrorAndSkipsWrites`
+  - `TestCreateEngramReturnsCreatedResponse`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP11 - Repository Continuation (Planned)
+
+- Continue Phase 2 repository migration with next high-value slices:
+  - chat repository baseline
+  - document repository baseline
+  - project repository baseline
+- Keep parity tests migrated and executed one-by-one.
