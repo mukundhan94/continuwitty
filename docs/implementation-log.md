@@ -318,6 +318,30 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP36: non-checkpoint code-health uplift for user repository scans)
+
+1. Improved legacy non-checkpoint repository mapping:
+   - `internal/repository/user.go`
+   - replaced duplicated scan-to-model field assignment by introducing shared helper:
+     - `buildScannedUserRecord`
+   - `userRecordFromScan` and `userAuthRecordFromScan` now reuse shared scanned user fields mapping.
+2. Executed repository user tests one-by-one:
+   - `TestGetUserAuthRecordLooksUpUsername`
+   - `TestListUsersReturnsRecords`
+   - `TestCreateUserReturnsCreatedUser`
+   - `TestCreateUserReturnsUsernameExistsOnDuplicate`
+   - `TestUpdateUserReturnsNilWhenNotFound`
+   - `TestUpdateUserAppliesProvidedFields`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/user.go` improved from `9.38` to `10.0`
+   - `code_health_review` now reports no findings for this file.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (Go migration CP35: non-checkpoint code-health uplift for session token decode)
 
 1. Improved legacy non-checkpoint auth utility:

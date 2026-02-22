@@ -2316,6 +2316,32 @@
     - fixed `Complex Method` and `Complex Conditional` in `Decode`
     - introduced non-blocking `String Heavy Function Arguments` module note.
 
-### CP36 - Auth/Session Continuation Follow-Up (Planned)
+### CP36 - Non-Checkpoint Code-Health Uplift (`internal/repository/user.go`)
+
+- Improved legacy non-checkpoint repository utility file:
+  - `internal/repository/user.go`
+  - removed duplicated scan-to-model mapping between:
+    - `userRecordFromScan`
+    - `userAuthRecordFromScan`
+  - introduced shared helper:
+    - `buildScannedUserRecord`
+- Executed migrated tests one-by-one:
+  - `TestGetUserAuthRecordLooksUpUsername`
+  - `TestListUsersReturnsRecords`
+  - `TestCreateUserReturnsCreatedUser`
+  - `TestCreateUserReturnsUsernameExistsOnDuplicate`
+  - `TestUpdateUserReturnsNilWhenNotFound`
+  - `TestUpdateUserAppliesProvidedFields`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/user.go` score improved from `9.38` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP37 - Auth/Session Continuation Follow-Up (Planned)
 
 - Continue incremental code-health uplift of legacy non-checkpoint Go files below 9.5 while maintaining one-by-one test execution and migration parity progression.

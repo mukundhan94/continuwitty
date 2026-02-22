@@ -241,21 +241,27 @@ func parseUserRole(roleValue string) (models.UserRole, error) {
 }
 
 func userRecordFromScan(base userScanFields, role models.UserRole) *models.UserRecord {
-	return &models.UserRecord{
-		UserID:           base.UserID,
-		Username:         base.Username,
-		Role:             role,
-		IsActive:         base.IsActive,
-		DefaultProjectID: base.DefaultProjectID,
-		CreatedAt:        base.CreatedAt,
-	}
+	record := buildScannedUserRecord(base, role)
+	return &record
 }
 
 func userAuthRecordFromScan(base userScanFields, role models.UserRole, passwordHash string) *models.UserAuthRecord {
+	record := buildScannedUserRecord(base, role)
 	return &models.UserAuthRecord{
+		UserID:           record.UserID,
+		Username:         record.Username,
+		PasswordHash:     passwordHash,
+		Role:             record.Role,
+		IsActive:         record.IsActive,
+		DefaultProjectID: record.DefaultProjectID,
+		CreatedAt:        record.CreatedAt,
+	}
+}
+
+func buildScannedUserRecord(base userScanFields, role models.UserRole) models.UserRecord {
+	return models.UserRecord{
 		UserID:           base.UserID,
 		Username:         base.Username,
-		PasswordHash:     passwordHash,
 		Role:             role,
 		IsActive:         base.IsActive,
 		DefaultProjectID: base.DefaultProjectID,
