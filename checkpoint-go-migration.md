@@ -2420,6 +2420,36 @@
   - result: `quality_gates=passed`
   - findings: none
 
-### CP40 - Auth/Session Continuation Follow-Up (Planned)
+### CP40 - Non-Checkpoint Code-Health Uplift (`internal/repository/chat.go`)
+
+- Improved legacy non-checkpoint chat repository implementation file:
+  - `internal/repository/chat.go`
+  - refactored payload normalization and enum validation helpers:
+    - split defaults from validation for create payload normalization.
+    - extracted shared optional enum normalization for update payload fields.
+  - new helpers:
+    - `applyCreatePayloadDefaults`
+    - `validateCreatePayloadEnums`
+    - `normalizeOptionalEnum[T ~string]`
+- Executed migrated tests one-by-one:
+  - `TestCreateChatSessionReturnsInsertedRecord`
+  - `TestListChatSessionsAppliesVisibilityAndProjectFilter`
+  - `TestGetChatSessionAdminRecordReturnsRecord`
+  - `TestChatSessionGetAndUpdateReturnNilWhenRowMissing`
+  - `TestUpdateChatSessionValidatesProviderValue`
+  - `TestNormalizeCreatePayloadRejectsInvalidVisibility`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/chat.go` score improved from `9.02` -> `9.68`
+  - `code_health_review` shows a non-blocking remaining `Complex Method` note on `applyCreatePayloadDefaults` (`cc = 9`).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed `Bumpy Road Ahead` and `Overall Code Complexity`
+    - replaced one `Complex Method` finding with another non-blocking threshold-edge note.
+
+### CP41 - Auth/Session Continuation Follow-Up (Planned)
 
 - Continue incremental code-health uplift of legacy non-checkpoint Go files below 9.5 while maintaining one-by-one test execution and migration parity progression.

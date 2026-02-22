@@ -306,6 +306,43 @@ func UpdateChatSession(
 }
 
 func normalizeCreatePayload(payload models.ChatSessionCreateRequest) (models.ChatSessionCreateRequest, error) {
+	payload = applyCreatePayloadDefaults(payload)
+	if err := validateCreatePayloadEnums(payload); err != nil {
+		return models.ChatSessionCreateRequest{}, err
+	}
+	return payload, nil
+}
+
+func normalizeUpdatePayload(payload models.ChatSessionUpdateRequest) (chatSessionUpdateValues, error) {
+	values := chatSessionUpdateValues{
+		Title:                   payload.Title,
+		ModelID:                 payload.ModelID,
+		SystemPrompt:            payload.SystemPrompt,
+		AutosaveEnabled:         payload.AutosaveEnabled,
+		AutosaveIntervalMinutes: payload.AutosaveIntervalMinutes,
+		AutosaveMinMessages:     payload.AutosaveMinMessages,
+		RetentionDays:           payload.RetentionDays,
+		RetentionMaxSnapshots:   payload.RetentionMaxSnapshots,
+	}
+	provider, err := normalizeOptionalEnum(payload.Provider, models.ParseChatProvider)
+	if err != nil {
+		return chatSessionUpdateValues{}, err
+	}
+	visibilityScope, err := normalizeOptionalEnum(payload.VisibilityScope, models.ParseVisibilityScope)
+	if err != nil {
+		return chatSessionUpdateValues{}, err
+	}
+	autosaveStrategy, err := normalizeOptionalEnum(payload.AutosaveStrategy, models.ParseChatAutosaveStrategy)
+	if err != nil {
+		return chatSessionUpdateValues{}, err
+	}
+	values.Provider = provider
+	values.VisibilityScope = visibilityScope
+	values.AutosaveStrategy = autosaveStrategy
+	return values, nil
+}
+
+func applyCreatePayloadDefaults(payload models.ChatSessionCreateRequest) models.ChatSessionCreateRequest {
 	if payload.Provider == "" {
 		payload.Provider = models.ChatProviderOpenAI
 	}
@@ -330,51 +367,35 @@ func normalizeCreatePayload(payload models.ChatSessionCreateRequest) (models.Cha
 	if payload.RetentionMaxSnapshots == 0 {
 		payload.RetentionMaxSnapshots = 60
 	}
-	if _, err := models.ParseChatProvider(string(payload.Provider)); err != nil {
-		return models.ChatSessionCreateRequest{}, err
-	}
-	if _, err := models.ParseVisibilityScope(string(payload.VisibilityScope)); err != nil {
-		return models.ChatSessionCreateRequest{}, err
-	}
-	if _, err := models.ParseChatAutosaveStrategy(string(payload.AutosaveStrategy)); err != nil {
-		return models.ChatSessionCreateRequest{}, err
-	}
-	return payload, nil
+	return payload
 }
 
-func normalizeUpdatePayload(payload models.ChatSessionUpdateRequest) (chatSessionUpdateValues, error) {
-	values := chatSessionUpdateValues{
-		Title:                   payload.Title,
-		ModelID:                 payload.ModelID,
-		SystemPrompt:            payload.SystemPrompt,
-		AutosaveEnabled:         payload.AutosaveEnabled,
-		AutosaveIntervalMinutes: payload.AutosaveIntervalMinutes,
-		AutosaveMinMessages:     payload.AutosaveMinMessages,
-		RetentionDays:           payload.RetentionDays,
-		RetentionMaxSnapshots:   payload.RetentionMaxSnapshots,
+func validateCreatePayloadEnums(payload models.ChatSessionCreateRequest) error {
+	if _, err := models.ParseChatProvider(string(payload.Provider)); err != nil {
+		return err
 	}
-	if payload.Provider != nil {
-		if _, err := models.ParseChatProvider(string(*payload.Provider)); err != nil {
-			return chatSessionUpdateValues{}, err
-		}
-		provider := string(*payload.Provider)
-		values.Provider = &provider
+	if _, err := models.ParseVisibilityScope(string(payload.VisibilityScope)); err != nil {
+		return err
 	}
-	if payload.VisibilityScope != nil {
-		if _, err := models.ParseVisibilityScope(string(*payload.VisibilityScope)); err != nil {
-			return chatSessionUpdateValues{}, err
-		}
-		scope := string(*payload.VisibilityScope)
-		values.VisibilityScope = &scope
+	if _, err := models.ParseChatAutosaveStrategy(string(payload.AutosaveStrategy)); err != nil {
+		return err
 	}
-	if payload.AutosaveStrategy != nil {
-		if _, err := models.ParseChatAutosaveStrategy(string(*payload.AutosaveStrategy)); err != nil {
-			return chatSessionUpdateValues{}, err
-		}
-		strategy := string(*payload.AutosaveStrategy)
-		values.AutosaveStrategy = &strategy
+	return nil
+}
+
+func normalizeOptionalEnum[T ~string](
+	value *T,
+	parse func(value string) (T, error),
+) (*string, error) {
+	if value == nil {
+		return nil, nil
 	}
-	return values, nil
+	parsed, err := parse(string(*value))
+	if err != nil {
+		return nil, err
+	}
+	normalized := string(parsed)
+	return &normalized, nil
 }
 
 func scanChatSessionRecord(row interface {

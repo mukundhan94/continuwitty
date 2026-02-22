@@ -318,6 +318,37 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP40: non-checkpoint code-health uplift for chat repository payload normalization)
+
+1. Improved legacy non-checkpoint chat repository implementation:
+   - `internal/repository/chat.go`
+   - refactored payload normalization flow:
+     - create path split into defaults and enum validation helpers.
+     - update path switched to shared optional enum normalizer.
+   - added helpers:
+     - `applyCreatePayloadDefaults`
+     - `validateCreatePayloadEnums`
+     - `normalizeOptionalEnum[T ~string]`
+2. Executed chat repository tests one-by-one:
+   - `TestCreateChatSessionReturnsInsertedRecord`
+   - `TestListChatSessionsAppliesVisibilityAndProjectFilter`
+   - `TestGetChatSessionAdminRecordReturnsRecord`
+   - `TestChatSessionGetAndUpdateReturnNilWhenRowMissing`
+   - `TestUpdateChatSessionValidatesProviderValue`
+   - `TestNormalizeCreatePayloadRejectsInvalidVisibility`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat.go` improved from `9.02` to `9.68`
+   - `code_health_review` retains a non-blocking threshold-edge note:
+     - `applyCreatePayloadDefaults` with `cc = 9`.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings:
+     - fixed `Bumpy Road Ahead` and `Overall Code Complexity`
+     - one `Complex Method` finding moved to new helper at threshold edge (`cc = 9`).
+
 ### 2026-02-22 (Go migration CP39: non-checkpoint code-health uplift for chat repository tests)
 
 1. Improved legacy non-checkpoint chat repository tests:
