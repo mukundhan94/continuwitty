@@ -6,7 +6,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 **Business case for the worst file (`mcp/service.py`):** Improving from 3.0 to 5.15 (industry average) predicts 24–48% defect reduction and 3–20% development speed improvement (90% confidence interval).
 
-## Phase Completion Status (as of 2026-02-22, Checkpoint 103)
+## Phase Completion Status (as of 2026-02-22, Checkpoint 104)
 
 - [x] Phase 1 — `api/app/mcp/service.py` refactor and hardening completed (checkpoints 1, 44-68, 80-84, 87, 99)
 - [x] Phase 2 — `api/app/memory_admin/repository.py` refactor completed (checkpoints 2, 16)
@@ -21,7 +21,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 - [x] Phase 11 — `api/app/ingestion/repository.py` refactor completed (checkpoint 11)
 - [x] Phase 12 — `api/app/engram_enrichment/service.py` refactor completed (checkpoint 12)
 - [x] Phase 13 — Green-zone files promoted and stabilized (checkpoints 13-15)
-- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-103)
+- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-104)
 
 ## Execution Checkpoints
 
@@ -2783,6 +2783,29 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-22 (Checkpoint 104 - Memory Admin Repository Lifecycle Test Decomposition)
+
+- [x] Continued Phase 14 hardening in `api/tests/test_memory_admin_repository.py`:
+  - replaced oversized lifecycle integration test with focused lifecycle tests:
+    - `test_soft_delete_and_restore_session_lifecycle`
+    - `test_soft_delete_and_restore_engram_lifecycle`
+    - `test_soft_delete_collection_marks_deleted`
+  - extracted shared actor fixture helper:
+    - `_admin_actor_user_id()`
+  - preserved existing session/engram/collection lifecycle assertions while removing large-method pressure
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`265 passed, 4 skipped, 86 deselected`)
+  - `make test` (`265 passed, 90 skipped`)
+  - `make web-check` (`32 passed file suites, 122 passed tests`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/tests/test_memory_admin_repository.py` score: **10.0** (improved from **9.58**)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2821,6 +2844,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_chat_service.py` | 10.0 | GREEN |
 | `api/tests/test_chat_session_operations.py` | 10.0 | GREEN |
 | `api/tests/test_memory_admin_api_integration.py` | 10.0 | GREEN |
+| `api/tests/test_memory_admin_repository.py` | 10.0 | GREEN |
 | `api/tests/test_provider_adapters.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |

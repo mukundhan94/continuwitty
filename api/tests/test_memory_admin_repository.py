@@ -159,11 +159,8 @@ def test_replace_engram_sources_replaces_all_rows() -> None:
 
 
 @pytest.mark.integration
-def test_soft_delete_and_restore_lifecycle(clean_db) -> None:
-    admin = get_user_auth_record(get_settings().ui_demo_username)
-    assert admin is not None
-    actor_user_id = admin["user_id"]
-
+def test_soft_delete_and_restore_session_lifecycle(clean_db) -> None:
+    actor_user_id = _admin_actor_user_id()
     session = create_chat_session(
         owner_user_id=actor_user_id,
         payload=ChatSessionCreateRequest(
@@ -174,6 +171,7 @@ def test_soft_delete_and_restore_lifecycle(clean_db) -> None:
             visibility_scope="private",
         ),
     )
+
     deleted_session = memory_repo.soft_delete_session(
         session_id=session.session_id,
         deleted_by_user_id=actor_user_id,
@@ -182,6 +180,7 @@ def test_soft_delete_and_restore_lifecycle(clean_db) -> None:
     assert deleted_session is not None
     assert deleted_session.deleted_at is not None
     assert deleted_session.deleted_by_user_id == actor_user_id
+
     assert memory_repo.restore_session(session_id=session.session_id) is True
     restored_session = memory_repo.get_admin_session(
         session_id=session.session_id,
@@ -190,6 +189,10 @@ def test_soft_delete_and_restore_lifecycle(clean_db) -> None:
     assert restored_session is not None
     assert restored_session.deleted_at is None
 
+
+@pytest.mark.integration
+def test_soft_delete_and_restore_engram_lifecycle(clean_db) -> None:
+    actor_user_id = _admin_actor_user_id()
     created_engram = create_engram(
         payload=MemoryEngramCreate(
             project_id="engram-vault",
@@ -200,6 +203,7 @@ def test_soft_delete_and_restore_lifecycle(clean_db) -> None:
         embedding_dim=get_settings().embedding_dim,
         owner_user_id=actor_user_id,
     )
+
     assert memory_repo.soft_delete_engram(
         engram_id=created_engram.engram_id,
         deleted_by_user_id=actor_user_id,
@@ -211,6 +215,7 @@ def test_soft_delete_and_restore_lifecycle(clean_db) -> None:
     )
     assert deleted_engram is not None
     assert deleted_engram.deleted_at is not None
+
     assert memory_repo.restore_engram(engram_id=created_engram.engram_id) is True
     restored_engram = memory_repo.get_admin_engram(
         engram_id=created_engram.engram_id,
@@ -219,12 +224,17 @@ def test_soft_delete_and_restore_lifecycle(clean_db) -> None:
     assert restored_engram is not None
     assert restored_engram.deleted_at is None
 
+
+@pytest.mark.integration
+def test_soft_delete_collection_marks_deleted(clean_db) -> None:
+    actor_user_id = _admin_actor_user_id()
     collection = memory_repo.create_collection(
         project_id="engram-vault",
         owner_user_id=actor_user_id,
         name="Lifecycle collection",
         description="Collection lifecycle",
     )
+
     assert memory_repo.soft_delete_collection(
         collection_id=collection.collection_id,
         deleted_by_user_id=actor_user_id,
@@ -236,3 +246,9 @@ def test_soft_delete_and_restore_lifecycle(clean_db) -> None:
     )
     assert deleted_collection is not None
     assert deleted_collection.deleted_at is not None
+
+
+def _admin_actor_user_id() -> UUID:
+    admin = get_user_auth_record(get_settings().ui_demo_username)
+    assert admin is not None
+    return admin["user_id"]
