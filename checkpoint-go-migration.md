@@ -29,7 +29,8 @@
 | CP14 | 2026-02-22 | Completed | Document repository baseline (`upsert/list/query`) with chunk replacement and lexical rerank parity tests |
 | CP15 | 2026-02-22 | Completed | MCP token repository baseline (`create/list/get/revoke/touch`) with migrated unit tests |
 | CP16 | 2026-02-22 | Completed | OAuth repository baseline (`oauth_clients` + `oauth_authorization_codes`) with migrated unit tests |
-| CP17 | 2026-02-22 | In Progress | Repository continuation (collection repository migration) |
+| CP17 | 2026-02-22 | Completed | Collection repository baseline (`engram_collections` + `engram_collection_items`) with migrated unit tests |
+| CP18 | 2026-02-22 | In Progress | Repository continuation (memory-admin session/engram repository migration) |
 
 ## Checkpoint Details
 
@@ -823,8 +824,94 @@
   - `internal/repository/user.go` → 9.38
   - `internal/repository/user_test.go` → 10.0
 
-### CP17 - Repository Continuation (Planned)
+### CP17 - Collection Repository Baseline
+
+- Added collection model:
+  - `internal/models/collection.go`
+  - `EngramCollectionRecord`
+- Added collection repository operations:
+  - `internal/repository/collection.go`
+  - `ListCollections`
+  - `GetCollection`
+  - `CreateCollection`
+  - `UpdateCollection`
+  - `SoftDeleteCollection`
+  - `AddCollectionItems`
+  - `RemoveCollectionItem`
+- Added duplicate-name error mapping:
+  - `ErrCollectionNameExists` (unique constraint parity with Python repository behavior)
+- Added migrated collection repository tests:
+  - `internal/repository/collection_test.go`
+  - `TestListCollectionsBuildsFilters`
+  - `TestGetCollectionReturnsNilWhenMissing`
+  - `TestCreateCollectionUsesGeneratedID`
+  - `TestCreateCollectionMapsDuplicateNameError`
+  - `TestUpdateCollectionReturnsNilWhenMissing`
+  - `TestSoftDeleteCollectionReturnsBool`
+  - `TestAddCollectionItemsReturnsCountAndSkipsEmpty`
+  - `TestRemoveCollectionItemReturnsBool`
+- Executed migrated tests one-by-one:
+  - `TestListCollectionsBuildsFilters`
+  - `TestGetCollectionReturnsNilWhenMissing`
+  - `TestCreateCollectionUsesGeneratedID`
+  - `TestCreateCollectionMapsDuplicateNameError`
+  - `TestUpdateCollectionReturnsNilWhenMissing`
+  - `TestSoftDeleteCollectionReturnsBool`
+  - `TestAddCollectionItemsReturnsCountAndSkipsEmpty`
+  - `TestRemoveCollectionItemReturnsBool`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP18 - Repository Continuation (Planned)
 
 - Continue Phase 2 repository migration with next high-value slice:
-  - engram collection repository baseline
+  - memory-admin session + engram repository baseline
 - Keep parity tests migrated and executed one-by-one.
