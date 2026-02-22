@@ -1,4 +1,4 @@
-# MCP Client Integrations (LibreChat, VS Code Copilot, Codex)
+# MCP Client Integrations (LibreChat, VS Code Copilot, Codex, Claude Desktop)
 
 This guide provides copy-paste commands to connect external MCP clients to Engram.
 
@@ -173,7 +173,29 @@ Verify Codex sees the server:
 codex mcp list
 ```
 
-## 6) MCP Connectivity Smoke Test
+## 6) Claude Desktop Integration
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` and add the server under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "continuwitty": {
+      "url": "http://localhost:8000/api/v1/mcp/stream",
+      "headers": {
+        "Authorization": "Bearer $ENGRAM_MCP_TOKEN"
+      }
+    }
+  }
+}
+```
+
+Notes:
+- No `"type"` field — Claude Desktop infers HTTP transport from the presence of `url`.
+- Replace `$ENGRAM_MCP_TOKEN` with the token value from step 1 (Claude Desktop does not expand env vars).
+- Restart Claude Desktop after saving the file.
+
+## 7) MCP Connectivity Smoke Test
 
 ```bash
 BASE_URL=http://localhost:8000
