@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from typing import Any
 
 import pytest
 
@@ -30,15 +31,12 @@ def _login_admin(client) -> None:  # noqa: ANN001
     _login(client, settings.ui_demo_username, settings.ui_demo_password)
 
 
-@pytest.mark.integration
-def test_admin_memory_session_delete_keeps_or_deletes_linked_engrams(client, clean_db) -> None:
-    _login_admin(client)
-
-    session_response = client.post(
+def _create_chat_session(client, *, title: str) -> str:  # noqa: ANN001
+    response = client.post(
         "/api/v1/chat/sessions",
         json={
             "project_id": "engram-vault",
-            "title": "Delete policy session",
+            "title": title,
             "provider": "openai",
             "model_id": "gpt-4o-mini",
             "system_prompt": "",
@@ -51,111 +49,162 @@ def test_admin_memory_session_delete_keeps_or_deletes_linked_engrams(client, cle
             "retention_max_snapshots": 60,
         },
     )
-    assert session_response.status_code == 201
-    session_id = session_response.json()["session_id"]
+    assert response.status_code == 201
+    return response.json()["session_id"]
 
-    linked_engram = client.post(
-        "/api/v1/engrams",
-        json={
-            "project_id": "engram-vault",
-            "source_session_id": session_id,
-            "title": "Linked snapshot",
-            "abstract": "Linked engram for delete behavior.",
-            "detailed_summary_markdown": "Linked markdown",
-        },
-    )
-    assert linked_engram.status_code == 200
-    linked_engram_id = linked_engram.json()["engram_id"]
 
-    delete_keep = client.request(
+def _delete_admin_session(
+    client,
+    *,
+    session_id: str,
+    delete_linked_engrams: bool,
+    reason: str,
+) -> dict[str, Any]:  # noqa: ANN001
+    response = client.request(
         "DELETE",
         f"/api/v1/admin/memory/sessions/{session_id}",
-        json={"delete_linked_engrams": False, "reason": "session cleanup"},
+        json={"delete_linked_engrams": delete_linked_engrams, "reason": reason},
     )
-    assert delete_keep.status_code == 200
-    assert delete_keep.json()["linked_engrams_deleted"] == 0
+    assert response.status_code == 200
+    return response.json()
 
-    still_visible = client.get(
+
+def _list_session_engrams(
+    client,
+    *,
+    session_id: str,
+    include_deleted: bool,
+) -> list[dict[str, Any]]:  # noqa: ANN001
+    response = client.get(
         "/api/v1/admin/memory/engrams",
-        params={"session_id": session_id, "include_deleted": "false"},
-    )
-    assert still_visible.status_code == 200
-    assert any(item["engram_id"] == linked_engram_id for item in still_visible.json())
-
-    session_response_2 = client.post(
-        "/api/v1/chat/sessions",
-        json={
-            "project_id": "engram-vault",
-            "title": "Delete policy session 2",
-            "provider": "openai",
-            "model_id": "gpt-4o-mini",
-            "system_prompt": "",
-            "visibility_scope": "private",
-            "autosave_enabled": False,
-            "autosave_strategy": "off",
-            "autosave_interval_minutes": 30,
-            "autosave_min_messages": 6,
-            "retention_days": 30,
-            "retention_max_snapshots": 60,
+        params={
+            "session_id": session_id,
+            "include_deleted": str(include_deleted).lower(),
         },
     )
-    assert session_response_2.status_code == 201
-    session_id_2 = session_response_2.json()["session_id"]
-    linked_engram_2 = client.post(
-        "/api/v1/engrams",
-        json={
-            "project_id": "engram-vault",
-            "source_session_id": session_id_2,
-            "title": "Linked snapshot delete-all",
-            "abstract": "Linked engram that should be deleted.",
-            "detailed_summary_markdown": "Linked markdown 2",
-        },
-    )
-    assert linked_engram_2.status_code == 200
-    linked_engram_id_2 = linked_engram_2.json()["engram_id"]
-
-    delete_linked = client.request(
-        "DELETE",
-        f"/api/v1/admin/memory/sessions/{session_id_2}",
-        json={"delete_linked_engrams": True, "reason": "deep cleanup"},
-    )
-    assert delete_linked.status_code == 200
-    assert delete_linked.json()["linked_engrams_deleted"] >= 1
-
-    deleted_list = client.get(
-        "/api/v1/admin/memory/engrams",
-        params={"session_id": session_id_2, "include_deleted": "true"},
-    )
-    assert deleted_list.status_code == 200
-    target = next(item for item in deleted_list.json() if item["engram_id"] == linked_engram_id_2)
-    assert target["deleted_at"] is not None
+    assert response.status_code == 200
+    return response.json()
 
 
-@pytest.mark.integration
-def test_admin_memory_engram_edit_move_and_collection_detach(client, clean_db, db_conn) -> None:
-    _login_admin(client)
-
-    created_project = client.post(
+def _create_project(client, *, project_id: str) -> None:  # noqa: ANN001
+    response = client.post(
         "/api/v1/projects",
         json={
-            "project_id": "phase31-target",
-            "name": "Phase 31 Target",
+            "project_id": project_id,
+            "name": f"Project {project_id}",
             "description": "Move target project.",
         },
     )
-    assert created_project.status_code == 201
+    assert response.status_code == 201
 
-    created_engram = client.post(
-        "/api/v1/engrams",
-        json={
-            "project_id": "engram-vault",
-            "title": "Editable engram",
-            "abstract": "old abstract",
-            "detailed_summary_markdown": "old markdown",
-        },
+
+def _create_engram(client, *, project_id: str, title: str) -> str:  # noqa: ANN001
+    return _create_engram_record(
+        client,
+        project_id=project_id,
+        title=title,
+        source_session_id=None,
     )
-    assert created_engram.status_code == 200
-    engram_id = created_engram.json()["engram_id"]
+
+
+def _create_engram_record(
+    client,
+    *,
+    project_id: str,
+    title: str,
+    source_session_id: str | None,
+) -> str:  # noqa: ANN001
+    payload: dict[str, Any] = {
+        "project_id": project_id,
+        "title": title,
+        "abstract": "old abstract",
+        "detailed_summary_markdown": "old markdown",
+    }
+    if source_session_id is not None:
+        payload["source_session_id"] = source_session_id
+
+    response = client.post(
+        "/api/v1/engrams",
+        json=payload,
+    )
+    assert response.status_code == 200
+    return response.json()["engram_id"]
+
+
+def _create_collection(client, *, project_id: str, name: str) -> str:  # noqa: ANN001
+    response = client.post(
+        "/api/v1/admin/memory/collections",
+        json={"project_id": project_id, "name": name, "description": "ops"},
+    )
+    assert response.status_code == 201
+    return response.json()["collection_id"]
+
+
+def _assert_collection_detached(db_conn, *, engram_id: str) -> None:  # noqa: ANN001
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*)::INT
+            FROM engram_collection_items
+            WHERE engram_id = %s::UUID
+            """,
+            (engram_id,),
+        )
+        assert cur.fetchone()[0] == 0
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("delete_linked_engrams", [False, True])
+def test_admin_memory_session_delete_applies_linked_engram_policy(
+    client,
+    clean_db,
+    delete_linked_engrams: bool,
+) -> None:
+    _login_admin(client)
+    suffix = "delete" if delete_linked_engrams else "keep"
+    session_id = _create_chat_session(client, title=f"Delete policy session {suffix}")
+    linked_engram_id = _create_engram_record(
+        client,
+        project_id="engram-vault",
+        source_session_id=session_id,
+        title=f"Linked snapshot {suffix}",
+    )
+
+    deleted = _delete_admin_session(
+        client,
+        session_id=session_id,
+        delete_linked_engrams=delete_linked_engrams,
+        reason="deep cleanup" if delete_linked_engrams else "session cleanup",
+    )
+
+    if delete_linked_engrams:
+        assert deleted["linked_engrams_deleted"] >= 1
+        deleted_list = _list_session_engrams(
+            client,
+            session_id=session_id,
+            include_deleted=True,
+        )
+        target = next(item for item in deleted_list if item["engram_id"] == linked_engram_id)
+        assert target["deleted_at"] is not None
+        return
+
+    assert deleted["linked_engrams_deleted"] == 0
+    visible = _list_session_engrams(
+        client,
+        session_id=session_id,
+        include_deleted=False,
+    )
+    assert any(item["engram_id"] == linked_engram_id for item in visible)
+
+
+@pytest.mark.integration
+def test_admin_memory_engram_edit_enforces_optimistic_lock(client, clean_db) -> None:
+    _login_admin(client)
+    engram_id = _create_engram(
+        client,
+        project_id="engram-vault",
+        title="Editable engram",
+    )
 
     detail = client.get(f"/api/v1/admin/memory/engrams/{engram_id}")
     assert detail.status_code == 200
@@ -191,12 +240,21 @@ def test_admin_memory_engram_edit_move_and_collection_detach(client, clean_db, d
     )
     assert stale_update.status_code == 409
 
-    collection = client.post(
-        "/api/v1/admin/memory/collections",
-        json={"project_id": "engram-vault", "name": "Ops Collection", "description": "ops"},
+
+@pytest.mark.integration
+def test_admin_memory_engram_move_detaches_collection_items(client, clean_db, db_conn) -> None:
+    _login_admin(client)
+    _create_project(client, project_id="phase31-target")
+    engram_id = _create_engram(
+        client,
+        project_id="engram-vault",
+        title="Editable engram",
     )
-    assert collection.status_code == 201
-    collection_id = collection.json()["collection_id"]
+    collection_id = _create_collection(
+        client,
+        project_id="engram-vault",
+        name="Ops Collection",
+    )
 
     add_item = client.post(
         f"/api/v1/admin/memory/collections/{collection_id}/items",
@@ -212,16 +270,7 @@ def test_admin_memory_engram_edit_move_and_collection_detach(client, clean_db, d
     assert moved.status_code == 200
     assert moved.json()["project_id"] == "phase31-target"
 
-    with db_conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT COUNT(*)::INT
-            FROM engram_collection_items
-            WHERE engram_id = %s::UUID
-            """,
-            (engram_id,),
-        )
-        assert cur.fetchone()[0] == 0
+    _assert_collection_detached(db_conn, engram_id=engram_id)
 
 
 @pytest.mark.integration

@@ -6,7 +6,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 **Business case for the worst file (`mcp/service.py`):** Improving from 3.0 to 5.15 (industry average) predicts 24–48% defect reduction and 3–20% development speed improvement (90% confidence interval).
 
-## Phase Completion Status (as of 2026-02-22, Checkpoint 101)
+## Phase Completion Status (as of 2026-02-22, Checkpoint 102)
 
 - [x] Phase 1 — `api/app/mcp/service.py` refactor and hardening completed (checkpoints 1, 44-68, 80-84, 87, 99)
 - [x] Phase 2 — `api/app/memory_admin/repository.py` refactor completed (checkpoints 2, 16)
@@ -21,7 +21,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 - [x] Phase 11 — `api/app/ingestion/repository.py` refactor completed (checkpoint 11)
 - [x] Phase 12 — `api/app/engram_enrichment/service.py` refactor completed (checkpoint 12)
 - [x] Phase 13 — Green-zone files promoted and stabilized (checkpoints 13-15)
-- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-101)
+- [x] Phase 14 — Test infrastructure and coverage expansion completed with continued quality hardening (checkpoints 24-28, 88-102)
 
 ## Execution Checkpoints
 
@@ -2740,6 +2740,29 @@ The engram codebase has accumulated significant technical debt, particularly in 
 
 ---
 
+### 2026-02-22 (Checkpoint 102 - Memory Admin Integration Test Deduplication and Delete-Policy Parameterization)
+
+- [x] Continued Phase 14 hardening in `api/tests/test_memory_admin_api_integration.py`:
+  - removed duplicated integration setup by consolidating engram creation flows into a shared helper:
+    - `_create_engram_record(...)`
+  - parameterized linked-engram session delete policy checks into a single integration test:
+    - `test_admin_memory_session_delete_applies_linked_engram_policy`
+  - retained split focused integration checks for optimistic-lock edit behavior and collection-detach move behavior
+- [x] Added/expanded integration coverage while refactoring:
+  - delete policy test now explicitly covers both `delete_linked_engrams=false` and `delete_linked_engrams=true` paths via parameterization
+- [x] Validation run (using `make` commands):
+  - `make lint`
+  - `make test-unit` (`265 passed, 4 skipped, 84 deselected`)
+  - `make test` (`265 passed, 88 skipped`)
+  - `make web-check` (`32 passed file suites, 122 passed tests`)
+  - `make acceptance-test-mock-docker` (`10 passed`)
+- [x] CodeScene health checks run (`code_health_review`, `pre_commit_code_health_safeguard`)
+- [x] CodeScene notes:
+  - `api/tests/test_memory_admin_api_integration.py` score: **10.0** (improved from **9.06**)
+  - `pre_commit_code_health_safeguard` quality gate: **passed**
+
+---
+
 ## CodeScene Health Scorecard (Current State)
 
 | File | Score | Severity |
@@ -2777,6 +2800,7 @@ The engram codebase has accumulated significant technical debt, particularly in 
 | `api/tests/test_chat_context.py` | 10.0 | GREEN |
 | `api/tests/test_chat_service.py` | 10.0 | GREEN |
 | `api/tests/test_chat_session_operations.py` | 10.0 | GREEN |
+| `api/tests/test_memory_admin_api_integration.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_engram_dispatch_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_service_stream_unit.py` | 10.0 | GREEN |
 | `api/tests/test_mcp_api_integration.py` | 10.0 | GREEN |
