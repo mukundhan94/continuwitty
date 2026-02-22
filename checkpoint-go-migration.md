@@ -2390,6 +2390,36 @@
   - result: `quality_gates=passed`
   - findings: none
 
-### CP39 - Auth/Session Continuation Follow-Up (Planned)
+### CP39 - Non-Checkpoint Code-Health Uplift (`internal/repository/chat_test.go`)
+
+- Improved legacy non-checkpoint chat repository test file:
+  - `internal/repository/chat_test.go`
+  - removed duplicated nil-result test logic by consolidating:
+    - `TestGetChatSessionReturnsNilWhenMissing`
+    - `TestUpdateChatSessionReturnsNilWhenNoRows`
+    - into `TestChatSessionGetAndUpdateReturnNilWhenRowMissing` (subtests).
+  - removed excessive-arguments row helper by replacing:
+    - `chatSessionRowValues(...)` (16 args)
+    - with fixture struct:
+      - `chatSessionRowFixture`
+      - `chatSessionRowValues(fixture chatSessionRowFixture)`
+- Executed migrated tests one-by-one:
+  - `TestCreateChatSessionReturnsInsertedRecord`
+  - `TestListChatSessionsAppliesVisibilityAndProjectFilter`
+  - `TestGetChatSessionAdminRecordReturnsRecord`
+  - `TestChatSessionGetAndUpdateReturnNilWhenRowMissing`
+  - `TestUpdateChatSessionValidatesProviderValue`
+  - `TestNormalizeCreatePayloadRejectsInvalidVisibility`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/chat_test.go` score improved from `9.09` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP40 - Auth/Session Continuation Follow-Up (Planned)
 
 - Continue incremental code-health uplift of legacy non-checkpoint Go files below 9.5 while maintaining one-by-one test execution and migration parity progression.

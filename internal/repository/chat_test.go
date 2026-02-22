@@ -17,24 +17,24 @@ func TestCreateChatSessionReturnsInsertedRecord(t *testing.T) {
 	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000501")
 	ownerUserID := uuid.MustParse("00000000-0000-0000-0000-000000000502")
 	createdAt := time.Date(2026, 2, 20, 16, 0, 0, 0, time.UTC)
-	rowValues := chatSessionRowValues(
-		sessionID,
-		ownerUserID,
-		"engram-vault",
-		"Daily triage",
-		"openai",
-		"gpt-4o-mini",
-		"be concise",
-		"private",
-		false,
-		"off",
-		30,
-		6,
-		30,
-		60,
-		createdAt,
-		createdAt,
-	)
+	rowValues := chatSessionRowValues(chatSessionRowFixture{
+		SessionID:             sessionID,
+		OwnerUserID:           ownerUserID,
+		ProjectID:             "engram-vault",
+		Title:                 "Daily triage",
+		Provider:              "openai",
+		ModelID:               "gpt-4o-mini",
+		SystemPrompt:          "be concise",
+		VisibilityScope:       "private",
+		AutosaveEnabled:       false,
+		AutosaveStrategy:      "off",
+		AutosaveIntervalMins:  30,
+		AutosaveMinMessages:   6,
+		RetentionDays:         30,
+		RetentionMaxSnapshots: 60,
+		CreatedAt:             createdAt,
+		UpdatedAt:             createdAt,
+	})
 	db := &fakeQueryer{
 		queryRowResult: &fakeRow{values: rowValues},
 	}
@@ -78,24 +78,24 @@ func TestListChatSessionsAppliesVisibilityAndProjectFilter(t *testing.T) {
 	db := &fakeQueryer{
 		queryRowsResult: &fakeRows{
 			values: [][]any{
-				chatSessionRowValues(
-					sessionID,
-					actorUserID,
-					"engram-vault",
-					"Daily triage",
-					"openai",
-					"gpt-4o-mini",
-					"",
-					"project",
-					true,
-					"interval",
-					15,
-					4,
-					14,
-					20,
-					createdAt,
-					createdAt,
-				),
+				chatSessionRowValues(chatSessionRowFixture{
+					SessionID:             sessionID,
+					OwnerUserID:           actorUserID,
+					ProjectID:             "engram-vault",
+					Title:                 "Daily triage",
+					Provider:              "openai",
+					ModelID:               "gpt-4o-mini",
+					SystemPrompt:          "",
+					VisibilityScope:       "project",
+					AutosaveEnabled:       true,
+					AutosaveStrategy:      "interval",
+					AutosaveIntervalMins:  15,
+					AutosaveMinMessages:   4,
+					RetentionDays:         14,
+					RetentionMaxSnapshots: 20,
+					CreatedAt:             createdAt,
+					UpdatedAt:             createdAt,
+				}),
 			},
 		},
 	}
@@ -130,25 +130,6 @@ func TestListChatSessionsAppliesVisibilityAndProjectFilter(t *testing.T) {
 	}
 }
 
-func TestGetChatSessionReturnsNilWhenMissing(t *testing.T) {
-	db := &fakeQueryer{
-		queryRowResult: &fakeRow{err: pgx.ErrNoRows},
-	}
-
-	record, err := GetChatSession(
-		context.Background(),
-		db,
-		ChatSessionGetInput{
-			SessionID:   uuid.MustParse("00000000-0000-0000-0000-000000000521"),
-			ActorUserID: uuid.MustParse("00000000-0000-0000-0000-000000000522"),
-		},
-	)
-	requireNoError(t, err)
-	if record != nil {
-		t.Fatalf("expected nil session when row missing")
-	}
-}
-
 func TestGetChatSessionAdminRecordReturnsRecord(t *testing.T) {
 	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000525")
 	ownerUserID := uuid.MustParse("00000000-0000-0000-0000-000000000526")
@@ -171,26 +152,56 @@ func TestGetChatSessionAdminRecordReturnsRecord(t *testing.T) {
 	requireEqual(t, deletedAt, *record.DeletedAt)
 }
 
-func TestUpdateChatSessionReturnsNilWhenNoRows(t *testing.T) {
+func TestChatSessionGetAndUpdateReturnNilWhenRowMissing(t *testing.T) {
 	db := &fakeQueryer{
 		queryRowResult: &fakeRow{err: pgx.ErrNoRows},
 	}
-	title := "Updated title"
 
-	record, err := UpdateChatSession(
-		context.Background(),
-		db,
-		ChatSessionUpdateInput{
-			SessionID:   uuid.MustParse("00000000-0000-0000-0000-000000000531"),
-			ActorUserID: uuid.MustParse("00000000-0000-0000-0000-000000000532"),
-			Payload: models.ChatSessionUpdateRequest{
-				Title: &title,
+	testCases := []struct {
+		name    string
+		execute func() (*models.ChatSessionRecord, error)
+	}{
+		{
+			name: "get",
+			execute: func() (*models.ChatSessionRecord, error) {
+				return GetChatSession(
+					context.Background(),
+					db,
+					ChatSessionGetInput{
+						SessionID:   uuid.MustParse("00000000-0000-0000-0000-000000000521"),
+						ActorUserID: uuid.MustParse("00000000-0000-0000-0000-000000000522"),
+					},
+				)
 			},
 		},
-	)
-	requireNoError(t, err)
-	if record != nil {
-		t.Fatalf("expected nil session when update affected no rows")
+		{
+			name: "update",
+			execute: func() (*models.ChatSessionRecord, error) {
+				title := "Updated title"
+				return UpdateChatSession(
+					context.Background(),
+					db,
+					ChatSessionUpdateInput{
+						SessionID:   uuid.MustParse("00000000-0000-0000-0000-000000000531"),
+						ActorUserID: uuid.MustParse("00000000-0000-0000-0000-000000000532"),
+						Payload: models.ChatSessionUpdateRequest{
+							Title: &title,
+						},
+					},
+				)
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			record, err := testCase.execute()
+			requireNoError(t, err)
+			if record != nil {
+				t.Fatalf("expected nil session when row missing")
+			}
+		})
 	}
 }
 
@@ -241,40 +252,42 @@ func TestNormalizeCreatePayloadRejectsInvalidVisibility(t *testing.T) {
 	}
 }
 
-func chatSessionRowValues(
-	sessionID uuid.UUID,
-	ownerUserID uuid.UUID,
-	projectID string,
-	title string,
-	provider string,
-	modelID string,
-	systemPrompt string,
-	visibilityScope string,
-	autosaveEnabled bool,
-	autosaveStrategy string,
-	autosaveIntervalMinutes int,
-	autosaveMinMessages int,
-	retentionDays int,
-	retentionMaxSnapshots int,
-	createdAt time.Time,
-	updatedAt time.Time,
-) []any {
+type chatSessionRowFixture struct {
+	SessionID             uuid.UUID
+	OwnerUserID           uuid.UUID
+	ProjectID             string
+	Title                 string
+	Provider              string
+	ModelID               string
+	SystemPrompt          string
+	VisibilityScope       string
+	AutosaveEnabled       bool
+	AutosaveStrategy      string
+	AutosaveIntervalMins  int
+	AutosaveMinMessages   int
+	RetentionDays         int
+	RetentionMaxSnapshots int
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+func chatSessionRowValues(fixture chatSessionRowFixture) []any {
 	return []any{
-		sessionID,
-		ownerUserID,
-		projectID,
-		title,
-		provider,
-		modelID,
-		systemPrompt,
-		visibilityScope,
-		autosaveEnabled,
-		autosaveStrategy,
-		autosaveIntervalMinutes,
-		autosaveMinMessages,
-		retentionDays,
-		retentionMaxSnapshots,
-		createdAt,
-		updatedAt,
+		fixture.SessionID,
+		fixture.OwnerUserID,
+		fixture.ProjectID,
+		fixture.Title,
+		fixture.Provider,
+		fixture.ModelID,
+		fixture.SystemPrompt,
+		fixture.VisibilityScope,
+		fixture.AutosaveEnabled,
+		fixture.AutosaveStrategy,
+		fixture.AutosaveIntervalMins,
+		fixture.AutosaveMinMessages,
+		fixture.RetentionDays,
+		fixture.RetentionMaxSnapshots,
+		fixture.CreatedAt,
+		fixture.UpdatedAt,
 	}
 }

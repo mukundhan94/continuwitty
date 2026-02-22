@@ -318,6 +318,32 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP39: non-checkpoint code-health uplift for chat repository tests)
+
+1. Improved legacy non-checkpoint chat repository tests:
+   - `internal/repository/chat_test.go`
+   - consolidated duplicated nil-row tests into one subtest-based test:
+     - `TestChatSessionGetAndUpdateReturnNilWhenRowMissing`
+   - replaced high-argument row helper with fixture struct:
+     - added `chatSessionRowFixture`
+     - changed `chatSessionRowValues` to accept fixture struct instead of 16 parameters.
+2. Executed chat repository tests one-by-one:
+   - `TestCreateChatSessionReturnsInsertedRecord`
+   - `TestListChatSessionsAppliesVisibilityAndProjectFilter`
+   - `TestGetChatSessionAdminRecordReturnsRecord`
+   - `TestChatSessionGetAndUpdateReturnNilWhenRowMissing`
+   - `TestUpdateChatSessionValidatesProviderValue`
+   - `TestNormalizeCreatePayloadRejectsInvalidVisibility`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_test.go` improved from `9.09` to `10.0`
+   - `code_health_review` now reports no findings.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (Go migration CP38: non-checkpoint code-health uplift for OAuth repository fetch paths)
 
 1. Improved legacy non-checkpoint OAuth repository querying:
