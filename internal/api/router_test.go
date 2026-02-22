@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"engram/internal/admin"
+	"engram/internal/auth"
 	"engram/internal/config"
 	"engram/internal/models"
 
@@ -121,5 +122,45 @@ func TestMemoryAdminRoutesMountedWithDependencies(t *testing.T) {
 	}
 	if !serviceCalled {
 		t.Fatalf("expected list sessions service to be called")
+	}
+}
+
+func TestSessionAuthRoutesNotMountedWithoutDependencies(t *testing.T) {
+	settings := config.Settings{AppSemanticVersion: "1.2.3", AppCommitSHA: "abc1234"}
+	router := NewRouter(settings)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/session/csrf", nil)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", response.Code)
+	}
+}
+
+func TestSessionAuthRoutesMountedWithDependencies(t *testing.T) {
+	settings := config.Settings{AppSemanticVersion: "1.2.3", AppCommitSHA: "abc1234"}
+	manager, err := auth.NewSessionManager("dev-session-secret-for-tests", auth.DefaultSessionCookieName)
+	if err != nil {
+		t.Fatalf("expected session manager creation to succeed: %v", err)
+	}
+
+	router := NewRouterWithDependencies(
+		settings,
+		RouterDependencies{
+			SessionAuth: SessionAuthDependencies{
+				SessionManager:    manager,
+				GenerateCSRFToken: auth.GenerateCSRFToken,
+			},
+		},
+	)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/session/csrf", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.Code)
 	}
 }

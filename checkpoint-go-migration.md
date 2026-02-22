@@ -39,7 +39,8 @@
 | CP24 | 2026-02-22 | Completed | Runtime integration baseline (DB-backed memory-admin router deps + migration-time actor/project resolver bridges) |
 | CP25 | 2026-02-22 | Completed | Runtime hardening baseline (context-first admin actor resolution with dev header bridge adapter) |
 | CP26 | 2026-02-22 | Completed | Auth/session integration baseline (session-cookie middleware populates canonical admin actor context) |
-| CP27 | 2026-02-22 | In Progress | Auth/session continuation (replace temporary header bridge with full login/session + CSRF parity routes) |
+| CP27 | 2026-02-22 | Completed | Auth/session route baseline (`/api/v1/session/*` + `/api/v1/me`) with cookie + CSRF login/logout parity wiring |
+| CP28 | 2026-02-22 | In Progress | Auth/session continuation (session hardening + UI/login parity integration) |
 
 ## Checkpoint Details
 
@@ -1716,9 +1717,116 @@
 - Pre-commit safeguard:
   - `quality_gates=passed`.
 
-### CP27 - Auth/Session Continuation (Planned)
+### CP27 - Auth/Session Route Baseline
+
+- Added session-auth route module:
+  - `internal/api/session_auth.go`
+  - endpoints:
+    - `GET /api/v1/session/csrf`
+    - `POST /api/v1/session/login`
+    - `POST /api/v1/session/logout`
+    - `GET /api/v1/me`
+  - login flow uses signed cookie session state + CSRF verification.
+  - `/api/v1/me` uses middleware-populated actor context and canonical DB lookup.
+- Updated router composition to mount session-auth routes when dependencies are configured:
+  - `internal/api/router.go`
+  - `RouterDependencies` now includes `SessionAuth`.
+- Updated runtime wiring for canonical session-auth path:
+  - `cmd/api/main.go`
+  - injects `SessionAuthDependencies` (session manager, user lookups, password verification, CSRF token generator).
+  - removed runtime dependency on temporary header bridge; actor context now comes from session middleware path.
+- Added migrated tests:
+  - `internal/api/session_auth_test.go`
+    - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+    - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+    - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+    - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+  - `internal/api/router_test.go`
+    - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+    - `TestSessionAuthRoutesMountedWithDependencies`
+- Executed migrated tests one-by-one:
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/admin/project_resolver.go` → 10.0
+  - `internal/admin/project_resolver_test.go` → 10.0
+  - `internal/admin/service.go` → 8.54
+  - `internal/admin/service_test.go` → 9.38
+  - `internal/api/admin_actor.go` → 10.0
+  - `internal/api/admin_actor_test.go` → 10.0
+  - `internal/api/admin_memory.go` → 6.88
+  - `internal/api/admin_memory_test.go` → 9.68
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/api/session_actor_middleware.go` → 9.38
+  - `internal/api/session_actor_middleware_test.go` → 9.68
+  - `internal/api/session_auth.go` → 8.15
+  - `internal/api/session_auth_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/auth/session.go` → 9.38
+  - `internal/auth/session_test.go` → 10.0
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+- Pre-commit safeguard:
+  - `quality_gates=passed`.
+
+### CP28 - Auth/Session Continuation (Planned)
 
 - Continue migration with the next high-value slice:
-  - replace temporary header bridge with full login/session + CSRF parity route flow in Go
-  - ensure session actor lifecycle and role authorization align with Python semantics
+  - harden session lifecycle (cookie security attributes, TTL/rotation semantics, and logout invalidation parity)
+  - wire UI/login parity routes on top of session-auth primitives
 - Keep parity tests migrated and executed one-by-one.

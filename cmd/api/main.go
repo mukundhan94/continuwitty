@@ -56,30 +56,38 @@ func initDBPoolOrExit(ctx context.Context, logger *slog.Logger, settings config.
 }
 
 func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgxpool.Pool) http.Handler {
-	routerDependencies := internalapi.RouterDependencies{
-		MemoryAdminService: admin.NewService(pool, settings.EmbeddingDim, admin.PassthroughProjectResolver{}),
-		RequireAdminActor:  internalapi.RequireAdminActorFromContext,
-	}
-	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
-
 	sessionManager, err := auth.NewSessionManager(settings.AppSessionSecret, auth.DefaultSessionCookieName)
 	if err != nil {
 		logger.Error("failed to initialize session manager", "error", err)
 		os.Exit(1)
 	}
-	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
 
-	if config.IsProductionEnv(settings) {
-		logger.Info("memory-admin routes require session-authenticated context actor")
-		return handler
+	routerDependencies := internalapi.RouterDependencies{
+		MemoryAdminService: admin.NewService(pool, settings.EmbeddingDim, admin.PassthroughProjectResolver{}),
+		RequireAdminActor:  internalapi.RequireAdminActorFromContext,
+		SessionAuth: internalapi.SessionAuthDependencies{
+			SessionManager:       sessionManager,
+			LookupUserByUsername: lookupSessionUserByUsername(pool),
+			LookupUserByID:       lookupSessionUser(pool),
+			VerifyPassword:       auth.VerifyPassword,
+			GenerateCSRFToken:    auth.GenerateCSRFToken,
+		},
 	}
-	logger.Info("enabling migration-time header admin actor bridge")
-	return internalapi.AdminActorHeaderBridge(handler)
+	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
+	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
+	logger.Info("session-authenticated actor context enabled")
+	return handler
 }
 
 func lookupSessionUser(pool *pgxpool.Pool) internalapi.SessionUserLookup {
 	return func(ctx context.Context, userID uuid.UUID) (*models.UserAuthRecord, error) {
 		return repository.GetUserAuthRecordByID(ctx, pool, userID)
+	}
+}
+
+func lookupSessionUserByUsername(pool *pgxpool.Pool) internalapi.SessionUserByUsernameLookup {
+	return func(ctx context.Context, username string) (*models.UserAuthRecord, error) {
+		return repository.GetUserAuthRecord(ctx, pool, username)
 	}
 }
 

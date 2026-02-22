@@ -19,6 +19,7 @@ func NewRouter(settings config.Settings) http.Handler {
 type RouterDependencies struct {
 	MemoryAdminService MemoryAdminService
 	RequireAdminActor  RequireAdminActor
+	SessionAuth        SessionAuthDependencies
 }
 
 // NewRouterWithDependencies builds the API router and mounts dependency-backed routes.
@@ -43,6 +44,9 @@ func NewRouterWithDependencies(settings config.Settings, dependencies RouterDepe
 	})
 	if dependencies.MemoryAdminService != nil && dependencies.RequireAdminActor != nil {
 		MountMemoryAdminRoutes(router, dependencies.MemoryAdminService, dependencies.RequireAdminActor)
+	}
+	if dependencies.SessionAuth.SessionManager != nil {
+		MountSessionAuthRoutes(router, dependencies.SessionAuth)
 	}
 
 	return router

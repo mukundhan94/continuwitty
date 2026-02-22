@@ -3103,3 +3103,105 @@
    - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
    - result: `quality_gates=passed`
    - findings: none
+
+### 2026-02-22 (Go migration CP27: session login/logout/csrf route baseline)
+
+1. Added session-auth API routes:
+   - `internal/api/session_auth.go`
+   - `GET /api/v1/session/csrf`
+   - `POST /api/v1/session/login`
+   - `POST /api/v1/session/logout`
+   - `GET /api/v1/me`
+2. Updated API router composition:
+   - `internal/api/router.go`
+   - `RouterDependencies` now carries `SessionAuth` and mounts session-auth routes when configured.
+3. Updated runtime dependency wiring:
+   - `cmd/api/main.go`
+   - injects session-auth dependencies (session manager, user lookup by username/id, password verification, CSRF token generator).
+   - runtime no longer depends on migration-time header bridge for actor context.
+4. Added migrated tests:
+   - `internal/api/session_auth_test.go`
+   - `internal/api/router_test.go` session-auth mounting tests
+5. Executed migrated tests one-by-one:
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestSessionAuthRoutesNotMountedWithoutDependencies$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestSessionAuthRoutesMountedWithDependencies$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionAuthRoutesLoginSetsSessionCookie$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionAuthRoutesLoginRejectsInvalidCSRF$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionAuthRoutesMeUsesSessionActorMiddleware$' -v`
+6. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+7. File-level CodeScene checks (all Go migration files before commit):
+   - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/admin/project_resolver.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/admin/project_resolver_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/admin/service.go` -> `8.54`
+   - `/Users/mukundhan/Projects/engram/internal/admin/service_test.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/api/admin_actor.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/admin_actor_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/admin_memory.go` -> `6.88`
+   - `/Users/mukundhan/Projects/engram/internal/api/admin_memory_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/api/router.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/session_actor_middleware.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/api/session_actor_middleware_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/api/session_auth.go` -> `8.15`
+   - `/Users/mukundhan/Projects/engram/internal/api/session_auth_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/auth/session.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/auth/session_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/config/config.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db_test.go` -> `9.61`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/errors.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/chat.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/collection.go` -> `None` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/document.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/engram.go` -> `None` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/mcp_token.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/oauth.go` -> `None` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/project.go` -> `None` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/user.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/admin_engram.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/admin_engram_test.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/admin_engram_update.go` -> `9.61`
+   - `/Users/mukundhan/Projects/engram/internal/repository/admin_engram_update_test.go` -> `9.25`
+   - `/Users/mukundhan/Projects/engram/internal/repository/admin_session.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/admin_session_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat.go` -> `9.02`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_message.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_message_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_pinning.go` -> `8.81`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_pinning_test.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/chat_test.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/repository/collection.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/collection_test.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/repository/document.go` -> `8.81`
+   - `/Users/mukundhan/Projects/engram/internal/repository/document_test.go` -> `8.72`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_helpers_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_rehydration.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_rehydration_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_repository_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_store.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_unit_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_write.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_write_test.go` -> `9.26`
+   - `/Users/mukundhan/Projects/engram/internal/repository/mcp_token.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/mcp_token_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/oauth.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/oauth_test.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/project.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/project_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user_test.go` -> `10.0`
+8. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
