@@ -12,6 +12,17 @@ import (
 
 // NewRouter builds the API router for the Go migration path.
 func NewRouter(settings config.Settings) http.Handler {
+	return NewRouterWithDependencies(settings, RouterDependencies{})
+}
+
+// RouterDependencies captures optional services required by composed API routes.
+type RouterDependencies struct {
+	MemoryAdminService MemoryAdminService
+	RequireAdminActor  RequireAdminActor
+}
+
+// NewRouterWithDependencies builds the API router and mounts dependency-backed routes.
+func NewRouterWithDependencies(settings config.Settings, dependencies RouterDependencies) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
@@ -30,6 +41,9 @@ func NewRouter(settings config.Settings) http.Handler {
 			})
 		})
 	})
+	if dependencies.MemoryAdminService != nil && dependencies.RequireAdminActor != nil {
+		MountMemoryAdminRoutes(router, dependencies.MemoryAdminService, dependencies.RequireAdminActor)
+	}
 
 	return router
 }
