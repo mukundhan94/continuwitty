@@ -30,9 +30,14 @@
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUDIT_LOG_PATH` | `./data/audit_events.jsonl` | Local audit event log path |
+| `AUDIT_LOG_STDOUT_ENABLED` | `false` | Emit audit events to stdout (production emits to stdout automatically) |
+| `AUDIT_LOG_MAX_EVENT_BYTES` | `32768` | Maximum serialized bytes per audit event before truncation |
 | `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` | `5` | Max failed login attempts before lockout |
 | `LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `300` | Rate-limit sliding window |
 | `LOGIN_LOCKOUT_SECONDS` | `900` | Lockout duration after max attempts |
+| `MCP_TRANSPORT_RATE_LIMIT_MAX_REQUESTS` | `120` | Max MCP transport requests per window per actor key |
+| `MCP_TRANSPORT_RATE_LIMIT_WINDOW_SECONDS` | `60` | MCP transport rate-limit window |
+| `MCP_TRANSPORT_RATE_LIMIT_BLOCK_SECONDS` | `30` | MCP transport block duration once threshold is exceeded |
 
 ## Debug / Observability
 
@@ -77,6 +82,7 @@
 |----------|---------|-------------|
 | `INGESTION_MAX_FILE_BYTES` | - | Maximum file upload size |
 | `INGESTION_MAX_TEXT_CHARS` | - | Maximum text ingestion length |
+| `INGESTION_MAX_METADATA_JSON_BYTES` | `20000` | Maximum metadata JSON payload size for file ingestion |
 
 ## Web Runtime
 
@@ -106,8 +112,9 @@
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OAUTH_ENABLED` | `false` | Enable OAuth authorization server |
+| `OAUTH_ENABLED` | `true` | Enable OAuth authorization server |
 | `OAUTH_ISSUER_URL` | - | OAuth issuer URL |
+| `OAUTH_REQUIRE_PROTECTED_REGISTRATION` | `true` | Require authenticated admin session for dynamic client registration |
 | `OAUTH_ACCESS_TOKEN_TTL_SECONDS` | - | OAuth access token lifetime |
 | `OAUTH_AUTHORIZATION_CODE_TTL_SECONDS` | - | OAuth authorization code lifetime |
 | `OAUTH_CLIENT_SECRET_PEPPER` | - | Pepper for OAuth client secret hashing |

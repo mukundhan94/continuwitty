@@ -15,7 +15,7 @@
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
 - **Phase 33 completed:** portable export/import stash workflow with REST + MCP + web transfer flows, owner/admin authorization, and source-fidelity round-trip coverage.
-- **Phase 34 planned:** security audit remediation backlog queued for post-export hardening cycle.
+- **Phase 34 completed:** security audit remediation for production-safe config defaults, distributed login/MCP throttling, protected OAuth registration, and security regression coverage.
 
 ---
 
@@ -140,6 +140,13 @@
 - Transfer page export/import workflow with searchable project/collection IDs
 - Round-trip tests for collection membership and engram source fidelity
 
+### Milestone 34 — Security Audit Remediation Program (Completed)
+- Production fail-fast validation for insecure secrets/defaults and protected OAuth registration.
+- Distributed rate limiting for login lockouts and MCP transport request bursts.
+- OAuth PKCE hardening (`S256` only) plus admin-protected dynamic client registration.
+- Ingestion and audit hardening (metadata size cap, file type validation, audit payload sanitization/truncation).
+- Security-focused API regression coverage and acceptance lockout scenario.
+
 ### Milestone 19 — Collaboration (Planned)
 - Project membership model, scoped sharing/revocation, audit-visible events
 
@@ -171,4 +178,4 @@
 | 24-28 | Engram Link Graph | Planned |
 | 32 | ContinuWitty Query Protocol | Planned |
 | 33 | Portable Export/Import Stash | Completed |
-| 34 | Security Audit Remediation Program | Planned |
+| 34 | Security Audit Remediation Program | Completed |

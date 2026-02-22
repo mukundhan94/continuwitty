@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.ingestion.errors import IngestionServiceError
 from app.ingestion.models import (
@@ -21,18 +23,76 @@ from app.ingestion.models import (
 from app.ingestion.service import DocumentIngestionService, FileIngestRequest
 from app.models import VisibilityScope
 
-_FORM_DEFAULT_VISIBILITY = Form(default=VisibilityScope.private)
-_FORM_DEFAULT_CHUNK_SIZE = Form(default=1000)
-_FORM_DEFAULT_CHUNK_OVERLAP = Form(default=180)
+
+@dataclass(frozen=True)
+class _IngestFileFormPayload:
+    project_id: str
+    title: str | None
+    visibility_scope: VisibilityScope
+    chunk_size_chars: int
+    chunk_overlap_chars: int
+    metadata_json: str | None
+    file: UploadFile | None
+
+
+def _parse_int_form_field(value: str | None, *, default: int, field_name: str) -> int:
+    if value is None or value.strip() == "":
+        return default
+    try:
+        return int(value.strip())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"{field_name} must be an integer") from exc
+
+
+async def _parse_ingest_file_form_payload(request: Request) -> _IngestFileFormPayload:
+    form = await request.form()
+    project_id = str(form.get("project_id", "")).strip()
+    if not project_id:
+        raise HTTPException(status_code=422, detail="project_id is required")
+
+    visibility_raw = str(form.get("visibility_scope", VisibilityScope.private.value)).strip()
+    try:
+        visibility_scope = VisibilityScope(visibility_raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="visibility_scope is invalid") from exc
+
+    upload = form.get("file")
+    file = upload if isinstance(upload, UploadFile | StarletteUploadFile) else None
+    return _IngestFileFormPayload(
+        project_id=project_id,
+        title=str(form.get("title", "")).strip() or None,
+        visibility_scope=visibility_scope,
+        chunk_size_chars=_parse_int_form_field(
+            str(form.get("chunk_size_chars", "")).strip() or None,
+            default=1000,
+            field_name="chunk_size_chars",
+        ),
+        chunk_overlap_chars=_parse_int_form_field(
+            str(form.get("chunk_overlap_chars", "")).strip() or None,
+            default=180,
+            field_name="chunk_overlap_chars",
+        ),
+        metadata_json=str(form.get("metadata_json", "")).strip() or None,
+        file=file,
+    )
+
+
+# FastAPI dependency object kept at module scope to satisfy lint rule B008.
+INGEST_FILE_FORM_PAYLOAD_DEPENDENCY = Depends(_parse_ingest_file_form_payload)
 
 
 def _to_http_exception(exc: IngestionServiceError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
-def _parse_metadata_json(metadata_json: str | None) -> dict[str, Any]:
+def _parse_metadata_json(metadata_json: str | None, *, max_bytes: int) -> dict[str, Any]:
     if not metadata_json:
         return {}
+    if len(metadata_json.encode("utf-8")) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"metadata_json exceeds max allowed size of {max_bytes} bytes",
+        )
 
     try:
         parsed = json.loads(metadata_json)
@@ -55,6 +115,7 @@ def create_ingestion_router(
     *,
     ingestion_service: DocumentIngestionService,
     require_api_actor: Callable[[Request], dict[str, Any]],
+    max_metadata_json_bytes: int = 20_000,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/ingestion", tags=["ingestion"])
 
@@ -72,34 +133,28 @@ def create_ingestion_router(
     @router.post("/file", response_model=DocumentIngestResponse, status_code=201)
     async def ingest_file(
         request: Request,
-        project_id: str = Form(...),
-        title: str | None = Form(default=None),
-        visibility_scope: VisibilityScope = _FORM_DEFAULT_VISIBILITY,
-        chunk_size_chars: int = _FORM_DEFAULT_CHUNK_SIZE,
-        chunk_overlap_chars: int = _FORM_DEFAULT_CHUNK_OVERLAP,
-        metadata_json: str | None = Form(default=None),
-        file: UploadFile | None = None,
+        form: _IngestFileFormPayload = INGEST_FILE_FORM_PAYLOAD_DEPENDENCY,
     ) -> DocumentIngestResponse:
         actor = require_api_actor(request)
-        if file is None:
+        if form.file is None:
             raise HTTPException(status_code=422, detail="file is required")
 
-        metadata = _parse_metadata_json(metadata_json)
+        metadata = _parse_metadata_json(form.metadata_json, max_bytes=max_metadata_json_bytes)
         payload = DocumentIngestFileRequest(
-            project_id=project_id,
-            title=title,
-            visibility_scope=visibility_scope,
-            chunk_size_chars=chunk_size_chars,
-            chunk_overlap_chars=chunk_overlap_chars,
+            project_id=form.project_id,
+            title=form.title,
+            visibility_scope=form.visibility_scope,
+            chunk_size_chars=form.chunk_size_chars,
+            chunk_overlap_chars=form.chunk_overlap_chars,
             metadata=metadata,
         )
-        content = await file.read()
+        content = await form.file.read()
 
         try:
             return ingestion_service.ingest_file(
                 actor_user_id=UUID(actor["user_id"]),
                 payload=payload,
-                file_request=_build_file_ingest_request(upload=file, content_bytes=content),
+                file_request=_build_file_ingest_request(upload=form.file, content_bytes=content),
             )
         except IngestionServiceError as exc:
             raise _to_http_exception(exc) from exc

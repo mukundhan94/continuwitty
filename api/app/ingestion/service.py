@@ -55,6 +55,15 @@ class ChunkBuildRequest:
 class DocumentIngestionService:
     """Coordinates document ingestion, chunking, and blended retrieval responses."""
 
+    _ALLOWED_FILE_MIME_TYPES = {
+        "application/json",
+        "application/xml",
+        "text/csv",
+        "text/markdown",
+        "text/plain",
+        "text/xml",
+    }
+
     def __init__(
         self,
         *,
@@ -100,7 +109,21 @@ class DocumentIngestionService:
                 status_code=415,
             ) from exc
 
+    def _validate_file_mime_type(self, *, mime_type: str | None) -> None:
+        normalized = (mime_type or "").strip().lower()
+        if not normalized:
+            return
+        if normalized.startswith("text/"):
+            return
+        if normalized in self._ALLOWED_FILE_MIME_TYPES:
+            return
+        raise IngestionServiceError(
+            "Unsupported file type. Upload a UTF-8 text-based document.",
+            status_code=415,
+        )
+
     def _validate_file_input(self, *, request: FileIngestRequest) -> str:
+        self._validate_file_mime_type(mime_type=request.mime_type)
         self._validate_file_size(content_bytes=request.content_bytes)
         decoded = self._decode_file_text(content_bytes=request.content_bytes)
         normalized_text = normalize_document_text(decoded)

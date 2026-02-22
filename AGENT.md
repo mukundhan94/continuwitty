@@ -165,6 +165,8 @@ Before merging refactors:
 - Typed MCP client helpers (Python + TypeScript) alongside the server ensure contract parity and catch drift early.
 - Fill-empty-only metadata enrichment preserves caller intent while enabling zero-config agent persistence.
 - Token scope + allowlist + project policy model provides flexible least-privilege for external MCP agents.
+- Production fail-fast config validation prevents insecure session/token/OAuth defaults from booting in `APP_ENV=production`.
+- MCP transport throttling plus login lockout controls should be enforced via distributed state (`rate_limit_state`) rather than process-local memory.
 - Soft-delete with `deleted_at`/`delete_reason`/`deleted_by_user_id` columns enables safe reversible operations with audit trail.
 - Project-default writes are contractually explicit via `resolved_project_id` + `used_default_project` fields where supported.
 - Collection/project boundaries are enforced at mutation time; cross-project engram moves purge invalid collection memberships.
@@ -174,6 +176,7 @@ Before merging refactors:
 - Never use raw SQL in service or MCP layers — all DB access through repositories.
 - Never hardcode color/font values in React components — always use theme tokens from `web/src/styles/theme.ts`.
 - Never change MCP tool names — they are stable contracts for external agents (underscored aliases for compatibility only).
+- Never permit OAuth `plain` PKCE or unprotected dynamic registration in production paths.
 - SSE stream parsing must handle both `\n\n` and `\r\n\r\n` framing boundaries.
 - Frontend redirect detection must handle `opaqueredirect` and `status 0` from `fetch` with manual redirect mode.
 - Bedrock errors must be classified specifically (`ValidationException` vs auth vs throttle) rather than treated as generic failures.

@@ -1,3 +1,4 @@
+import hashlib
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,11 +15,16 @@ from .agent_workflow import AgentWorkflowService
 from .audit import log_audit_event
 from .auth import generate_csrf_token, hash_password, verify_password
 from .chat import ChatService, create_chat_router
-from .config import build_debug_settings_snapshot, get_settings, should_log_settings
+from .config import (
+    build_debug_settings_snapshot,
+    get_settings,
+    is_production_env,
+    should_log_settings,
+)
 from .db import ensure_schema_initialized
 from .export import ExportService, create_export_router
 from .ingestion import DocumentIngestionService, create_ingestion_router
-from .login_guard import LoginAttemptGuard
+from .login_guard import LoginAttemptGuard, RequestRateLimiter
 from .main_api_router import MainApiRouterDependencies, create_main_api_router
 from .mcp import McpService, McpServiceDependencies, create_mcp_router
 from .mcp.auth import McpResolvedActor, resolve_mcp_actor
@@ -62,6 +68,8 @@ async def lifespan(_app: FastAPI):
     try:
         ensure_schema_initialized()
     except Exception as exc:  # pragma: no cover - defensive for local startup mismatches
+        if is_production_env(current_settings):
+            raise
         print(f"[warn] failed to initialize schema: {exc}")
     yield
     with suppress(Exception):
@@ -87,6 +95,12 @@ login_attempt_guard = LoginAttemptGuard(
     max_attempts=settings.login_rate_limit_max_attempts,
     window_seconds=settings.login_rate_limit_window_seconds,
     lockout_seconds=settings.login_lockout_seconds,
+)
+mcp_transport_rate_limiter = RequestRateLimiter(
+    max_requests=settings.mcp_transport_rate_limit_max_requests,
+    window_seconds=settings.mcp_transport_rate_limit_window_seconds,
+    block_seconds=settings.mcp_transport_rate_limit_block_seconds,
+    namespace="mcp_transport",
 )
 chat_service = ChatService(embedding_dim=settings.embedding_dim)
 project_service = ProjectService()
@@ -256,6 +270,37 @@ def _login_attempt_key(request: Request, username: str) -> str:
     return f"{username.lower()}:{_client_ip(request)}"
 
 
+def _authorization_fingerprint(request: Request) -> str:
+    authorization = (request.headers.get("authorization") or "").strip()
+    if not authorization:
+        return "anonymous"
+    digest = hashlib.sha256(authorization.encode()).hexdigest()
+    return digest[:24]
+
+
+def _mcp_transport_rate_limit_key(request: Request) -> str:
+    return f"{_client_ip(request)}:{_authorization_fingerprint(request)}"
+
+
+def _enforce_mcp_transport_rate_limit(request: Request) -> None:
+    allowed, retry_seconds = mcp_transport_rate_limiter.consume(
+        _mcp_transport_rate_limit_key(request)
+    )
+    if allowed:
+        return
+    log_audit_event(
+        request=request,
+        event_type="mcp_transport_rate_limited",
+        success=False,
+        detail=f"retry_in_seconds={retry_seconds}",
+    )
+    raise HTTPException(
+        status_code=429,
+        detail=f"Too many MCP transport requests. Retry in {retry_seconds} seconds.",
+        headers={"Retry-After": str(retry_seconds)},
+    )
+
+
 def _authenticate_user(username: str, password: str) -> dict[str, Any] | None:
     try:
         user = get_user_auth_record(username)
@@ -343,12 +388,14 @@ app.include_router(
     create_mcp_router(
         mcp_service=mcp_service,
         resolve_mcp_actor=_resolve_mcp_actor,
+        enforce_transport_rate_limit=_enforce_mcp_transport_rate_limit,
     )
 )
 app.include_router(
     create_ingestion_router(
         ingestion_service=ingestion_service,
         require_api_actor=_require_authenticated_api_user,
+        max_metadata_json_bytes=settings.ingestion_max_metadata_json_bytes,
     )
 )
 app.include_router(

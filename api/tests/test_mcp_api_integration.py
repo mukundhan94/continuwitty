@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+import app.main as main_module
 from tests.mcp_api_integration_helpers import (
     _final_result_frame,
     _login,
@@ -17,6 +18,37 @@ def test_mcp_stream_requires_authentication(client, clean_db) -> None:
         json={"jsonrpc": "2.0", "id": "1", "method": "user.get_profile", "params": {}},
     )
     assert response.status_code == 401
+
+
+@pytest.mark.integration
+def test_mcp_stream_enforces_transport_rate_limit(client, clean_db, monkeypatch) -> None:
+    monkeypatch.setattr(
+        main_module,
+        "mcp_transport_rate_limiter",
+        main_module.RequestRateLimiter(
+            max_requests=1,
+            window_seconds=60,
+            block_seconds=60,
+            namespace="test-mcp-transport",
+        ),
+    )
+    _login(client)
+
+    first = client.post(
+        "/api/v1/mcp/stream",
+        json={"jsonrpc": "2.0", "id": "first", "method": "initialize", "params": {}},
+        headers={"Accept": "application/json"},
+    )
+    assert first.status_code == 200
+
+    second = client.post(
+        "/api/v1/mcp/stream",
+        json={"jsonrpc": "2.0", "id": "second", "method": "initialize", "params": {}},
+        headers={"Accept": "application/json"},
+    )
+    assert second.status_code == 429
+    assert "Retry-After" in second.headers
+    assert "Too many MCP transport requests" in second.json()["detail"]
 
 
 @pytest.mark.integration

@@ -116,3 +116,26 @@ def test_ingestion_file_and_blended_query_flow(client, clean_db) -> None:
     body = blended.json()
     assert len(body["engrams"]) >= 1
     assert len(body["document_chunks"]) >= 1
+
+
+@pytest.mark.integration
+def test_ingestion_file_rejects_oversized_metadata_json(client, clean_db) -> None:
+    _login(client)
+    oversized_value = "x" * 25_000
+
+    upload = client.post(
+        "/api/v1/ingestion/file",
+        data={
+            "project_id": "engram-vault",
+            "metadata_json": f'{{"note":"{oversized_value}"}}',
+        },
+        files={
+            "file": (
+                "notes.txt",
+                "Queue depth exceeded threshold for 20 minutes.",
+                "text/plain",
+            )
+        },
+    )
+    assert upload.status_code == 413
+    assert "metadata_json exceeds max allowed size" in upload.json()["detail"]

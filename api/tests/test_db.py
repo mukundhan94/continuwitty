@@ -8,11 +8,17 @@ from app import db
 class _SettingsStub:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
+        self.app_env = "development"
+        self.ui_demo_username = "admin"
+        self.ui_demo_password = "admin123"
+        self.ui_demo_password_hash = None
 
 
 class _FakeCursor:
     def __init__(self) -> None:
         self.executed_sql: list[str] = []
+        self.executed_params: list[tuple[object, ...] | None] = []
+        self.fetchone_value = None
 
     def __enter__(self) -> _FakeCursor:
         return self
@@ -20,8 +26,12 @@ class _FakeCursor:
     def __exit__(self, exc_type, exc, tb) -> None:
         return None
 
-    def execute(self, sql: str) -> None:
+    def execute(self, sql: str, params=None) -> None:  # noqa: ANN001
         self.executed_sql.append(sql)
+        self.executed_params.append(params)
+
+    def fetchone(self):  # noqa: ANN201
+        return self.fetchone_value
 
 
 class _FakeConnection:
@@ -106,3 +116,31 @@ def test_ensure_schema_initialized_executes_schema_sql(monkeypatch) -> None:
     assert connect_calls == ["postgresql://example/svc"]
     assert fake_cursor.executed_sql == ["SELECT 1;"]
     assert fake_connection.commits == 1
+
+
+def test_harden_bootstrap_admin_credentials_updates_default_hash(monkeypatch) -> None:
+    fake_cursor = _FakeCursor()
+    fake_cursor.fetchone_value = (db._DEFAULT_BOOTSTRAP_ADMIN_HASH,)
+
+    monkeypatch.setattr(db, "hash_password", lambda _password: "hashed-replacement")
+    settings = _SettingsStub("postgresql://example/svc")
+    settings.app_env = "production"
+    settings.ui_demo_username = "admin"
+    settings.ui_demo_password = "StrongPassword-12345"
+
+    db._harden_bootstrap_admin_credentials(cur=fake_cursor, settings=settings)
+
+    assert any("SELECT password_hash" in sql for sql in fake_cursor.executed_sql)
+    assert any("UPDATE users" in sql for sql in fake_cursor.executed_sql)
+
+
+def test_harden_bootstrap_admin_credentials_skips_non_default_hash(monkeypatch) -> None:
+    fake_cursor = _FakeCursor()
+    fake_cursor.fetchone_value = ("custom-password-hash",)
+    settings = _SettingsStub("postgresql://example/svc")
+    settings.app_env = "production"
+
+    db._harden_bootstrap_admin_credentials(cur=fake_cursor, settings=settings)
+
+    assert any("SELECT password_hash" in sql for sql in fake_cursor.executed_sql)
+    assert not any("UPDATE users" in sql for sql in fake_cursor.executed_sql)

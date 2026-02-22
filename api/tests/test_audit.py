@@ -77,3 +77,37 @@ def test_log_audit_event_omits_optional_fields_when_missing(tmp_path: Path, monk
     assert "username" not in payload
     assert "detail" not in payload
     assert "metadata" not in payload
+
+
+def test_log_audit_event_truncates_oversized_payload(tmp_path: Path, monkeypatch) -> None:
+    log_path = tmp_path / "logs" / "audit_events.jsonl"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(log_path))
+    monkeypatch.setenv("AUDIT_LOG_MAX_EVENT_BYTES", "1024")
+
+    log_audit_event(
+        request=_build_request(method="POST", path="/api/v1/mcp/stream", client_host="10.0.0.12"),
+        event_type="mcp_transport_rate_limited",
+        success=False,
+        detail="x" * 5000,
+        metadata={"payload": "y" * 5000},
+    )
+
+    payload = _read_single_event(log_path)
+    assert payload["event_type"] == "mcp_transport_rate_limited"
+    assert payload["metadata"] == {"truncated": True}
+    assert "truncated" in str(payload["detail"])
+
+
+def test_log_audit_event_writes_stdout_when_enabled(tmp_path: Path, monkeypatch, capsys) -> None:
+    log_path = tmp_path / "logs" / "audit_events.jsonl"
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(log_path))
+    monkeypatch.setenv("AUDIT_LOG_STDOUT_ENABLED", "true")
+
+    log_audit_event(
+        request=_build_request(method="GET", path="/healthz", client_host="127.0.0.1"),
+        event_type="healthcheck",
+        success=True,
+    )
+
+    captured = capsys.readouterr()
+    assert "healthcheck" in captured.out

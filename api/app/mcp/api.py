@@ -80,6 +80,7 @@ def create_mcp_router(
     *,
     mcp_service: McpService,
     resolve_mcp_actor: Callable[[Request], McpResolvedActor],
+    enforce_transport_rate_limit: Callable[[Request], None] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/mcp", tags=["mcp"])
     logger.info(
@@ -112,6 +113,8 @@ def create_mcp_router(
 
     @router.post("/stream")
     def mcp_stream(request: Request, payload: McpJsonRpcRequest):
+        if enforce_transport_rate_limit is not None:
+            enforce_transport_rate_limit(request)
         actor_context = resolve_mcp_actor(request)
         if payload.id is None:
             # JSON-RPC notifications intentionally do not carry `id` and must

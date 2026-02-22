@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from ..config import Settings
 
 SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS = {"none", "client_secret_post"}
-SUPPORTED_CODE_CHALLENGE_METHODS = {"S256", "plain"}
+SUPPORTED_CODE_CHALLENGE_METHODS = {"S256"}
 SUPPORTED_GRANT_TYPES = {"authorization_code"}
 SUPPORTED_RESPONSE_TYPES = {"code"}
 MCP_SCOPES = ["mcp:read", "mcp:write"]

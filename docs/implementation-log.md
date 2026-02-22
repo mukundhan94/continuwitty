@@ -11,8 +11,60 @@
 
 1. Ran CodeScene MCP pre-commit health gate on the working tree:
    - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
-   - result: `quality_gates=passed`
-   - findings: none
+  - result: `quality_gates=passed`
+  - findings: none
+
+### 2026-02-22 (Phase 34 security audit remediation program)
+
+1. Implemented production config hardening with fail-fast validation:
+   - `api/app/config.py`
+   - production startup now rejects insecure defaults/short values for:
+     - `APP_SESSION_SECRET`
+     - `MCP_TOKEN_PEPPER`
+     - `OAUTH_CLIENT_SECRET_PEPPER`
+     - `UI_DEMO_PASSWORD`
+   - added `OAUTH_REQUIRE_PROTECTED_REGISTRATION` enforcement for production.
+2. Hardened bootstrap auth behavior for production deployments:
+   - `api/app/db.py`
+   - if seeded bootstrap admin hash is detected in production, rotate to configured secure password/hash during schema initialization.
+3. Added distributed rate limiting backed by `rate_limit_state`:
+   - `db/init/001_schema.sql` (`rate_limit_state` table + indexes)
+   - `api/app/login_guard.py` now supports DB-backed login lockout state.
+   - added `RequestRateLimiter` and wired MCP transport throttling into:
+     - `api/app/main.py`
+     - `api/app/mcp/api.py`
+4. Applied OAuth hardening:
+   - `PKCE S256` only (`plain` removed from supported methods).
+   - dynamic client registration (`POST /oauth/register`) now requires an authenticated admin session when protected registration is enabled.
+5. Applied ingestion and audit hardening:
+   - ingestion file MIME allowlist + metadata JSON size guard.
+   - audit logging now sanitizes payloads, truncates oversized events, and supports stdout emission for centralized log collection.
+6. Added security-focused regression coverage:
+   - API/unit/integration:
+     - `api/tests/test_config_settings.py`
+     - `api/tests/test_db.py`
+     - `api/tests/test_login_guard.py`
+     - `api/tests/test_mcp_api_integration.py`
+     - `api/tests/test_oauth_api_unit.py`
+     - `api/tests/test_oauth_service.py`
+     - `api/tests/test_mcp_oauth_integration.py`
+     - `api/tests/test_ingestion_service.py`
+     - `api/tests/test_ingestion_api_integration.py`
+     - `api/tests/test_audit.py`
+   - acceptance:
+     - `acceptance-tests/features/authentication.feature`
+     - `acceptance-tests/src/steps/auth.steps.ts`
+7. Updated docs and env references:
+   - `.env.example`
+   - `docs/env-reference.md`
+   - `docs/api-reference.md`
+   - `docs/mcp-guide.md`
+   - `AGENT.md` security contracts.
+8. Verification:
+   - `cd api && uv run ruff check ...` (all touched backend/test files)
+   - `cd api && uv run pytest -q tests/test_config_settings.py tests/test_oauth_service.py tests/test_oauth_api_unit.py tests/test_mcp_oauth_integration.py tests/test_login_guard.py tests/test_mcp_api_integration.py tests/test_ingestion_service.py tests/test_ingestion_api_integration.py tests/test_audit.py tests/test_db.py`
+   - `cd acceptance-tests && npm run bdd:gen`
+   - `cd acceptance-tests && npm run typecheck`
 
 ### 2026-02-22 (Phase 16 CLI smoke utility: `engram-cli mcp-call`)
 

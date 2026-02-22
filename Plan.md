@@ -753,8 +753,8 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- Planned.
-- This phase executes remediation work from the audit backlog in priority order.
+- Completed (2026-02-22).
+- Remediation work shipped across config/session hardening, distributed throttling, OAuth protections, ingestion/logging controls, and regression coverage.
 
 ### Goals
 

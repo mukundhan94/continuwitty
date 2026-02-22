@@ -50,7 +50,7 @@ def test_ingest_text_rejects_overlap_not_smaller_than_chunk_size() -> None:
                 content_bytes=b"\x80\x81\x82",
             ),
             415,
-            "Only UTF-8 text files are supported in this phase",
+            "Unsupported file type. Upload a UTF-8 text-based document.",
         ),
         (
             FileIngestRequest(

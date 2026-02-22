@@ -116,8 +116,6 @@ def validate_pkce(
     challenge = (code_challenge or "").strip()
     if not verifier or not challenge:
         return False
-    if method == "plain":
-        return hmac.compare_digest(verifier, challenge)
     if method == "S256":
         digest = hashlib.sha256(verifier.encode()).digest()
         encoded = base64.urlsafe_b64encode(digest).decode().rstrip("=")

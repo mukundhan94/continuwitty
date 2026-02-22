@@ -189,6 +189,22 @@ CREATE INDEX IF NOT EXISTS mcp_tokens_active_idx
   ON mcp_tokens (owner_user_id, expires_at)
   WHERE revoked_at IS NULL;
 
+CREATE TABLE IF NOT EXISTS rate_limit_state (
+  namespace TEXT NOT NULL,
+  rate_key TEXT NOT NULL,
+  event_count INTEGER NOT NULL DEFAULT 0 CHECK (event_count >= 0),
+  window_started_at TIMESTAMPTZ NOT NULL,
+  blocked_until TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (namespace, rate_key)
+);
+
+CREATE INDEX IF NOT EXISTS rate_limit_state_namespace_updated_idx
+  ON rate_limit_state (namespace, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS rate_limit_state_namespace_blocked_idx
+  ON rate_limit_state (namespace, blocked_until DESC);
+
 CREATE TABLE IF NOT EXISTS oauth_clients (
   client_id TEXT PRIMARY KEY,
   client_name TEXT NOT NULL,
@@ -213,13 +229,39 @@ CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
   redirect_uri TEXT NOT NULL,
   code_challenge TEXT NOT NULL,
   code_challenge_method TEXT NOT NULL DEFAULT 'S256'
-    CHECK (code_challenge_method IN ('S256', 'plain')),
+    CHECK (code_challenge_method = 'S256'),
   requested_scope TEXT NOT NULL DEFAULT '',
   resource TEXT,
   expires_at TIMESTAMPTZ NOT NULL,
   consumed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'oauth_authorization_codes_code_challenge_method_check'
+  ) THEN
+    ALTER TABLE oauth_authorization_codes
+      DROP CONSTRAINT oauth_authorization_codes_code_challenge_method_check;
+  END IF;
+END $$;
+
+DELETE FROM oauth_authorization_codes
+WHERE code_challenge_method <> 'S256';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'oauth_authorization_codes_code_challenge_method_check'
+  ) THEN
+    ALTER TABLE oauth_authorization_codes
+      ADD CONSTRAINT oauth_authorization_codes_code_challenge_method_check
+      CHECK (code_challenge_method = 'S256');
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS oauth_authorization_codes_client_expires_idx
   ON oauth_authorization_codes (client_id, expires_at DESC);

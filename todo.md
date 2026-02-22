@@ -15,7 +15,7 @@
 ## Near-Term (Next Phases)
 
 - [x] Phase 33: portable export/import stash workflow (project + collections + engrams) with owner/admin authorization and round-trip tests
-- [ ] Phase 34: security audit remediation program (critical defaults, auth/session hardening, MCP/OAuth protections)
+- [x] Phase 34: security audit remediation program (critical defaults, auth/session hardening, MCP/OAuth protections)
 - [ ] Phase 19: implement project membership and scoped sharing/revocation flows with audit trails
 - [ ] Phase 20: OIDC integration + distributed rate-limit strategy + production auth hardening tests
 - [ ] Phase 21: observability and reliability

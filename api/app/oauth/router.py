@@ -65,10 +65,15 @@ def _register_oauth_client_registration_route(
     *,
     router: APIRouter,
     settings: Settings,
+    resolve_session_user: Callable[[Request], dict[str, Any] | None],
 ) -> None:
     @router.post("/oauth/register")
-    def oauth_register_client(payload: OAuthClientRegistrationRequest) -> JSONResponse:
-        return _handle_oauth_register(settings=settings, payload=payload)
+    def oauth_register_client(request: Request, payload: OAuthClientRegistrationRequest) -> JSONResponse:
+        return _handle_oauth_register(
+            settings=settings,
+            payload=payload,
+            session_user=resolve_session_user(request),
+        )
 
 
 def _register_oauth_authorization_routes(
@@ -134,7 +139,11 @@ def create_oauth_router(
 ) -> APIRouter:
     router = APIRouter(tags=["oauth"])
     _register_oauth_well_known_routes(router=router, settings=settings)
-    _register_oauth_client_registration_route(router=router, settings=settings)
+    _register_oauth_client_registration_route(
+        router=router,
+        settings=settings,
+        resolve_session_user=resolve_session_user,
+    )
     _register_oauth_authorization_routes(
         router=router,
         settings=settings,

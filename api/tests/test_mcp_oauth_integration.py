@@ -63,6 +63,7 @@ def test_oauth_metadata_exposes_dynamic_registration(client, clean_db) -> None:
     assert payload["token_endpoint"].endswith("/oauth/token")
     assert payload["registration_endpoint"].endswith("/oauth/register")
     assert "authorization_code" in payload["grant_types_supported"]
+    assert payload["code_challenge_methods_supported"] == ["S256"]
 
     protected = client.get("/.well-known/oauth-protected-resource")
     assert protected.status_code == 200
@@ -73,6 +74,7 @@ def test_oauth_metadata_exposes_dynamic_registration(client, clean_db) -> None:
 
 @pytest.mark.integration
 def test_oauth_authorize_redirects_to_login_with_next(client, clean_db) -> None:
+    _login(client)
     register = client.post(
         "/oauth/register",
         json={
@@ -85,6 +87,7 @@ def test_oauth_authorize_redirects_to_login_with_next(client, clean_db) -> None:
     )
     assert register.status_code == 201
     registered = register.json()
+    client.cookies.clear()
 
     verifier = "oauth-next-verifier"
     authorize = client.get(
@@ -124,6 +127,7 @@ def test_oauth_authorize_redirects_to_login_with_next(client, clean_db) -> None:
 
 @pytest.mark.integration
 def test_oauth_authorization_code_exchange_issues_mcp_bearer_token(client, clean_db) -> None:
+    _login(client)
     register = client.post(
         "/oauth/register",
         json={
@@ -137,7 +141,6 @@ def test_oauth_authorization_code_exchange_issues_mcp_bearer_token(client, clean
     assert register.status_code == 201
     registered = register.json()
 
-    _login(client)
     verifier = "oauth-code-verifier-123"
     authorize = client.get(
         "/oauth/authorize",
@@ -187,6 +190,7 @@ def test_oauth_authorization_code_exchange_issues_mcp_bearer_token(client, clean
 
 @pytest.mark.integration
 def test_oauth_token_rejects_invalid_pkce_verifier(client, clean_db) -> None:
+    _login(client)
     register = client.post(
         "/oauth/register",
         json={
@@ -197,7 +201,6 @@ def test_oauth_token_rejects_invalid_pkce_verifier(client, clean_db) -> None:
     assert register.status_code == 201
     registered = register.json()
 
-    _login(client)
     verifier = "oauth-valid-verifier"
     authorize = client.get(
         "/oauth/authorize",
@@ -230,6 +233,7 @@ def test_oauth_token_rejects_invalid_pkce_verifier(client, clean_db) -> None:
 
 @pytest.mark.integration
 def test_oauth_token_requires_client_secret_for_confidential_clients(client, clean_db) -> None:
+    _login(client)
     register = client.post(
         "/oauth/register",
         json={
@@ -241,7 +245,6 @@ def test_oauth_token_requires_client_secret_for_confidential_clients(client, cle
     assert register.status_code == 201
     registered = register.json()
 
-    _login(client)
     authorize = client.get(
         "/oauth/authorize",
         params={
@@ -268,6 +271,20 @@ def test_oauth_token_requires_client_secret_for_confidential_clients(client, cle
     assert token_response.status_code == 401
     assert token_response.json()["error"] == "invalid_client"
     assert token_response.headers["www-authenticate"] == 'Bearer realm="engram-oauth"'
+
+
+@pytest.mark.integration
+def test_oauth_register_requires_authenticated_admin_session(client, clean_db) -> None:
+    response = client.post(
+        "/oauth/register",
+        json={
+            "client_name": "unauthenticated-client",
+            "redirect_uris": ["http://127.0.0.1:33418"],
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"] == "invalid_client"
 
 
 @pytest.mark.integration

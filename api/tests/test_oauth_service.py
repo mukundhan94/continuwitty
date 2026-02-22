@@ -29,20 +29,20 @@ def test_token_scope_maps_write_scope() -> None:
     assert token_scope_from_oauth_scope("mcp:read") == "read"
 
 
-def test_validate_pkce_s256_and_plain() -> None:
+def test_validate_pkce_s256_only() -> None:
     verifier = "pkce-verifier-example"
     assert validate_pkce(
         code_verifier=verifier,
         code_challenge=_s256_challenge(verifier),
         code_challenge_method="S256",
     )
-    assert validate_pkce(
-        code_verifier=verifier,
-        code_challenge=verifier,
-        code_challenge_method="plain",
-    )
     assert not validate_pkce(
         code_verifier="wrong",
         code_challenge=_s256_challenge(verifier),
         code_challenge_method="S256",
+    )
+    assert not validate_pkce(
+        code_verifier=verifier,
+        code_challenge=verifier,
+        code_challenge_method="plain",
     )

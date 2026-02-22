@@ -124,7 +124,7 @@ Sign in via `POST /login` with form credentials to obtain a session cookie.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/mcp/stream` | MCP JSON-RPC over SSE |
+| `POST` | `/api/v1/mcp/stream` | MCP JSON-RPC over SSE (rate-limited, returns `429` with `Retry-After`) |
 
 ### OAuth
 
@@ -133,9 +133,9 @@ Sign in via `POST /login` with form credentials to obtain a session cookie.
 | `GET` | `/.well-known/oauth-authorization-server` | OAuth server metadata |
 | `GET` | `/.well-known/openid-configuration` | OpenID configuration |
 | `GET` | `/.well-known/oauth-protected-resource` | Protected resource metadata |
-| `POST` | `/oauth/register` | Dynamic client registration |
+| `POST` | `/oauth/register` | Protected dynamic client registration (admin session required) |
 | `GET` | `/oauth/authorize` | Authorization endpoint |
-| `POST` | `/oauth/token` | Token exchange |
+| `POST` | `/oauth/token` | Token exchange (PKCE `S256` only) |
 
 ### Agent Runs
 

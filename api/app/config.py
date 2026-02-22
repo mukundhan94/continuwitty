@@ -3,7 +3,7 @@ from functools import lru_cache
 from importlib import metadata
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _SENSITIVE_SETTING_KEYS = {
@@ -23,6 +23,45 @@ _SENSITIVE_SETTING_KEYS = {
 }
 
 _DEV_ENV_NAMES = {"dev", "development", "local"}
+_PRODUCTION_ENV_NAMES = {"prod", "production"}
+_MIN_SECRET_LENGTH = 32
+_MIN_PASSWORD_LENGTH = 12
+_DEFAULT_SESSION_SECRET = "engram-local-dev-session-secret"
+_DEFAULT_MCP_TOKEN_PEPPER = "engram-local-dev-mcp-token-pepper"
+_DEFAULT_OAUTH_CLIENT_SECRET_PEPPER = "engram-local-dev-oauth-client-pepper"
+_DEFAULT_UI_DEMO_PASSWORD = "admin123"
+_WEAK_PASSWORD_VALUES = {
+    "admin",
+    "admin123",
+    "changeme",
+    "password",
+}
+
+
+def _append_secret_violations(
+    *,
+    violations: list[str],
+    name: str,
+    value: str,
+    insecure_default: str,
+) -> None:
+    normalized = (value or "").strip()
+    if normalized == insecure_default:
+        violations.append(f"{name} cannot use the development default in production")
+    if len(normalized) < _MIN_SECRET_LENGTH:
+        violations.append(f"{name} must be at least {_MIN_SECRET_LENGTH} characters in production")
+
+
+def _demo_password_violations(password: str) -> list[str]:
+    normalized = (password or "").strip()
+    issues: list[str] = []
+    if len(normalized) < _MIN_PASSWORD_LENGTH:
+        issues.append(
+            f"UI_DEMO_PASSWORD must be at least {_MIN_PASSWORD_LENGTH} characters in production"
+        )
+    if normalized.lower() in _WEAK_PASSWORD_VALUES:
+        issues.append("UI_DEMO_PASSWORD uses a weak value in production")
+    return issues
 
 
 def _default_semantic_version() -> str:
@@ -64,17 +103,23 @@ class Settings(BaseSettings):
     embedding_timeout_seconds: float = 20.0
     ingestion_max_file_bytes: int = 2_000_000
     ingestion_max_text_chars: int = 200_000
+    ingestion_max_metadata_json_bytes: int = 20_000
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    app_session_secret: str = "engram-local-dev-session-secret"
+    app_session_secret: str = _DEFAULT_SESSION_SECRET
     ui_demo_username: str = "admin"
-    ui_demo_password: str = "admin123"
+    ui_demo_password: str = _DEFAULT_UI_DEMO_PASSWORD
     ui_demo_password_hash: str | None = None
     langgraph_checkpoint_path: str = "./data/langgraph_checkpoints.sqlite"
     audit_log_path: str = "./data/audit_events.jsonl"
+    audit_log_stdout_enabled: bool = False
+    audit_log_max_event_bytes: int = 32_768
     login_rate_limit_window_seconds: int = 300
     login_rate_limit_max_attempts: int = 5
     login_lockout_seconds: int = 900
+    mcp_transport_rate_limit_window_seconds: int = 60
+    mcp_transport_rate_limit_max_requests: int = 120
+    mcp_transport_rate_limit_block_seconds: int = 30
     default_chat_provider: str = "openai"
     default_chat_model: str = "gpt-4o-mini"
     chat_debug_enabled: bool = True
@@ -93,18 +138,52 @@ class Settings(BaseSettings):
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
     aws_session_token: str | None = None
-    mcp_token_pepper: str = "engram-local-dev-mcp-token-pepper"
+    mcp_token_pepper: str = _DEFAULT_MCP_TOKEN_PEPPER
     oauth_enabled: bool = True
     oauth_issuer_url: str | None = None
+    oauth_require_protected_registration: bool = True
     oauth_access_token_ttl_seconds: int = 3600
     oauth_authorization_code_ttl_seconds: int = 300
-    oauth_client_secret_pepper: str = "engram-local-dev-oauth-client-pepper"
+    oauth_client_secret_pepper: str = _DEFAULT_OAUTH_CLIENT_SECRET_PEPPER
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        if self.app_env.strip().lower() not in _PRODUCTION_ENV_NAMES:
+            return self
+
+        violations: list[str] = []
+        _append_secret_violations(
+            violations=violations,
+            name="APP_SESSION_SECRET",
+            value=self.app_session_secret,
+            insecure_default=_DEFAULT_SESSION_SECRET,
+        )
+        _append_secret_violations(
+            violations=violations,
+            name="MCP_TOKEN_PEPPER",
+            value=self.mcp_token_pepper,
+            insecure_default=_DEFAULT_MCP_TOKEN_PEPPER,
+        )
+        _append_secret_violations(
+            violations=violations,
+            name="OAUTH_CLIENT_SECRET_PEPPER",
+            value=self.oauth_client_secret_pepper,
+            insecure_default=_DEFAULT_OAUTH_CLIENT_SECRET_PEPPER,
+        )
+        violations.extend(_demo_password_violations(self.ui_demo_password))
+
+        if not self.oauth_require_protected_registration:
+            violations.append("OAUTH_REQUIRE_PROTECTED_REGISTRATION must be enabled in production")
+
+        if violations:
+            raise ValueError("; ".join(violations))
+        return self
 
 
 @lru_cache
@@ -122,3 +201,7 @@ def build_debug_settings_snapshot(settings: Settings) -> dict[str, object]:
 
 def should_log_settings(settings: Settings) -> bool:
     return settings.log_config_in_dev and settings.app_env.strip().lower() in _DEV_ENV_NAMES
+
+
+def is_production_env(settings: Settings) -> bool:
+    return settings.app_env.strip().lower() in _PRODUCTION_ENV_NAMES

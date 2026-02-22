@@ -27,6 +27,7 @@ class _RedirectValidationCase:
 def _settings() -> SimpleNamespace:
     return SimpleNamespace(
         oauth_enabled=True,
+        oauth_require_protected_registration=True,
         oauth_client_secret_pepper="oauth-pepper",
         oauth_issuer_url="",
         mcp_token_pepper="mcp-pepper",
@@ -59,7 +60,7 @@ def _oauth_code_record(
     client_id: str = "engram_client_test",
     redirect_uri: str = "https://example.com/callback",
     code_challenge: str = "challenge",
-    code_challenge_method: str = "plain",
+    code_challenge_method: str = "S256",
 ) -> OAuthAuthorizationCodeRecord:
     now = datetime.now(UTC)
     return OAuthAuthorizationCodeRecord(
@@ -155,7 +156,11 @@ def test_handle_oauth_register_normalizes_lists_and_issues_secret(monkeypatch) -
         token_endpoint_auth_method="client_secret_post",
     )
 
-    response = oauth_registration._handle_oauth_register(settings=_settings(), payload=payload)
+    response = oauth_registration._handle_oauth_register(
+        settings=_settings(),
+        payload=payload,
+        session_user={"user_id": str(uuid4()), "username": "admin", "role": "admin"},
+    )
 
     assert response.status_code == 201
     response_payload = json.loads(response.body)
@@ -168,6 +173,31 @@ def test_handle_oauth_register_normalizes_lists_and_issues_secret(monkeypatch) -
     assert captured_args["grant_types"] == ["authorization_code"]
     assert captured_args["response_types"] == ["code"]
     assert captured_args["client_secret_hash"] == "hashed-secret"
+
+
+@pytest.mark.parametrize(
+    ("session_user", "expected_status", "expected_error"),
+    [
+        (None, 401, "invalid_client"),
+        ({"user_id": "user-1", "username": "analyst", "role": "analyst"}, 403, "insufficient_privilege"),
+    ],
+)
+def test_handle_oauth_register_rejects_unauthorized_session_user(
+    session_user: dict[str, str] | None,
+    expected_status: int,
+    expected_error: str,
+) -> None:
+    response = oauth_registration._handle_oauth_register(
+        settings=_settings(),
+        payload=oauth_registration.OAuthClientRegistrationRequest(
+            redirect_uris=["https://example.com/callback"],
+        ),
+        session_user=session_user,
+    )
+
+    assert response.status_code == expected_status
+    payload = json.loads(response.body)
+    assert payload["error"] == expected_error
 
 
 def test_oauth_authorize_redirects_to_login_when_session_missing(monkeypatch) -> None:
@@ -203,7 +233,18 @@ def test_oauth_authorize_redirects_to_login_when_session_missing(monkeypatch) ->
     assert response.headers["location"].startswith("/login?next=")
 
 
-def test_validate_authorize_request_requires_pkce_for_public_client() -> None:
+@pytest.mark.parametrize(
+    ("code_challenge", "code_challenge_method", "expected_error_snippet"),
+    [
+        (None, "S256", "code_challenge+is+required+for+public+clients"),
+        ("verifier", "plain", "Unsupported+code_challenge_method"),
+    ],
+)
+def test_validate_authorize_request_rejects_invalid_pkce_inputs(
+    code_challenge: str | None,
+    code_challenge_method: str,
+    expected_error_snippet: str,
+) -> None:
     method, error = oauth_api._validate_authorize_request(
         client=_oauth_client_record(token_endpoint_auth_method="none"),
         payload=oauth_api.OAuthAuthorizeRequest(
@@ -212,8 +253,8 @@ def test_validate_authorize_request_requires_pkce_for_public_client() -> None:
             redirect_uri="https://example.com/callback",
             state="state-1",
             scope="mcp:read",
-            code_challenge=None,
-            code_challenge_method="S256",
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
             resource=None,
         ),
     )
@@ -221,7 +262,7 @@ def test_validate_authorize_request_requires_pkce_for_public_client() -> None:
     assert method is None
     assert error is not None
     assert error.status_code == 303
-    assert "code_challenge+is+required+for+public+clients" in error.headers["location"]
+    assert expected_error_snippet in error.headers["location"]
 
 
 def test_validate_authorization_code_exchange_rejects_redirect_mismatch() -> None:
