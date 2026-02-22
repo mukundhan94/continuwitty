@@ -21,7 +21,8 @@
 | CP6 | 2026-02-22 | Completed | Embeddings baseline (local + fallback service parity tests) |
 | CP7 | 2026-02-22 | Completed | Repository helper baseline for engram query/rerank/rehydration formatting parity |
 | CP8 | 2026-02-22 | Completed | Engram repository DB read parity (`list_engrams` + `query_engrams`) with migrated tests |
-| CP9 | 2026-02-22 | In Progress | Engram repository write/rehydration parity (`create_engram` + `get_rehydration_bundle`) |
+| CP9 | 2026-02-22 | Completed | Engram rehydration/source read parity (`get_rehydration_bundle` + `get_engram_sources`) |
+| CP10 | 2026-02-22 | In Progress | Engram write-path parity (`create_engram` + source/artifact inserts) |
 
 ## Checkpoint Details
 
@@ -280,10 +281,59 @@
   - `internal/repository/user.go` → 9.38
   - `internal/repository/user_test.go` → 10.0
 
-### CP9 - Engram Repository Write/Rehydration Parity (Planned)
+### CP9 - Engram Rehydration/Source Read Parity
 
-- Port remaining engram DB operations:
+- Added rehydration/source repository operations:
+  - `internal/repository/engram_rehydration.go`
+  - `GetRehydrationBundle`
+  - `GetEngramSources`
+  - actor-scoped visibility checks for read-path access control parity
+- Added model shapes for rehydration/source responses:
+  - `internal/models/engram.go`
+  - `RehydrationBundle`
+  - `EngramSourceRecord`
+- Added DB-path tests:
+  - `internal/repository/engram_rehydration_test.go`
+  - `TestGetRehydrationBundleReturnsNilWhenNotFound`
+  - `TestGetRehydrationBundleBuildsContextWithVisibilityFilter`
+  - `TestGetEngramSourcesReturnsRowsWhenVisible`
+  - `TestGetEngramSourcesReturnsEmptyWhenNotVisible`
+- Executed migrated tests one-by-one:
+  - `TestGetRehydrationBundleReturnsNilWhenNotFound`
+  - `TestGetRehydrationBundleBuildsContextWithVisibilityFilter`
+  - `TestGetEngramSourcesReturnsRowsWhenVisible`
+  - `TestGetEngramSourcesReturnsEmptyWhenNotVisible`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP10 - Engram Write Path Parity (Planned)
+
+- Port write-path operations next:
+  - `create_engram_with_report`
   - `create_engram`
-  - `get_rehydration_bundle`
-  - `get_engram_sources`
-- Migrate DB-backed parity tests incrementally with one-by-one execution.
+  - source/artifact insert paths
+- Migrate parity tests incrementally with one-by-one execution.

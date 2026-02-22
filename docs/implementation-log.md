@@ -318,6 +318,61 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP9: rehydration/source read-path parity)
+
+1. Added rehydration/source repository operations:
+   - `internal/repository/engram_rehydration.go`
+   - `GetRehydrationBundle`
+   - `GetEngramSources`
+   - actor-scoped visibility checks for parity with Python read-path access control
+2. Added response model shapes:
+   - `internal/models/engram.go`
+   - `RehydrationBundle`
+   - `EngramSourceRecord`
+3. Added rehydration/source tests:
+   - `internal/repository/engram_rehydration_test.go`
+   - `TestGetRehydrationBundleReturnsNilWhenNotFound`
+   - `TestGetRehydrationBundleBuildsContextWithVisibilityFilter`
+   - `TestGetEngramSourcesReturnsRowsWhenVisible`
+   - `TestGetEngramSourcesReturnsEmptyWhenNotVisible`
+4. Executed migrated tests one-by-one:
+   - `go test ./internal/repository -run '^TestGetRehydrationBundleReturnsNilWhenNotFound$' -v`
+   - `go test ./internal/repository -run '^TestGetRehydrationBundleBuildsContextWithVisibilityFilter$' -v`
+   - `go test ./internal/repository -run '^TestGetEngramSourcesReturnsRowsWhenVisible$' -v`
+   - `go test ./internal/repository -run '^TestGetEngramSourcesReturnsEmptyWhenNotVisible$' -v`
+5. Full Go verification:
+   - `go test ./...`
+6. File-level CodeScene checks (all current Go migration files before commit):
+   - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/auth/password_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/config/config_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/db/db_test.go` -> `9.61`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/errors.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/local_test.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service.go` -> `9.09`
+   - `/Users/mukundhan/Projects/engram/internal/embeddings/service_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/models/engram.go` -> `N/A` (struct-only file; score unavailable)
+   - `/Users/mukundhan/Projects/engram/internal/models/user.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_helpers_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_rehydration.go` -> `9.68`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_rehydration_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_repository_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_store.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram_unit_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user.go` -> `9.38`
+   - `/Users/mukundhan/Projects/engram/internal/repository/user_test.go` -> `10.0`
+7. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (CodeScene pre-commit safeguard for immediate-phase closeout bundle)
 
 1. Ran CodeScene MCP pre-commit health gate on the working tree:

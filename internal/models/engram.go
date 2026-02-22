@@ -98,3 +98,28 @@ type EngramQueryResult struct {
 	VisibilityScope string     `json:"visibility_scope"`
 	Distance        float64    `json:"distance"`
 }
+
+// RehydrationBundle models context returned for rehydration consumers.
+type RehydrationBundle struct {
+	EngramID                uuid.UUID             `json:"engram_id"`
+	ProjectID               string                `json:"project_id"`
+	Title                   string                `json:"title"`
+	CompactSummary          string                `json:"compact_summary"`
+	DetailedSummaryMarkdown string                `json:"detailed_summary_markdown"`
+	KeyDecisions            []map[string]any      `json:"key_decisions,omitempty"`
+	OpenQuestions           []string              `json:"open_questions,omitempty"`
+	TopCitations            []RehydrationCitation `json:"top_citations,omitempty"`
+	ContextMarkdown         string                `json:"context_markdown"`
+	OwnerUserID             *uuid.UUID            `json:"owner_user_id,omitempty"`
+	VisibilityScope         string                `json:"visibility_scope"`
+}
+
+// EngramSourceRecord models source rows tied to an engram.
+type EngramSourceRecord struct {
+	SourceID   uuid.UUID `json:"source_id"`
+	EngramID   uuid.UUID `json:"engram_id"`
+	CapturedAt time.Time `json:"captured_at"`
+	URL        string    `json:"url"`
+	Title      *string   `json:"title,omitempty"`
+	Snippet    *string   `json:"snippet,omitempty"`
+}
