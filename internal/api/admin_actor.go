@@ -84,6 +84,10 @@ func AdminActorHeaderBridge(next http.Handler) http.Handler {
 		})
 	}
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if _, exists := AdminActorFromContext(request.Context()); exists {
+			next.ServeHTTP(writer, request)
+			return
+		}
 		actor, err := RequireAdminActorFromHeaders(request)
 		if err == nil {
 			request = WithAdminActor(request, actor)

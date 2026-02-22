@@ -112,29 +112,63 @@ func TestRequireAdminActorFromContextRejectsNonAdminRole(t *testing.T) {
 	}
 }
 
-func TestAdminActorHeaderBridgeInjectsContextActor(t *testing.T) {
-	handler := AdminActorHeaderBridge(
-		http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			actor, err := RequireAdminActorFromContext(request)
-			if err != nil {
-				writer.WriteHeader(http.StatusForbidden)
-				return
-			}
-			if actor.UserID != uuid.MustParse("00000000-0000-0000-0000-000000000423") {
-				t.Fatalf("unexpected actor user id: %s", actor.UserID)
-			}
-			writer.WriteHeader(http.StatusNoContent)
-		}),
-	)
+func TestAdminActorHeaderBridgeResolvesActor(t *testing.T) {
+	testCases := []struct {
+		name            string
+		requestFactory  func() *http.Request
+		expectedActorID uuid.UUID
+	}{
+		{
+			name: "injects from headers",
+			requestFactory: func() *http.Request {
+				request := httptest.NewRequest("GET", "/api/v1/admin/memory/sessions", nil)
+				request.Header.Set(HeaderAdminActorUserID, "00000000-0000-0000-0000-000000000423")
+				request.Header.Set(HeaderAdminActorRole, "admin")
+				return request
+			},
+			expectedActorID: uuid.MustParse("00000000-0000-0000-0000-000000000423"),
+		},
+		{
+			name: "preserves existing context actor",
+			requestFactory: func() *http.Request {
+				request := httptest.NewRequest("GET", "/api/v1/admin/memory/sessions", nil)
+				request = WithAdminActor(
+					request,
+					AdminActor{
+						UserID: uuid.MustParse("00000000-0000-0000-0000-000000000424"),
+						Role:   "admin",
+					},
+				)
+				request.Header.Set(HeaderAdminActorUserID, "00000000-0000-0000-0000-000000000425")
+				request.Header.Set(HeaderAdminActorRole, "admin")
+				return request
+			},
+			expectedActorID: uuid.MustParse("00000000-0000-0000-0000-000000000424"),
+		},
+	}
 
-	request := httptest.NewRequest("GET", "/api/v1/admin/memory/sessions", nil)
-	request.Header.Set(HeaderAdminActorUserID, "00000000-0000-0000-0000-000000000423")
-	request.Header.Set(HeaderAdminActorRole, "admin")
-	response := httptest.NewRecorder()
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			handler := AdminActorHeaderBridge(
+				http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+					actor, err := RequireAdminActorFromContext(request)
+					if err != nil {
+						writer.WriteHeader(http.StatusForbidden)
+						return
+					}
+					if actor.UserID != testCase.expectedActorID {
+						t.Fatalf("unexpected actor user id: %s", actor.UserID)
+					}
+					writer.WriteHeader(http.StatusNoContent)
+				}),
+			)
 
-	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("expected status 204, got %d", response.Code)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, testCase.requestFactory())
+			if response.Code != http.StatusNoContent {
+				t.Fatalf("expected status 204, got %d", response.Code)
+			}
+		})
 	}
 }
 
