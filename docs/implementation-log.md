@@ -7,6 +7,29 @@
 
 ## Implementation Log
 
+### 2026-02-22 (Go migration CP1: module scaffold + config parity)
+
+1. Started phased Go migration per `migrate.md` with a dedicated checkpoint tracker:
+   - `checkpoint-go-migration.md`
+2. Added Go module scaffold and first internal package:
+   - `go.mod`
+   - `internal/config/config.go`
+3. Ported config behavior from Python:
+   - production hardening validation parity (`APP_SESSION_SECRET`, `MCP_TOKEN_PEPPER`, `OAUTH_CLIENT_SECRET_PEPPER`, `UI_DEMO_PASSWORD`, protected OAuth registration)
+   - debug snapshot redaction parity for sensitive fields
+   - environment helpers for dev/prod gating
+4. Ported config tests from `api/tests/test_config_settings.py`:
+   - `internal/config/config_test.go`
+5. Executed migrated Go tests one-by-one:
+   - `go test ./internal/config -run '^TestBuildDebugSettingsSnapshotRedactsSecrets$' -v`
+   - `go test ./internal/config -run '^TestShouldLogSettingsOnlyForDevModes$' -v`
+   - `go test ./internal/config -run '^TestProductionSettingsRejectInsecureDefaults$' -v`
+   - `go test ./internal/config -run '^TestProductionSettingsAcceptHardenedValues$' -v`
+6. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-02-22 (CodeScene pre-commit safeguard for immediate-phase closeout bundle)
 
 1. Ran CodeScene MCP pre-commit health gate on the working tree:
