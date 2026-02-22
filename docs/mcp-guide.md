@@ -33,6 +33,37 @@
 - **Error:** `{"jsonrpc":"2.0","id":"...","error":{"code":...,"message":"...","data":{...}}}`
 - **Progress:** `{"jsonrpc":"2.0","method":"mcp.event","params":{"id":"...","tool":"chat.send_message","event":"chunk|meta|done","data":{...}}}`
 
+### Error Code Mapping (Tool Calls)
+
+- `-32602` Invalid params:
+  - missing required argument (for example `{"missing":"name"}`)
+  - invalid UUID input (for example `collection_id` set to a name string)
+- `-32003` Forbidden:
+  - token scope/policy or resource authorization denied
+- `-32004` Not found:
+  - referenced resource/project does not exist or is not visible
+- `-32009` Conflict:
+  - write conflict such as duplicate collection name in a project
+- `error.data.suggested_action` is included for authorization/not-found/conflict cases to help clients auto-remediate.
+
+Example conflict payload (duplicate collection name):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "collection-create-2",
+  "error": {
+    "code": -32009,
+    "message": "Collection name already exists for this project",
+    "data": {
+      "status_code": 409,
+      "detail": "Collection name already exists for this project",
+      "suggested_action": "use_unique_collection_name_or_update_existing_collection"
+    }
+  }
+}
+```
+
 ---
 
 ## Authentication
@@ -164,6 +195,7 @@ curl -s -b "$COOKIE_JAR" \
 
 - `tools/list` exposes client-safe tool names with underscores (e.g., `chat_send_message`)
 - For backward compatibility, dotted names (`chat.send_message`) are still accepted in direct calls and `tools/call`
+- For any argument ending with `_id` (for example `collection_id`, `engram_id`, `session_id`), pass UUID values, not human-readable names.
 - `chat_save_as_engram` supports two modes:
   - Session snapshot mode with `session_id`
   - Conversation-only mode with `project_id` + `conversation_markdown` (no session required)
@@ -431,6 +463,39 @@ Document pin/list helpers:
     "query": "incident mitigation",
     "project_id": "engram-vault",
     "top_k": 5
+  }
+}
+```
+
+Collection add-items flow (resolve collection UUID first):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "collection-list-1",
+  "method": "tools/call",
+  "params": {
+    "name": "engram.collection_list",
+    "arguments": {
+      "project_id": "engram-vault"
+    }
+  }
+}
+```
+
+Use the returned `collections[].collection_id` UUID:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "collection-add-items-1",
+  "method": "tools/call",
+  "params": {
+    "name": "engram.collection_add_items",
+    "arguments": {
+      "collection_id": "00000000-0000-0000-0000-000000000000",
+      "engram_ids": ["11111111-1111-1111-1111-111111111111"]
+    }
   }
 }
 ```

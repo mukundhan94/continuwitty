@@ -143,6 +143,8 @@ The MCP stream endpoint supports:
 - `GET`/`HEAD` probe responses (`200`) for client capability checks
 - `tools/list` uses underscore tool names (for strict client validation), e.g. `chat_send_message`
 - `tools/call` still accepts both underscore and dotted names for backward compatibility
+- Tool arguments ending with `_id` must be UUID strings from prior MCP results, not display names.
+- For `engram_collection_add_items`, call `engram_collection_list` first and use `collections[].collection_id`.
 - `chat_save_as_engram` can persist without any chat session by sending:
   - `project_id`
   - `conversation_markdown`
