@@ -16,17 +16,17 @@ func TestCreateOAuthClientReturnsCreatedRecord(t *testing.T) {
 	secretHash := "secret-hash"
 	metadataJSON := map[string]any{"contacts": []any{"ops@example.com"}}
 	db := &fakeQueryer{
-		queryRowResult: &fakeRow{values: oauthClientRowValues(
-			"client-123",
-			"Codex Agent",
-			[]string{"https://example.com/callback"},
-			[]string{"authorization_code"},
-			[]string{"code"},
-			"none",
-			&secretHash,
-			metadataJSON,
-			createdAt,
-		)},
+		queryRowResult: &fakeRow{values: oauthClientRowValues(oauthClientRowFixture{
+			ClientID:                "client-123",
+			ClientName:              "Codex Agent",
+			RedirectURIs:            []string{"https://example.com/callback"},
+			GrantTypes:              []string{"authorization_code"},
+			ResponseTypes:           []string{"code"},
+			TokenEndpointAuthMethod: "none",
+			ClientSecretHash:        &secretHash,
+			MetadataJSON:            metadataJSON,
+			CreatedAt:               createdAt,
+		})},
 	}
 
 	record, err := CreateOAuthClient(
@@ -78,20 +78,20 @@ func TestCreateOAuthAuthorizationCodeReturnsRecord(t *testing.T) {
 	createdAt := time.Date(2026, 2, 22, 15, 0, 0, 0, time.UTC)
 	resource := "https://engram.local/mcp"
 	db := &fakeQueryer{
-		queryRowResult: &fakeRow{values: oauthAuthorizationCodeRowValues(
-			codeID,
-			"hash-abc",
-			"client-123",
-			userID,
-			"https://example.com/callback",
-			"challenge",
-			"S256",
-			"read write",
-			&resource,
-			expiresAt,
-			nil,
-			createdAt,
-		)},
+		queryRowResult: &fakeRow{values: oauthAuthorizationCodeRowValues(oauthAuthorizationCodeRowFixture{
+			CodeID:              codeID,
+			CodeHash:            "hash-abc",
+			ClientID:            "client-123",
+			UserID:              userID,
+			RedirectURI:         "https://example.com/callback",
+			CodeChallenge:       "challenge",
+			CodeChallengeMethod: "S256",
+			RequestedScope:      "read write",
+			Resource:            &resource,
+			ExpiresAt:           expiresAt,
+			ConsumedAt:          nil,
+			CreatedAt:           createdAt,
+		})},
 	}
 
 	record, err := CreateOAuthAuthorizationCode(
@@ -141,20 +141,20 @@ func TestGetOAuthAuthorizationCodeByHashReturnsRecord(t *testing.T) {
 	expiresAt := time.Date(2026, 2, 22, 15, 20, 0, 0, time.UTC)
 	createdAt := time.Date(2026, 2, 22, 15, 5, 0, 0, time.UTC)
 	db := &fakeQueryer{
-		queryRowResult: &fakeRow{values: oauthAuthorizationCodeRowValues(
-			codeID,
-			"hash-def",
-			"client-123",
-			userID,
-			"https://example.com/callback",
-			"challenge",
-			"S256",
-			"",
-			nil,
-			expiresAt,
-			nil,
-			createdAt,
-		)},
+		queryRowResult: &fakeRow{values: oauthAuthorizationCodeRowValues(oauthAuthorizationCodeRowFixture{
+			CodeID:              codeID,
+			CodeHash:            "hash-def",
+			ClientID:            "client-123",
+			UserID:              userID,
+			RedirectURI:         "https://example.com/callback",
+			CodeChallenge:       "challenge",
+			CodeChallengeMethod: "S256",
+			RequestedScope:      "",
+			Resource:            nil,
+			ExpiresAt:           expiresAt,
+			ConsumedAt:          nil,
+			CreatedAt:           createdAt,
+		})},
 	}
 
 	record, err := GetOAuthAuthorizationCodeByHash(context.Background(), db, "hash-def")
@@ -181,68 +181,72 @@ func TestConsumeOAuthAuthorizationCodeReturnsNilWhenAlreadyConsumed(t *testing.T
 	}
 }
 
-func oauthClientRowValues(
-	clientID string,
-	clientName string,
-	redirectURIs []string,
-	grantTypes []string,
-	responseTypes []string,
-	tokenEndpointAuthMethod string,
-	clientSecretHash *string,
-	metadataJSON map[string]any,
-	createdAt time.Time,
-) []any {
+type oauthClientRowFixture struct {
+	ClientID                string
+	ClientName              string
+	RedirectURIs            []string
+	GrantTypes              []string
+	ResponseTypes           []string
+	TokenEndpointAuthMethod string
+	ClientSecretHash        *string
+	MetadataJSON            map[string]any
+	CreatedAt               time.Time
+}
+
+func oauthClientRowValues(fixture oauthClientRowFixture) []any {
 	var secretHashValue any
-	if clientSecretHash != nil {
-		secretHashValue = *clientSecretHash
+	if fixture.ClientSecretHash != nil {
+		secretHashValue = *fixture.ClientSecretHash
 	}
 	return []any{
-		clientID,
-		clientName,
-		redirectURIs,
-		grantTypes,
-		responseTypes,
-		tokenEndpointAuthMethod,
+		fixture.ClientID,
+		fixture.ClientName,
+		fixture.RedirectURIs,
+		fixture.GrantTypes,
+		fixture.ResponseTypes,
+		fixture.TokenEndpointAuthMethod,
 		secretHashValue,
-		metadataJSON,
-		createdAt,
+		fixture.MetadataJSON,
+		fixture.CreatedAt,
 	}
 }
 
-func oauthAuthorizationCodeRowValues(
-	codeID uuid.UUID,
-	codeHash string,
-	clientID string,
-	userID uuid.UUID,
-	redirectURI string,
-	codeChallenge string,
-	codeChallengeMethod string,
-	requestedScope string,
-	resource *string,
-	expiresAt time.Time,
-	consumedAt *time.Time,
-	createdAt time.Time,
-) []any {
+type oauthAuthorizationCodeRowFixture struct {
+	CodeID              uuid.UUID
+	CodeHash            string
+	ClientID            string
+	UserID              uuid.UUID
+	RedirectURI         string
+	CodeChallenge       string
+	CodeChallengeMethod string
+	RequestedScope      string
+	Resource            *string
+	ExpiresAt           time.Time
+	ConsumedAt          *time.Time
+	CreatedAt           time.Time
+}
+
+func oauthAuthorizationCodeRowValues(fixture oauthAuthorizationCodeRowFixture) []any {
 	var resourceValue any
-	if resource != nil {
-		resourceValue = *resource
+	if fixture.Resource != nil {
+		resourceValue = *fixture.Resource
 	}
 	var consumedAtValue any
-	if consumedAt != nil {
-		consumedAtValue = *consumedAt
+	if fixture.ConsumedAt != nil {
+		consumedAtValue = *fixture.ConsumedAt
 	}
 	return []any{
-		codeID,
-		codeHash,
-		clientID,
-		userID,
-		redirectURI,
-		codeChallenge,
-		codeChallengeMethod,
-		requestedScope,
+		fixture.CodeID,
+		fixture.CodeHash,
+		fixture.ClientID,
+		fixture.UserID,
+		fixture.RedirectURI,
+		fixture.CodeChallenge,
+		fixture.CodeChallengeMethod,
+		fixture.RequestedScope,
 		resourceValue,
-		expiresAt,
+		fixture.ExpiresAt,
 		consumedAtValue,
-		createdAt,
+		fixture.CreatedAt,
 	}
 }
