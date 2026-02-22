@@ -1,0 +1,492 @@
+# Engram Vault - MCP Guide
+
+> Complete guide to Model Context Protocol (MCP) integration.
+> See [MCP Client Integrations](mcp-client-integrations.md) for external client setup (LibreChat, VS Code Copilot, Codex).
+> See [API Reference](api-reference.md) for REST endpoints.
+
+---
+
+## Transport
+
+### Endpoint
+
+- `POST /api/v1/mcp/stream` — JSON-RPC over SSE
+- `GET /api/v1/mcp/stream` — probe metadata
+- `HEAD /api/v1/mcp/stream` — probe health
+
+### Content Negotiation
+
+- `POST /api/v1/mcp/stream` returns JSON when `Accept` includes `application/json`.
+- It returns SSE when `Accept` explicitly prefers `text/event-stream`.
+- If both are sent with equal priority (common in editor MCP clients), JSON is returned for better `initialize` compatibility.
+- JSON-RPC notifications without `id` (for example `notifications/initialized`) are accepted with `202` and no body.
+
+### SSE Framing
+
+- `event: jsonrpc`
+- `data: <JSON-RPC frame>`
+
+### Frame Types
+
+- **Success:** `{"jsonrpc":"2.0","id":"...","result":{...}}`
+- **Error:** `{"jsonrpc":"2.0","id":"...","error":{"code":...,"message":"...","data":{...}}}`
+- **Progress:** `{"jsonrpc":"2.0","method":"mcp.event","params":{"id":"...","tool":"chat.send_message","event":"chunk|meta|done","data":{...}}}`
+
+---
+
+## Authentication
+
+### Session Cookie Auth
+
+Preferred for external tools: authenticated UI session cookies (sign in via `/login`).
+
+### MCP Bearer Token Auth
+
+Preferred for external tools: MCP bearer token via `Authorization: Bearer <token>`.
+
+Bearer and session auth resolve the same actor model and visibility checks.
+Some MCP clients preflight with `GET`/`HEAD`; these return `200` to avoid noisy `405` logs.
+
+### OAuth Authorization
+
+For MCP clients that support dynamic registration (e.g., VS Code Copilot):
+- `/.well-known/oauth-authorization-server` discovery
+- `POST /oauth/register` dynamic client registration
+- `GET /oauth/authorize` + `POST /oauth/token` PKCE authorization code flow
+- Token exchange issues short-lived MCP bearer tokens
+
+---
+
+## MCP Token Workflow
+
+`ENGRAM_MCP_TOKEN` is first-class and backed by persisted token records. Create token credentials as admin, store only the plaintext token client-side, and send it in the `Authorization` header for MCP calls.
+
+For client-specific setup commands, see [MCP Client Integrations](mcp-client-integrations.md).
+
+### Token Policy Model
+
+- **Scope:** `read` or `write`
+- **Optional `allowed_tools`:** when empty, all tools in scope are allowed
+- **Optional `allowed_project_ids`:** when empty, no additional project restriction; when provided, calls are limited to those projects
+- **Default token expiry:** 90 days
+
+### Create a Read Token (Admin Session)
+
+```bash
+COOKIE_JAR=/tmp/engram-admin.cookies
+BASE_URL=http://localhost:8000
+USERNAME=admin
+PASSWORD=admin123
+
+CSRF_TOKEN=$(
+  curl -s -c "$COOKIE_JAR" "$BASE_URL/login" \
+  | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' \
+  | head -n 1
+)
+
+curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  -X POST "$BASE_URL/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "username=$USERNAME" \
+  --data-urlencode "password=$PASSWORD" \
+  --data-urlencode "csrf_token=$CSRF_TOKEN" >/dev/null
+
+TOKEN_JSON=$(
+  curl -s -b "$COOKIE_JAR" \
+    -H "Content-Type: application/json" \
+    -X POST "$BASE_URL/api/v1/mcp/tokens" \
+    -d '{
+      "name": "librechat-read-token",
+      "scope": "read",
+      "allowed_tools": [],
+      "allowed_project_ids": ["engram-vault"],
+      "expires_in_days": 90
+    }'
+)
+
+echo "$TOKEN_JSON" | jq
+MCP_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.token')
+```
+
+### Use Bearer Token
+
+```bash
+curl -sN \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MCP_TOKEN" \
+  -X POST "$BASE_URL/api/v1/mcp/stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "tools-list-bearer",
+    "method": "tools/list",
+    "params": {}
+  }' \
+  | sed -n 's/^data: //p' \
+  | jq
+```
+
+### Revoke Token
+
+```bash
+TOKEN_ID=$(echo "$TOKEN_JSON" | jq -r '.token_id')
+curl -s -b "$COOKIE_JAR" \
+  -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/v1/mcp/tokens/$TOKEN_ID/revoke" \
+  -d '{"reason":"rotation"}' | jq
+```
+
+### LibreChat Bearer Config Example
+
+```json
+{
+  "type": "sse",
+  "url": "https://your-host.example.com/api/v1/mcp/stream",
+  "headers": {
+    "Authorization": "Bearer engram_mcp_<token_id_hex>_<secret>",
+    "Accept": "text/event-stream"
+  }
+}
+```
+
+---
+
+## Compatibility Methods
+
+- `initialize`
+- `tools/list`
+- `tools/call`
+
+---
+
+## Tool Naming
+
+- `tools/list` exposes client-safe tool names with underscores (e.g., `chat_send_message`)
+- For backward compatibility, dotted names (`chat.send_message`) are still accepted in direct calls and `tools/call`
+- `chat_save_as_engram` supports two modes:
+  - Session snapshot mode with `session_id`
+  - Conversation-only mode with `project_id` + `conversation_markdown` (no session required)
+
+---
+
+## Tool Catalog
+
+### Chat Tools
+
+- `chat.create_session`
+- `chat.list_sessions`
+- `chat.get_session`
+- `chat.list_messages`
+- `chat.get_lifecycle_policy`
+- `chat.update_lifecycle_policy`
+- `chat.list_timeline`
+- `chat.send_message`
+- `chat.list_pinned_engrams`
+- `chat.pin_engram`
+- `chat.unpin_engram`
+- `chat.list_pinned_documents`
+- `chat.pin_document`
+- `chat.unpin_document`
+- `chat.list_project_documents`
+- `chat.save_as_engram`
+- `chat.continue_session`
+
+### Engram Tools
+
+- `engram.create`
+- `engram.create_from_conversation`
+- `engram.query`
+- `engram.rehydrate`
+- `engram.pin_to_session`
+
+### User Tools
+
+- `user.get_profile`
+- `user.list_projects`
+
+---
+
+## Invocation Styles
+
+### 1. Direct Tool Method (Backward-Compatible)
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "tool-call-1",
+  "method": "chat.send_message",
+  "params": {
+    "session_id": "00000000-0000-0000-0000-000000000000",
+    "content_text": "Summarize the pinned engrams",
+    "stream": true
+  }
+}
+```
+
+### 2. MCP-Compatible `tools/call`
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "tool-call-2",
+  "method": "tools/call",
+  "params": {
+    "name": "chat.send_message",
+    "arguments": {
+      "session_id": "00000000-0000-0000-0000-000000000000",
+      "content_text": "Summarize the pinned engrams",
+      "stream": true
+    }
+  }
+}
+```
+
+---
+
+## Quick Start (curl)
+
+```bash
+# 1) Login and persist session cookie
+COOKIE_JAR=/tmp/engram-mcp.cookies
+BASE_URL=http://localhost:8000
+USERNAME=admin
+PASSWORD=admin123
+
+CSRF_TOKEN=$(
+  curl -s -c "$COOKIE_JAR" "$BASE_URL/login" \
+  | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' \
+  | head -n 1
+)
+
+curl -s -i -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  -X POST "$BASE_URL/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "username=$USERNAME" \
+  --data-urlencode "password=$PASSWORD" \
+  --data-urlencode "csrf_token=$CSRF_TOKEN" \
+  | head -n 1
+
+# Expect: HTTP/1.1 303 See Other
+```
+
+```bash
+# 2) Verify session auth is active
+curl -s -b "$COOKIE_JAR" "$BASE_URL/api/v1/me" | jq
+```
+
+```bash
+# 3) MCP initialize
+curl -sN -b "$COOKIE_JAR" \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/v1/mcp/stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "init-1",
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "clientInfo": {"name": "curl-client", "version": "0.1.0"}
+    }
+  }' \
+  | sed -n 's/^data: //p' \
+  | jq
+```
+
+```bash
+# 4) Discover tools
+curl -sN -b "$COOKIE_JAR" \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/v1/mcp/stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "tools-list-1",
+    "method": "tools/list",
+    "params": {}
+  }' \
+  | sed -n 's/^data: //p' \
+  | jq
+```
+
+```bash
+# 5) Persist conversation-only memory with auto-metadata enrichment
+curl -sN -b "$COOKIE_JAR" \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/v1/mcp/stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "engram-from-conv-1",
+    "method": "tools/call",
+    "params": {
+      "name": "engram.create_from_conversation",
+      "arguments": {
+        "project_id": "engram-vault",
+        "conversation_markdown": "## User\nCheckout latency spiked after deploy.\n## Assistant\nLikely cache miss storm and connection pool saturation."
+      }
+    }
+  }' \
+  | sed -n 's/^data: //p' \
+  | jq
+```
+
+```bash
+# 6) Streaming chat tool call
+curl -sN -b "$COOKIE_JAR" \
+  -H "Accept: text/event-stream" \
+  -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/v1/mcp/stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "chat-stream-1",
+    "method": "tools/call",
+    "params": {
+      "name": "chat.send_message",
+      "arguments": {
+        "session_id": "00000000-0000-0000-0000-000000000000",
+        "content_text": "Summarize pinned engrams and list action items.",
+        "stream": true
+      }
+    }
+  }'
+```
+
+---
+
+## Example Calls by Tool Group
+
+### chat.*
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "chat-create-1",
+  "method": "chat.create_session",
+  "params": {
+    "project_id": "engram-vault",
+    "title": "MCP chat session",
+    "provider": "openai",
+    "model_id": "gpt-4o-mini",
+    "visibility_scope": "private",
+    "autosave_enabled": true,
+    "autosave_strategy": "interval",
+    "autosave_interval_minutes": 30,
+    "autosave_min_messages": 4,
+    "retention_days": 30,
+    "retention_max_snapshots": 25
+  }
+}
+```
+
+Document pin/list helpers:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "chat-pin-doc-1",
+  "method": "tools/call",
+  "params": {
+    "name": "chat.pin_document",
+    "arguments": {
+      "session_id": "00000000-0000-0000-0000-000000000000",
+      "document_id": "11111111-1111-1111-1111-111111111111"
+    }
+  }
+}
+```
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "chat-list-pins-1",
+  "method": "tools/call",
+  "params": {
+    "name": "chat.list_pinned_documents",
+    "arguments": {
+      "session_id": "00000000-0000-0000-0000-000000000000"
+    }
+  }
+}
+```
+
+### engram.*
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "engram-query-1",
+  "method": "engram.query",
+  "params": {
+    "query": "incident mitigation",
+    "project_id": "engram-vault",
+    "top_k": 5
+  }
+}
+```
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "engram-create-conversation-1",
+  "method": "tools/call",
+  "params": {
+    "name": "engram.create_from_conversation",
+    "arguments": {
+      "project_id": "engram-vault",
+      "conversation_markdown": "## User\nDatabase latency spiked.\n## Assistant\nLikely cache miss storm after deploy."
+    }
+  }
+}
+```
+
+Expected response highlights:
+
+- `result.engram`: persisted engram payload
+- `result.enrichment_report.enrichment_applied`: whether empty metadata fields were auto-filled
+- `result.enrichment_report.auto_tags` / `auto_keywords`: deterministic derived values
+
+### user.*
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "user-profile-1",
+  "method": "user.get_profile",
+  "params": {}
+}
+```
+
+---
+
+## Typed Client Helpers
+
+### Python (`McpSseClient`)
+
+```python
+from app.mcp.client import McpSseClient
+
+# Session auth
+with McpSseClient(base_url="http://localhost:8000") as client:
+    client.login_with_password(username="admin", password="admin123")
+    init_result = client.call_tool(method="initialize", params={}).require_result()
+    tools_result = client.call_tool(method="tools/list", params={}).require_result()
+    print("tool count:", len(tools_result["tools"]))
+```
+
+```python
+# Bearer auth
+from app.mcp.client import McpSseClient
+
+with McpSseClient(
+    base_url="http://localhost:8000",
+    bearer_token="engram_mcp_<token_id_hex>_<secret>",
+) as client:
+    tools = client.call_tool(method="tools/list", params={}).require_result()
+    print("visible tools:", [tool["name"] for tool in tools["tools"]])
+```
+
+### TypeScript (`streamMcpCall`)
+
+- Source: `web/src/api/mcpClient.ts`
+- Provides `streamMcpCall`, frame parsers, and final-frame helpers

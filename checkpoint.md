@@ -1,0 +1,163 @@
+# Engram Vault - Project Checkpoints
+
+> Milestone tracking and phase progress.
+> See [Plan.md](Plan.md) for full roadmap. See [todo.md](todo.md) for pending work. See [refactor.md](refactor.md) for refactoring checkpoints.
+
+---
+
+## Current State Summary
+
+- **Phases 0-15 completed:** foundation, schema/storage, retrieval/rehydration, durability, chat continuity, providers, MCP, UI, acceptance, theme/UX hardening.
+- **Phase 16 in progress:** MCP developer tooling and typed clients (compatibility + typed clients complete, CLI smoke command deferred).
+- **Phase 17 completed:** document ingestion and RAG-ready retrieval, including session-level document pinning.
+- **Phase 18 in progress:** memory lifecycle policies (core autosave/retention/timeline controls implemented; richer consolidation semantics remaining).
+- **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
+- **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
+- **Phase 31 in progress:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests implemented; docs/skills closeout pending).
+
+---
+
+## Active Phase Progress
+
+### Phase 31 Progress Tracker
+
+- [x] `Plan.md` updated with Phase 31 status and near-term execution order.
+- [x] Added first-class `projects` table and per-user default project persistence.
+- [x] Added default-project fallback when `project_id` is missing in engram create paths.
+- [x] Added admin memory router (`/api/v1/admin/memory`) for session/engram/collection management.
+- [x] Added MCP organization tools for project, engram, collection, and session lifecycle operations.
+- [x] Added dedicated admin memory UI page with routing (`/admin/memory`).
+- [x] Hardened `/api/v1/engrams*` with authenticated actor-scoped visibility.
+- [x] Added backend/web/acceptance tests for Phase 31 behavior.
+- [ ] Update `AGENT.md` + skills docs and append final phase-closeout validation evidence.
+
+#### Planned Phase 31 User-Facing Areas
+
+- **Project defaults:** set default project once and reuse it when `project_id` is omitted; preserve explicit `project_id` when provided.
+- **Memory management page:** separate admin route for listing, editing, moving, deleting, and restoring sessions/engrams; project-bounded collections.
+- **MCP organization tools:** agent-driven memory organization from chat/tool calls with scoped authorization.
+
+#### Phase 31 Implemented So Far
+
+1. Schema: `projects` table, `users.default_project_id` FK, soft-delete metadata, `engram_collections`/`engram_collection_items`, idempotent project backfill.
+2. Backend: `api/app/projects/`, `api/app/memory_admin/`, wired into `api/app/main.py`.
+3. API: engrams require auth, default-project resolution, `resolved_project_id`/`used_default_project` in responses.
+4. MCP: project/engram/collection/session tools with dotted aliases for backward compatibility.
+5. Web: routing (`/`, `/admin/memory`), default-project controls, admin page list/filter/edit/move/delete/restore workflows.
+6. Tests: backend integration, MCP extensions, web unit/integration, acceptance mock coverage.
+
+---
+
+## Completed Milestones
+
+### Milestone 1 — Local DB + Schema + API Skeleton
+- Local DB + schema created
+- API skeleton created
+- CRUD + query + rehydrate endpoints wired
+
+### Milestone 2 — UI Login Workflow
+- Added local UI login workflow for manual testing
+- Added authenticated dashboard for create/list/query/rehydrate API calls
+- Added UI auth tests for login/logout/session redirects
+
+### Milestone 3 — LangGraph Durability
+- LangGraph run checkpointing integrated
+- Automatic engram write at end of each research run
+- Optional periodic snapshot engrams for long-running threads
+
+### Milestone 4 — Auth Hardening + Provenance
+- CSRF protection for login/logout UI forms
+- Optional hashed-password authentication path
+- Source-inspection endpoint and dashboard workflow
+- Multi-user auth model and role-based access controls
+
+### Milestone 5 — Evaluation Harness
+- Local eval harness: fact recall, cross-engram reasoning proxy, temporal updates, abstention checks
+
+### Milestone 6 — CLI Workflow
+- Local CLI: upload engrams from JSON, query/search from terminal, rehydrate bundles
+
+### Milestone 7 — Retrieval Quality
+- Reranking (dense + lexical overlap)
+- Citation-packing in rehydration context
+
+### Milestone 8 — Memory Maintenance
+- Background consolidation jobs
+
+### Milestone 9 — Security Baseline (In Progress)
+- Completed: local audit event logging, login rate limiting + lockout guard
+- Remaining: OIDC, centralized audit pipeline, distributed auth rate limits
+
+### Milestone 10 — Schema + Repository Layer
+- Chat/session/pinning tables, engram ownership/visibility fields, visibility-aware repository filtering
+
+### Milestone 11 — Provider Adapter Layer
+- OpenAI, Anthropic, Bedrock adapters with normalized mapping
+- Provider registry and configuration contract
+
+### Milestone 12 — Chat API + Continuity
+- Session/message endpoints, stream endpoint, save-as-engram, continue-session flows
+- Context assembly with `used_engram_ids` and `source_references`
+
+### Milestone 13 — MCP HTTP Stream
+- JSON-RPC over SSE transport, chat/engram/user tool routing
+- Auth/visibility parity with REST APIs, structured error frames
+
+### Milestone 14 — React Chat UI
+- Session list/create, streaming transcript, pin/save/continue controls
+- Frontend test baseline and `make web-check`
+
+### Milestone 15 — Acceptance + UX Hardening
+- Playwright-BDD acceptance baseline for login/chat/continuation flows
+- Bedrock live and triage continuity scenarios
+- Markdown rendering, stream parsing, dark/light theming, sidebar UX
+
+### Milestone 16 — MCP Developer Experience (In Progress)
+- MCP compatibility methods: `initialize`, `tools/list`, `tools/call`
+- Typed Python and TypeScript MCP client helpers
+- Remaining: CLI smoke utility deferred
+
+### Milestone 17 — RAG-Ready Ingestion
+- File/document upload, deterministic chunking, retrieval blending
+- Session-level document pin/unpin and continuation carry-forward
+
+### Milestone 18 — Memory Lifecycle (In Progress)
+- Session-level autosave strategies, retention windows, pruning
+- Lifecycle policy + timeline APIs + MCP tools + UI
+- Remaining: richer consolidation merge/group timeline semantics
+
+### Milestone 29 — Auto-Metadata Enrichment
+- Deterministic fill-empty-only derivation for `abstract`, `tags`, `keywords`
+- Repository-level centralization across all create paths
+- MCP `engram.create_from_conversation` for conversation-only persistence
+
+### Milestone 19 — Collaboration (Planned)
+- Project membership model, scoped sharing/revocation, audit-visible events
+
+### Milestone 20 — Production Security (Planned)
+- OIDC integration, distributed auth rate limiting, centralized audit
+
+---
+
+## Phase Completion Timeline
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 0-9 | Foundations through Security Baseline | Completed |
+| 10 | Schema + Repository Layer | Completed |
+| 11 | Provider Adapter Layer | Completed |
+| 12 | Chat API + Continuity | Completed |
+| 13 | MCP HTTP Stream | Completed |
+| 14 | React Chat UI | Completed |
+| 15 | Acceptance + UX Hardening | Completed |
+| 16 | MCP Developer Experience | In Progress |
+| 17 | Document Ingestion (RAG) | Completed |
+| 18 | Memory Lifecycle Policies | In Progress |
+| 29 | Auto-Metadata Enrichment | Completed |
+| 30 | MCP Personal Access Tokens | Completed |
+| 31 | Enterprise Memory Management | In Progress |
+| 19 | Collaboration + Sharing | Planned |
+| 20 | Production Security | Planned |
+| 21-23 | Observability, Release, EvalOps | Planned |
+| 24-28 | Engram Link Graph | Planned |
+| 32 | ContinuWitty Query Protocol | Planned |

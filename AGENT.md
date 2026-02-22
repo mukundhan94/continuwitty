@@ -24,7 +24,7 @@ Use it as the default workflow when adding or refactoring features.
 ## 2. Non-Negotiable Rules
 - Keep all features local-first by default.
 - Use `uv` for dependency and command execution.
-- Update `README.md` in every implementation phase.
+- Update `docs/implementation-log.md` and `checkpoint.md` in every implementation phase.
 - Preserve backward compatibility for existing endpoints unless intentionally versioned.
 - Add tests for every non-trivial behavior change.
 - Keep all frontend colors/typography/shadows in `web/src/styles/theme.ts` and consume via shared primitives/utilities.
@@ -42,7 +42,7 @@ Use it as the default workflow when adding or refactoring features.
 9. If `acceptance-tests/`, `web/Dockerfile`, `api/Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-bddgen`, `make acceptance-typecheck`, and `make acceptance-test-docker`.
 10. If Bedrock provider behavior changed, run live non-deterministic acceptance gate: `make acceptance-test-bedrock-live` (or docker equivalent).
 11. For docker runtime changes: validate `docker compose config`.
-12. Update docs (`README.md`, `Plan.md` progress, `docs/architecture-playbook.md` when call flows or schema semantics change, skill docs if needed).
+12. Update docs (`docs/implementation-log.md`, `checkpoint.md`, `Plan.md` progress, `docs/architecture-playbook.md` when call flows or schema semantics change, skill docs if needed).
 13. Commit with phase-scoped message.
 
 ## 4. Architecture Boundaries
@@ -72,7 +72,7 @@ Use it as the default workflow when adding or refactoring features.
 - Never silently drop columns or rewrite semantics without migration notes.
 - Keep DDL idempotent (`IF NOT EXISTS`, compatible alters where possible).
 - Add indexes for new query paths.
-- Document schema impact in README under implementation log.
+- Document schema impact in `docs/implementation-log.md`.
 
 ## 6. API and Interface Policy
 - For breaking changes, add new fields/routes and keep old behavior until deprecated.
@@ -141,5 +141,55 @@ Before merging refactors:
 ## 12. Long-Run Maintenance Cadence
 - Weekly: run full quality gates and evals.
 - Monthly: review dependency updates and provider API changes.
-- Each feature cycle: refresh `README.md`, `Plan.md`, and affected skill docs; update `docs/architecture-playbook.md` for call-flow or data-semantics changes.
+- Each feature cycle: refresh `docs/implementation-log.md`, `checkpoint.md`, `Plan.md`, and affected skill docs; update `docs/architecture-playbook.md` for call-flow or data-semantics changes.
 - Keep skill instructions short, precise, and executable.
+
+## 13. Accumulated Project Learnings
+
+### Architecture Patterns That Worked
+- Domain module layout (`api/app/<domain>/` with `api.py`/`service.py`/`repository.py`/`models.py`) scales well for feature isolation.
+- Centralized enrichment in repository create flow ensures all create paths share behavior (REST, MCP, chat save, autosave, CLI, consolidation).
+- Typed MCP client helpers (Python + TypeScript) alongside the server ensure contract parity and catch drift early.
+- Fill-empty-only metadata enrichment preserves caller intent while enabling zero-config agent persistence.
+- Token scope + allowlist + project policy model provides flexible least-privilege for external MCP agents.
+- Soft-delete with `deleted_at`/`delete_reason`/`deleted_by_user_id` columns enables safe reversible operations with audit trail.
+
+### Common Pitfalls to Avoid
+- Never put business logic in `main.py` route handlers — always delegate to services.
+- Never use raw SQL in service or MCP layers — all DB access through repositories.
+- Never hardcode color/font values in React components — always use theme tokens from `web/src/styles/theme.ts`.
+- Never change MCP tool names — they are stable contracts for external agents (underscored aliases for compatibility only).
+- SSE stream parsing must handle both `\n\n` and `\r\n\r\n` framing boundaries.
+- Frontend redirect detection must handle `opaqueredirect` and `status 0` from `fetch` with manual redirect mode.
+- Bedrock errors must be classified specifically (`ValidationException` vs auth vs throttle) rather than treated as generic failures.
+- MCP `Accept` header negotiation matters: JSON vs SSE response depends on client preference order.
+
+### Schema Evolution Guidelines
+- The project uses a single `db/init/001_schema.sql` file with `IF NOT EXISTS` guards for idempotent bootstrap.
+- When adding tables, always include indexes for query paths that will be used by repositories.
+- Soft-delete patterns require `deleted_at` columns and `WHERE deleted_at IS NULL` defaults in repositories.
+- Project backfill logic must be idempotent for existing data promotion.
+- Use compatible `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for additive changes.
+
+### Testing Insights
+- Lifecycle policy tests require regression coverage across unit (policy helpers), integration (chat API), and MCP layers.
+- Provider adapter tests should cover error classification, not just happy paths.
+- Acceptance tests should use deterministic mocks for CI reliability and tagged live scenarios for provider validation.
+- Frontend tests must render within `ThemeProvider` context.
+- MCP contract changes need transport + JSON-RPC integration coverage plus typed client parser/transport tests.
+
+### MCP Development Notes
+- MCP tools use stable verb-object names (`chat.create_session`) — underscored variants (`chat_create_session`) for external client compatibility.
+- Authorization checks for MCP tools must mirror REST API authorization exactly.
+- Streaming tools emit `mcp.event` progress frames with correlation IDs.
+- JSON-RPC notifications without `id` get `202` response with no body.
+- `tools/list` exposes underscored names; dotted names are accepted in `tools/call` for backward compatibility.
+
+## 14. Documentation Maintenance
+- `README.md` is a slim landing page — do not add detailed content to it.
+- API endpoint changes go to `docs/api-reference.md`.
+- MCP tool/transport changes go to `docs/mcp-guide.md`.
+- Environment variable additions go to `docs/env-reference.md`.
+- Implementation log entries go to `docs/implementation-log.md`.
+- Milestone completions go to `checkpoint.md`.
+- When a phase completes, update `checkpoint.md`, `todo.md`, and `Plan.md`.
