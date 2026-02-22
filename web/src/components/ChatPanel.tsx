@@ -149,6 +149,40 @@ interface ChatPanelProps {
   onContinueSession: () => Promise<void>
 }
 
+interface PanelHeaderProps {
+  session: ChatSession | null
+  sending: boolean
+  hasSession: boolean
+  onOpenSaveModal: () => void
+  onContinueSession: () => Promise<void>
+}
+
+interface TranscriptSectionProps {
+  messages: ChatMessage[]
+  pendingUserText: string | null
+  streamingAssistantText: string
+  hasSession: boolean
+  sourceReferences: ChatSourceReference[]
+}
+
+interface DebugTracePanelProps {
+  debugTrace: ChatDebugTrace
+}
+
+interface TimelineSectionProps {
+  timelineEvents: ChatTimelineEvent[]
+}
+
+interface ComposerSectionProps {
+  hasSession: boolean
+  sending: boolean
+  composerText: string
+  onComposerChange: (value: string) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
+  onComposerKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
+  onRetry: () => Promise<void>
+}
+
 function MessageBubble({ role, text }: { role: string; text: string }) {
   const markdownComponents: Components = {
     a: ({ node, ...props }) => {
@@ -166,6 +200,173 @@ function MessageBubble({ role, text }: { role: string; text: string }) {
         </ReactMarkdown>
       </MessageText>
     </ChatMessageBubble>
+  )
+}
+
+function isEnterSubmitKey(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+  return event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !event.repeat
+}
+
+function canSubmitComposer(hasSession: boolean, sending: boolean, composerText: string): boolean {
+  return hasSession && !sending && composerText.trim().length > 0
+}
+
+function tokenSourceLabel(debugTrace: ChatDebugTrace): string {
+  return debugTrace.llm_calls[0]?.token_usage_is_estimated ? 'estimated' : 'provider'
+}
+
+function formatTimelineType(eventType: string): string {
+  return eventType.replaceAll('_', ' ')
+}
+
+function PanelHeader({ session, sending, hasSession, onOpenSaveModal, onContinueSession }: PanelHeaderProps) {
+  return (
+    <PaneHeader as="header">
+      <HeaderBlock>
+        <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">
+          {session ? session.title : 'Select or create a session'}
+        </h2>
+        <MutedText>
+          {session ? `${session.provider}/${session.model_id} · ${session.visibility_scope}` : 'No active session'}
+        </MutedText>
+      </HeaderBlock>
+
+      <ActionRow>
+        <button type="button" onClick={onOpenSaveModal} disabled={!hasSession || sending}>
+          Save as Engram
+        </button>
+        <button type="button" onClick={onContinueSession} disabled={!hasSession || sending}>
+          Continue in New Chat
+        </button>
+      </ActionRow>
+    </PaneHeader>
+  )
+}
+
+function TranscriptSection({
+  messages,
+  pendingUserText,
+  streamingAssistantText,
+  hasSession,
+  sourceReferences,
+}: TranscriptSectionProps) {
+  return (
+    <>
+      <TranscriptRail>
+        {messages.map((message) => (
+          <MessageBubble key={message.message_id} role={message.role} text={message.content_text} />
+        ))}
+
+        {pendingUserText ? <MessageBubble role="user" text={pendingUserText} /> : null}
+        {streamingAssistantText ? <MessageBubble role="assistant" text={streamingAssistantText} /> : null}
+        {!hasSession ? <MutedText>Session messages will appear here.</MutedText> : null}
+      </TranscriptRail>
+
+      {sourceReferences.length > 0 ? (
+        <SourceStrip>
+          <SourceTitle>Source references used:</SourceTitle>
+          <ul>
+            {sourceReferences.map((ref) => (
+              <li key={`${ref.engram_id}-${ref.url}`}>
+                <a href={ref.url} target="_blank" rel="noreferrer">
+                  {ref.title || ref.url}
+                </a>
+                <span> ({ref.engram_title})</span>
+              </li>
+            ))}
+          </ul>
+        </SourceStrip>
+      ) : null}
+    </>
+  )
+}
+
+function DebugTracePanel({ debugTrace }: DebugTracePanelProps) {
+  return (
+    <DebugPanel>
+      <summary>Debug Trace</summary>
+      <DebugPanelBody>
+        <DebugGrid>
+          <span>
+            <DebugLabel>Total:</DebugLabel> {debugTrace.total_duration_ms.toFixed(1)} ms
+          </span>
+          <span>
+            <DebugLabel>Context:</DebugLabel> {debugTrace.context_duration_ms.toFixed(1)} ms
+          </span>
+          <span>
+            <DebugLabel>Embeds:</DebugLabel> {debugTrace.embedding_calls.length}
+          </span>
+          <span>
+            <DebugLabel>LLM Call:</DebugLabel> {debugTrace.llm_call_duration_ms.toFixed(1)} ms
+          </span>
+          <span>
+            <DebugLabel>Input Tokens:</DebugLabel> {debugTrace.llm_calls[0]?.token_usage?.input_tokens ?? 0}
+          </span>
+          <span>
+            <DebugLabel>Output Tokens:</DebugLabel> {debugTrace.llm_calls[0]?.token_usage?.output_tokens ?? 0}
+          </span>
+          <span>
+            <DebugLabel>Token Source:</DebugLabel> {tokenSourceLabel(debugTrace)}
+          </span>
+        </DebugGrid>
+        <DebugBlock>{JSON.stringify(debugTrace, null, 2)}</DebugBlock>
+      </DebugPanelBody>
+    </DebugPanel>
+  )
+}
+
+function TimelineSection({ timelineEvents }: TimelineSectionProps) {
+  return (
+    <TimelineStrip>
+      <SourceTitle>Lifecycle Timeline</SourceTitle>
+      {timelineEvents.length === 0 ? (
+        <MutedText>No lifecycle events yet.</MutedText>
+      ) : (
+        <TimelineList>
+          {timelineEvents.map((event) => (
+            <TimelineItem key={event.event_id}>
+              <TimelineMeta>
+                {formatTimelineType(event.event_type)} · {new Date(event.created_at).toLocaleString()}
+              </TimelineMeta>
+              <strong>{event.title}</strong>
+              <MutedText>{event.abstract}</MutedText>
+            </TimelineItem>
+          ))}
+        </TimelineList>
+      )}
+    </TimelineStrip>
+  )
+}
+
+function ComposerSection({
+  hasSession,
+  sending,
+  composerText,
+  onComposerChange,
+  onSubmit,
+  onComposerKeyDown,
+  onRetry,
+}: ComposerSectionProps) {
+  return (
+    <ComposerForm onSubmit={(event) => void onSubmit(event)}>
+      <textarea
+        value={composerText}
+        onChange={(event) => onComposerChange(event.target.value)}
+        onKeyDown={onComposerKeyDown}
+        rows={3}
+        placeholder={hasSession ? 'Ask something and stream a response...' : 'Create a session first'}
+        disabled={!hasSession || sending}
+      />
+
+      <ComposerActions>
+        <button type="submit" disabled={!canSubmitComposer(hasSession, sending, composerText)}>
+          {sending ? 'Streaming...' : 'Send'}
+        </button>
+        <button type="button" onClick={onRetry} disabled={!hasSession || sending}>
+          Retry Last Prompt
+        </button>
+      </ComposerActions>
+    </ComposerForm>
   )
 }
 
@@ -194,16 +395,10 @@ export function ChatPanel({
   }
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Enter') {
+    if (!isEnterSubmitKey(event)) {
       return
     }
-    if (event.shiftKey) {
-      return
-    }
-    if (event.nativeEvent.isComposing || event.repeat) {
-      return
-    }
-    if (!hasSession || sending || !composerText.trim()) {
+    if (!canSubmitComposer(hasSession, sending, composerText)) {
       return
     }
     event.preventDefault()
@@ -212,130 +407,37 @@ export function ChatPanel({
 
   return (
     <GlassPane data-testid="chat-panel">
-      <PaneHeader as="header">
-        <HeaderBlock>
-          <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">
-            {session ? session.title : 'Select or create a session'}
-          </h2>
-          <MutedText>
-            {session ? `${session.provider}/${session.model_id} · ${session.visibility_scope}` : 'No active session'}
-          </MutedText>
-        </HeaderBlock>
-
-        <ActionRow>
-          <button type="button" onClick={onOpenSaveModal} disabled={!hasSession || sending}>
-            Save as Engram
-          </button>
-          <button type="button" onClick={onContinueSession} disabled={!hasSession || sending}>
-            Continue in New Chat
-          </button>
-        </ActionRow>
-      </PaneHeader>
+      <PanelHeader
+        session={session}
+        sending={sending}
+        hasSession={hasSession}
+        onOpenSaveModal={onOpenSaveModal}
+        onContinueSession={onContinueSession}
+      />
 
       <SectionDivider />
 
-      <TranscriptRail>
-        {messages.map((message) => (
-          <MessageBubble key={message.message_id} role={message.role} text={message.content_text} />
-        ))}
+      <TranscriptSection
+        messages={messages}
+        pendingUserText={pendingUserText}
+        streamingAssistantText={streamingAssistantText}
+        hasSession={hasSession}
+        sourceReferences={sourceReferences}
+      />
 
-        {pendingUserText ? <MessageBubble role="user" text={pendingUserText} /> : null}
-        {streamingAssistantText ? <MessageBubble role="assistant" text={streamingAssistantText} /> : null}
-        {!hasSession ? <MutedText>Session messages will appear here.</MutedText> : null}
-      </TranscriptRail>
+      {debugTrace ? <DebugTracePanel debugTrace={debugTrace} /> : null}
 
-      {sourceReferences.length > 0 ? (
-        <SourceStrip>
-          <SourceTitle>Source references used:</SourceTitle>
-          <ul>
-            {sourceReferences.map((ref) => (
-              <li key={`${ref.engram_id}-${ref.url}`}>
-                <a href={ref.url} target="_blank" rel="noreferrer">
-                  {ref.title || ref.url}
-                </a>
-                <span> ({ref.engram_title})</span>
-              </li>
-            ))}
-          </ul>
-        </SourceStrip>
-      ) : null}
+      <TimelineSection timelineEvents={timelineEvents} />
 
-      {debugTrace ? (
-        <DebugPanel>
-          <summary>Debug Trace</summary>
-          <DebugPanelBody>
-            <DebugGrid>
-              <span>
-                <DebugLabel>Total:</DebugLabel> {debugTrace.total_duration_ms.toFixed(1)} ms
-              </span>
-              <span>
-                <DebugLabel>Context:</DebugLabel> {debugTrace.context_duration_ms.toFixed(1)} ms
-              </span>
-              <span>
-                <DebugLabel>Embeds:</DebugLabel> {debugTrace.embedding_calls.length}
-              </span>
-              <span>
-                <DebugLabel>LLM Call:</DebugLabel> {debugTrace.llm_call_duration_ms.toFixed(1)} ms
-              </span>
-              <span>
-                <DebugLabel>Input Tokens:</DebugLabel> {debugTrace.llm_calls[0]?.token_usage?.input_tokens ?? 0}
-              </span>
-              <span>
-                <DebugLabel>Output Tokens:</DebugLabel> {debugTrace.llm_calls[0]?.token_usage?.output_tokens ?? 0}
-              </span>
-              {debugTrace.llm_calls[0]?.token_usage_is_estimated ? (
-                <span>
-                  <DebugLabel>Token Source:</DebugLabel> estimated
-                </span>
-              ) : (
-                <span>
-                  <DebugLabel>Token Source:</DebugLabel> provider
-                </span>
-              )}
-            </DebugGrid>
-            <DebugBlock>{JSON.stringify(debugTrace, null, 2)}</DebugBlock>
-          </DebugPanelBody>
-        </DebugPanel>
-      ) : null}
-
-      <TimelineStrip>
-        <SourceTitle>Lifecycle Timeline</SourceTitle>
-        {timelineEvents.length === 0 ? (
-          <MutedText>No lifecycle events yet.</MutedText>
-        ) : (
-          <TimelineList>
-            {timelineEvents.map((event) => (
-              <TimelineItem key={event.event_id}>
-                <TimelineMeta>
-                  {event.event_type.replaceAll('_', ' ')} · {new Date(event.created_at).toLocaleString()}
-                </TimelineMeta>
-                <strong>{event.title}</strong>
-                <MutedText>{event.abstract}</MutedText>
-              </TimelineItem>
-            ))}
-          </TimelineList>
-        )}
-      </TimelineStrip>
-
-      <ComposerForm onSubmit={handleSubmit}>
-        <textarea
-          value={composerText}
-          onChange={(event) => onComposerChange(event.target.value)}
-          onKeyDown={handleComposerKeyDown}
-          rows={3}
-          placeholder={hasSession ? 'Ask something and stream a response...' : 'Create a session first'}
-          disabled={!hasSession || sending}
-        />
-
-        <ComposerActions>
-          <button type="submit" disabled={!hasSession || sending || !composerText.trim()}>
-            {sending ? 'Streaming...' : 'Send'}
-          </button>
-          <button type="button" onClick={onRetry} disabled={!hasSession || sending}>
-            Retry Last Prompt
-          </button>
-        </ComposerActions>
-      </ComposerForm>
+      <ComposerSection
+        hasSession={hasSession}
+        sending={sending}
+        composerText={composerText}
+        onComposerChange={onComposerChange}
+        onSubmit={handleSubmit}
+        onComposerKeyDown={handleComposerKeyDown}
+        onRetry={onRetry}
+      />
 
       {error ? <ErrorText>{error}</ErrorText> : null}
     </GlassPane>

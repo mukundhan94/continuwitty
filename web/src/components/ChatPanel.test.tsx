@@ -79,6 +79,14 @@ describe('ChatPanel keyboard behavior', () => {
     expect(event.defaultPrevented).toBe(false)
     expect(onSend).not.toHaveBeenCalled()
   })
+
+  it('disables composer actions when no session is selected', () => {
+    renderPanel({ session: null })
+
+    expect(screen.getByPlaceholderText(/create a session first/i)).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^send$/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /retry last prompt/i })).toBeDisabled()
+  })
 })
 
 describe('ChatPanel markdown rendering', () => {
