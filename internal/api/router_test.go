@@ -145,6 +145,13 @@ func TestSessionAuthRoutesNotMountedWithoutDependencies(t *testing.T) {
 		t.Fatalf("expected users status 404, got %d", usersResponse.Code)
 	}
 
+	engramsRequest := httptest.NewRequest(http.MethodGet, "/api/v1/engrams", nil)
+	engramsResponse := httptest.NewRecorder()
+	router.ServeHTTP(engramsResponse, engramsRequest)
+	if engramsResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected engrams status 404, got %d", engramsResponse.Code)
+	}
+
 	uiRequest := httptest.NewRequest(http.MethodGet, "/login", nil)
 	uiResponse := httptest.NewRecorder()
 	router.ServeHTTP(uiResponse, uiRequest)
@@ -209,5 +216,12 @@ func TestSessionAuthRoutesMountedWithDependencies(t *testing.T) {
 	router.ServeHTTP(usersResponse, usersRequest)
 	if usersResponse.Code != http.StatusInternalServerError {
 		t.Fatalf("expected users status 500 when user dependencies are missing, got %d", usersResponse.Code)
+	}
+
+	engramsRequest := httptest.NewRequest(http.MethodGet, "/api/v1/engrams", nil)
+	engramsResponse := httptest.NewRecorder()
+	router.ServeHTTP(engramsResponse, engramsRequest)
+	if engramsResponse.Code != http.StatusInternalServerError {
+		t.Fatalf("expected engrams status 500 when engram dependencies are missing, got %d", engramsResponse.Code)
 	}
 }

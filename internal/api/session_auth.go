@@ -35,33 +35,101 @@ type SessionAuditLogger func(
 
 // SessionAuthDependencies captures required collaborators for session auth routes.
 type SessionAuthDependencies struct {
-	SessionManager       *auth.SessionManager
-	LookupUserByUsername SessionUserByUsernameLookup
-	LookupUserByID       SessionUserLookup
-	VerifyPassword       func(password, encodedHash string) bool
-	GenerateCSRFToken    func() (string, error)
-	CookieSecure         bool
-	LoginAttemptGuard    SessionLoginAttemptGuard
-	LogAuditEvent        SessionAuditLogger
-	ListUsers            func(ctx context.Context, limit, offset int) ([]models.UserRecord, error)
-	CreateUser           func(ctx context.Context, input SessionUserCreateInput) (*models.UserRecord, error)
-	UpdateUser           func(ctx context.Context, userID uuid.UUID, input SessionUserUpdateInput) (*models.UserRecord, error)
-	HashPassword         func(password string) (string, error)
+	SessionManager           *auth.SessionManager
+	LookupUserByUsername     SessionUserByUsernameLookup
+	LookupUserByID           SessionUserLookup
+	VerifyPassword           func(password, encodedHash string) bool
+	GenerateCSRFToken        func() (string, error)
+	CookieSecure             bool
+	LoginAttemptGuard        SessionLoginAttemptGuard
+	LogAuditEvent            SessionAuditLogger
+	ListUsers                func(ctx context.Context, limit, offset int) ([]models.UserRecord, error)
+	CreateUser               func(ctx context.Context, input SessionUserCreateInput) (*models.UserRecord, error)
+	UpdateUser               func(ctx context.Context, userID uuid.UUID, input SessionUserUpdateInput) (*models.UserRecord, error)
+	HashPassword             func(password string) (string, error)
+	ResolveProjectIDForWrite func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		projectID string,
+	) (SessionProjectResolution, error)
+	CreateEngram func(
+		ctx context.Context,
+		payload models.MemoryEngramCreate,
+		ownerUserID uuid.UUID,
+	) (*models.EngramCreateResponse, error)
+	ListEngrams func(
+		ctx context.Context,
+		projectID *string,
+		limit int,
+		offset int,
+		actorUserID uuid.UUID,
+	) ([]models.EngramSummary, error)
+	QueryEngrams func(
+		ctx context.Context,
+		request models.EngramQueryRequest,
+		actorUserID uuid.UUID,
+	) ([]models.EngramQueryResult, error)
+	GetRehydrationBundle func(
+		ctx context.Context,
+		engramID uuid.UUID,
+		actorUserID uuid.UUID,
+	) (*models.RehydrationBundle, error)
+	GetEngramSources func(
+		ctx context.Context,
+		engramID uuid.UUID,
+		limit int,
+		actorUserID uuid.UUID,
+	) ([]models.EngramSourceRecord, error)
 }
 
 type sessionAuthDependencies struct {
-	manager              *auth.SessionManager
-	lookupUserByUsername SessionUserByUsernameLookup
-	lookupUserByID       SessionUserLookup
-	verifyPassword       func(password, encodedHash string) bool
-	generateCSRFToken    func() (string, error)
-	cookieSecure         bool
-	loginAttemptGuard    SessionLoginAttemptGuard
-	logAuditEvent        SessionAuditLogger
-	listUsers            func(ctx context.Context, limit, offset int) ([]models.UserRecord, error)
-	createUser           func(ctx context.Context, input SessionUserCreateInput) (*models.UserRecord, error)
-	updateUser           func(ctx context.Context, userID uuid.UUID, input SessionUserUpdateInput) (*models.UserRecord, error)
-	hashPassword         func(password string) (string, error)
+	manager                  *auth.SessionManager
+	lookupUserByUsername     SessionUserByUsernameLookup
+	lookupUserByID           SessionUserLookup
+	verifyPassword           func(password, encodedHash string) bool
+	generateCSRFToken        func() (string, error)
+	cookieSecure             bool
+	loginAttemptGuard        SessionLoginAttemptGuard
+	logAuditEvent            SessionAuditLogger
+	listUsers                func(ctx context.Context, limit, offset int) ([]models.UserRecord, error)
+	createUser               func(ctx context.Context, input SessionUserCreateInput) (*models.UserRecord, error)
+	updateUser               func(ctx context.Context, userID uuid.UUID, input SessionUserUpdateInput) (*models.UserRecord, error)
+	hashPassword             func(password string) (string, error)
+	resolveProjectIDForWrite func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		projectID string,
+	) (SessionProjectResolution, error)
+	createEngram func(
+		ctx context.Context,
+		payload models.MemoryEngramCreate,
+		ownerUserID uuid.UUID,
+	) (*models.EngramCreateResponse, error)
+	listEngrams func(
+		ctx context.Context,
+		projectID *string,
+		limit int,
+		offset int,
+		actorUserID uuid.UUID,
+	) ([]models.EngramSummary, error)
+	queryEngrams func(
+		ctx context.Context,
+		request models.EngramQueryRequest,
+		actorUserID uuid.UUID,
+	) ([]models.EngramQueryResult, error)
+	getRehydrationBundle func(
+		ctx context.Context,
+		engramID uuid.UUID,
+		actorUserID uuid.UUID,
+	) (*models.RehydrationBundle, error)
+	getEngramSources func(
+		ctx context.Context,
+		engramID uuid.UUID,
+		limit int,
+		actorUserID uuid.UUID,
+	) ([]models.EngramSourceRecord, error)
 }
 
 type sessionLoginRequest struct {
@@ -84,18 +152,24 @@ type sessionAuditEvent struct {
 
 func newSessionAuthDependencies(dependencies SessionAuthDependencies) sessionAuthDependencies {
 	return sessionAuthDependencies{
-		manager:              dependencies.SessionManager,
-		lookupUserByUsername: dependencies.LookupUserByUsername,
-		lookupUserByID:       dependencies.LookupUserByID,
-		verifyPassword:       dependencies.VerifyPassword,
-		generateCSRFToken:    dependencies.GenerateCSRFToken,
-		cookieSecure:         dependencies.CookieSecure,
-		loginAttemptGuard:    dependencies.LoginAttemptGuard,
-		logAuditEvent:        dependencies.LogAuditEvent,
-		listUsers:            dependencies.ListUsers,
-		createUser:           dependencies.CreateUser,
-		updateUser:           dependencies.UpdateUser,
-		hashPassword:         dependencies.HashPassword,
+		manager:                  dependencies.SessionManager,
+		lookupUserByUsername:     dependencies.LookupUserByUsername,
+		lookupUserByID:           dependencies.LookupUserByID,
+		verifyPassword:           dependencies.VerifyPassword,
+		generateCSRFToken:        dependencies.GenerateCSRFToken,
+		cookieSecure:             dependencies.CookieSecure,
+		loginAttemptGuard:        dependencies.LoginAttemptGuard,
+		logAuditEvent:            dependencies.LogAuditEvent,
+		listUsers:                dependencies.ListUsers,
+		createUser:               dependencies.CreateUser,
+		updateUser:               dependencies.UpdateUser,
+		hashPassword:             dependencies.HashPassword,
+		resolveProjectIDForWrite: dependencies.ResolveProjectIDForWrite,
+		createEngram:             dependencies.CreateEngram,
+		listEngrams:              dependencies.ListEngrams,
+		queryEngrams:             dependencies.QueryEngrams,
+		getRehydrationBundle:     dependencies.GetRehydrationBundle,
+		getEngramSources:         dependencies.GetEngramSources,
 	}
 }
 
@@ -112,6 +186,11 @@ func MountSessionAuthRoutes(router chi.Router, dependencies SessionAuthDependenc
 	router.Get("/api/v1/users", deps.handleListUsers)
 	router.Post("/api/v1/users", deps.handleCreateUser)
 	router.Patch("/api/v1/users/{user_id}", deps.handleUpdateUser)
+	router.Post("/api/v1/engrams", deps.handleCreateEngram)
+	router.Get("/api/v1/engrams", deps.handleListEngrams)
+	router.Post("/api/v1/engrams/query", deps.handleQueryEngrams)
+	router.Get("/api/v1/engrams/{engram_id}/sources", deps.handleListEngramSources)
+	router.Get("/api/v1/engrams/{engram_id}/rehydrate", deps.handleRehydrateEngram)
 }
 
 func (dependencies sessionAuthDependencies) handleCSRF(writer http.ResponseWriter, request *http.Request) {

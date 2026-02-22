@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"engram/internal/embeddings"
 	"engram/internal/models"
 
 	"github.com/google/uuid"
@@ -38,6 +39,16 @@ func vectorLiteral(values []float64) string {
 		parts = append(parts, fmt.Sprintf("%.6f", value))
 	}
 	return "[" + strings.Join(parts, ",") + "]"
+}
+
+// BuildLocalQueryLiteral creates a pgvector-compatible literal for query search.
+func BuildLocalQueryLiteral(query string, embeddingDim int) (string, error) {
+	provider := embeddings.LocalDeterministicEmbeddingProvider{}
+	vector, err := provider.Embed(query, embeddingDim)
+	if err != nil {
+		return "", err
+	}
+	return vectorLiteral(vector), nil
 }
 
 func buildRetrievalText(payload models.MemoryEngramCreate) string {

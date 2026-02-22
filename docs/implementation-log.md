@@ -318,6 +318,55 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP34: session-auth engram route parity + >9.5 code-health gate)
+
+1. Added session-auth engram route set:
+   - `internal/api/session_engrams.go` (new)
+   - mounted in `internal/api/session_auth.go`:
+     - `POST /api/v1/engrams`
+     - `GET /api/v1/engrams`
+     - `POST /api/v1/engrams/query`
+     - `GET /api/v1/engrams/{engram_id}/sources`
+     - `GET /api/v1/engrams/{engram_id}/rehydrate`
+2. Wired runtime dependencies and project-resolution bridge:
+   - `cmd/api/main.go`
+   - added repository-backed `SessionAuthDependencies` callbacks for engram create/list/query/rehydrate/sources.
+   - added explicit project/default-project resolution helpers for session engram create behavior parity.
+   - refactored dependency builders into focused helper functions to keep CodeScene score at `10.0`.
+3. Added repository helper:
+   - `internal/repository/engram.go`
+   - `BuildLocalQueryLiteral(query string, embeddingDim int)` for deterministic local query embedding literal generation.
+4. Added/updated migrated tests:
+   - `internal/api/session_engrams_test.go` (new):
+     - `TestMountSessionAuthRoutesEngramCollectionRoutesUseRepository`
+     - `TestMountSessionAuthRoutesCreateEngramUsesProjectResolution`
+     - `TestMountSessionAuthRoutesRehydrateReturns404WhenMissing`
+     - `TestMountSessionAuthRoutesListEngramSourcesUsesRepository`
+     - `TestMountSessionAuthRoutesCreateEngramRequiresProjectOrDefault`
+   - `internal/api/router_test.go`:
+     - added route mount assertions for `/api/v1/engrams` with/without required session engram dependencies.
+5. Executed migrated tests one-by-one:
+   - `TestMountSessionAuthRoutesEngramCollectionRoutesUseRepository`
+   - `TestMountSessionAuthRoutesCreateEngramUsesProjectResolution`
+   - `TestMountSessionAuthRoutesRehydrateReturns404WhenMissing`
+   - `TestMountSessionAuthRoutesListEngramSourcesUsesRepository`
+   - `TestMountSessionAuthRoutesCreateEngramRequiresProjectOrDefault`
+   - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+   - `TestSessionAuthRoutesMountedWithDependencies`
+6. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+7. File-level CodeScene checks (checkpoint-touched files):
+   - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/session_auth.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/session_engrams.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/session_engrams_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/api/router_test.go` -> `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/engram.go` -> `9.68`
+8. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - finding: unchanged non-blocking `Primitive Obsession` note in `internal/repository/engram.go`
+
 ### 2026-02-22 (Go migration CP33: role-aware `/api/v1/users` parity + auth/session code-health uplift)
 
 1. Added session-auth user-management API routes:
