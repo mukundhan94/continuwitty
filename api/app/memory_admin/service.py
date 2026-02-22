@@ -283,12 +283,15 @@ class MemoryAdminService:
             actor_role=actor_role,
             project_id=payload.project_id,
         )
-        return create_collection(
-            project_id=resolution.project_id,
-            owner_user_id=actor_user_id,
-            name=payload.name.strip(),
-            description=payload.description.strip(),
-        )
+        try:
+            return create_collection(
+                project_id=resolution.project_id,
+                owner_user_id=actor_user_id,
+                name=payload.name.strip(),
+                description=payload.description.strip(),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     def update_collection(
         self,
@@ -304,11 +307,14 @@ class MemoryAdminService:
             current_updated_at=current.updated_at,
             detail="Collection was updated by another operation",
         )
-        updated = update_collection(
-            collection_id=collection_id,
-            name=payload.name.strip() if payload.name else None,
-            description=payload.description.strip() if payload.description is not None else None,
-        )
+        try:
+            updated = update_collection(
+                collection_id=collection_id,
+                name=payload.name.strip() if payload.name else None,
+                description=payload.description.strip() if payload.description is not None else None,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         if not updated:
             raise HTTPException(status_code=404, detail="Collection not found")
         return updated

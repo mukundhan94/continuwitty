@@ -51,6 +51,56 @@ class _StreamChatSendMessageRequest:
 
 
 class McpServiceStreamMixin:
+    @staticmethod
+    def _http_exception_to_mcp_error(exc: HTTPException) -> tuple[int, str, dict[str, Any]]:
+        status_code = exc.status_code
+        detail = str(exc.detail)
+        lower_detail = detail.lower()
+
+        if status_code in {401, 403}:
+            return (
+                -32003,
+                "Forbidden",
+                {
+                    "status_code": status_code,
+                    "detail": detail,
+                    "suggested_action": "check_mcp_token_scope_or_resource_permissions",
+                },
+            )
+
+        if status_code == 409:
+            suggested_action = "resolve_conflict_and_retry"
+            if "already exists" in lower_detail and "collection" in lower_detail:
+                suggested_action = "use_unique_collection_name_or_update_existing_collection"
+            return (
+                -32009,
+                detail,
+                {
+                    "status_code": status_code,
+                    "detail": detail,
+                    "suggested_action": suggested_action,
+                },
+            )
+
+        if status_code >= 500:
+            return (
+                -32000,
+                "Internal MCP error",
+                {
+                    "status_code": status_code,
+                    "detail": detail,
+                },
+            )
+
+        return (
+            -32602,
+            "Invalid params",
+            {
+                "status_code": status_code,
+                "detail": detail,
+            },
+        )
+
     def _error_for_non_stream_exception(
         self,
         *,
@@ -72,14 +122,12 @@ class McpServiceStreamMixin:
                 data={"errors": exc.errors()},
             )
         if isinstance(exc, HTTPException):
-            # Surface REST-style validation/authorization failures as structured
-            # MCP errors without leaking transport-specific status handling.
-            error_code = -32003 if exc.status_code in {401, 403} else -32602
+            error_code, message, data = self._http_exception_to_mcp_error(exc)
             return self._error(
                 request_id,
                 code=error_code,
-                message="Invalid params" if exc.status_code < 500 else "Internal MCP error",
-                data={"status_code": exc.status_code, "detail": str(exc.detail)},
+                message=message,
+                data=data,
             )
         if isinstance(exc, ChatProviderExecutionError):
             return self._error(

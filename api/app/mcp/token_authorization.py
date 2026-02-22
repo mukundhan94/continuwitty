@@ -101,6 +101,57 @@ def _resolve_project_input_for_write(
     return None, True
 
 
+def _project_resolution_error(exc: HTTPException) -> McpRpcError:
+    status_code = exc.status_code
+    detail = str(exc.detail)
+
+    if status_code >= 500:
+        return McpRpcError(
+            code=-32000,
+            message="Internal MCP error",
+            data={"status_code": status_code, "detail": detail},
+        )
+
+    if status_code in {401, 403}:
+        return McpRpcError(
+            code=-32003,
+            message="Forbidden",
+            data={
+                "status_code": status_code,
+                "detail": detail,
+                "suggested_action": "check_mcp_token_scope_or_resource_permissions",
+            },
+        )
+
+    if status_code == 404:
+        return McpRpcError(
+            code=-32004,
+            message=detail,
+            data={
+                "status_code": status_code,
+                "detail": detail,
+                "suggested_action": "provide_existing_project_id_or_set_project_default",
+            },
+        )
+
+    if status_code == 409:
+        return McpRpcError(
+            code=-32009,
+            message=detail,
+            data={
+                "status_code": status_code,
+                "detail": detail,
+                "suggested_action": "resolve_conflict_and_retry",
+            },
+        )
+
+    return McpRpcError(
+        code=-32602,
+        message="Invalid params",
+        data={"status_code": status_code, "detail": detail},
+    )
+
+
 def resolve_project_for_write(
     *,
     dependencies: TokenAuthorizationDependencies,
@@ -118,11 +169,7 @@ def resolve_project_for_write(
             project_id=resolved_project_input,
         )
     except HTTPException as exc:
-        raise McpRpcError(
-            code=-32602,
-            message="Invalid params",
-            data={"detail": str(exc.detail)},
-        ) from exc
+        raise _project_resolution_error(exc) from exc
     return resolution.project_id, (used_default_project and resolution.used_default_project)
 
 

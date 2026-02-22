@@ -188,6 +188,30 @@ def test_mcp_tools_call_requires_name_param(client, clean_db) -> None:
 
 
 @pytest.mark.integration
+def test_mcp_collection_add_items_invalid_collection_id_has_actionable_error(client, clean_db) -> None:
+    _login(client)
+    frames = _mcp_frames(
+        client,
+        method="tools/call",
+        params={
+            "name": "engram.collection_add_items",
+            "arguments": {
+                "collection_id": "API Backend",
+                "engram_ids": ["832875bd-eded-4c98-beab-7eee44d40f8f"],
+            },
+        },
+        request_id="collection-add-invalid-id",
+    )
+    error_frame = [item for item in frames if "error" in item][0]
+    assert error_frame["id"] == "collection-add-invalid-id"
+    assert error_frame["error"]["code"] == -32602
+    assert error_frame["error"]["message"] == "Invalid collection_id: expected UUID string"
+    assert error_frame["error"]["data"]["invalid"] == "collection_id"
+    assert error_frame["error"]["data"]["expected"] == "uuid"
+    assert error_frame["error"]["data"]["received"] == "API Backend"
+
+
+@pytest.mark.integration
 def test_mcp_tools_call_project_and_engram_round_trip_plus_unknown_tool(client, clean_db) -> None:
     _login(client)
 
@@ -255,3 +279,47 @@ def test_mcp_tools_call_project_and_engram_round_trip_plus_unknown_tool(client, 
     assert error_frame["id"] == "tools-call-unknown"
     assert error_frame["error"]["code"] == -32601
     assert error_frame["error"]["data"]["method"] == "unknown.tool"
+
+
+@pytest.mark.integration
+def test_mcp_collection_create_duplicate_name_returns_conflict_not_internal_error(
+    client, clean_db
+) -> None:
+    _login(client)
+
+    first = _mcp_json_response(
+        client,
+        method="tools/call",
+        params={
+            "name": "engram.collection_create",
+            "arguments": {
+                "project_id": "engram-vault",
+                "name": "Ops collection",
+                "description": "Runbook notes",
+            },
+        },
+        request_id="collection-create-1",
+    )
+    assert first["result"]["isError"] is False
+
+    duplicate = _mcp_json_response(
+        client,
+        method="tools/call",
+        params={
+            "name": "engram.collection_create",
+            "arguments": {
+                "project_id": "engram-vault",
+                "name": "Ops collection",
+                "description": "Duplicate name",
+            },
+        },
+        request_id="collection-create-2",
+    )
+    assert duplicate["error"]["code"] == -32009
+    assert "already exists" in duplicate["error"]["message"]
+    assert duplicate["error"]["data"]["status_code"] == 409
+    assert "already exists" in duplicate["error"]["data"]["detail"]
+    assert (
+        duplicate["error"]["data"]["suggested_action"]
+        == "use_unique_collection_name_or_update_existing_collection"
+    )

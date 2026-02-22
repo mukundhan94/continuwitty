@@ -25,8 +25,8 @@ class McpServiceAccessMixin:
         except ValueError as exc:
             raise McpRpcError(
                 code=-32602,
-                message="Invalid params",
-                data={"invalid": key},
+                message=f"Invalid {key}: expected UUID string",
+                data={"invalid": key, "expected": "uuid", "received": str(raw)},
             ) from exc
 
     @staticmethod
@@ -37,8 +37,8 @@ class McpServiceAccessMixin:
         if not isinstance(raw, list):
             raise McpRpcError(
                 code=-32602,
-                message="Invalid params",
-                data={"invalid": key},
+                message=f"Invalid {key}: expected array of UUID strings",
+                data={"invalid": key, "expected": "uuid[]", "received_type": type(raw).__name__},
             )
         parsed: list[UUID] = []
         for index, item in enumerate(raw):
@@ -47,8 +47,8 @@ class McpServiceAccessMixin:
             except ValueError as exc:
                 raise McpRpcError(
                     code=-32602,
-                    message="Invalid params",
-                    data={"invalid": key, "index": index},
+                    message=f"Invalid {key}[{index}]: expected UUID string",
+                    data={"invalid": key, "index": index, "expected": "uuid", "received": str(item)},
                 ) from exc
         return parsed
 

@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+from fastapi import HTTPException
+
 from app.mcp.errors import McpRpcError
 from app.mcp.service import McpService, McpServiceDependencies, _StreamChatSendMessageRequest
 from app.models import McpJsonRpcRequest
@@ -198,3 +200,35 @@ def test_stream_chat_send_message_non_stream_as_tool_call_wraps_success() -> Non
             service._tool_call_success("chat.send_message", {"message": {"message_id": "m1"}}),
         )
     ]
+
+
+def test_error_for_non_stream_exception_maps_conflicts_to_mcp_conflict() -> None:
+    service = _build_service()
+
+    frame = service._error_for_non_stream_exception(
+        request_id="req-conflict",
+        exc=HTTPException(status_code=409, detail="Collection name already exists for this project"),
+    )
+
+    assert frame["error"]["code"] == -32009
+    assert "already exists" in frame["error"]["message"]
+    assert (
+        frame["error"]["data"]["suggested_action"]
+        == "use_unique_collection_name_or_update_existing_collection"
+    )
+
+
+def test_error_for_non_stream_exception_maps_forbidden_to_authorization_error() -> None:
+    service = _build_service()
+
+    frame = service._error_for_non_stream_exception(
+        request_id="req-forbidden",
+        exc=HTTPException(status_code=403, detail="Forbidden"),
+    )
+
+    assert frame["error"]["code"] == -32003
+    assert frame["error"]["message"] == "Forbidden"
+    assert (
+        frame["error"]["data"]["suggested_action"]
+        == "check_mcp_token_scope_or_resource_permissions"
+    )

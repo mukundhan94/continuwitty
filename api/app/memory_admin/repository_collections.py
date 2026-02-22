@@ -3,11 +3,26 @@ from __future__ import annotations
 import uuid
 from uuid import UUID
 
+from psycopg.errors import UniqueViolation
+
 from app.db import get_conn
 from app.models import EngramCollectionRecord
 
 from .repository_common import _soft_delete_record_exists, _SoftDeleteRecordRequest
 from .repository_types import CollectionListRepositoryRequest
+
+
+def _execute_collection_write(
+    *,
+    sql: str,
+    params: tuple[object, ...],
+) -> dict[str, object] | None:
+    with get_conn() as conn, conn.cursor() as cur:
+        try:
+            cur.execute(sql, params)
+        except UniqueViolation as exc:
+            raise ValueError("Collection name already exists for this project") from exc
+        return cur.fetchone()
 
 
 def list_collections(
@@ -86,9 +101,8 @@ def create_collection(
     description: str,
 ) -> EngramCollectionRecord:
     collection_id = uuid.uuid4()
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
+    row = _execute_collection_write(
+        sql="""
             INSERT INTO engram_collections (
                 collection_id,
                 project_id,
@@ -111,9 +125,9 @@ def create_collection(
                 deleted_by_user_id,
                 delete_reason
             """,
-            (collection_id, project_id, owner_user_id, name, description),
-        )
-        row = cur.fetchone()
+        params=(collection_id, project_id, owner_user_id, name, description),
+    )
+    assert row is not None
     return EngramCollectionRecord(**row)
 
 
@@ -123,9 +137,8 @@ def update_collection(
     name: str | None,
     description: str | None,
 ) -> EngramCollectionRecord | None:
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
+    row = _execute_collection_write(
+        sql="""
             UPDATE engram_collections
             SET
                 name = COALESCE(%s, name),
@@ -146,9 +159,8 @@ def update_collection(
                 deleted_by_user_id,
                 delete_reason
             """,
-            (name, description, collection_id),
-        )
-        row = cur.fetchone()
+        params=(name, description, collection_id),
+    )
     return EngramCollectionRecord(**row) if row else None
 
 

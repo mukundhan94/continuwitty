@@ -5,13 +5,16 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 
 from app.mcp.catalog import _TOOL_ALIASES, _to_dotted_tool_name
 from app.mcp.errors import McpRpcError
 from app.mcp.token_authorization import (
     EnforceTokenAuthorizationRequest,
+    ResolveProjectForWriteRequest,
     TokenAuthorizationDependencies,
     enforce_token_authorization,
+    resolve_project_for_write,
     visible_tool_catalog,
 )
 
@@ -88,4 +91,33 @@ def test_enforce_token_authorization_requires_explicit_project_for_multi_project
     assert exc_info.value.data == {
         "missing": "project_id",
         "reason": "token_has_multiple_allowed_projects",
+    }
+
+
+def test_resolve_project_for_write_surfaces_project_not_found_as_mcp_not_found() -> None:
+    dependencies = _dependencies()
+    actor_user_id = uuid4()
+
+    def _raise_not_found(**_kwargs) -> None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    dependencies.project_service.resolve_project_id_for_write = _raise_not_found
+
+    with pytest.raises(McpRpcError) as exc_info:
+        resolve_project_for_write(
+            dependencies=dependencies,
+            request=ResolveProjectForWriteRequest(
+                actor_user_id=actor_user_id,
+                actor_role="user",
+                requested_project_id="missing-project",
+                token_auth=None,
+            ),
+        )
+
+    assert exc_info.value.code == -32004
+    assert exc_info.value.message == "Project not found"
+    assert exc_info.value.data == {
+        "status_code": 404,
+        "detail": "Project not found",
+        "suggested_action": "provide_existing_project_id_or_set_project_default",
     }
