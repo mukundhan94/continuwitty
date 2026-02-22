@@ -26,7 +26,8 @@
 | CP11 | 2026-02-22 | Completed | Chat session repository baseline (`create/list/get/update`) with migrated unit tests |
 | CP12 | 2026-02-22 | Completed | Project repository baseline (`list/get/create/ensure/default-project`) with migrated unit tests |
 | CP13 | 2026-02-22 | Completed | Chat repository continuation (`chat_messages`, session-linked engrams, autosave pruning, and session pinning) with migrated unit tests |
-| CP14 | 2026-02-22 | In Progress | Repository continuation (document repository baseline migration) |
+| CP14 | 2026-02-22 | Completed | Document repository baseline (`upsert/list/query`) with chunk replacement and lexical rerank parity tests |
+| CP15 | 2026-02-22 | In Progress | Repository continuation (collection + MCP token/OAuth repository migration) |
 
 ## Checkpoint Details
 
@@ -598,8 +599,84 @@
   - `internal/repository/user.go` → 9.38
   - `internal/repository/user_test.go` → 10.0
 
-### CP14 - Repository Continuation (Planned)
+### CP14 - Document Repository Baseline
 
-- Continue Phase 2 repository migration with next high-value slice:
-  - document repository baseline
+- Added document models required by ingestion repository migration:
+  - `internal/models/document.go`
+  - `DocumentSourceType` + parser
+  - `DocumentRecord`
+  - `DocumentChunkQueryRequest`
+  - `DocumentChunkQueryResult`
+- Added document repository operations:
+  - `internal/repository/document.go`
+  - `UpsertDocumentWithChunks`
+  - `ListDocuments`
+  - `QueryDocumentChunks`
+  - helper parity for:
+    - document chunk replacement
+    - document chunk `WHERE` clause construction
+    - dense+lexical rerank
+- Added migrated document repository tests:
+  - `internal/repository/document_test.go`
+  - `TestUpsertDocumentWithChunksPersistsDocumentAndChunks`
+  - `TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch`
+  - `TestListDocumentsAppliesProjectFilter`
+  - `TestQueryDocumentChunksBuildsQueryAndReranks`
+  - `TestBuildDocumentChunkWhereDefaultsToActorScopeOnly`
+  - `TestUpsertDocumentWithChunksRejectsInvalidVisibility`
+- Executed migrated tests one-by-one:
+  - `TestUpsertDocumentWithChunksPersistsDocumentAndChunks`
+  - `TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch`
+  - `TestListDocumentsAppliesProjectFilter`
+  - `TestQueryDocumentChunksBuildsQueryAndReranks`
+  - `TestBuildDocumentChunkWhereDefaultsToActorScopeOnly`
+  - `TestUpsertDocumentWithChunksRejectsInvalidVisibility`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP15 - Repository Continuation (Planned)
+
+- Continue Phase 2 repository migration with next high-value slices:
+  - engram collection repository baseline
+  - MCP token repository baseline
+  - OAuth repository baseline
 - Keep parity tests migrated and executed one-by-one.
