@@ -15,6 +15,23 @@ import (
 // SessionUserByUsernameLookup resolves an auth-capable user record by username.
 type SessionUserByUsernameLookup func(ctx context.Context, username string) (*models.UserAuthRecord, error)
 
+// SessionLoginAttemptGuard provides login attempt rate-limit checks.
+type SessionLoginAttemptGuard interface {
+	Check(key string) (bool, int)
+	RegisterSuccess(key string)
+	RegisterFailure(key string)
+}
+
+// SessionAuditLogger writes auth-related audit events.
+type SessionAuditLogger func(
+	request *http.Request,
+	eventType string,
+	success bool,
+	username string,
+	detail string,
+	metadata map[string]any,
+)
+
 // SessionAuthDependencies captures required collaborators for session auth routes.
 type SessionAuthDependencies struct {
 	SessionManager       *auth.SessionManager
@@ -23,6 +40,8 @@ type SessionAuthDependencies struct {
 	VerifyPassword       func(password, encodedHash string) bool
 	GenerateCSRFToken    func() (string, error)
 	CookieSecure         bool
+	LoginAttemptGuard    SessionLoginAttemptGuard
+	LogAuditEvent        SessionAuditLogger
 }
 
 type sessionAuthDependencies struct {
@@ -32,6 +51,8 @@ type sessionAuthDependencies struct {
 	verifyPassword       func(password, encodedHash string) bool
 	generateCSRFToken    func() (string, error)
 	cookieSecure         bool
+	loginAttemptGuard    SessionLoginAttemptGuard
+	logAuditEvent        SessionAuditLogger
 }
 
 type sessionLoginRequest struct {
@@ -44,6 +65,14 @@ type sessionLogoutRequest struct {
 	CSRFToken string `json:"csrf_token"`
 }
 
+type sessionAuditEvent struct {
+	eventType string
+	success   bool
+	username  string
+	detail    string
+	metadata  map[string]any
+}
+
 func newSessionAuthDependencies(dependencies SessionAuthDependencies) sessionAuthDependencies {
 	return sessionAuthDependencies{
 		manager:              dependencies.SessionManager,
@@ -52,6 +81,8 @@ func newSessionAuthDependencies(dependencies SessionAuthDependencies) sessionAut
 		verifyPassword:       dependencies.VerifyPassword,
 		generateCSRFToken:    dependencies.GenerateCSRFToken,
 		cookieSecure:         dependencies.CookieSecure,
+		loginAttemptGuard:    dependencies.LoginAttemptGuard,
+		logAuditEvent:        dependencies.LogAuditEvent,
 	}
 }
 
@@ -268,6 +299,20 @@ func (dependencies sessionAuthDependencies) handleCurrentUser(writer http.Respon
 			"role":      record.Role,
 			"is_active": record.IsActive,
 		},
+	)
+}
+
+func (dependencies sessionAuthDependencies) logAuditEventRequest(request *http.Request, event sessionAuditEvent) {
+	if dependencies.logAuditEvent == nil {
+		return
+	}
+	dependencies.logAuditEvent(
+		request,
+		event.eventType,
+		event.success,
+		event.username,
+		event.detail,
+		event.metadata,
 	)
 }
 

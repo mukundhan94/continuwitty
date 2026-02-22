@@ -2,13 +2,17 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
+	"engram/internal/audit"
 	"engram/internal/auth"
 	"engram/internal/models"
 
@@ -86,6 +90,43 @@ func TestMountSessionUIRoutesLoginRejectsInvalidCSRF(t *testing.T) {
 
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("expected status 403, got %d", response.Code)
+	}
+}
+
+func TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures(t *testing.T) {
+	handler, manager, _ := buildSessionUITestHandler(t)
+
+	for attempt := 0; attempt < 5; attempt++ {
+		csrfToken, loginCookie := fetchLoginCSRFTokenAndCookie(t, handler, manager, nil)
+		values := url.Values{}
+		values.Set("username", "admin")
+		values.Set("password", "wrong")
+		values.Set("csrf_token", csrfToken)
+		request := newSessionUIFormRequest(t, http.MethodPost, "/login", values, loginCookie)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("expected status 401, got %d", response.Code)
+		}
+	}
+
+	csrfToken, loginCookie := fetchLoginCSRFTokenAndCookie(t, handler, manager, nil)
+	blockedValues := url.Values{}
+	blockedValues.Set("username", "admin")
+	blockedValues.Set("password", "wrong")
+	blockedValues.Set("csrf_token", csrfToken)
+	blockedRequest := newSessionUIFormRequest(t, http.MethodPost, "/login", blockedValues, loginCookie)
+	blockedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(blockedResponse, blockedRequest)
+	if blockedResponse.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected status 429, got %d", blockedResponse.Code)
+	}
+	var payload map[string]string
+	if err := json.Unmarshal(blockedResponse.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected valid json payload, got %v", err)
+	}
+	if !strings.Contains(payload["detail"], "Too many login attempts") {
+		t.Fatalf("expected rate-limit detail message, got %q", payload["detail"])
 	}
 }
 
@@ -230,8 +271,48 @@ func TestMountSessionUIRoutesLogoutRejectsInvalidCSRF(t *testing.T) {
 	}
 }
 
-func buildSessionUITestHandler(t *testing.T) (http.Handler, *auth.SessionManager, *models.UserAuthRecord) {
+func TestMountSessionUIRoutesLoginFailureWritesAuditLog(t *testing.T) {
+	auditLogPath := filepath.Join(t.TempDir(), "audit.log")
+	handler, manager, _ := buildSessionUITestHandler(
+		t,
+		sessionUITestHandlerOptions{auditLogPath: auditLogPath},
+	)
+	csrfToken, loginCookie := fetchLoginCSRFTokenAndCookie(t, handler, manager, nil)
+
+	values := url.Values{}
+	values.Set("username", "admin")
+	values.Set("password", "wrong")
+	values.Set("csrf_token", csrfToken)
+	request := newSessionUIFormRequest(t, http.MethodPost, "/login", values, loginCookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", response.Code)
+	}
+
+	content, err := os.ReadFile(auditLogPath)
+	if err != nil {
+		t.Fatalf("expected audit log to be written: %v", err)
+	}
+	if !strings.Contains(string(content), "\"event_type\":\"login_failed\"") {
+		t.Fatalf("expected login_failed audit event in log")
+	}
+}
+
+type sessionUITestHandlerOptions struct {
+	auditLogPath      string
+	loginAttemptGuard SessionLoginAttemptGuard
+}
+
+func buildSessionUITestHandler(
+	t *testing.T,
+	options ...sessionUITestHandlerOptions,
+) (http.Handler, *auth.SessionManager, *models.UserAuthRecord) {
 	t.Helper()
+	handlerOptions := sessionUITestHandlerOptions{}
+	if len(options) > 0 {
+		handlerOptions = options[0]
+	}
 	manager, err := auth.NewSessionManager("dev-session-secret-for-tests", auth.DefaultSessionCookieName)
 	if err != nil {
 		t.Fatalf("expected manager creation to succeed: %v", err)
@@ -260,12 +341,35 @@ func buildSessionUITestHandler(t *testing.T) (http.Handler, *auth.SessionManager
 		return record, nil
 	}
 	router := chi.NewRouter()
+	loginAttemptGuard := handlerOptions.loginAttemptGuard
+	if loginAttemptGuard == nil {
+		loginAttemptGuard = auth.NewLoginAttemptGuard(5, 300, 900)
+	}
+	var logAuditEvent SessionAuditLogger
+	if handlerOptions.auditLogPath != "" {
+		logger := audit.NewLogger(audit.LoggerOptions{
+			Path:          handlerOptions.auditLogPath,
+			MaxEventBytes: 32_768,
+		})
+		logAuditEvent = func(
+			request *http.Request,
+			eventType string,
+			success bool,
+			username string,
+			detail string,
+			metadata map[string]any,
+		) {
+			_ = logger.LogRequestEvent(request, eventType, success, username, detail, metadata)
+		}
+	}
 	dependencies := SessionAuthDependencies{
 		SessionManager:       manager,
 		LookupUserByUsername: lookupByUsername,
 		LookupUserByID:       lookupByID,
 		VerifyPassword:       auth.VerifyPassword,
 		GenerateCSRFToken:    auth.GenerateCSRFToken,
+		LoginAttemptGuard:    loginAttemptGuard,
+		LogAuditEvent:        logAuditEvent,
 	}
 	MountSessionAuthRoutes(router, dependencies)
 	MountSessionUIRoutes(router, dependencies)

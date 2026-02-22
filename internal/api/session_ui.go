@@ -2,7 +2,9 @@ package api
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -109,25 +111,16 @@ func (dependencies sessionAuthDependencies) handleLoginSubmit(writer http.Respon
 	if !ok {
 		return
 	}
-	if !dependencies.validateUILoginCSRF(writer, request, payload.CSRFToken) {
+	attemptKey, ok := dependencies.validateUILoginPreconditions(writer, request, payload)
+	if !ok {
 		return
 	}
-	record, err := dependencies.lookupUserByUsername(request.Context(), payload.Username)
-	if err != nil {
-		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
+	record, authenticated := dependencies.authenticateUILoginRecord(writer, request, payload)
+	if !authenticated {
+		dependencies.handleFailedUILogin(writer, request, payload, attemptKey)
 		return
 	}
-	if record == nil || !record.IsActive || !dependencies.verifyPassword(payload.Password, record.PasswordHash) {
-		dependencies.renderLoginPage(
-			writer,
-			request,
-			http.StatusUnauthorized,
-			"Invalid username or password.",
-			payload.NextPath,
-		)
-		return
-	}
-	dependencies.writeUILoginSuccess(writer, request, record, payload.NextPath)
+	dependencies.handleSuccessfulUILogin(writer, request, record, attemptKey, payload.NextPath)
 }
 
 func parseUILoginFormPayload(writer http.ResponseWriter, request *http.Request) (uiLoginFormPayload, bool) {
@@ -154,6 +147,107 @@ func (dependencies sessionAuthDependencies) validateUILoginCSRF(
 		return false
 	}
 	return true
+}
+
+func (dependencies sessionAuthDependencies) validateUILoginPreconditions(
+	writer http.ResponseWriter,
+	request *http.Request,
+	payload uiLoginFormPayload,
+) (string, bool) {
+	if !dependencies.validateUILoginCSRF(writer, request, payload.CSRFToken) {
+		dependencies.logAuditEventRequest(
+			request,
+			sessionAuditEvent{
+				eventType: "login_csrf_rejected",
+				success:   false,
+				username:  payload.Username,
+			},
+		)
+		return "", false
+	}
+	attemptKey := loginAttemptKey(request, payload.Username)
+	if dependencies.loginAttemptGuard == nil {
+		return attemptKey, true
+	}
+	allowed, retryAfterSeconds := dependencies.loginAttemptGuard.Check(attemptKey)
+	if allowed {
+		return attemptKey, true
+	}
+	detail := fmt.Sprintf("Too many login attempts. Retry in %d seconds.", retryAfterSeconds)
+	dependencies.logAuditEventRequest(
+		request,
+		sessionAuditEvent{
+			eventType: "login_rate_limited",
+			success:   false,
+			username:  payload.Username,
+			detail:    fmt.Sprintf("retry_in_seconds=%d", retryAfterSeconds),
+		},
+	)
+	writeJSON(writer, http.StatusTooManyRequests, map[string]string{"detail": detail})
+	return "", false
+}
+
+func (dependencies sessionAuthDependencies) authenticateUILoginRecord(
+	writer http.ResponseWriter,
+	request *http.Request,
+	payload uiLoginFormPayload,
+) (*models.UserAuthRecord, bool) {
+	record, err := dependencies.lookupUserByUsername(request.Context(), payload.Username)
+	if err != nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
+		return nil, false
+	}
+	if record == nil || !record.IsActive || !dependencies.verifyPassword(payload.Password, record.PasswordHash) {
+		return nil, false
+	}
+	return record, true
+}
+
+func (dependencies sessionAuthDependencies) handleFailedUILogin(
+	writer http.ResponseWriter,
+	request *http.Request,
+	payload uiLoginFormPayload,
+	attemptKey string,
+) {
+	if dependencies.loginAttemptGuard != nil {
+		dependencies.loginAttemptGuard.RegisterFailure(attemptKey)
+	}
+	dependencies.logAuditEventRequest(
+		request,
+		sessionAuditEvent{
+			eventType: "login_failed",
+			success:   false,
+			username:  payload.Username,
+		},
+	)
+	dependencies.renderLoginPage(
+		writer,
+		request,
+		http.StatusUnauthorized,
+		"Invalid username or password.",
+		payload.NextPath,
+	)
+}
+
+func (dependencies sessionAuthDependencies) handleSuccessfulUILogin(
+	writer http.ResponseWriter,
+	request *http.Request,
+	record *models.UserAuthRecord,
+	attemptKey string,
+	nextPath string,
+) {
+	if dependencies.loginAttemptGuard != nil {
+		dependencies.loginAttemptGuard.RegisterSuccess(attemptKey)
+	}
+	dependencies.logAuditEventRequest(
+		request,
+		sessionAuditEvent{
+			eventType: "login_success",
+			success:   true,
+			username:  record.Username,
+		},
+	)
+	dependencies.writeUILoginSuccess(writer, request, record, nextPath)
 }
 
 func (dependencies sessionAuthDependencies) writeUILoginSuccess(
@@ -185,9 +279,30 @@ func (dependencies sessionAuthDependencies) handleLogoutSubmit(writer http.Respo
 		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid form body"})
 		return
 	}
+	record, _ := dependencies.resolveSessionUser(request)
+	username := ""
+	if record != nil {
+		username = record.Username
+	}
 	if !dependencies.validateLogoutCSRF(writer, request, request.FormValue("csrf_token")) {
+		dependencies.logAuditEventRequest(
+			request,
+			sessionAuditEvent{
+				eventType: "logout_csrf_rejected",
+				success:   false,
+				username:  username,
+			},
+		)
 		return
 	}
+	dependencies.logAuditEventRequest(
+		request,
+		sessionAuditEvent{
+			eventType: "logout_success",
+			success:   true,
+			username:  username,
+		},
+	)
 	dependencies.clearSessionCookie(writer)
 	http.Redirect(writer, request, "/login", http.StatusSeeOther)
 }
@@ -307,4 +422,23 @@ func safeNextPath(rawPath string) string {
 		return ""
 	}
 	return candidate
+}
+
+func loginAttemptKey(request *http.Request, username string) string {
+	return strings.ToLower(strings.TrimSpace(username)) + ":" + requestClientIP(request)
+}
+
+func requestClientIP(request *http.Request) string {
+	if request == nil {
+		return "unknown"
+	}
+	remoteAddress := strings.TrimSpace(request.RemoteAddr)
+	if remoteAddress == "" {
+		return "unknown"
+	}
+	host, _, err := net.SplitHostPort(remoteAddress)
+	if err == nil && strings.TrimSpace(host) != "" {
+		return host
+	}
+	return remoteAddress
 }

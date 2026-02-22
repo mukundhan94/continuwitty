@@ -318,6 +318,84 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP30: login guard + audit parity baseline)
+
+1. Added Go login/rate-limit primitives:
+   - `internal/auth/ratelimit.go`
+   - `LoginAttemptGuard` and `RequestRateLimiter` parity semantics with configurable thresholds/windows and test clock injection.
+2. Added Go audit event logger:
+   - `internal/audit/audit.go`
+   - JSONL request-event writer with sanitization/truncation and optional stdout mirroring.
+3. Wired runtime dependencies:
+   - `cmd/api/main.go`
+   - session auth dependencies now include:
+     - login-attempt guard (`LOGIN_RATE_LIMIT_*` settings)
+     - audit logger (`AUDIT_LOG_*` settings)
+4. Updated session auth/UI flow:
+   - `internal/api/session_auth.go`
+     - added dependency hooks (`LoginAttemptGuard`, `LogAuditEvent`).
+     - refactored audit helper signature to satisfy CodeScene argument-count gate.
+   - `internal/api/session_ui.go`
+     - login preconditions now include login-attempt guard enforcement.
+     - login/logout paths now emit audit events (`login_success`, `login_failed`, `login_csrf_rejected`, `login_rate_limited`, `logout_success`, `logout_csrf_rejected`).
+     - lockout responses return `429` JSON with retry detail.
+5. Added/updated tests:
+   - `internal/auth/ratelimit_test.go`
+   - `internal/audit/audit_test.go`
+   - `internal/api/session_ui_test.go`:
+     - `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+     - `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+6. Executed migrated tests one-by-one:
+   - `go test ./internal/auth -run '^TestRegisterFailureLocksAfterMaxAttempts$'`
+   - `go test ./internal/auth -run '^TestCheckUnlocksAfterLockoutExpiry$'`
+   - `go test ./internal/auth -run '^TestFailureWindowDropsStaleAttempts$'`
+   - `go test ./internal/auth -run '^TestRegisterSuccessClearsPriorFailures$'`
+   - `go test ./internal/auth -run '^TestRequestRateLimiterThresholdBehavior$'`
+   - `go test ./internal/audit -run '^TestLogRequestEventWritesJSONLine$'`
+   - `go test ./internal/audit -run '^TestLogRequestEventTruncatesOversizedPayload$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLoginRejectsInvalidCredentials$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLoginRejectsInvalidCSRF$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLoginAndLogoutWorkflow$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLoginRedirectPathSanitization$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLogoutRejectsInvalidCSRF$'`
+   - `go test ./internal/api -run '^TestMountSessionUIRoutesLoginFailureWritesAuditLog$'`
+   - `go test ./internal/api -run '^TestSessionAuthRoutesNotMountedWithoutDependencies$'`
+   - `go test ./internal/api -run '^TestSessionAuthRoutesMountedWithDependencies$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesLoginSetsSessionCookie$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesLoginRejectsInvalidCSRF$'`
+   - `go test ./internal/api -run '^TestMountSessionAuthRoutesMeUsesSessionActorMiddleware$'`
+   - `go test ./internal/auth -run '^TestSessionManagerEncodeDecodeRoundTrip$'`
+   - `go test ./internal/auth -run '^TestSessionManagerDecodeRejectsExpiredToken$'`
+7. Full Go verification:
+   - `go test ./...` passed.
+8. File-level CodeScene checks before commit:
+   - scored all Go files in repository (73 files at this checkpoint).
+   - struct-only model files explicitly reviewed:
+     - `internal/models/oauth.go`
+     - `internal/models/project.go`
+     - `internal/models/collection.go`
+     - `internal/models/engram.go`
+     - `code_health_review` returned `score=null`, `review=[]`.
+   - changed-file score highlights:
+     - `/Users/mukundhan/Projects/engram/internal/auth/ratelimit.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/auth/ratelimit_test.go` -> `9.61`
+     - `/Users/mukundhan/Projects/engram/internal/audit/audit.go` -> `9.68`
+     - `/Users/mukundhan/Projects/engram/internal/audit/audit_test.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/api/session_ui.go` -> `8.81`
+     - `/Users/mukundhan/Projects/engram/internal/api/session_auth.go` -> `8.28`
+     - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+9. CodeScene pre-commit safeguard:
+   - initial run failed on:
+     - `handleLoginSubmit` complexity threshold
+     - `logAuditEventRequest` argument-count threshold
+   - refactored and reran:
+     - final `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)` -> `quality_gates=passed`
+
 ### 2026-02-22 (Go migration CP29: UI/login parity baseline)
 
 1. Added session-backed UI auth routes:

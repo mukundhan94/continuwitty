@@ -11,6 +11,7 @@ import (
 
 	"engram/internal/admin"
 	internalapi "engram/internal/api"
+	"engram/internal/audit"
 	"engram/internal/auth"
 	"engram/internal/config"
 	"engram/internal/db"
@@ -61,6 +62,16 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		logger.Error("failed to initialize session manager", "error", err)
 		os.Exit(1)
 	}
+	loginAttemptGuard := auth.NewLoginAttemptGuard(
+		settings.LoginRateLimitMaxAttempts,
+		settings.LoginRateLimitWindowSeconds,
+		settings.LoginLockoutSeconds,
+	)
+	auditLogger := audit.NewLogger(audit.LoggerOptions{
+		Path:          settings.AuditLogPath,
+		StdoutEnabled: settings.AuditLogStdoutEnabled || config.IsProductionEnv(settings),
+		MaxEventBytes: settings.AuditLogMaxEventBytes,
+	})
 
 	routerDependencies := internalapi.RouterDependencies{
 		MemoryAdminService: admin.NewService(pool, settings.EmbeddingDim, admin.PassthroughProjectResolver{}),
@@ -72,6 +83,24 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 			VerifyPassword:       auth.VerifyPassword,
 			GenerateCSRFToken:    auth.GenerateCSRFToken,
 			CookieSecure:         config.IsProductionEnv(settings),
+			LoginAttemptGuard:    loginAttemptGuard,
+			LogAuditEvent: func(
+				request *http.Request,
+				eventType string,
+				success bool,
+				username string,
+				detail string,
+				metadata map[string]any,
+			) {
+				_ = auditLogger.LogRequestEvent(
+					request,
+					eventType,
+					success,
+					username,
+					detail,
+					metadata,
+				)
+			},
 		},
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)

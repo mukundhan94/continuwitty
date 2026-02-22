@@ -42,7 +42,8 @@
 | CP27 | 2026-02-22 | Completed | Auth/session route baseline (`/api/v1/session/*` + `/api/v1/me`) with cookie + CSRF login/logout parity wiring |
 | CP28 | 2026-02-22 | Completed | Auth/session hardening baseline (session TTL/issued-at validation + secure cookie attributes + route handler health refactor) |
 | CP29 | 2026-02-22 | Completed | UI/login parity baseline (`/`, `/login`, `/logout`, `/ui`) with form CSRF/session contract on hardened auth state |
-| CP30 | 2026-02-22 | In Progress | Auth/session continuation (rate-limit/audit parity and remaining UI/auth integration gaps) |
+| CP30 | 2026-02-22 | Completed | Login guard + audit parity baseline (rate-limit lockout semantics and auth audit events wired in Go runtime/UI flow) |
+| CP31 | 2026-02-22 | In Progress | Auth/session continuation (distributed limiter parity + UI/admin auth integration hardening) |
 
 ## Checkpoint Details
 
@@ -1941,10 +1942,99 @@
   - result: `quality_gates=passed`
   - findings: none
 
-### CP30 - Auth/Session Continuation (Planned)
+### CP30 - Login Guard + Audit Parity Baseline
+
+- Added login/rate-limit primitives:
+  - `internal/auth/ratelimit.go`
+  - `LoginAttemptGuard` with failure-window pruning, lockout expiry checks, and success-reset semantics.
+  - `RequestRateLimiter` with fixed-block and window-bound blocking modes.
+- Added audit logging primitives:
+  - `internal/audit/audit.go`
+  - JSONL request event logger with payload sanitization/truncation behavior and configurable stdout mirroring.
+- Added/updated tests:
+  - `internal/auth/ratelimit_test.go`
+    - `TestRegisterFailureLocksAfterMaxAttempts`
+    - `TestCheckUnlocksAfterLockoutExpiry`
+    - `TestFailureWindowDropsStaleAttempts`
+    - `TestRegisterSuccessClearsPriorFailures`
+    - `TestRequestRateLimiterThresholdBehavior`
+  - `internal/audit/audit_test.go`
+    - `TestLogRequestEventWritesJSONLine`
+    - `TestLogRequestEventTruncatesOversizedPayload`
+  - `internal/api/session_ui_test.go`
+    - added `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+    - added `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+- Wired runtime/session dependencies:
+  - `cmd/api/main.go`
+  - injects login attempt guard using config values:
+    - `LOGIN_RATE_LIMIT_MAX_ATTEMPTS`
+    - `LOGIN_RATE_LIMIT_WINDOW_SECONDS`
+    - `LOGIN_LOCKOUT_SECONDS`
+  - injects audit logger using:
+    - `AUDIT_LOG_PATH`
+    - `AUDIT_LOG_MAX_EVENT_BYTES`
+    - `AUDIT_LOG_STDOUT_ENABLED`
+- Updated session UI/auth flow:
+  - `internal/api/session_auth.go`
+    - added session auth dependency hooks for login guard + audit logger.
+    - refactored audit dispatch helper to satisfy CodeScene argument-count gate.
+  - `internal/api/session_ui.go`
+    - login preconditions now enforce CSRF + login-attempt guard checks.
+    - login flow now records success/failure/rate-limit/csrf audit events.
+    - logout flow now records success/csrf-rejected audit events.
+    - lockout response parity: `429` with `Too many login attempts...` detail.
+- Executed migrated tests one-by-one:
+  - `TestRegisterFailureLocksAfterMaxAttempts`
+  - `TestCheckUnlocksAfterLockoutExpiry`
+  - `TestFailureWindowDropsStaleAttempts`
+  - `TestRegisterSuccessClearsPriorFailures`
+  - `TestRequestRateLimiterThresholdBehavior`
+  - `TestLogRequestEventWritesJSONLine`
+  - `TestLogRequestEventTruncatesOversizedPayload`
+  - `TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCredentials`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+  - `TestMountSessionUIRoutesLoginAndLogoutWorkflow`
+  - `TestMountSessionUIRoutesLoginRedirectPathSanitization`
+  - `TestMountSessionUIRoutesLogoutRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+  - `TestSessionManagerEncodeDecodeRoundTrip`
+  - `TestSessionManagerDecodeRejectsExpiredToken`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - scored all `.go` files in repository (73 files at this checkpoint).
+  - struct-only models explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - changed-file score highlights:
+    - `internal/auth/ratelimit.go` -> `10.0`
+    - `internal/auth/ratelimit_test.go` -> `9.61`
+    - `internal/audit/audit.go` -> `9.68`
+    - `internal/audit/audit_test.go` -> `10.0`
+    - `internal/api/session_ui.go` -> `8.81`
+    - `internal/api/session_auth.go` -> `8.28`
+    - `cmd/api/main.go` -> `10.0`
+- Pre-commit safeguard:
+  - first run failed on `handleLoginSubmit` method complexity and `logAuditEventRequest` argument count.
+  - applied local refactor and reran safeguards.
+  - final result: `quality_gates=passed`
+
+### CP31 - Auth/Session Continuation (Planned)
 
 - Continue migration with the next high-value slice:
-  - port login-attempt guard/rate-limit behavior from Python (`login_guard.py`) into Go auth middleware.
-  - add audit event parity for UI login/logout failure/success paths.
-  - close remaining UI/auth integration gaps after baseline route parity.
-- Keep parity tests migrated and executed one-by-one.
+  - align distributed rate-limit persistence semantics (DB-backed parity) where required.
+  - continue UI/admin auth integration hardening on top of rate-limit/audit baseline.
+  - keep route and auth test parity increments executed one-by-one.
