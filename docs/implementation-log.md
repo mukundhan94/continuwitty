@@ -318,6 +318,61 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP31: distributed limiter parity baseline)
+
+1. Added distributed `rate_limit_state` persistence for Go auth limiter state:
+   - `/Users/mukundhan/Projects/engram/internal/auth/ratelimit_store_pgx.go`
+   - introduced `PGXRateLimitStore` with row-lock + mutate semantics for namespace/key limiter entries.
+2. Refactored auth limiter code into focused modules while preserving behavior:
+   - `/Users/mukundhan/Projects/engram/internal/auth/ratelimit.go` (shared limiter contracts/helpers)
+   - `/Users/mukundhan/Projects/engram/internal/auth/login_guard.go` (`LoginAttemptGuard`)
+   - `/Users/mukundhan/Projects/engram/internal/auth/request_limiter.go` (`RequestRateLimiter`)
+   - added options-based constructors and `SetDistributedStore(...)` hooks for runtime wiring.
+3. Updated runtime wiring:
+   - `/Users/mukundhan/Projects/engram/cmd/api/main.go`
+   - login guard now uses `auth.NewPGXRateLimitStore(pool)` and enables distributed state under `login_attempts`.
+4. Added/updated migrated tests:
+   - `/Users/mukundhan/Projects/engram/internal/auth/ratelimit_test.go`
+   - added distributed/fallback coverage:
+     - `TestLoginAttemptGuardDistributedStateSharedAcrossInstances`
+     - `TestLoginAttemptGuardFallsBackToLocalStateWhenDistributedStoreFails`
+     - `TestRequestRateLimiterDistributedStateSharedAcrossInstances`
+     - `TestRequestRateLimiterFallsBackToLocalStateWhenDistributedStoreFails`
+   - refactored request limiter threshold assertions into helpers to reduce test complexity.
+5. Executed migrated tests one-by-one:
+   - `/usr/local/go/bin/go test ./internal/auth -run '^TestRegisterFailureLocksAfterMaxAttempts$' -v`
+   - `/usr/local/go/bin/go test ./internal/auth -run '^TestCheckUnlocksAfterLockoutExpiry$' -v`
+   - `/usr/local/go/bin/go test ./internal/auth -run '^TestFailureWindowDropsStaleAttempts$' -v`
+   - `/usr/local/go/bin/go test ./internal/auth -run '^TestRegisterSuccessClearsPriorFailures$' -v`
+   - `/usr/local/go/bin/go test ./internal/auth -run '^TestLoginAttemptGuardDistributedStateSharedAcrossInstances$' -v`
+   - `/usr/local/go/bin/go test ./internal/auth -run '^TestLoginAttemptGuardFallsBackToLocalStateWhenDistributedStoreFails$' -v`
+   - `/usr/local/go/bin/go test ./internal/auth -run '^TestRequestRateLimiterThresholdBehavior$' -v`
+   - `/usr/local/go/bin/go test ./internal/auth -run '^TestRequestRateLimiterDistributedStateSharedAcrossInstances$' -v`
+   - `/usr/local/go/bin/go test ./internal/auth -run '^TestRequestRateLimiterFallsBackToLocalStateWhenDistributedStoreFails$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionUIRoutesLoginFailureWritesAuditLog$' -v`
+   - `/usr/local/go/bin/go test ./internal/api -run '^TestMountSessionAuthRoutesLoginSetsSessionCookie$' -v`
+6. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+7. File-level CodeScene checks (all Go files before commit):
+   - scored all `.go` files in repository (78 files at this checkpoint).
+   - struct-only model files reviewed with `code_health_review`:
+     - `/Users/mukundhan/Projects/engram/internal/models/collection.go` -> `score=null`, findings none
+     - `/Users/mukundhan/Projects/engram/internal/models/engram.go` -> `score=null`, findings none
+     - `/Users/mukundhan/Projects/engram/internal/models/oauth.go` -> `score=null`, findings none
+     - `/Users/mukundhan/Projects/engram/internal/models/project.go` -> `score=null`, findings none
+   - checkpoint-touched file scores:
+     - `/Users/mukundhan/Projects/engram/cmd/api/main.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/auth/ratelimit.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/auth/login_guard.go` -> `9.68`
+     - `/Users/mukundhan/Projects/engram/internal/auth/request_limiter.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/auth/ratelimit_store_pgx.go` -> `10.0`
+     - `/Users/mukundhan/Projects/engram/internal/auth/ratelimit_test.go` -> `9.68`
+8. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: non-blocking arg-count warning in test helper (`assertConsumeBlocked`)
+
 ### 2026-02-22 (Go migration CP30: login guard + audit parity baseline)
 
 1. Added Go login/rate-limit primitives:

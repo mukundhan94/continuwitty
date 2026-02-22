@@ -62,11 +62,13 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		logger.Error("failed to initialize session manager", "error", err)
 		os.Exit(1)
 	}
+	rateLimitStore := auth.NewPGXRateLimitStore(pool)
 	loginAttemptGuard := auth.NewLoginAttemptGuard(
 		settings.LoginRateLimitMaxAttempts,
 		settings.LoginRateLimitWindowSeconds,
 		settings.LoginLockoutSeconds,
 	)
+	loginAttemptGuard.SetDistributedStore(auth.DefaultLoginAttemptNamespace, rateLimitStore)
 	auditLogger := audit.NewLogger(audit.LoggerOptions{
 		Path:          settings.AuditLogPath,
 		StdoutEnabled: settings.AuditLogStdoutEnabled || config.IsProductionEnv(settings),

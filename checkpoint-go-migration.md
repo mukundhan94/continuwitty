@@ -43,7 +43,8 @@
 | CP28 | 2026-02-22 | Completed | Auth/session hardening baseline (session TTL/issued-at validation + secure cookie attributes + route handler health refactor) |
 | CP29 | 2026-02-22 | Completed | UI/login parity baseline (`/`, `/login`, `/logout`, `/ui`) with form CSRF/session contract on hardened auth state |
 | CP30 | 2026-02-22 | Completed | Login guard + audit parity baseline (rate-limit lockout semantics and auth audit events wired in Go runtime/UI flow) |
-| CP31 | 2026-02-22 | In Progress | Auth/session continuation (distributed limiter parity + UI/admin auth integration hardening) |
+| CP31 | 2026-02-22 | Completed | Distributed limiter parity baseline (`rate_limit_state`-backed auth limiter state + process-local fallback hardening) |
+| CP32 | 2026-02-22 | In Progress | Auth/session continuation (UI/admin auth integration hardening on distributed limiter baseline) |
 
 ## Checkpoint Details
 
@@ -2032,9 +2033,67 @@
   - applied local refactor and reran safeguards.
   - final result: `quality_gates=passed`
 
-### CP31 - Auth/Session Continuation (Planned)
+### CP31 - Distributed Limiter Parity Baseline
+
+- Added distributed limiter state persistence for Go auth limiters:
+  - `internal/auth/ratelimit_store_pgx.go`
+  - new `PGXRateLimitStore` backed by `rate_limit_state` with row-lock mutation semantics.
+- Refactored auth limiter internals for maintainability while preserving CP30 behavior:
+  - split limiter code into focused modules:
+    - `internal/auth/ratelimit.go` (shared limiter state/contracts/helpers)
+    - `internal/auth/login_guard.go` (`LoginAttemptGuard`)
+    - `internal/auth/request_limiter.go` (`RequestRateLimiter`)
+  - added options-based constructors and explicit distributed-store enablement methods:
+    - `SetDistributedStore(...)` for login and request limiters.
+  - retained local in-memory fallback semantics when distributed store is unavailable.
+- Wired runtime login guard to distributed store:
+  - `cmd/api/main.go`
+  - creates `auth.NewPGXRateLimitStore(pool)` and injects it into login guard configuration.
+- Expanded migrated tests:
+  - `internal/auth/ratelimit_test.go`
+  - added distributed-state coverage:
+    - `TestLoginAttemptGuardDistributedStateSharedAcrossInstances`
+    - `TestLoginAttemptGuardFallsBackToLocalStateWhenDistributedStoreFails`
+    - `TestRequestRateLimiterDistributedStateSharedAcrossInstances`
+    - `TestRequestRateLimiterFallsBackToLocalStateWhenDistributedStoreFails`
+  - refactored threshold test helpers to satisfy CodeScene complexity gate while preserving assertions.
+- Executed migrated tests one-by-one:
+  - `TestRegisterFailureLocksAfterMaxAttempts`
+  - `TestCheckUnlocksAfterLockoutExpiry`
+  - `TestFailureWindowDropsStaleAttempts`
+  - `TestRegisterSuccessClearsPriorFailures`
+  - `TestLoginAttemptGuardDistributedStateSharedAcrossInstances`
+  - `TestLoginAttemptGuardFallsBackToLocalStateWhenDistributedStoreFails`
+  - `TestRequestRateLimiterThresholdBehavior`
+  - `TestRequestRateLimiterDistributedStateSharedAcrossInstances`
+  - `TestRequestRateLimiterFallsBackToLocalStateWhenDistributedStoreFails`
+  - `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+  - `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - scored all `.go` files in repository (78 files at this checkpoint).
+  - struct-only models explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - checkpoint-touched file scores (all above 9.5):
+    - `cmd/api/main.go` -> `10.0`
+    - `internal/auth/ratelimit.go` -> `10.0`
+    - `internal/auth/login_guard.go` -> `9.68`
+    - `internal/auth/request_limiter.go` -> `10.0`
+    - `internal/auth/ratelimit_store_pgx.go` -> `10.0`
+    - `internal/auth/ratelimit_test.go` -> `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: one non-blocking test helper argument-count warning in `internal/auth/ratelimit_test.go`
+
+### CP32 - Auth/Session Continuation (Planned)
 
 - Continue migration with the next high-value slice:
-  - align distributed rate-limit persistence semantics (DB-backed parity) where required.
-  - continue UI/admin auth integration hardening on top of rate-limit/audit baseline.
-  - keep route and auth test parity increments executed one-by-one.
+  - UI/admin auth integration hardening on top of distributed limiter baseline.
+  - maintain one-by-one parity test execution for each incremental auth/session route change.
