@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from app.chat.context import ChatContextRequest, _bundle_section, assemble_chat_context
 from app.ingestion.models import DocumentChunkQueryResult
@@ -12,6 +13,15 @@ from app.models import (
     PinnedDocumentRecord,
     RehydrationBundle,
 )
+
+
+@dataclass(frozen=True)
+class _MergeCase:
+    pinned_id: UUID
+    retrieved_id: UUID
+    pinned_document_id: UUID
+    pinned_chunk_id: UUID
+    retrieved_chunk_id: UUID
 
 
 def _session() -> ChatSessionRecord:
@@ -71,65 +81,85 @@ def _bundle(engram_id, title: str, citation_url: str | None = None) -> Rehydrati
     )
 
 
-def test_assemble_chat_context_merges_pinned_and_retrieved(monkeypatch) -> None:
-    session = _session()
-    pinned_id = uuid4()
-    retrieved_id = uuid4()
-    pinned_document_id = uuid4()
+def _engram_summary(*, engram_id: UUID, title: str, actor_user_id: UUID) -> EngramSummary:
+    return EngramSummary(
+        engram_id=engram_id,
+        project_id="project-chat",
+        thread_id="thread-1",
+        title=title,
+        abstract=f"{title} abstract",
+        created_at=datetime.now(UTC),
+        tags=[],
+        keywords=[],
+        owner_user_id=actor_user_id,
+        visibility_scope="private",
+    )
 
+
+def _engram_query_result(
+    *,
+    engram_id: UUID,
+    title: str,
+    actor_user_id: UUID,
+    distance: float,
+) -> EngramQueryResult:
+    return EngramQueryResult(
+        engram_id=engram_id,
+        project_id="project-chat",
+        title=title,
+        abstract=f"{title} abstract",
+        created_at=datetime.now(UTC),
+        tags=[],
+        keywords=[],
+        owner_user_id=actor_user_id,
+        visibility_scope="private",
+        distance=distance,
+    )
+
+
+def _install_merge_case_dependencies(
+    *,
+    monkeypatch,
+    case: _MergeCase,
+) -> None:
+    _install_merge_case_engram_dependencies(
+        monkeypatch=monkeypatch,
+        case=case,
+    )
+    _install_merge_case_document_dependencies(
+        monkeypatch=monkeypatch,
+        case=case,
+    )
+
+
+def _install_merge_case_engram_dependencies(
+    *,
+    monkeypatch,
+    case: _MergeCase,
+) -> None:
     monkeypatch.setattr(
         "app.chat.context.list_pinned_engram_summaries",
         lambda session_id, actor_user_id: [
-            EngramSummary(
-                engram_id=pinned_id,
-                project_id="project-chat",
-                thread_id="thread-1",
+            _engram_summary(
+                engram_id=case.pinned_id,
                 title="Pinned",
-                abstract="Pinned abstract",
-                created_at=datetime.now(UTC),
-                tags=[],
-                keywords=[],
-                owner_user_id=actor_user_id,
-                visibility_scope="private",
-            )
-        ],
-    )
-    monkeypatch.setattr(
-        "app.chat.context.list_pinned_documents",
-        lambda session_id, actor_user_id: [
-            PinnedDocumentRecord(
-                session_id=session_id,
-                document_id=pinned_document_id,
-                pinned_by_user_id=actor_user_id,
-                created_at=datetime.now(UTC),
+                actor_user_id=actor_user_id,
             )
         ],
     )
     monkeypatch.setattr(
         "app.chat.context.query_engrams",
         lambda request, embedding_dim, actor_user_id: [
-            EngramQueryResult(
-                engram_id=retrieved_id,
-                project_id="project-chat",
+            _engram_query_result(
+                engram_id=case.retrieved_id,
                 title="Retrieved",
-                abstract="Retrieved abstract",
-                created_at=datetime.now(UTC),
-                tags=[],
-                keywords=[],
-                owner_user_id=actor_user_id,
-                visibility_scope="private",
+                actor_user_id=actor_user_id,
                 distance=0.1,
             ),
-            EngramQueryResult(
-                engram_id=pinned_id,
-                project_id="project-chat",
+            _engram_query_result(
+                engram_id=case.pinned_id,
                 title="Pinned",
-                abstract="Pinned abstract",
-                created_at=datetime.now(UTC),
-                tags=[],
-                keywords=[],
-                owner_user_id=actor_user_id,
-                visibility_scope="private",
+                actor_user_id=actor_user_id,
                 distance=0.2,
             ),
         ],
@@ -138,19 +168,35 @@ def test_assemble_chat_context_merges_pinned_and_retrieved(monkeypatch) -> None:
         "app.chat.context.get_rehydration_bundle",
         lambda engram_id, actor_user_id: _bundle(
             engram_id=engram_id,
-            title="Pinned" if engram_id == pinned_id else "Retrieved",
+            title="Pinned" if engram_id == case.pinned_id else "Retrieved",
         ),
     )
-    pinned_chunk_id = uuid4()
-    retrieved_chunk_id = uuid4()
+
+
+def _install_merge_case_document_dependencies(
+    *,
+    monkeypatch,
+    case: _MergeCase,
+) -> None:
+    monkeypatch.setattr(
+        "app.chat.context.list_pinned_documents",
+        lambda session_id, actor_user_id: [
+            PinnedDocumentRecord(
+                session_id=session_id,
+                document_id=case.pinned_document_id,
+                pinned_by_user_id=actor_user_id,
+                created_at=datetime.now(UTC),
+            )
+        ],
+    )
 
     def _fake_query_document_chunks(actor_user_id, request, embedding_dim):  # noqa: ANN001
         if request.document_ids:
-            assert request.document_ids == [pinned_document_id]
+            assert request.document_ids == [case.pinned_document_id]
             return [
                 DocumentChunkQueryResult(
-                    chunk_id=pinned_chunk_id,
-                    document_id=pinned_document_id,
+                    chunk_id=case.pinned_chunk_id,
+                    document_id=case.pinned_document_id,
                     project_id="project-chat",
                     title="Pinned Runbook",
                     source_name="runbook.md",
@@ -163,7 +209,7 @@ def test_assemble_chat_context_merges_pinned_and_retrieved(monkeypatch) -> None:
             ]
         return [
             DocumentChunkQueryResult(
-                chunk_id=retrieved_chunk_id,
+                chunk_id=case.retrieved_chunk_id,
                 document_id=uuid4(),
                 project_id="project-chat",
                 title="Retrieved Incident Notes",
@@ -178,12 +224,14 @@ def test_assemble_chat_context_merges_pinned_and_retrieved(monkeypatch) -> None:
 
     monkeypatch.setattr("app.chat.context.query_document_chunks", _fake_query_document_chunks)
 
-    assembled = assemble_chat_context(
-        request=_context_request(session, query="what should we do"),
-    )
 
-    assert assembled.used_engram_ids == [pinned_id, retrieved_id]
-    assert assembled.used_document_chunk_ids == [pinned_chunk_id, retrieved_chunk_id]
+def _assert_merge_case(
+    *,
+    assembled,
+    case: _MergeCase,
+) -> None:
+    assert assembled.used_engram_ids == [case.pinned_id, case.retrieved_id]
+    assert assembled.used_document_chunk_ids == [case.pinned_chunk_id, case.retrieved_chunk_id]
     assert len(assembled.source_references) == 4
     assert "Engram Retrieval Context" in assembled.context_markdown
     assert "Pinned summary" in assembled.context_markdown
@@ -191,6 +239,27 @@ def test_assemble_chat_context_merges_pinned_and_retrieved(monkeypatch) -> None:
     assert "Retrieved summary" in assembled.context_markdown
     assert "Pinned Document Context" in assembled.context_markdown
     assert "Document Retrieval Context" in assembled.context_markdown
+
+
+def test_assemble_chat_context_merges_pinned_and_retrieved(monkeypatch) -> None:
+    session = _session()
+    case = _MergeCase(
+        pinned_id=uuid4(),
+        retrieved_id=uuid4(),
+        pinned_document_id=uuid4(),
+        pinned_chunk_id=uuid4(),
+        retrieved_chunk_id=uuid4(),
+    )
+    _install_merge_case_dependencies(
+        monkeypatch=monkeypatch,
+        case=case,
+    )
+
+    assembled = assemble_chat_context(
+        request=_context_request(session, query="what should we do"),
+    )
+
+    _assert_merge_case(assembled=assembled, case=case)
 
 
 def test_assemble_chat_context_dedupes_duplicate_source_urls(monkeypatch) -> None:
@@ -427,3 +496,29 @@ def test_assemble_chat_context_returns_empty_when_no_sources(monkeypatch) -> Non
     assert assembled.used_engram_ids == []
     assert assembled.used_document_chunk_ids == []
     assert assembled.source_references == []
+
+
+def test_assemble_chat_context_uses_document_top_k_for_retrieval(monkeypatch) -> None:
+    session = _session()
+    observed_top_k: list[int] = []
+
+    monkeypatch.setattr("app.chat.context.list_pinned_engram_summaries", lambda *args, **kwargs: [])
+    monkeypatch.setattr("app.chat.context.list_pinned_documents", lambda *args, **kwargs: [])
+    monkeypatch.setattr("app.chat.context.query_engrams", lambda *args, **kwargs: [])
+    monkeypatch.setattr("app.chat.context.get_rehydration_bundle", lambda *args, **kwargs: None)
+
+    def _fake_query_document_chunks(actor_user_id, request, embedding_dim):  # noqa: ANN001
+        observed_top_k.append(request.top_k)
+        return []
+
+    monkeypatch.setattr("app.chat.context.query_document_chunks", _fake_query_document_chunks)
+
+    assemble_chat_context(
+        request=_context_request(
+            session,
+            query="top-k check",
+            document_top_k=2,
+        ),
+    )
+
+    assert observed_top_k == [2]
