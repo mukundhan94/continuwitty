@@ -131,3 +131,45 @@ type EngramSourceRecord struct {
 	Title      *string   `json:"title,omitempty"`
 	Snippet    *string   `json:"snippet,omitempty"`
 }
+
+// AdminEngramSourceInput models source replacement payloads in memory-admin flows.
+type AdminEngramSourceInput struct {
+	CapturedAt  time.Time `json:"captured_at"`
+	URL         string    `json:"url"`
+	Title       *string   `json:"title,omitempty"`
+	Snippet     *string   `json:"snippet,omitempty"`
+	ContentText *string   `json:"content_text,omitempty"`
+	ContentHash *string   `json:"content_hash,omitempty"`
+}
+
+// AdminEngramSourceRecord models admin source rows associated with an engram.
+type AdminEngramSourceRecord struct {
+	SourceID    uuid.UUID `json:"source_id"`
+	CapturedAt  time.Time `json:"captured_at"`
+	URL         string    `json:"url"`
+	Title       *string   `json:"title,omitempty"`
+	Snippet     *string   `json:"snippet,omitempty"`
+	ContentText *string   `json:"content_text,omitempty"`
+	ContentHash *string   `json:"content_hash,omitempty"`
+}
+
+// AdminEngramRecord models admin-level engram rows with lifecycle metadata.
+type AdminEngramRecord struct {
+	EngramID                uuid.UUID                 `json:"engram_id"`
+	ProjectID               string                    `json:"project_id"`
+	ThreadID                *string                   `json:"thread_id,omitempty"`
+	Title                   string                    `json:"title"`
+	Abstract                string                    `json:"abstract"`
+	DetailedSummaryMarkdown string                    `json:"detailed_summary_markdown"`
+	Tags                    []string                  `json:"tags,omitempty"`
+	Keywords                []string                  `json:"keywords,omitempty"`
+	OwnerUserID             *uuid.UUID                `json:"owner_user_id,omitempty"`
+	VisibilityScope         VisibilityScope           `json:"visibility_scope"`
+	SourceSessionID         *uuid.UUID                `json:"source_session_id,omitempty"`
+	CreatedAt               time.Time                 `json:"created_at"`
+	UpdatedAt               time.Time                 `json:"updated_at"`
+	DeletedAt               *time.Time                `json:"deleted_at,omitempty"`
+	DeletedByUserID         *uuid.UUID                `json:"deleted_by_user_id,omitempty"`
+	DeleteReason            *string                   `json:"delete_reason,omitempty"`
+	Sources                 []AdminEngramSourceRecord `json:"sources,omitempty"`
+}
