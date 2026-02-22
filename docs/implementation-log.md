@@ -318,6 +318,40 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-02-22 (Go migration CP48: non-checkpoint code-health uplift for admin engram repository tests)
+
+1. Improved legacy non-checkpoint admin engram repository tests:
+   - `internal/repository/admin_engram_test.go`
+   - replaced high-argument row helper signatures with fixture structs:
+     - `adminEngramRowFixture`
+     - `adminEngramSourceRowFixture`
+   - updated admin engram and admin engram update test call sites to use typed fixtures instead of long positional helper arguments.
+2. Executed affected tests one-by-one:
+   - `TestListAdminEngramsBuildsFiltersAndSearch`
+   - `TestListAdminEngramSourcesReturnsRows`
+   - `TestGetAdminEngramReturnsNilWhenMissing`
+   - `TestGetAdminEngramHydratesSources`
+   - `TestMoveAdminEngramProjectReturnsUpdatedRecordAndRunsDetachQuery`
+   - `TestMoveAdminEngramProjectReturnsNilWhenNotFound`
+   - `TestSoftDeleteEngramReturnsBool`
+   - `TestRestoreEngramReturnsBool`
+   - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+   - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+   - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+   - `TestReplaceAdminEngramSourcesReplacesRows`
+   - `TestUpdateAdminEngramReturnsNilWhenMissing`
+   - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+3. Full Go verification:
+   - `/usr/local/go/bin/go test ./...` passed.
+4. CodeScene checks:
+   - `/Users/mukundhan/Projects/engram/internal/repository/admin_engram_test.go` improved from `9.38` to `10.0`
+   - `/Users/mukundhan/Projects/engram/internal/repository/admin_engram_update_test.go` remained `10.0` after helper migration.
+   - no remaining findings.
+5. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none.
+
 ### 2026-02-22 (Go migration CP47: non-checkpoint code-health uplift for admin engram update repository tests)
 
 1. Improved legacy non-checkpoint admin engram update repository tests:

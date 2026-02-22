@@ -21,24 +21,21 @@ func TestListAdminEngramsBuildsFiltersAndSearch(t *testing.T) {
 	createdAt := time.Date(2026, 2, 22, 18, 0, 0, 0, time.UTC)
 	db := &fakeQueryer{
 		queryRowsResult: &fakeRows{values: [][]any{
-			adminEngramRowValues(
-				engramID,
-				"project-docs",
-				&threadID,
-				"Queue pressure snapshot",
-				"Updated abstract",
-				"markdown",
-				[]string{"ops"},
-				[]string{"queue"},
-				&ownerUserID,
-				"private",
-				&sessionID,
-				createdAt,
-				createdAt,
-				nil,
-				nil,
-				nil,
-			),
+			adminEngramRowValues(adminEngramRowFixture{
+				EngramID:                engramID,
+				ProjectID:               "project-docs",
+				ThreadID:                &threadID,
+				Title:                   "Queue pressure snapshot",
+				Abstract:                "Updated abstract",
+				DetailedSummaryMarkdown: "markdown",
+				Tags:                    []string{"ops"},
+				Keywords:                []string{"queue"},
+				OwnerUserID:             &ownerUserID,
+				VisibilityScope:         "private",
+				SourceSessionID:         &sessionID,
+				CreatedAt:               createdAt,
+				UpdatedAt:               createdAt,
+			}),
 		}},
 	}
 	projectID := "project-docs"
@@ -94,16 +91,20 @@ func TestListAdminEngramSourcesReturnsRows(t *testing.T) {
 	contentHash := "hash-a"
 	db := &fakeQueryer{
 		queryRowsResult: &fakeRows{values: [][]any{
-			adminEngramSourceRowValues(sourceID, capturedAt, "https://example.com/a", &title, &snippet, &contentText, &contentHash),
-			adminEngramSourceRowValues(
-				uuid.MustParse("00000000-0000-0000-0000-000000000d13"),
-				capturedAt,
-				"https://example.com/b",
-				nil,
-				nil,
-				nil,
-				nil,
-			),
+			adminEngramSourceRowValues(adminEngramSourceRowFixture{
+				SourceID:    sourceID,
+				CapturedAt:  capturedAt,
+				URL:         "https://example.com/a",
+				Title:       &title,
+				Snippet:     &snippet,
+				ContentText: &contentText,
+				ContentHash: &contentHash,
+			}),
+			adminEngramSourceRowValues(adminEngramSourceRowFixture{
+				SourceID:   uuid.MustParse("00000000-0000-0000-0000-000000000d13"),
+				CapturedAt: capturedAt,
+				URL:        "https://example.com/b",
+			}),
 		}},
 	}
 
@@ -141,34 +142,25 @@ func TestGetAdminEngramHydratesSources(t *testing.T) {
 	ownerUserID := uuid.MustParse("00000000-0000-0000-0000-000000000d32")
 	createdAt := time.Date(2026, 2, 22, 18, 10, 0, 0, time.UTC)
 	db := &fakeQueryer{
-		queryRowResult: &fakeRow{values: adminEngramRowValues(
-			engramID,
-			"project-docs",
-			nil,
-			"Admin engram",
-			"Abstract",
-			"Markdown",
-			[]string{"tag"},
-			[]string{"keyword"},
-			&ownerUserID,
-			"project",
-			nil,
-			createdAt,
-			createdAt,
-			nil,
-			nil,
-			nil,
-		)},
+		queryRowResult: &fakeRow{values: adminEngramRowValues(adminEngramRowFixture{
+			EngramID:                engramID,
+			ProjectID:               "project-docs",
+			Title:                   "Admin engram",
+			Abstract:                "Abstract",
+			DetailedSummaryMarkdown: "Markdown",
+			Tags:                    []string{"tag"},
+			Keywords:                []string{"keyword"},
+			OwnerUserID:             &ownerUserID,
+			VisibilityScope:         "project",
+			CreatedAt:               createdAt,
+			UpdatedAt:               createdAt,
+		})},
 		queryRowsResult: &fakeRows{values: [][]any{
-			adminEngramSourceRowValues(
-				uuid.MustParse("00000000-0000-0000-0000-000000000d33"),
-				createdAt,
-				"https://example.com/source",
-				nil,
-				nil,
-				nil,
-				nil,
-			),
+			adminEngramSourceRowValues(adminEngramSourceRowFixture{
+				SourceID:   uuid.MustParse("00000000-0000-0000-0000-000000000d33"),
+				CapturedAt: createdAt,
+				URL:        "https://example.com/source",
+			}),
 		}},
 	}
 
@@ -196,37 +188,28 @@ func TestMoveAdminEngramProjectReturnsUpdatedRecordAndRunsDetachQuery(t *testing
 	db := &fakeQueryer{
 		queryRowResults: []*fakeRow{
 			{values: []any{engramID}},
-			{values: adminEngramRowValues(
-				engramID,
-				targetProjectID,
-				nil,
-				"Moved engram",
-				"Abstract",
-				"Markdown",
-				[]string{"tag"},
-				[]string{"keyword"},
-				&ownerUserID,
-				"private",
-				nil,
-				createdAt,
-				createdAt,
-				nil,
-				nil,
-				nil,
-			)},
+			{values: adminEngramRowValues(adminEngramRowFixture{
+				EngramID:                engramID,
+				ProjectID:               targetProjectID,
+				Title:                   "Moved engram",
+				Abstract:                "Abstract",
+				DetailedSummaryMarkdown: "Markdown",
+				Tags:                    []string{"tag"},
+				Keywords:                []string{"keyword"},
+				OwnerUserID:             &ownerUserID,
+				VisibilityScope:         "private",
+				CreatedAt:               createdAt,
+				UpdatedAt:               createdAt,
+			})},
 		},
 		queryRowsResults: []*fakeRows{
 			{values: [][]any{}},
 			{values: [][]any{
-				adminEngramSourceRowValues(
-					uuid.MustParse("00000000-0000-0000-0000-000000000d44"),
-					createdAt,
-					"https://example.com/source",
-					nil,
-					nil,
-					nil,
-					nil,
-				),
+				adminEngramSourceRowValues(adminEngramSourceRowFixture{
+					SourceID:   uuid.MustParse("00000000-0000-0000-0000-000000000d44"),
+					CapturedAt: createdAt,
+					URL:        "https://example.com/source",
+				}),
 			}},
 		},
 	}
@@ -330,97 +313,101 @@ func TestRestoreEngramReturnsBool(t *testing.T) {
 	}
 }
 
-func adminEngramRowValues(
-	engramID uuid.UUID,
-	projectID string,
-	threadID *string,
-	title string,
-	abstract string,
-	detailedSummaryMarkdown string,
-	tags []string,
-	keywords []string,
-	ownerUserID *uuid.UUID,
-	visibilityScope string,
-	sourceSessionID *uuid.UUID,
-	createdAt time.Time,
-	updatedAt time.Time,
-	deletedAt *time.Time,
-	deletedByUserID *uuid.UUID,
-	deleteReason *string,
-) []any {
+type adminEngramRowFixture struct {
+	EngramID                uuid.UUID
+	ProjectID               string
+	ThreadID                *string
+	Title                   string
+	Abstract                string
+	DetailedSummaryMarkdown string
+	Tags                    []string
+	Keywords                []string
+	OwnerUserID             *uuid.UUID
+	VisibilityScope         string
+	SourceSessionID         *uuid.UUID
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	DeletedAt               *time.Time
+	DeletedByUserID         *uuid.UUID
+	DeleteReason            *string
+}
+
+func adminEngramRowValues(fixture adminEngramRowFixture) []any {
 	var threadIDValue any
-	if threadID != nil {
-		threadIDValue = *threadID
+	if fixture.ThreadID != nil {
+		threadIDValue = *fixture.ThreadID
 	}
 	var ownerUserIDValue any
-	if ownerUserID != nil {
-		ownerUserIDValue = *ownerUserID
+	if fixture.OwnerUserID != nil {
+		ownerUserIDValue = *fixture.OwnerUserID
 	}
 	var sourceSessionIDValue any
-	if sourceSessionID != nil {
-		sourceSessionIDValue = *sourceSessionID
+	if fixture.SourceSessionID != nil {
+		sourceSessionIDValue = *fixture.SourceSessionID
 	}
 	var deletedAtValue any
-	if deletedAt != nil {
-		deletedAtValue = *deletedAt
+	if fixture.DeletedAt != nil {
+		deletedAtValue = *fixture.DeletedAt
 	}
 	var deletedByUserIDValue any
-	if deletedByUserID != nil {
-		deletedByUserIDValue = *deletedByUserID
+	if fixture.DeletedByUserID != nil {
+		deletedByUserIDValue = *fixture.DeletedByUserID
 	}
 	var deleteReasonValue any
-	if deleteReason != nil {
-		deleteReasonValue = *deleteReason
+	if fixture.DeleteReason != nil {
+		deleteReasonValue = *fixture.DeleteReason
 	}
 	return []any{
-		engramID,
-		projectID,
+		fixture.EngramID,
+		fixture.ProjectID,
 		threadIDValue,
-		title,
-		abstract,
-		detailedSummaryMarkdown,
-		tags,
-		keywords,
+		fixture.Title,
+		fixture.Abstract,
+		fixture.DetailedSummaryMarkdown,
+		fixture.Tags,
+		fixture.Keywords,
 		ownerUserIDValue,
-		visibilityScope,
+		fixture.VisibilityScope,
 		sourceSessionIDValue,
-		createdAt,
-		updatedAt,
+		fixture.CreatedAt,
+		fixture.UpdatedAt,
 		deletedAtValue,
 		deletedByUserIDValue,
 		deleteReasonValue,
 	}
 }
 
-func adminEngramSourceRowValues(
-	sourceID uuid.UUID,
-	capturedAt time.Time,
-	url string,
-	title *string,
-	snippet *string,
-	contentText *string,
-	contentHash *string,
-) []any {
+type adminEngramSourceRowFixture struct {
+	SourceID    uuid.UUID
+	CapturedAt  time.Time
+	URL         string
+	Title       *string
+	Snippet     *string
+	ContentText *string
+	ContentHash *string
+}
+
+func adminEngramSourceRowValues(fixture adminEngramSourceRowFixture) []any {
 	var titleValue any
-	if title != nil {
-		titleValue = *title
+	if fixture.Title != nil {
+		titleValue = *fixture.Title
 	}
 	var snippetValue any
-	if snippet != nil {
-		snippetValue = *snippet
+	if fixture.Snippet != nil {
+		snippetValue = *fixture.Snippet
 	}
 	var contentTextValue any
-	if contentText != nil {
-		contentTextValue = *contentText
+	if fixture.ContentText != nil {
+		contentTextValue = *fixture.ContentText
 	}
 	var contentHashValue any
-	if contentHash != nil {
-		contentHashValue = *contentHash
+	if fixture.ContentHash != nil {
+		contentHashValue = *fixture.ContentHash
 	}
 	return []any{
-		sourceID,
-		capturedAt,
-		url,
+		fixture.SourceID,
+		fixture.CapturedAt,
+		fixture.URL,
 		titleValue,
 		snippetValue,
 		contentTextValue,

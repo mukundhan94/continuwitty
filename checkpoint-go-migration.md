@@ -2654,3 +2654,37 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP48 - Non-Checkpoint Code-Health Uplift (`internal/repository/admin_engram_test.go`)
+
+- Improved legacy non-checkpoint admin engram repository test file:
+  - `internal/repository/admin_engram_test.go`
+  - replaced high-argument row helper signatures with fixture structs:
+    - `adminEngramRowFixture`
+    - `adminEngramSourceRowFixture`
+  - updated all admin engram and admin engram update test call sites to pass typed fixtures instead of long positional argument lists.
+- Executed migrated tests one-by-one:
+  - `TestListAdminEngramsBuildsFiltersAndSearch`
+  - `TestListAdminEngramSourcesReturnsRows`
+  - `TestGetAdminEngramReturnsNilWhenMissing`
+  - `TestGetAdminEngramHydratesSources`
+  - `TestMoveAdminEngramProjectReturnsUpdatedRecordAndRunsDetachQuery`
+  - `TestMoveAdminEngramProjectReturnsNilWhenNotFound`
+  - `TestSoftDeleteEngramReturnsBool`
+  - `TestRestoreEngramReturnsBool`
+  - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+  - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+  - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+  - `TestReplaceAdminEngramSourcesReplacesRows`
+  - `TestUpdateAdminEngramReturnsNilWhenMissing`
+  - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/admin_engram_test.go` score improved from `9.38` -> `10.0`
+  - `internal/repository/admin_engram_update_test.go` remains `10.0` after helper signature migration.
+  - `code_health_review` shows no remaining findings for either file.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
