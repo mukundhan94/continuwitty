@@ -2688,3 +2688,27 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP49 - Non-Checkpoint Code-Health Uplift (`internal/admin/service_test.go`)
+
+- Improved legacy non-checkpoint admin service test file:
+  - `internal/admin/service_test.go`
+  - consolidated duplicated list-forwarding tests into one table-driven test:
+    - `TestListMemoryAdminRequestsForwardSharedObject`
+  - introduced shared capture struct for forwarding assertions:
+    - `sharedListRequestCapture`
+- Executed migrated tests one-by-one:
+  - `TestListMemoryAdminRequestsForwardSharedObject`
+  - `TestListEngramsUsesRequestObject`
+  - `TestUpdateCollectionRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramUsesRepositoryRequestObject`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/admin/service_test.go` score improved from `9.38` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.

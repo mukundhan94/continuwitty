@@ -13,60 +13,85 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestListSessionsForwardsSharedRequestObject(t *testing.T) {
-	service := NewService(nil, 256, nil)
-	captured := repository.AdminSessionListInput{}
-	service.deps.listAdminSessions = func(_ context.Context, _ repository.Queryer, input repository.AdminSessionListInput) ([]models.AdminChatSessionRecord, error) {
-		captured = input
-		return []models.AdminChatSessionRecord{}, nil
+func TestListMemoryAdminRequestsForwardSharedObject(t *testing.T) {
+	testCases := []struct {
+		name  string
+		setup func(service *Service, capture *sharedListRequestCapture)
+		call  func(service *Service, request MemoryAdminListRequest) (int, error)
+	}{
+		{
+			name: "sessions",
+			setup: func(service *Service, capture *sharedListRequestCapture) {
+				service.deps.listAdminSessions = func(
+					_ context.Context,
+					_ repository.Queryer,
+					input repository.AdminSessionListInput,
+				) ([]models.AdminChatSessionRecord, error) {
+					capture.projectID = input.ProjectID
+					capture.ownerUserID = input.OwnerUserID
+					capture.includeDeleted = input.IncludeDeleted
+					capture.limit = input.Limit
+					capture.offset = input.Offset
+					return []models.AdminChatSessionRecord{}, nil
+				}
+			},
+			call: func(service *Service, request MemoryAdminListRequest) (int, error) {
+				listed, err := service.ListSessions(context.Background(), request)
+				return len(listed), err
+			},
+		},
+		{
+			name: "collections",
+			setup: func(service *Service, capture *sharedListRequestCapture) {
+				service.deps.listCollections = func(
+					_ context.Context,
+					_ repository.Queryer,
+					input repository.CollectionListInput,
+				) ([]models.EngramCollectionRecord, error) {
+					capture.projectID = input.ProjectID
+					capture.ownerUserID = input.OwnerUserID
+					capture.includeDeleted = input.IncludeDeleted
+					capture.limit = input.Limit
+					capture.offset = input.Offset
+					return []models.EngramCollectionRecord{}, nil
+				}
+			},
+			call: func(service *Service, request MemoryAdminListRequest) (int, error) {
+				listed, err := service.ListCollections(context.Background(), request)
+				return len(listed), err
+			},
+		},
 	}
 
-	ownerUserID := uuid.MustParse("00000000-0000-0000-0000-000000000f01")
-	projectID := "engram-vault"
-	request := MemoryAdminListRequest{
-		ProjectID:      &projectID,
-		OwnerUserID:    &ownerUserID,
-		IncludeDeleted: false,
-		Limit:          50,
-		Offset:         10,
+	for index, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			service := NewService(nil, 256, nil)
+			capture := &sharedListRequestCapture{}
+			testCase.setup(service, capture)
+
+			ownerUserID := uuid.MustParse("00000000-0000-0000-0000-000000000f01")
+			if index == 1 {
+				ownerUserID = uuid.MustParse("00000000-0000-0000-0000-000000000f02")
+			}
+			projectID := "engram-vault"
+			request := MemoryAdminListRequest{
+				ProjectID:      &projectID,
+				OwnerUserID:    &ownerUserID,
+				IncludeDeleted: false,
+				Limit:          50,
+				Offset:         10,
+			}
+
+			listedCount, err := testCase.call(service, request)
+			requireNoError(t, err)
+			requireEqual(t, 0, listedCount)
+			requireEqual(t, projectID, *capture.projectID)
+			requireEqual(t, ownerUserID, *capture.ownerUserID)
+			requireEqual(t, false, capture.includeDeleted)
+			requireEqual(t, 50, capture.limit)
+			requireEqual(t, 10, capture.offset)
+		})
 	}
-
-	listed, err := service.ListSessions(context.Background(), request)
-	requireNoError(t, err)
-	requireEqual(t, 0, len(listed))
-	requireEqual(t, projectID, *captured.ProjectID)
-	requireEqual(t, ownerUserID, *captured.OwnerUserID)
-	requireEqual(t, false, captured.IncludeDeleted)
-	requireEqual(t, 50, captured.Limit)
-	requireEqual(t, 10, captured.Offset)
-}
-
-func TestListCollectionsForwardsSharedRequestObject(t *testing.T) {
-	service := NewService(nil, 256, nil)
-	captured := repository.CollectionListInput{}
-	service.deps.listCollections = func(_ context.Context, _ repository.Queryer, input repository.CollectionListInput) ([]models.EngramCollectionRecord, error) {
-		captured = input
-		return []models.EngramCollectionRecord{}, nil
-	}
-
-	ownerUserID := uuid.MustParse("00000000-0000-0000-0000-000000000f02")
-	projectID := "engram-vault"
-	request := MemoryAdminListRequest{
-		ProjectID:      &projectID,
-		OwnerUserID:    &ownerUserID,
-		IncludeDeleted: false,
-		Limit:          50,
-		Offset:         10,
-	}
-
-	listed, err := service.ListCollections(context.Background(), request)
-	requireNoError(t, err)
-	requireEqual(t, 0, len(listed))
-	requireEqual(t, projectID, *captured.ProjectID)
-	requireEqual(t, ownerUserID, *captured.OwnerUserID)
-	requireEqual(t, false, captured.IncludeDeleted)
-	requireEqual(t, 50, captured.Limit)
-	requireEqual(t, 10, captured.Offset)
 }
 
 func TestListEngramsUsesRequestObject(t *testing.T) {
@@ -270,6 +295,14 @@ func derefStringSlice(value *[]string) []string {
 		return nil
 	}
 	return *value
+}
+
+type sharedListRequestCapture struct {
+	projectID      *string
+	ownerUserID    *uuid.UUID
+	includeDeleted bool
+	limit          int
+	offset         int
 }
 
 func requireNoError(t *testing.T, err error) {
