@@ -71,10 +71,18 @@ export interface ChatLifecyclePolicy {
 export interface ChatTimelineEvent {
   event_id: string
   session_id: string
-  event_type: 'autosave_snapshot' | 'manual_snapshot' | 'consolidation' | string
+  event_type:
+    | 'autosave_snapshot'
+    | 'manual_snapshot'
+    | 'consolidation'
+    | 'consolidation_merge'
+    | 'consolidation_group'
+    | string
   title: string
   abstract: string
   tags: string[]
+  consolidation_group_key?: string | null
+  consolidation_merged_count?: number | null
   created_at: string
 }
 

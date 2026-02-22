@@ -45,7 +45,7 @@ from app.projects.repository import ensure_project_exists
 from app.repository import create_engram
 
 from .errors import ChatSessionNotFoundError, ChatValidationError
-from .lifecycle_policy import classify_timeline_event_type, normalize_autosave_policy
+from .lifecycle_policy import classify_timeline_event, normalize_autosave_policy
 from .session_lifecycle import (
     LifecycleMaintenanceResult,
     SessionLifecycleDependencies,
@@ -212,18 +212,23 @@ class ChatSessionOperationsMixin:
             limit=limit,
             offset=offset,
         )
-        return [
-            ChatTimelineEvent(
+        events: list[ChatTimelineEvent] = []
+        for item in linked:
+            semantics = classify_timeline_event(item.tags)
+            events.append(
+                ChatTimelineEvent(
                 event_id=item.engram_id,
                 session_id=session_id,
-                event_type=classify_timeline_event_type(item.tags),
+                event_type=semantics.event_type,
                 title=item.title,
                 abstract=item.abstract,
                 tags=item.tags,
+                consolidation_group_key=semantics.consolidation_group_key,
+                consolidation_merged_count=semantics.consolidation_merged_count,
                 created_at=item.created_at,
             )
-            for item in linked
-        ]
+            )
+        return events
 
     def list_messages(
         self,

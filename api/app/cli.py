@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from .config import get_settings
 from .consolidation import run_project_consolidation
+from .mcp.client import McpClientError, McpSseClient, mcp_frame_to_json
 from .models import EngramQueryRequest, MemoryEngramCreate
 from .repository import create_engram, get_rehydration_bundle, query_engrams
 
@@ -91,13 +92,41 @@ def _consolidate(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="engram-cli",
-        description="Local CLI for upload/search/rehydrate workflows.",
-    )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+def _load_mcp_params(args: argparse.Namespace) -> dict[str, Any]:
+    payload = _load_json(args.params_file) if args.params_file else json.loads(args.params_json)
+    if not isinstance(payload, dict):
+        raise ValueError("MCP params must be a JSON object")
+    return payload
 
+
+def _mcp_call(args: argparse.Namespace) -> int:
+    if not args.bearer_token:
+        if bool(args.username) != bool(args.password):
+            raise ValueError("Provide both --username and --password for session login")
+        if not args.username:
+            raise ValueError(
+                "Provide either --bearer-token or both --username and --password"
+            )
+
+    params = _load_mcp_params(args)
+    with McpSseClient(base_url=args.base_url, bearer_token=args.bearer_token) as client:
+        if not args.bearer_token:
+            client.login_with_password(username=args.username, password=args.password)
+        result = client.call_tool(
+            method=args.method,
+            params=params,
+            request_id=args.request_id,
+        )
+
+    payload = {
+        "request": result.request.model_dump(mode="json"),
+        "frames": [mcp_frame_to_json(frame) for frame in result.frames],
+    }
+    _print_json(payload)
+    return 1 if result.final_error_frame is not None else 0
+
+
+def _register_upload_parser(subparsers) -> None:  # noqa: ANN001
     upload_parser = subparsers.add_parser("upload", help="Create one or more engrams from JSON")
     upload_parser.add_argument(
         "--file",
@@ -105,6 +134,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to a JSON file containing a MemoryEngramCreate object or list",
     )
 
+
+def _register_search_parser(subparsers) -> None:  # noqa: ANN001
     search_parser = subparsers.add_parser("search", help="Semantic search for engrams")
     search_parser.add_argument("--query", required=True, help="Semantic query text")
     search_parser.add_argument("--project-id", help="Optional project filter")
@@ -126,11 +157,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="ISO-8601 timestamp filter (inclusive)",
     )
 
+
+def _register_rehydrate_parser(subparsers) -> None:  # noqa: ANN001
     rehydrate_parser = subparsers.add_parser(
         "rehydrate", help="Get rehydration bundle by engram id"
     )
     rehydrate_parser.add_argument("--engram-id", required=True, help="Engram UUID")
 
+
+def _register_consolidate_parser(subparsers) -> None:  # noqa: ANN001
     consolidate_parser = subparsers.add_parser(
         "consolidate", help="Create an automated consolidation engram for a project"
     )
@@ -153,6 +188,54 @@ def build_parser() -> argparse.ArgumentParser:
         help="Preview consolidation without creating a new engram",
     )
 
+
+def _register_mcp_call_parser(subparsers) -> None:  # noqa: ANN001
+    mcp_call_parser = subparsers.add_parser(
+        "mcp-call",
+        help="Call an MCP JSON-RPC method over the stream endpoint for smoke debugging",
+    )
+    mcp_call_parser.add_argument(
+        "--base-url",
+        default="http://localhost:8000",
+        help="Engram API base URL",
+    )
+    mcp_call_parser.add_argument("--method", required=True, help="JSON-RPC method to invoke")
+    mcp_call_parser.add_argument(
+        "--request-id",
+        default="engram-cli-mcp-call-1",
+        help="JSON-RPC request id",
+    )
+    params_group = mcp_call_parser.add_mutually_exclusive_group()
+    params_group.add_argument(
+        "--params-json",
+        default="{}",
+        help="JSON object string used as request params",
+    )
+    params_group.add_argument(
+        "--params-file",
+        help="Path to a JSON file containing request params object",
+    )
+    mcp_call_parser.add_argument(
+        "--bearer-token",
+        help="MCP bearer token (engram_mcp_<token_id_hex>_<secret>)",
+    )
+    mcp_call_parser.add_argument("--username", help="Username for form-based login")
+    mcp_call_parser.add_argument("--password", help="Password for form-based login")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="engram-cli",
+        description="Local CLI for upload/search/rehydrate workflows.",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    _register_upload_parser(subparsers)
+    _register_search_parser(subparsers)
+    _register_rehydrate_parser(subparsers)
+    _register_consolidate_parser(subparsers)
+    _register_mcp_call_parser(subparsers)
+
     return parser
 
 
@@ -169,7 +252,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _rehydrate(args)
         if args.command == "consolidate":
             return _consolidate(args)
-    except (OSError, json.JSONDecodeError, ValueError, ValidationError) as exc:
+        if args.command == "mcp-call":
+            return _mcp_call(args)
+    except (
+        McpClientError,
+        OSError,
+        json.JSONDecodeError,
+        ValueError,
+        ValidationError,
+    ) as exc:
         print(f"CLI error: {exc}", file=sys.stderr)
         return 2
 

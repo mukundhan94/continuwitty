@@ -512,3 +512,59 @@ def test_run_session_lifecycle_prunes_retention_excess(monkeypatch) -> None:
 
     assert result.snapshot_engram_id is None
     assert len(result.pruned_engram_ids) == 2
+
+
+def test_list_timeline_events_exposes_consolidation_merge_semantics(monkeypatch) -> None:
+    actor_id = uuid4()
+    session = _session(actor_id)
+    service = ChatService(embedding_dim=256)
+
+    now = datetime.now(UTC)
+    linked = [
+        EngramSummary(
+            engram_id=uuid4(),
+            project_id=session.project_id,
+            thread_id=f"chat-session:{session.session_id}:consolidation",
+            title="Consolidated Snapshot",
+            abstract="Merged timeline snapshots for incident handoff.",
+            created_at=now,
+            tags=[
+                "consolidated",
+                "consolidation_group_key:incident-42",
+                "consolidation_merged_count:3",
+            ],
+            keywords=[],
+        ),
+        EngramSummary(
+            engram_id=uuid4(),
+            project_id=session.project_id,
+            thread_id=f"chat-session:{session.session_id}:autosave",
+            title="Autosave Snapshot #1",
+            abstract="Autosave summary.",
+            created_at=now - timedelta(minutes=2),
+            tags=["autosave_snapshot"],
+            keywords=[],
+        ),
+    ]
+
+    monkeypatch.setattr(
+        "app.chat.session_operations.get_chat_session",
+        lambda session_id, actor_user_id: session,
+    )
+    monkeypatch.setattr(
+        "app.chat.session_operations.list_session_linked_engrams",
+        lambda **kwargs: linked,
+    )
+
+    events = service.list_timeline_events(
+        actor_user_id=actor_id,
+        session_id=session.session_id,
+        limit=20,
+        offset=0,
+    )
+
+    assert len(events) == 2
+    assert events[0].event_type == "consolidation_merge"
+    assert events[0].consolidation_group_key == "incident-42"
+    assert events[0].consolidation_merged_count == 3
+    assert events[1].event_type == "autosave_snapshot"

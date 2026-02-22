@@ -8,12 +8,12 @@
 ## Current State Summary
 
 - **Phases 0-15 completed:** foundation, schema/storage, retrieval/rehydration, durability, chat continuity, providers, MCP, UI, acceptance, theme/UX hardening.
-- **Phase 16 in progress:** MCP developer tooling and typed clients (compatibility + typed clients complete, CLI smoke command deferred).
+- **Phase 16 completed:** MCP developer tooling and typed clients (compatibility surface, typed clients, and CLI smoke utility complete).
 - **Phase 17 completed:** document ingestion and RAG-ready retrieval, including session-level document pinning.
-- **Phase 18 in progress:** memory lifecycle policies (core autosave/retention/timeline controls implemented; richer consolidation semantics remaining).
+- **Phase 18 completed:** memory lifecycle policies (autosave/retention controls, timeline APIs/UI, and explicit consolidation merge/group semantics).
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
-- **Phase 31 in progress:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests implemented; docs/skills closeout pending).
+- **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
 - **Phase 33 in progress:** portable export/import stash workflow (backend export+import APIs and new web transfer page shipped; full cross-surface closeout still in progress).
 - **Phase 34 planned:** security audit remediation backlog queued for post-export hardening cycle.
 
@@ -31,7 +31,8 @@
 - [x] Added dedicated admin memory UI page with routing (`/admin/memory`).
 - [x] Hardened `/api/v1/engrams*` with authenticated actor-scoped visibility.
 - [x] Added backend/web/acceptance tests for Phase 31 behavior.
-- [ ] Update `AGENT.md` + skills docs and append final phase-closeout validation evidence.
+- [x] Update `AGENT.md` + skills docs and append final phase-closeout validation evidence.
+- [x] Validation evidence: `make acceptance-test-mock` (2026-02-22) -> `18 passed`, including `@phase31 @memory-admin` scenarios.
 
 #### Planned Phase 31 User-Facing Areas
 
@@ -114,19 +115,19 @@
 - Bedrock live and triage continuity scenarios
 - Markdown rendering, stream parsing, dark/light theming, sidebar UX
 
-### Milestone 16 — MCP Developer Experience (In Progress)
+### Milestone 16 — MCP Developer Experience (Completed)
 - MCP compatibility methods: `initialize`, `tools/list`, `tools/call`
 - Typed Python and TypeScript MCP client helpers
-- Remaining: CLI smoke utility deferred
+- Completed: CLI smoke utility (`engram-cli mcp-call`) for local MCP transport/tool debugging.
 
 ### Milestone 17 — RAG-Ready Ingestion
 - File/document upload, deterministic chunking, retrieval blending
 - Session-level document pin/unpin and continuation carry-forward
 
-### Milestone 18 — Memory Lifecycle (In Progress)
+### Milestone 18 — Memory Lifecycle (Completed)
 - Session-level autosave strategies, retention windows, pruning
 - Lifecycle policy + timeline APIs + MCP tools + UI
-- Remaining: richer consolidation merge/group timeline semantics
+- Completed: explicit consolidation merge/group timeline semantics in lifecycle timeline rendering.
 
 ### Milestone 29 — Auto-Metadata Enrichment
 - Deterministic fill-empty-only derivation for `abstract`, `tags`, `keywords`
@@ -152,12 +153,12 @@
 | 13 | MCP HTTP Stream | Completed |
 | 14 | React Chat UI | Completed |
 | 15 | Acceptance + UX Hardening | Completed |
-| 16 | MCP Developer Experience | In Progress |
+| 16 | MCP Developer Experience | Completed |
 | 17 | Document Ingestion (RAG) | Completed |
-| 18 | Memory Lifecycle Policies | In Progress |
+| 18 | Memory Lifecycle Policies | Completed |
 | 29 | Auto-Metadata Enrichment | Completed |
 | 30 | MCP Personal Access Tokens | Completed |
-| 31 | Enterprise Memory Management | In Progress |
+| 31 | Enterprise Memory Management | Completed |
 | 19 | Collaboration + Sharing | Planned |
 | 20 | Production Security | Planned |
 | 21-23 | Observability, Release, EvalOps | Planned |

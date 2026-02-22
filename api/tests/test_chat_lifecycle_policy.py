@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from app.chat.lifecycle_policy import (
+    classify_timeline_event,
     classify_timeline_event_type,
     duplicate_snapshot_exists,
     is_low_value_snapshot_abstract,
@@ -110,4 +111,30 @@ def test_retention_pruning_respects_age_and_max_count() -> None:
 def test_timeline_event_classification() -> None:
     assert classify_timeline_event_type(["autosave_snapshot", "chat"]) == "autosave_snapshot"
     assert classify_timeline_event_type(["consolidated", "maintenance"]) == "consolidation"
+    assert (
+        classify_timeline_event_type(
+            ["consolidated", "consolidation_group_key:incident-42"]
+        )
+        == "consolidation_group"
+    )
+    assert (
+        classify_timeline_event_type(
+            [
+                "consolidated",
+                "consolidation_group_key:incident-42",
+                "consolidation_merged_count:3",
+            ]
+        )
+        == "consolidation_merge"
+    )
     assert classify_timeline_event_type(["incident", "handoff"]) == "manual_snapshot"
+
+    semantics = classify_timeline_event(
+        [
+            "consolidated",
+            "consolidation_group_key:incident-42",
+            "consolidation_merged_count:3",
+        ]
+    )
+    assert semantics.consolidation_group_key == "incident-42"
+    assert semantics.consolidation_merged_count == 3

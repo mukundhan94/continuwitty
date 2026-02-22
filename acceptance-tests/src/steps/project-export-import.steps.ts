@@ -155,6 +155,15 @@ async function ensureProjectTransferPage(page: Page): Promise<void> {
   await expect(transferPage).toBeVisible()
 }
 
+async function setWorkspaceProject(page: Page, projectId: string): Promise<void> {
+  const showCreator = page.getByRole('button', { name: /Show Creator/i })
+  if (await showCreator.isVisible().catch(() => false)) {
+    await showCreator.click()
+  }
+  await page.getByTestId('session-project-id-input').fill(projectId)
+  await expect(page.getByTestId('session-project-id-input')).toHaveValue(projectId)
+}
+
 async function datalistOptionValues(page: Page, listSelector: string): Promise<string[]> {
   return page.locator(`${listSelector} option`).evaluateAll((nodes) =>
     nodes
@@ -261,6 +270,7 @@ When('I prepare a project dataset for export tests', async ({ page }) => {
     engramIds: [engramA, engramB],
     collectionIds: [collectionA, collectionB],
   }
+  await setWorkspaceProject(page, projectId)
   latestExportBundle = null
   latestExportFilename = null
 })

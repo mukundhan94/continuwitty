@@ -24,10 +24,17 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
   - `tools/list`
   - `tools/call`
 - Keep direct tool methods for backward compatibility (`chat.*`, `engram.*`, `user.*`).
+- Keep organization contracts stable for project + memory admin:
+  - `project.*` (`list`, `create`, `get_default`, `set_default`)
+  - `engram.*` lifecycle (`list/get/update/move_project/delete/restore`)
+  - `engram.collection_*` lifecycle
+  - `chat.delete_session` and `chat.restore_session`
+- Keep canonical dotted names internally; expose underscore aliases in `tools/list` and accept both forms in `tools/call`.
 - For token-authenticated calls, enforce in service layer before dispatch:
   - scope check (`read` / `write`)
   - optional per-tool allowlist
   - optional project allowlist
+- For write tools that allow omitted `project_id` (`engram.create`, `engram.create_from_conversation`, `engram.collection_create`, `chat.save_as_engram` conversation path), resolve project via project service/token policy and surface `resolved_project_id` + `used_default_project` in structured results.
 
 ## Module Layout (Current)
 - `api/app/mcp/api.py`: HTTP transport and SSE writer.
@@ -47,7 +54,7 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 6. If `tools/list` schemas change, update typed clients and docs in the same phase.
 7. If tool scope/project semantics change, update token policy tests and docs in the same phase.
 
-## Initial Tool Set
+## Current Tool Groups
 - `chat.create_session`
 - `chat.list_sessions`
 - `chat.get_session`
@@ -65,6 +72,24 @@ description: Use this skill when building or changing MCP tool handlers, JSON-RP
 - `chat.list_project_documents`
 - `chat.save_as_engram`
 - `chat.continue_session`
+- `chat.delete_session`
+- `chat.restore_session`
+- `project.list`
+- `project.create`
+- `project.get_default`
+- `project.set_default`
+- `engram.list`
+- `engram.get`
+- `engram.update`
+- `engram.move_project`
+- `engram.delete`
+- `engram.restore`
+- `engram.collection_list`
+- `engram.collection_create`
+- `engram.collection_update`
+- `engram.collection_delete`
+- `engram.collection_add_items`
+- `engram.collection_remove_items`
 - `engram.create`
 - `engram.create_from_conversation`
 - `engram.query`

@@ -164,3 +164,50 @@ describe('ChatPanel markdown rendering', () => {
     expect(screen.getByText(/Output Tokens:/)).toBeInTheDocument()
   })
 })
+
+describe('ChatPanel timeline rendering', () => {
+  it('groups consolidation events with the same consolidation group key', () => {
+    renderPanel({
+      timelineEvents: [
+        {
+          event_id: 'timeline-1',
+          session_id: 'session-1',
+          event_type: 'consolidation_merge',
+          title: 'Consolidated Memory Snapshot A',
+          abstract: 'Merged older timeline snapshots.',
+          tags: ['consolidated', 'consolidation_group_key:incident-42', 'consolidation_merged_count:3'],
+          consolidation_group_key: 'incident-42',
+          consolidation_merged_count: 3,
+          created_at: '2026-02-22T10:00:00Z',
+        },
+        {
+          event_id: 'timeline-2',
+          session_id: 'session-1',
+          event_type: 'consolidation_merge',
+          title: 'Consolidated Memory Snapshot B',
+          abstract: 'Merged additional timeline snapshots.',
+          tags: ['consolidated', 'consolidation_group_key:incident-42', 'consolidation_merged_count:2'],
+          consolidation_group_key: 'incident-42',
+          consolidation_merged_count: 2,
+          created_at: '2026-02-22T09:58:00Z',
+        },
+        {
+          event_id: 'timeline-3',
+          session_id: 'session-1',
+          event_type: 'autosave_snapshot',
+          title: 'Autosave Snapshot #1',
+          abstract: 'Latest autosave summary.',
+          tags: ['autosave_snapshot'],
+          created_at: '2026-02-22T09:50:00Z',
+        },
+      ],
+    })
+
+    expect(screen.getAllByTestId('timeline-item')).toHaveLength(2)
+    expect(screen.getByText('Consolidation Group')).toBeInTheDocument()
+    expect(
+      screen.getByText('Group incident-42: 2 consolidation snapshots (5 merged engrams).'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Autosave Snapshot #1')).toBeInTheDocument()
+  })
+})

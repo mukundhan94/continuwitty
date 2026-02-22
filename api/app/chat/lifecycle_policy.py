@@ -18,6 +18,17 @@ class SessionLifecyclePolicy:
     retention_max_snapshots: int
 
 
+@dataclass(frozen=True)
+class TimelineEventSemantics:
+    event_type: str
+    consolidation_group_key: str | None = None
+    consolidation_merged_count: int | None = None
+
+
+_CONSOLIDATION_GROUP_KEY_TAG_PREFIX = "consolidation_group_key:"
+_CONSOLIDATION_MERGED_COUNT_TAG_PREFIX = "consolidation_merged_count:"
+
+
 def normalize_autosave_policy(
     *,
     autosave_enabled: bool,
@@ -37,13 +48,65 @@ def normalize_autosave_policy(
     return True, autosave_strategy
 
 
-def classify_timeline_event_type(tags: list[str]) -> str:
-    tag_set = {item.strip().lower() for item in tags}
+def _normalize_tags(tags: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for item in tags:
+        candidate = item.strip()
+        if candidate:
+            normalized.append(candidate)
+    return normalized
+
+
+def _extract_tag_value(tags: list[str], *, prefix: str) -> str | None:
+    for tag in tags:
+        if tag.lower().startswith(prefix):
+            value = tag[len(prefix) :].strip()
+            if value:
+                return value
+    return None
+
+
+def _parse_positive_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except ValueError:
+        return None
+    return parsed if parsed > 0 else None
+
+
+def classify_timeline_event(tags: list[str]) -> TimelineEventSemantics:
+    normalized_tags = _normalize_tags(tags)
+    tag_set = {item.lower() for item in normalized_tags}
     if "autosave_snapshot" in tag_set:
-        return "autosave_snapshot"
+        return TimelineEventSemantics(event_type="autosave_snapshot")
     if "consolidated" in tag_set:
-        return "consolidation"
-    return "manual_snapshot"
+        group_key = _extract_tag_value(
+            normalized_tags,
+            prefix=_CONSOLIDATION_GROUP_KEY_TAG_PREFIX,
+        )
+        merged_count = _parse_positive_int(
+            _extract_tag_value(
+                normalized_tags,
+                prefix=_CONSOLIDATION_MERGED_COUNT_TAG_PREFIX,
+            )
+        )
+        event_type = "consolidation"
+        if merged_count and merged_count > 1:
+            event_type = "consolidation_merge"
+        elif group_key:
+            event_type = "consolidation_group"
+        return TimelineEventSemantics(
+            event_type=event_type,
+            consolidation_group_key=group_key,
+            consolidation_merged_count=merged_count,
+        )
+    return TimelineEventSemantics(event_type="manual_snapshot")
+
+
+def classify_timeline_event_type(tags: list[str]) -> str:
+    return classify_timeline_event(tags).event_type
 
 
 def is_low_value_snapshot_abstract(value: str) -> bool:

@@ -6,7 +6,8 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 from app.cli import main
-from app.models import EngramCreateResponse, EngramQueryResult, RehydrationBundle
+from app.mcp.client import McpToolCallResult, parse_mcp_jsonrpc_frame
+from app.models import EngramCreateResponse, EngramQueryResult, McpJsonRpcRequest, RehydrationBundle
 
 MINIMAL_ENGRAM = {
     "project_id": "cli-project",
@@ -169,3 +170,150 @@ def test_cli_consolidate(monkeypatch, capsys) -> None:
     body = json.loads(stdout)
     assert body["project_id"] == "proj-a"
     assert body["reason"] == "dry_run"
+
+
+def test_cli_mcp_call_with_bearer_token(monkeypatch, capsys) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeMcpClient:
+        def __init__(self, *, base_url: str, bearer_token: str | None) -> None:
+            captured["base_url"] = base_url
+            captured["bearer_token"] = bearer_token
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _exc_type, _exc, _tb) -> None:
+            return None
+
+        def login_with_password(self, *, username: str, password: str) -> None:
+            captured["login"] = (username, password)
+
+        def call_tool(self, *, method: str, params: dict, request_id: str | int):  # noqa: ANN001
+            captured["method"] = method
+            captured["params"] = params
+            captured["request_id"] = request_id
+            return McpToolCallResult(
+                request=McpJsonRpcRequest(
+                    jsonrpc="2.0",
+                    id=request_id,
+                    method=method,
+                    params=params,
+                ),
+                frames=[
+                    parse_mcp_jsonrpc_frame(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "result": {"ok": True, "method": method},
+                        }
+                    )
+                ],
+            )
+
+    monkeypatch.setattr("app.cli.McpSseClient", _FakeMcpClient)
+
+    code = main(
+        [
+            "mcp-call",
+            "--base-url",
+            "http://localhost:9000",
+            "--method",
+            "tools/list",
+            "--request-id",
+            "smoke-1",
+            "--params-json",
+            '{"include": "all"}',
+            "--bearer-token",
+            "engram_mcp_deadbeef_secret",
+        ]
+    )
+    stdout = capsys.readouterr().out
+
+    assert code == 0
+    assert captured["base_url"] == "http://localhost:9000"
+    assert captured["bearer_token"] == "engram_mcp_deadbeef_secret"
+    assert "login" not in captured
+    assert captured["method"] == "tools/list"
+    assert captured["params"] == {"include": "all"}
+    assert captured["request_id"] == "smoke-1"
+
+    body = json.loads(stdout)
+    assert body["request"]["method"] == "tools/list"
+    assert body["frames"][0]["result"]["ok"] is True
+
+
+def test_cli_mcp_call_with_session_login(monkeypatch, capsys) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeMcpClient:
+        def __init__(self, *, base_url: str, bearer_token: str | None) -> None:
+            captured["base_url"] = base_url
+            captured["bearer_token"] = bearer_token
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _exc_type, _exc, _tb) -> None:
+            return None
+
+        def login_with_password(self, *, username: str, password: str) -> None:
+            captured["login"] = (username, password)
+
+        def call_tool(self, *, method: str, params: dict, request_id: str | int):  # noqa: ANN001
+            return McpToolCallResult(
+                request=McpJsonRpcRequest(
+                    jsonrpc="2.0",
+                    id=request_id,
+                    method=method,
+                    params=params,
+                ),
+                frames=[
+                    parse_mcp_jsonrpc_frame(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "result": {"default_project_id": "engram-vault"},
+                        }
+                    )
+                ],
+            )
+
+    monkeypatch.setattr("app.cli.McpSseClient", _FakeMcpClient)
+
+    code = main(
+        [
+            "mcp-call",
+            "--method",
+            "project.get_default",
+            "--username",
+            "admin",
+            "--password",
+            "admin123",
+        ]
+    )
+    _ = capsys.readouterr().out
+
+    assert code == 0
+    assert captured["bearer_token"] is None
+    assert captured["login"] == ("admin", "admin123")
+
+
+def test_cli_mcp_call_requires_auth(monkeypatch, capsys) -> None:
+    class _UnusedMcpClient:
+        def __init__(self, **_kwargs):
+            raise AssertionError("MCP client should not be constructed without auth")
+
+    monkeypatch.setattr("app.cli.McpSseClient", _UnusedMcpClient)
+
+    code = main(
+        [
+            "mcp-call",
+            "--method",
+            "tools/list",
+        ]
+    )
+    output = capsys.readouterr()
+
+    assert code == 2
+    assert "Provide either --bearer-token or both --username and --password" in output.err

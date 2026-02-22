@@ -109,8 +109,8 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress: compatibility surface (`initialize`, `tools/list`, `tools/call`) and typed clients are complete.
-- Deferred by request: CLI smoke command (`engram-cli mcp-call`).
+- Completed: compatibility surface (`initialize`, `tools/list`, `tools/call`) and typed clients.
+- Completed: CLI smoke command (`engram-cli mcp-call`) for local MCP debugging.
 
 ### Goals
 
@@ -159,8 +159,8 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress: lifecycle policy schema/models/service/API/MCP/UI timeline controls are implemented and validated.
-- Remaining: richer merge/consolidation grouping semantics in timeline presentation.
+- Completed: lifecycle policy schema/models/service/API/MCP/UI timeline controls are implemented and validated.
+- Completed: explicit consolidation merge/grouping semantics in timeline presentation.
 
 ### Goals
 
@@ -791,23 +791,18 @@ Build a local-first memory system where agents and humans can:
 
 ## Near-Term Execution Order
 
-1. Phase 18 remaining timeline semantics
-2. Phase 31 closeout: AGENT/skills updates + acceptance-test-mock evidence append
-3. Phase 19 (sharing model) and Phase 20 (security hardening) parallel planning
-4. Phase 16 deferred CLI smoke utility (`engram-cli mcp-call`) after phase 18 semantics close
-5. Phase 21 onward after security and data-sharing model stabilize
-6. After phase 23, execute link-graph roadmap in order:
+1. Phase 33 cross-surface closeout and round-trip hardening
+2. Phase 19 (sharing model) and Phase 20 (security hardening) parallel planning
+3. Phase 21 onward after security and data-sharing model stabilize
+4. After phase 23, execute link-graph roadmap in order:
    - Phase 24 (graph foundations)
    - Phase 25 (link APIs/MCP + suggestions)
    - Phase 26 (graph-aware recall)
    - Phase 27 (traceability UX)
    - Phase 28 (temporal dynamics + graph quality)
-7. Execute Phase 32 after Phase 19 + Phase 24-28 baselines are in place:
+5. Execute Phase 32 after Phase 19 + Phase 24-28 baselines are in place:
    - add `cw>` query protocol
    - enable access-aware federated linked recall across projects
-8. Execute Phase 33 during current cycle before broad collaboration rollout:
-   - ship portable project export/import stash workflow
-   - validate owner/admin authorization across REST + MCP + web
-9. Execute Phase 34 after Phase 33 foundations land:
+6. Execute Phase 34 after Phase 33 foundations land:
    - remediate security audit backlog by priority
    - enforce production-safe defaults and distributed protection controls

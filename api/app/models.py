@@ -315,6 +315,8 @@ class ChatTimelineEvent(BaseModel):
     title: str
     abstract: str
     tags: list[str] = Field(default_factory=list)
+    consolidation_group_key: str | None = None
+    consolidation_merged_count: int | None = None
     created_at: datetime
 
 

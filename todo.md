@@ -7,10 +7,10 @@
 
 ## Immediate (Current Sprint)
 
-- [ ] Phase 31 closeout: update `AGENT.md` + skills with final project-default/soft-delete/collection invariants and MCP organization contracts
-- [ ] Phase 31 closeout: run/record full acceptance mock execution (`make acceptance-test-mock`) with new admin-memory scenarios
-- [ ] Phase 18 follow-up: add explicit consolidation merge/grouping event semantics in timeline rendering
-- [ ] Phase 16 deferred: CLI smoke utility (`engram-cli mcp-call`)
+- [x] Phase 31 closeout: update `AGENT.md` + skills with final project-default/soft-delete/collection invariants and MCP organization contracts
+- [x] Phase 31 closeout: run/record full acceptance mock execution (`make acceptance-test-mock`) with new admin-memory scenarios
+- [x] Phase 18 follow-up: add explicit consolidation merge/grouping event semantics in timeline rendering
+- [x] Phase 16 deferred: CLI smoke utility (`engram-cli mcp-call`)
 
 ## Near-Term (Next Phases)
 

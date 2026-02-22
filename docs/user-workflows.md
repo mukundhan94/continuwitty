@@ -222,3 +222,15 @@ make cli ARGS="rehydrate --engram-id <engram_uuid>"
 make consolidate ARGS="--project-id engram-vault --dry-run"
 make consolidate ARGS="--project-id engram-vault"
 ```
+
+### MCP Smoke Call
+
+Use the CLI to smoke-test MCP JSON-RPC calls against `/api/v1/mcp/stream`.
+
+```bash
+make cli ARGS="mcp-call --method tools/list --username admin --password admin123"
+```
+
+```bash
+make cli ARGS="mcp-call --method project.get_default --params-json '{}' --bearer-token engram_mcp_<token_id_hex>_<secret>"
+```

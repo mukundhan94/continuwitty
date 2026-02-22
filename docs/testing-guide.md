@@ -34,7 +34,7 @@ Tests live under `api/tests/`:
 | `test_user_rbac.py` | User management and role-based access control |
 | `test_agent_workflow.py` | LangGraph checkpoint/resume + auto-persist + snapshot |
 | `test_eval_harness.py` | Evaluation harness scenario pass/fail |
-| `test_cli.py` | Upload/search/rehydrate CLI commands |
+| `test_cli.py` | Upload/search/rehydrate/consolidate + `mcp-call` CLI commands |
 | `test_consolidation.py` | Consolidation snapshot generation and safety |
 | `test_chat_lifecycle_policy.py` | Autosave normalization/trigger and retention pruning |
 | `test_chat_repository.py` | Chat session/message, pinning, lifecycle persistence |

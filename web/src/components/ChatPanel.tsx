@@ -173,6 +173,16 @@ interface TimelineSectionProps {
   timelineEvents: ChatTimelineEvent[]
 }
 
+interface TimelineRenderItem {
+  key: string
+  eventType: string
+  title: string
+  abstract: string
+  createdAt: string
+  groupedEvents: number
+  mergedCount: number | null
+}
+
 interface ComposerSectionProps {
   hasSession: boolean
   sending: boolean
@@ -216,7 +226,87 @@ function tokenSourceLabel(debugTrace: ChatDebugTrace): string {
 }
 
 function formatTimelineType(eventType: string): string {
-  return eventType.replaceAll('_', ' ')
+  const labels: Record<string, string> = {
+    autosave_snapshot: 'Autosave Snapshot',
+    manual_snapshot: 'Manual Snapshot',
+    consolidation: 'Consolidation',
+    consolidation_merge: 'Consolidation Merge',
+    consolidation_group: 'Consolidation Group',
+  }
+  return labels[eventType] ?? eventType.replaceAll('_', ' ')
+}
+
+function isConsolidationTimelineEvent(eventType: string): boolean {
+  return (
+    eventType === 'consolidation' ||
+    eventType === 'consolidation_merge' ||
+    eventType === 'consolidation_group'
+  )
+}
+
+function normalizedMergedCount(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
+function buildTimelineRenderEvents(timelineEvents: ChatTimelineEvent[]): TimelineRenderItem[] {
+  const rendered: TimelineRenderItem[] = []
+  const groupedIndexByKey = new Map<string, number>()
+
+  for (const event of timelineEvents) {
+    const groupKey = (event.consolidation_group_key || '').trim()
+    const mergedCount = normalizedMergedCount(event.consolidation_merged_count)
+
+    if (!groupKey || !isConsolidationTimelineEvent(event.event_type)) {
+      rendered.push({
+        key: event.event_id,
+        eventType: event.event_type,
+        title: event.title,
+        abstract: event.abstract,
+        createdAt: event.created_at,
+        groupedEvents: 1,
+        mergedCount,
+      })
+      continue
+    }
+
+    const existingIndex = groupedIndexByKey.get(groupKey)
+    const currentMerged = mergedCount ?? 1
+    if (existingIndex === undefined) {
+      rendered.push({
+        key: `consolidation-group:${groupKey}`,
+        eventType: 'consolidation_group',
+        title: 'Consolidation Group',
+        abstract: `Group ${groupKey}: 1 consolidation snapshot (${currentMerged} merged engrams).`,
+        createdAt: event.created_at,
+        groupedEvents: 1,
+        mergedCount: currentMerged,
+      })
+      groupedIndexByKey.set(groupKey, rendered.length - 1)
+      continue
+    }
+
+    const existing = rendered[existingIndex]
+    const groupedEvents = existing.groupedEvents + 1
+    const nextMergedCount = (existing.mergedCount ?? existing.groupedEvents) + currentMerged
+    rendered[existingIndex] = {
+      ...existing,
+      abstract: `Group ${groupKey}: ${groupedEvents} consolidation snapshots (${nextMergedCount} merged engrams).`,
+      groupedEvents,
+      mergedCount: nextMergedCount,
+    }
+  }
+
+  return rendered
+}
+
+function buildTimelineMeta(event: TimelineRenderItem): string {
+  const parts = [formatTimelineType(event.eventType), new Date(event.createdAt).toLocaleString()]
+  if (event.groupedEvents > 1) {
+    parts.push(`${event.groupedEvents} grouped`)
+  } else if (event.mergedCount && event.mergedCount > 1) {
+    parts.push(`${event.mergedCount} merged`)
+  }
+  return parts.join(' · ')
 }
 
 function PanelHeader({ session, sending, hasSession, onOpenSaveModal, onContinueSession }: PanelHeaderProps) {
@@ -316,18 +406,18 @@ function DebugTracePanel({ debugTrace }: DebugTracePanelProps) {
 }
 
 function TimelineSection({ timelineEvents }: TimelineSectionProps) {
+  const renderEvents = buildTimelineRenderEvents(timelineEvents)
+
   return (
     <TimelineStrip>
       <SourceTitle>Lifecycle Timeline</SourceTitle>
-      {timelineEvents.length === 0 ? (
+      {renderEvents.length === 0 ? (
         <MutedText>No lifecycle events yet.</MutedText>
       ) : (
         <TimelineList>
-          {timelineEvents.map((event) => (
-            <TimelineItem key={event.event_id}>
-              <TimelineMeta>
-                {formatTimelineType(event.event_type)} · {new Date(event.created_at).toLocaleString()}
-              </TimelineMeta>
+          {renderEvents.map((event) => (
+            <TimelineItem key={event.key} data-testid="timeline-item">
+              <TimelineMeta>{buildTimelineMeta(event)}</TimelineMeta>
               <strong>{event.title}</strong>
               <MutedText>{event.abstract}</MutedText>
             </TimelineItem>

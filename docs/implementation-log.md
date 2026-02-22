@@ -7,6 +7,83 @@
 
 ## Implementation Log
 
+### 2026-02-22 (CodeScene pre-commit safeguard for immediate-phase closeout bundle)
+
+1. Ran CodeScene MCP pre-commit health gate on the working tree:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
+### 2026-02-22 (Phase 16 CLI smoke utility: `engram-cli mcp-call`)
+
+1. Added a new CLI subcommand in `api/app/cli.py`:
+   - `engram-cli mcp-call`
+   - supports:
+     - `--method` (required)
+     - `--params-json` or `--params-file`
+     - `--request-id`
+     - `--base-url`
+     - bearer auth (`--bearer-token`) or form login (`--username` + `--password`)
+2. Integrated CLI smoke call with the typed MCP client:
+   - uses `McpSseClient` transport against `/api/v1/mcp/stream`
+   - prints request + parsed JSON-RPC frames as JSON output for debugging
+   - returns non-zero when an RPC error frame is returned
+3. Added CLI regression tests in `api/tests/test_cli.py` for:
+   - bearer-token MCP call path
+   - username/password session-login MCP call path
+   - explicit auth validation failure path
+4. Updated docs:
+   - `docs/user-workflows.md` (MCP smoke call examples)
+   - `docs/testing-guide.md` (`test_cli.py` coverage row)
+5. Validation:
+   - `cd api && uv run pytest -q tests/test_cli.py`
+   - `cd api && uv run ruff check app/cli.py tests/test_cli.py`
+
+### 2026-02-22 (Phase 18 timeline consolidation semantics follow-up)
+
+1. Added explicit consolidation timeline semantics in lifecycle policy:
+   - `api/app/chat/lifecycle_policy.py` now parses consolidation tag metadata:
+     - `consolidation_group_key:<value>`
+     - `consolidation_merged_count:<int>`
+   - added `TimelineEventSemantics` and expanded event-type classification:
+     - `consolidation`
+     - `consolidation_group`
+     - `consolidation_merge`
+2. Extended timeline response contract:
+   - `api/app/models.py::ChatTimelineEvent` now includes optional
+     - `consolidation_group_key`
+     - `consolidation_merged_count`
+   - `api/app/chat/session_operations.py` now emits those semantics per event.
+3. Implemented timeline grouping semantics in UI rendering:
+   - `web/src/components/ChatPanel.tsx` now groups consolidation events sharing a `consolidation_group_key` into a single rendered timeline row with grouped/merged counts.
+   - added explicit user-facing labels for lifecycle event types.
+4. Added regression coverage:
+   - `api/tests/test_chat_lifecycle_policy.py`
+   - `api/tests/test_chat_session_operations.py`
+   - `web/src/components/ChatPanel.test.tsx`
+5. Validation:
+   - `cd api && uv run pytest -q tests/test_chat_lifecycle_policy.py tests/test_chat_session_operations.py`
+   - `cd api && uv run ruff check app/chat/lifecycle_policy.py app/chat/session_operations.py tests/test_chat_lifecycle_policy.py tests/test_chat_session_operations.py`
+   - `cd web && npm run test -- src/components/ChatPanel.test.tsx`
+   - `cd web && npm run lint`
+
+### 2026-02-22 (Phase 31 closeout docs + acceptance validation evidence)
+
+1. Finalized Phase 31 contributor contracts in `AGENT.md`:
+   - explicit default-project write resolution invariants.
+   - explicit soft-delete/restore invariants for sessions/engrams/collections.
+   - explicit collection project-boundary invariants (including auto-detach on cross-project engram moves).
+   - explicit MCP organization tool contract set and dotted/underscored naming compatibility.
+2. Updated skill docs with the same Phase 31 invariants:
+   - `skills/mcp-http-stream-tools/SKILL.md`
+   - `skills/engram-lifecycle/SKILL.md`
+   - `skills/testing-and-evals/SKILL.md`
+3. Fixed deterministic acceptance coverage for transfer-page suggestion checks:
+   - `acceptance-tests/src/steps/project-export-import.steps.ts`
+   - the dataset prep step now sets workspace project to the prepared export project before suggestion assertions, matching project-scoped collection suggestion behavior.
+4. Validation evidence:
+   - `make acceptance-test-mock` -> `18 passed` (includes `@phase31 @memory-admin` scenarios).
+
 ### 2026-02-22 (Phase 33 web export/import page + test coverage)
 
 1. Added a dedicated Phase 33 project transfer page in `web/src/components/ProjectTransferPage.tsx`:

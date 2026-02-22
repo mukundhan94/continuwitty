@@ -30,6 +30,9 @@ Use it as the default workflow when adding or refactoring features.
 - Keep all frontend colors/typography/shadows in `web/src/styles/theme.ts` and consume via shared primitives/utilities.
 - Keep engram auto-metadata enrichment fill-empty-only: derive `abstract/tags/keywords` only when empty and never overwrite non-empty caller values.
 - Keep API data contracts in the same package: prefer `api/app/models.py` for shared request/response models; only add domain-local models under `api/app/<domain>/models.py` when they are truly domain-internal.
+- Keep project write resolution centralized in `ProjectService.resolve_project_id_for_write`: explicit `project_id` wins, otherwise use actor default project, otherwise fail with 422.
+- Keep soft-delete semantics for sessions/engrams/collections (`deleted_at`, `deleted_by_user_id`, `delete_reason`) and restore by clearing those fields; never hard-delete from admin APIs/tools.
+- Keep collections project-bounded: engrams can only belong to collections in the same project, and cross-project engram moves must auto-detach invalid collection links.
 - Before every commit, follow `skills/codescene/SKILL.md` and run a CodeScene MCP pre-commit health check (`pre_commit_code_health_safeguard`) on the current change set; record the outcome in the implementation log.
 
 ## 3. Daily Workflow
@@ -80,6 +83,8 @@ Use it as the default workflow when adding or refactoring features.
 - For breaking changes, add new fields/routes and keep old behavior until deprecated.
 - Validate all external payloads with Pydantic models.
 - Include stable identifiers in responses (`user_id`, `session_id`, `engram_id`).
+- For write flows that allow omitted `project_id` (`/api/v1/engrams`, admin collection create, MCP organization write tools), always resolve project via `ProjectService` and keep response-level project resolution metadata where defined (`resolved_project_id`, `used_default_project`).
+- Keep admin memory lists default-hidden for soft-deleted rows; expose deleted rows only with explicit `include_deleted=true`.
 - For chat responses, return `used_engram_ids` whenever context retrieval is used.
 - For chat responses, return `used_document_chunk_ids` when document chunks are used for context.
 - For chat responses, return `source_references` whenever retrieval context includes citations or document chunk evidence.
@@ -102,6 +107,12 @@ Use it as the default workflow when adding or refactoring features.
 - Return structured error payloads with machine-parseable codes.
 - Keep all tool routing in `api/app/mcp/service.py`; avoid embedding tool logic in route handlers.
 - Keep external MCP compatibility (`initialize`, `tools/list`, `tools/call`) aligned with direct tool methods.
+- Keep MCP organization contracts stable:
+  - project: `project.list`, `project.create`, `project.get_default`, `project.set_default`
+  - engram admin lifecycle: `engram.list`, `engram.get`, `engram.update`, `engram.move_project`, `engram.delete`, `engram.restore`
+  - collection lifecycle: `engram.collection_list`, `engram.collection_create`, `engram.collection_update`, `engram.collection_delete`, `engram.collection_add_items`, `engram.collection_remove_items`
+  - session lifecycle: `chat.delete_session`, `chat.restore_session`
+- Keep dotted canonical tool names as source-of-truth; continue exposing underscore aliases in `tools/list` for strict MCP client compatibility and accept both forms in `tools/call`.
 - When MCP contracts change, update both typed clients in the same phase:
   - `api/app/mcp/client.py`
   - `web/src/api/mcpClient.ts`
@@ -155,6 +166,8 @@ Before merging refactors:
 - Fill-empty-only metadata enrichment preserves caller intent while enabling zero-config agent persistence.
 - Token scope + allowlist + project policy model provides flexible least-privilege for external MCP agents.
 - Soft-delete with `deleted_at`/`delete_reason`/`deleted_by_user_id` columns enables safe reversible operations with audit trail.
+- Project-default writes are contractually explicit via `resolved_project_id` + `used_default_project` fields where supported.
+- Collection/project boundaries are enforced at mutation time; cross-project engram moves purge invalid collection memberships.
 
 ### Common Pitfalls to Avoid
 - Never put business logic in `main.py` route handlers — always delegate to services.
