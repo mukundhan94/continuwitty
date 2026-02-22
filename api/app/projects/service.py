@@ -46,6 +46,24 @@ class ProjectService:
             offset=offset,
         )
 
+    def get_project(
+        self,
+        *,
+        actor_user_id: UUID,
+        actor_role: str,
+        project_id: str,
+        include_archived: bool = False,
+    ) -> ProjectRecord | None:
+        normalized = _normalize_project_id(project_id)
+        if not normalized:
+            return None
+        return get_project_for_actor(
+            project_id=normalized,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            include_archived=include_archived,
+        )
+
     def create_project(
         self,
         *,

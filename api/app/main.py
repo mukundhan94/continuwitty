@@ -16,6 +16,7 @@ from .auth import generate_csrf_token, hash_password, verify_password
 from .chat import ChatService, create_chat_router
 from .config import build_debug_settings_snapshot, get_settings, should_log_settings
 from .db import ensure_schema_initialized
+from .export import ExportService, create_export_router
 from .ingestion import DocumentIngestionService, create_ingestion_router
 from .login_guard import LoginAttemptGuard
 from .main_api_router import MainApiRouterDependencies, create_main_api_router
@@ -92,6 +93,11 @@ project_service = ProjectService()
 memory_admin_service = MemoryAdminService(
     embedding_dim=settings.embedding_dim,
     project_service=project_service,
+)
+export_service = ExportService(
+    project_service=project_service,
+    memory_admin_service=memory_admin_service,
+    embedding_dim=settings.embedding_dim,
 )
 ingestion_service = DocumentIngestionService(
     embedding_dim=settings.embedding_dim,
@@ -363,6 +369,12 @@ app.include_router(
     )
 )
 app.include_router(
+    create_export_router(
+        export_service=export_service,
+        require_api_actor=_require_authenticated_api_user,
+    )
+)
+app.include_router(
     create_main_api_router(
         dependencies=MainApiRouterDependencies(
             require_roles_api=lambda request, allowed_roles: _require_roles_api(
@@ -377,9 +389,7 @@ app.include_router(
             get_rehydration_bundle=lambda engram_id, **kwargs: get_rehydration_bundle(
                 engram_id, **kwargs
             ),
-            get_engram_sources=lambda engram_id, **kwargs: get_engram_sources(
-                engram_id, **kwargs
-            ),
+            get_engram_sources=lambda engram_id, **kwargs: get_engram_sources(engram_id, **kwargs),
             list_users=lambda **kwargs: list_users(**kwargs),
             create_user=lambda **kwargs: create_user(**kwargs),
             update_user=lambda **kwargs: update_user(**kwargs),
@@ -519,9 +529,7 @@ def ui_admin(request: Request) -> Response:
     except Exception as exc:  # pragma: no cover - local display fallback
         error = str(exc)
     try:
-        mcp_tokens = list_token_summaries(
-            owner_user_id=UUID(user["user_id"]), limit=500, offset=0
-        )
+        mcp_tokens = list_token_summaries(owner_user_id=UUID(user["user_id"]), limit=500, offset=0)
     except Exception as exc:  # pragma: no cover - local display fallback
         token_error = str(exc)
 

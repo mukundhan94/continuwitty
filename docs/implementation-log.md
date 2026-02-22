@@ -7,6 +7,26 @@
 
 ## Implementation Log
 
+### 2026-02-22 (Phase 33 export service code-health pass)
+
+1. Refactored `api/app/export/service.py` to remove duplicated lookup patterns in import flows and consolidate lookup logic through a shared helper.
+2. Kept export/import behavior unchanged while reducing duplication flagged by CodeScene.
+3. Verification:
+   - `cd api && uv run ruff check app/export/service.py`
+   - `cd api && uv run pytest -q tests/test_export_api.py tests/test_export_api_integration.py`
+   - CodeScene Code Health review for `api/app/export/service.py`: `10.0`
+
+### 2026-02-22 (Dev workflow contract test fix)
+
+1. Fixed a single backend test failure in `tests/test_dev_workflow_contract.py::test_readme_quick_start_uses_new_local_run_defaults` by aligning `README.md` quick-start wording with the expected local workflow contract.
+2. Added explicit quick-start phrases for:
+   - preferred local run mode (`make dev`)
+   - optional split-terminal mode (`make api`, `make web`)
+   - container stack usage as occasional debugging mode (`make stack-up`).
+3. Verification:
+   - `cd api && uv run pytest -q tests/test_dev_workflow_contract.py`
+   - `cd api && uv run pytest -q`
+
 ### 2026-02-15 (Engram panel UX pass)
 
 1. Updated engram cards to show only titles by default and reveal full markdown abstract on hover/focus.
@@ -1133,3 +1153,22 @@
    - Phase 33 (In Progress)
    - Phase 34 (Planned)
 4. Updated `todo.md` near-term queue with explicit Phase 33/34 execution items to ensure follow-up pickup in later passes.
+
+### 2026-02-22 (Phase 33 progress - project import path + quality gate)
+
+1. Extended Phase 33 export module with import support in `api/app/export/`:
+   - added `POST /api/v1/projects/{project_id}/import` endpoint accepting JSON or ZIP export bundle uploads.
+   - added import conflict policy handling (`skip`, `overwrite`, `rename`).
+2. Kept shared API data contracts in `api/app/models.py`:
+   - `ProjectImportConflictPolicy`
+   - `ProjectImportResponse`.
+3. Added/updated tests:
+   - `api/tests/test_export_api.py`
+   - `api/tests/test_export_api_integration.py`
+   - validated export subset behavior, ZIP export, non-owner denial, JSON import, and ZIP import rename behavior.
+4. Validation results:
+   - `uv run --project api ruff check` (targeted files) passed.
+   - `uv run --project api pytest -q api/tests/test_export_api.py api/tests/test_export_api_integration.py` passed (`7 passed`).
+5. CodeScene health gate:
+   - `mcp_analyze_change_set` against `origin/main` -> `quality_gates=passed`.
+   - findings flagged complexity/duplication in `api/app/export/service.py`; accepted for this slice and queued for follow-up refactor pass.

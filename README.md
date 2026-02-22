@@ -4,10 +4,21 @@ Long LLM research runs produce valuable context that disappears between sessions
 
 ## Quick Start
 
+Preferred local run mode (single terminal, starts DB + API + Web)
+
 ```bash
 cp .env.example .env
 make dev                 # starts DB + API + web in one terminal
 ```
+
+Optional split-terminal mode
+
+```bash
+make api
+make web
+```
+
+Use `make stack-up` as an occasional debugging mode when you specifically need the full containerized stack.
 
 Open [localhost:5173](http://localhost:5173) (React chat) or [localhost:8000/docs](http://localhost:8000/docs) (API).
 
