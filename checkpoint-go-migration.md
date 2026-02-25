@@ -2978,3 +2978,36 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP58 - Phase 3 Project Service Port (`internal/projects/service.go`)
+
+- Ported `api/app/projects/service.py` into Go service layer:
+  - `internal/projects/service.go`
+- Added project business logic parity for:
+  - actor-scoped list/get
+  - create owner resolution (admin override vs actor-owned)
+  - default project read/write validation
+  - explicit/default project resolution for write flows
+- Added migrated tests:
+  - `internal/projects/service_test.go`
+- Executed migrated tests one-by-one:
+  - `TestListProjectsForwardsRepositoryInput`
+  - `TestGetProjectReturnsNilForBlankProjectID`
+  - `TestCreateProjectRejectsBlankProjectID`
+  - `TestCreateProjectUsesActorOwnerWhenNonAdmin`
+  - `TestCreateProjectAllowsAdminOwnerOverride`
+  - `TestSetDefaultProjectIDRequiresVisibleProject`
+  - `TestSetDefaultProjectIDRequiresUserUpdate`
+  - `TestResolveProjectIDForWriteEnsuresExplicitProjectWhenHidden`
+  - `TestResolveProjectIDForWriteUsesVisibleDefaultProject`
+  - `TestResolveProjectIDForWriteHandlesMissingAndInaccessibleDefault`
+  - `TestResolveOwnerUserIDUsesAdminOverrideOnly`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/projects/service.go`: `9.68`
+  - `internal/projects/service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
