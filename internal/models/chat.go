@@ -187,6 +187,17 @@ type SaveSessionAsEngramResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// ContinueSessionRequest models continue-session payload.
+type ContinueSessionRequest struct {
+	Title *string `json:"title,omitempty"`
+}
+
+// ContinueSessionResponse models continue-session result payload.
+type ContinueSessionResponse struct {
+	Session          ChatSessionRecord `json:"session"`
+	CarriedEngramIDs []uuid.UUID       `json:"carried_engram_ids"`
+}
+
 // PinnedEngramRecord models engram pins associated to chat sessions.
 type PinnedEngramRecord struct {
 	SessionID      uuid.UUID `json:"session_id"`
