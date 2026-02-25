@@ -45,6 +45,14 @@ type SessionMessagesRequest struct {
 	Offset      int
 }
 
+// SessionTimelineRequest captures list-timeline filters.
+type SessionTimelineRequest struct {
+	ActorUserID uuid.UUID
+	SessionID   uuid.UUID
+	Limit       int
+	Offset      int
+}
+
 // SessionPinEngramRequest captures pin/unpin engram request values.
 type SessionPinEngramRequest struct {
 	ActorUserID uuid.UUID
@@ -99,34 +107,36 @@ func (operation sessionPinOperation[Input, Record]) runUnpin(
 }
 
 type sessionOperationsDeps struct {
-	ensureProjectExists func(ctx context.Context, db repository.Queryer, input repository.ProjectEnsureInput) (*models.ProjectRecord, error)
-	createChatSession   func(ctx context.Context, db repository.Queryer, input repository.ChatSessionCreateInput) (*models.ChatSessionRecord, error)
-	listChatSessions    func(ctx context.Context, db repository.Queryer, input repository.ChatSessionListInput) ([]models.ChatSessionRecord, error)
-	getChatSession      func(ctx context.Context, db repository.Queryer, input repository.ChatSessionGetInput) (*models.ChatSessionRecord, error)
-	updateChatSession   func(ctx context.Context, db repository.Queryer, input repository.ChatSessionUpdateInput) (*models.ChatSessionRecord, error)
-	listChatMessages    func(ctx context.Context, db repository.Queryer, input repository.ChatMessageListInput) ([]models.ChatMessageRecord, error)
-	listPinnedEngrams   func(ctx context.Context, db repository.Queryer, input repository.ChatPinnedListInput) ([]models.EngramSummary, error)
-	listPinnedDocuments func(ctx context.Context, db repository.Queryer, input repository.ChatPinnedListInput) ([]models.PinnedDocumentRecord, error)
-	pinEngram           func(ctx context.Context, db repository.Queryer, input repository.ChatPinEngramInput) (*models.PinnedEngramRecord, error)
-	pinDocument         func(ctx context.Context, db repository.Queryer, input repository.ChatPinDocumentInput) (*models.PinnedDocumentRecord, error)
-	unpinEngram         func(ctx context.Context, db repository.Queryer, input repository.ChatPinEngramInput) (bool, error)
-	unpinDocument       func(ctx context.Context, db repository.Queryer, input repository.ChatPinDocumentInput) (bool, error)
+	ensureProjectExists      func(ctx context.Context, db repository.Queryer, input repository.ProjectEnsureInput) (*models.ProjectRecord, error)
+	createChatSession        func(ctx context.Context, db repository.Queryer, input repository.ChatSessionCreateInput) (*models.ChatSessionRecord, error)
+	listChatSessions         func(ctx context.Context, db repository.Queryer, input repository.ChatSessionListInput) ([]models.ChatSessionRecord, error)
+	getChatSession           func(ctx context.Context, db repository.Queryer, input repository.ChatSessionGetInput) (*models.ChatSessionRecord, error)
+	updateChatSession        func(ctx context.Context, db repository.Queryer, input repository.ChatSessionUpdateInput) (*models.ChatSessionRecord, error)
+	listChatMessages         func(ctx context.Context, db repository.Queryer, input repository.ChatMessageListInput) ([]models.ChatMessageRecord, error)
+	listSessionLinkedEngrams func(ctx context.Context, db repository.Queryer, input repository.SessionLinkedEngramsListInput) ([]models.EngramSummary, error)
+	listPinnedEngrams        func(ctx context.Context, db repository.Queryer, input repository.ChatPinnedListInput) ([]models.EngramSummary, error)
+	listPinnedDocuments      func(ctx context.Context, db repository.Queryer, input repository.ChatPinnedListInput) ([]models.PinnedDocumentRecord, error)
+	pinEngram                func(ctx context.Context, db repository.Queryer, input repository.ChatPinEngramInput) (*models.PinnedEngramRecord, error)
+	pinDocument              func(ctx context.Context, db repository.Queryer, input repository.ChatPinDocumentInput) (*models.PinnedDocumentRecord, error)
+	unpinEngram              func(ctx context.Context, db repository.Queryer, input repository.ChatPinEngramInput) (bool, error)
+	unpinDocument            func(ctx context.Context, db repository.Queryer, input repository.ChatPinDocumentInput) (bool, error)
 }
 
 func defaultSessionOperationsDeps() sessionOperationsDeps {
 	return sessionOperationsDeps{
-		ensureProjectExists: repository.EnsureProjectExists,
-		createChatSession:   repository.CreateChatSession,
-		listChatSessions:    repository.ListChatSessions,
-		getChatSession:      repository.GetChatSession,
-		updateChatSession:   repository.UpdateChatSession,
-		listChatMessages:    repository.ListChatMessages,
-		listPinnedEngrams:   repository.ListPinnedEngramSummaries,
-		listPinnedDocuments: repository.ListPinnedDocuments,
-		pinEngram:           repository.PinEngramToSession,
-		pinDocument:         repository.PinDocumentToSession,
-		unpinEngram:         repository.UnpinEngramFromSession,
-		unpinDocument:       repository.UnpinDocumentFromSession,
+		ensureProjectExists:      repository.EnsureProjectExists,
+		createChatSession:        repository.CreateChatSession,
+		listChatSessions:         repository.ListChatSessions,
+		getChatSession:           repository.GetChatSession,
+		updateChatSession:        repository.UpdateChatSession,
+		listChatMessages:         repository.ListChatMessages,
+		listSessionLinkedEngrams: repository.ListSessionLinkedEngrams,
+		listPinnedEngrams:        repository.ListPinnedEngramSummaries,
+		listPinnedDocuments:      repository.ListPinnedDocuments,
+		pinEngram:                repository.PinEngramToSession,
+		pinDocument:              repository.PinDocumentToSession,
+		unpinEngram:              repository.UnpinEngramFromSession,
+		unpinDocument:            repository.UnpinDocumentFromSession,
 	}
 }
 
@@ -314,6 +324,45 @@ func (service *SessionOperationsService) ListMessages(
 			Offset:      request.Offset,
 		},
 	)
+}
+
+// ListTimelineEvents returns timeline event projections from linked session engrams.
+func (service *SessionOperationsService) ListTimelineEvents(
+	ctx context.Context,
+	request SessionTimelineRequest,
+) ([]models.ChatTimelineEvent, error) {
+	if _, err := service.GetSession(ctx, request.ActorUserID, request.SessionID); err != nil {
+		return nil, err
+	}
+	linked, err := service.deps.listSessionLinkedEngrams(
+		ctx,
+		service.db,
+		repository.SessionLinkedEngramsListInput{
+			SessionID:   request.SessionID,
+			ActorUserID: request.ActorUserID,
+			Limit:       request.Limit,
+			Offset:      request.Offset,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	events := make([]models.ChatTimelineEvent, 0, len(linked))
+	for _, item := range linked {
+		semantics := ClassifyTimelineEvent(item.Tags)
+		events = append(events, models.ChatTimelineEvent{
+			EventID:                  item.EngramID,
+			SessionID:                request.SessionID,
+			EventType:                semantics.EventType,
+			Title:                    item.Title,
+			Abstract:                 item.Abstract,
+			Tags:                     append([]string(nil), item.Tags...),
+			ConsolidationGroupKey:    semantics.ConsolidationGroupKey,
+			ConsolidationMergedCount: semantics.ConsolidationMergedCount,
+			CreatedAt:                item.CreatedAt,
+		})
+	}
+	return events, nil
 }
 
 // ListPinnedEngrams returns pinned engram summaries for a visible session.

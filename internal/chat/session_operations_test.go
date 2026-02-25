@@ -222,6 +222,68 @@ func TestListMessagesRequiresVisibleSession(t *testing.T) {
 	}
 }
 
+func TestListTimelineEventsExposesConsolidationMergeSemantics(t *testing.T) {
+	service := sessionOperationsServiceForTest()
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000007395")
+	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000007396")
+	now := time.Now().UTC()
+	service.deps.getChatSession = func(context.Context, repository.Queryer, repository.ChatSessionGetInput) (*models.ChatSessionRecord, error) {
+		record := sessionOperationsFixtureRecord(actorUserID)
+		record.SessionID = sessionID
+		return &record, nil
+	}
+	service.deps.listSessionLinkedEngrams = func(context.Context, repository.Queryer, repository.SessionLinkedEngramsListInput) ([]models.EngramSummary, error) {
+		return []models.EngramSummary{
+			{
+				EngramID:  uuid.MustParse("00000000-0000-0000-0000-000000007397"),
+				ProjectID: "project-chat",
+				ThreadID:  stringPtr("chat-session:consolidation"),
+				Title:     "Consolidated Snapshot",
+				Abstract:  "Merged timeline snapshots for incident handoff.",
+				CreatedAt: now,
+				Tags: []string{
+					"consolidated",
+					"consolidation_group_key:incident-42",
+					"consolidation_merged_count:3",
+				},
+			},
+			{
+				EngramID:  uuid.MustParse("00000000-0000-0000-0000-000000007398"),
+				ProjectID: "project-chat",
+				ThreadID:  stringPtr("chat-session:autosave"),
+				Title:     "Autosave Snapshot",
+				Abstract:  "Autosave summary.",
+				CreatedAt: now.Add(-2 * time.Minute),
+				Tags:      []string{"autosave_snapshot"},
+			},
+		}, nil
+	}
+
+	events, err := service.ListTimelineEvents(
+		context.Background(),
+		SessionTimelineRequest{
+			ActorUserID: actorUserID,
+			SessionID:   sessionID,
+			Limit:       20,
+			Offset:      0,
+		},
+	)
+	if err != nil {
+		t.Fatalf("list timeline events: %v", err)
+	}
+	requireEqualIntRuntime(t, 2, len(events))
+	requireEqualAnyRuntime(t, "consolidation_merge", events[0].EventType)
+	if events[0].ConsolidationGroupKey == nil {
+		t.Fatalf("expected consolidation group key")
+	}
+	requireEqualAnyRuntime(t, "incident-42", *events[0].ConsolidationGroupKey)
+	if events[0].ConsolidationMergedCount == nil {
+		t.Fatalf("expected consolidation merged count")
+	}
+	requireEqualIntRuntime(t, 3, *events[0].ConsolidationMergedCount)
+	requireEqualAnyRuntime(t, "autosave_snapshot", events[1].EventType)
+}
+
 func TestPinDocumentReturnsPinnedRecord(t *testing.T) {
 	service := sessionOperationsServiceForTest()
 	expected := &models.PinnedDocumentRecord{
@@ -380,6 +442,9 @@ func sessionOperationsServiceForTest() *SessionOperationsService {
 	}
 	service.deps.listChatMessages = func(context.Context, repository.Queryer, repository.ChatMessageListInput) ([]models.ChatMessageRecord, error) {
 		return []models.ChatMessageRecord{}, nil
+	}
+	service.deps.listSessionLinkedEngrams = func(context.Context, repository.Queryer, repository.SessionLinkedEngramsListInput) ([]models.EngramSummary, error) {
+		return []models.EngramSummary{}, nil
 	}
 	service.deps.listPinnedEngrams = func(context.Context, repository.Queryer, repository.ChatPinnedListInput) ([]models.EngramSummary, error) {
 		return []models.EngramSummary{}, nil

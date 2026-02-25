@@ -114,6 +114,19 @@ type ChatSessionRecord struct {
 	UpdatedAt               time.Time            `json:"updated_at"`
 }
 
+// ChatTimelineEvent models timeline activity rows derived from linked engrams.
+type ChatTimelineEvent struct {
+	EventID                  uuid.UUID `json:"event_id"`
+	SessionID                uuid.UUID `json:"session_id"`
+	EventType                string    `json:"event_type"`
+	Title                    string    `json:"title"`
+	Abstract                 string    `json:"abstract"`
+	Tags                     []string  `json:"tags"`
+	ConsolidationGroupKey    *string   `json:"consolidation_group_key,omitempty"`
+	ConsolidationMergedCount *int      `json:"consolidation_merged_count,omitempty"`
+	CreatedAt                time.Time `json:"created_at"`
+}
+
 // AdminChatSessionRecord models admin-level chat session rows including soft-delete metadata.
 type AdminChatSessionRecord struct {
 	SessionID               uuid.UUID            `json:"session_id"`
