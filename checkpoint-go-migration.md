@@ -3096,3 +3096,34 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP62 - Phase 3 OAuth Utility Service Port (`internal/oauth/service.go`)
+
+- Ported `api/app/oauth/service.py` utility layer to Go:
+  - `internal/oauth/service.go`
+- Added OAuth utility parity for:
+  - scope normalization and scope-token mapping
+  - PKCE validation (S256)
+  - OAuth secret hash + verification
+  - authorization code hashing and active-state checks
+  - client ID/secret and authorization code generation
+  - redirect URI allowlist checks
+- Added migrated tests:
+  - `internal/oauth/service_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeScopeDefaultsToMCPRead`
+  - `TestNormalizeScopeAliasesAndDeduplicates`
+  - `TestTokenScopeMapsWriteScope`
+  - `TestValidatePKCES256Only`
+  - `TestOAuthSecretHashAndVerifyRoundTrip`
+  - `TestAuthorizationCodeIsActiveHonorsExpiryAndConsumption`
+  - `TestGeneratedClientCredentialsAreNonEmpty`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/oauth/service.go`: `10.0`
+  - `internal/oauth/service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
