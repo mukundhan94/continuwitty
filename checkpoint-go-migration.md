@@ -3306,3 +3306,31 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP69 - Phase 3 Chat Runtime Helper Extension (`internal/chat/message_runtime_helpers.go`)
+
+- Extended `api/app/chat/message_runtime.py` helper parity in Go:
+  - `internal/chat/message_runtime_helpers.go`
+- Added helper parity for:
+  - provider history message shaping from persisted chat message records
+  - system prompt assembly with retrieval-context guidance text
+  - preview text normalization/truncation for debug payloads
+- Expanded migrated tests:
+  - `internal/chat/message_runtime_helpers_test.go`
+- Executed tests one-by-one:
+  - `TestResolveTokenUsagePrefersProviderTotal`
+  - `TestResolveTokenUsageEstimatesWhenTotalMissing`
+  - `TestMapProviderErrorMapsProviderExceptions`
+  - `TestMapProviderErrorReturnsOriginalForUnknownError`
+  - `TestHistoryAsProviderMessagesFiltersRolesAndAppliesLimit`
+  - `TestBuildSystemPromptCombinesBaseAndContext`
+  - `TestPreviewTextNormalizesWhitespaceAndTruncates`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/message_runtime_helpers.go`: `10.0`
+  - `internal/chat/message_runtime_helpers_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.

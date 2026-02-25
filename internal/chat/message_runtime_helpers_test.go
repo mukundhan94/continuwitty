@@ -2,9 +2,15 @@ package chat
 
 import (
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
+	"time"
 
+	"engram/internal/models"
 	"engram/internal/providers"
+
+	"github.com/google/uuid"
 )
 
 func TestResolveTokenUsagePrefersProviderTotal(t *testing.T) {
@@ -103,6 +109,41 @@ func TestMapProviderErrorReturnsOriginalForUnknownError(t *testing.T) {
 	}
 }
 
+func TestHistoryAsProviderMessagesFiltersRolesAndAppliesLimit(t *testing.T) {
+	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000006901")
+	now := time.Now().UTC()
+	messages := []models.ChatMessageRecord{
+		{MessageID: uuid.MustParse("00000000-0000-0000-0000-000000006902"), SessionID: sessionID, Role: "system", ContentText: "ignore", CreatedAt: now},
+		{MessageID: uuid.MustParse("00000000-0000-0000-0000-000000006903"), SessionID: sessionID, Role: "user", ContentText: "first", CreatedAt: now},
+		{MessageID: uuid.MustParse("00000000-0000-0000-0000-000000006904"), SessionID: sessionID, Role: "assistant", ContentText: "second", CreatedAt: now},
+		{MessageID: uuid.MustParse("00000000-0000-0000-0000-000000006905"), SessionID: sessionID, Role: "user", ContentText: "third", CreatedAt: now},
+	}
+
+	providerMessages := HistoryAsProviderMessages(messages, 2)
+	expected := []providers.ProviderMessage{
+		{Role: "assistant", Content: "second"},
+		{Role: "user", Content: "third"},
+	}
+	if !reflect.DeepEqual(expected, providerMessages) {
+		t.Fatalf("expected provider messages %v, got %v", expected, providerMessages)
+	}
+}
+
+func TestBuildSystemPromptCombinesBaseAndContext(t *testing.T) {
+	prompt := BuildSystemPrompt(
+		"  be helpful  ",
+		"# Engram Retrieval Context\n\nsummary",
+	)
+	requireContainsRuntimeHelper(t, prompt, "be helpful")
+	requireContainsRuntimeHelper(t, prompt, "Use the retrieved engram context below when relevant.")
+	requireContainsRuntimeHelper(t, prompt, "# Engram Retrieval Context")
+}
+
+func TestPreviewTextNormalizesWhitespaceAndTruncates(t *testing.T) {
+	preview := PreviewText("  one\n\n two   three   four  ", 14)
+	requireEqualStringRuntimeHelper(t, "one two thr...", preview)
+}
+
 func requireEqualIntRuntimeHelper(t *testing.T, expected int, actual int) {
 	t.Helper()
 	if expected != actual {
@@ -114,5 +155,12 @@ func requireEqualStringRuntimeHelper(t *testing.T, expected string, actual strin
 	t.Helper()
 	if expected != actual {
 		t.Fatalf("expected %q, got %q", expected, actual)
+	}
+}
+
+func requireContainsRuntimeHelper(t *testing.T, value string, expected string) {
+	t.Helper()
+	if !strings.Contains(value, expected) {
+		t.Fatalf("expected %q to contain %q", value, expected)
 	}
 }
