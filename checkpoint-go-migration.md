@@ -3225,3 +3225,33 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP66 - Phase 3 Chat Context Assembly Port (`internal/chat/context.go`)
+
+- Ported `api/app/chat/context.py` to Go:
+  - `internal/chat/context.go`
+- Added context assembly parity for:
+  - pinned and retrieval-based engram context merge with deterministic dedupe order
+  - pinned-document scoped chunk retrieval behavior (one representative chunk per pin)
+  - merged pinned/retrieved document chunk budget and dedupe behavior
+  - markdown context sections for engram retrieval and document retrieval
+  - source reference collection and cross-source dedupe semantics
+- Added migrated tests:
+  - `internal/chat/context_test.go`
+- Executed tests one-by-one:
+  - `TestAssembleChatContextMergesPinnedAndRetrieved`
+  - `TestAssembleChatContextDedupesDuplicateSourceURLs`
+  - `TestAssembleChatContextDedupesMultipleChunksFromSameDocument`
+  - `TestAssembleChatContextUsesAllPinnedDocuments`
+  - `TestBundleSectionTruncatesDetailedExcerpt`
+  - `TestAssembleChatContextReturnsEmptyWhenNoSources`
+  - `TestAssembleChatContextUsesDocumentTopKForRetrieval`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/context.go`: `10.0`
+  - `internal/chat/context_test.go`: `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
