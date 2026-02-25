@@ -123,6 +123,53 @@ func TestPersistAssistantReplyWritesProviderMetadata(t *testing.T) {
 	}
 }
 
+func TestYieldStreamChunksEmitsChunkEventsAndAggregatesText(t *testing.T) {
+	prepared := preparedGenerationFixture()
+	runtime := NewChatMessageRuntime(ChatMessageRuntimeDependencies{EmbeddingDim: 256})
+
+	result, err := runtime.YieldStreamChunks(
+		context.Background(),
+		streamGenerateFromParts("part-1 ", "", "part-2"),
+		prepared,
+	)
+	if err != nil {
+		t.Fatalf("yield stream chunks: %v", err)
+	}
+	if result.ProviderError != nil {
+		t.Fatalf("expected no provider error, got %v", result.ProviderError)
+	}
+	requireEqualAnyRuntime(t, "part-1 part-2", result.FullText)
+	requireEqualAnyRuntime(
+		t,
+		[]StreamEvent{
+			{Type: "chunk", Payload: map[string]any{"text": "part-1 "}},
+			{Type: "chunk", Payload: map[string]any{"text": "part-2"}},
+		},
+		result.Events,
+	)
+}
+
+func TestYieldStreamChunksMapsProviderErrors(t *testing.T) {
+	prepared := preparedGenerationFixture()
+	runtime := NewChatMessageRuntime(ChatMessageRuntimeDependencies{EmbeddingDim: 256})
+
+	result, err := runtime.YieldStreamChunks(
+		context.Background(),
+		func(context.Context, providers.ProviderGenerateRequest) (<-chan string, error) {
+			return nil, providers.NewProviderRateLimitError("too many requests")
+		},
+		prepared,
+	)
+	if err != nil {
+		t.Fatalf("expected mapped provider error result, got %v", err)
+	}
+	if result.ProviderError == nil {
+		t.Fatalf("expected provider error result")
+	}
+	requireEqualIntRuntime(t, 429, result.ProviderError.StatusCode())
+	requireEqualAnyRuntime(t, "provider_rate_limit", result.ProviderError.ErrorCode())
+}
+
 func preparedGenerationFixture() PreparedGeneration {
 	now := time.Now().UTC()
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000007001")
@@ -183,6 +230,17 @@ func preparedGenerationFixture() PreparedGeneration {
 		PrepareDurationMS:     1.0,
 		ContextDurationMS:     1.0,
 		HistoryLoadDurationMS: 1.0,
+	}
+}
+
+func streamGenerateFromParts(parts ...string) StreamGenerateFunc {
+	return func(context.Context, providers.ProviderGenerateRequest) (<-chan string, error) {
+		chunks := make(chan string, len(parts))
+		for _, part := range parts {
+			chunks <- part
+		}
+		close(chunks)
+		return chunks, nil
 	}
 }
 

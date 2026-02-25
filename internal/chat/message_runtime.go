@@ -39,6 +39,22 @@ type RuntimeMessageCreateInput struct {
 	Metadata    *RuntimeMessageMetadata
 }
 
+// StreamGenerateFunc captures provider stream generation callback shape.
+type StreamGenerateFunc func(ctx context.Context, request providers.ProviderGenerateRequest) (<-chan string, error)
+
+// StreamEvent captures stream event type and payload details.
+type StreamEvent struct {
+	Type    string
+	Payload map[string]any
+}
+
+// StreamChunkResult captures emitted chunk events and final full text output.
+type StreamChunkResult struct {
+	Events        []StreamEvent
+	FullText      string
+	ProviderError *ChatProviderExecutionError
+}
+
 // PreparedGeneration captures runtime preparation artifacts before provider execution.
 type PreparedGeneration struct {
 	Session               models.ChatSessionRecord
@@ -169,6 +185,26 @@ func (runtime *ChatMessageRuntime) PersistAssistantReply(
 		return nil, NewChatSessionNotFoundError("")
 	}
 	return record, nil
+}
+
+// YieldStreamChunks streams provider tokens into chunk events and aggregates full text.
+func (runtime *ChatMessageRuntime) YieldStreamChunks(
+	ctx context.Context,
+	streamGenerate StreamGenerateFunc,
+	prepared PreparedGeneration,
+) (StreamChunkResult, error) {
+	if streamGenerate == nil {
+		return StreamChunkResult{}, errMessageRuntimeDependenciesIncomplete
+	}
+	stream, err := streamGenerate(ctx, prepared.ProviderRequest)
+	if err != nil {
+		mapped := MapProviderError(err)
+		if providerErr, ok := mapped.(*ChatProviderExecutionError); ok {
+			return StreamChunkResult{ProviderError: providerErr}, nil
+		}
+		return StreamChunkResult{}, mapped
+	}
+	return collectStreamChunks(stream), nil
 }
 
 // BuildStreamMetaPayload returns stream metadata sent ahead of streamed chunks.
@@ -328,4 +364,21 @@ func cloneTokenUsageIntMap(tokenUsage map[string]int) map[string]int {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func collectStreamChunks(stream <-chan string) StreamChunkResult {
+	events := make([]StreamEvent, 0)
+	builder := strings.Builder{}
+	for part := range stream {
+		if part == "" {
+			continue
+		}
+		builder.WriteString(part)
+		events = append(events, StreamEvent{Type: "chunk", Payload: map[string]any{"text": part}})
+	}
+	return StreamChunkResult{
+		Events:        events,
+		FullText:      builder.String(),
+		ProviderError: nil,
+	}
 }

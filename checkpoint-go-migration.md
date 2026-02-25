@@ -3384,3 +3384,31 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP72 - Phase 3 Chat Runtime Streaming Port (`internal/chat/message_runtime.go`)
+
+- Extended `api/app/chat/message_runtime.py` streaming parity in Go:
+  - `internal/chat/message_runtime.go`
+- Added stream runtime parity for:
+  - stream chunk event emission with empty-token filtering
+  - streamed full-text aggregation for completion payloads
+  - provider startup error mapping into chat provider execution errors
+- Expanded migrated tests:
+  - `internal/chat/message_runtime_test.go`
+- Executed tests one-by-one:
+  - `TestBuildStreamMetaPayloadIncludesContextReferences`
+  - `TestBuildStreamDonePayloadIncludesReplyAndContextFields`
+  - `TestPrepareGenerationBuildsProviderRequestFromHistoryAndContext`
+  - `TestPrepareGenerationRejectsEmptyPayload`
+  - `TestPersistAssistantReplyWritesProviderMetadata`
+  - `TestYieldStreamChunksEmitsChunkEventsAndAggregatesText`
+  - `TestYieldStreamChunksMapsProviderErrors`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/message_runtime.go`: `10.0`
+  - `internal/chat/message_runtime_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
