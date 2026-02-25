@@ -3011,3 +3011,30 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP59 - Phase 3 Project Service Runtime Wiring (`cmd/api/project_resolution.go`)
+
+- Integrated Phase 3 `internal/projects` service into runtime dependency graph:
+  - Added project-resolution adapters in `cmd/api/project_resolution.go`.
+  - Updated `cmd/api/main.go` to instantiate `projects.NewService(pool)` and pass adapters to:
+    - session `ResolveProjectIDForWrite` dependency
+    - admin `ProjectResolver` dependency
+- Removed duplicated project-resolution helpers from `cmd/api/main.go` in favor of shared service logic.
+- Added migrated adapter tests:
+  - `cmd/api/project_resolution_test.go`
+- Executed migrated tests one-by-one:
+  - `TestProjectResolutionAdaptersReturnServiceResolution`
+  - `TestMapSessionProjectResolutionErrorMapsKnownErrors`
+  - `TestMapSessionProjectResolutionErrorReturnsUnknownError`
+  - `TestMapAdminProjectResolutionErrorMapsKnownErrors`
+  - `TestMapAdminProjectResolutionErrorReturnsUnknownError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/project_resolution.go`: `10.0`
+  - `cmd/api/project_resolution_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.

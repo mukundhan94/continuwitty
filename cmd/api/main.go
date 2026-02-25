@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"engram/internal/admin"
@@ -17,6 +16,7 @@ import (
 	"engram/internal/config"
 	"engram/internal/db"
 	"engram/internal/models"
+	"engram/internal/projects"
 	"engram/internal/repository"
 
 	"github.com/google/uuid"
@@ -29,14 +29,7 @@ type sessionAuthRuntimeDependencies struct {
 	sessionManager    *auth.SessionManager
 	loginAttemptGuard *auth.LoginAttemptGuard
 	auditLogger       *audit.Logger
-}
-
-type projectWriteResolutionRequest struct {
-	ctx         context.Context
-	db          repository.Queryer
-	actorUserID uuid.UUID
-	actorRole   models.UserRole
-	projectID   string
+	projectService    projectResolutionService
 }
 
 func main() {
@@ -79,11 +72,12 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		logger.Error("failed to initialize session manager", "error", err)
 		os.Exit(1)
 	}
+	projectService := projects.NewService(pool)
 	loginAttemptGuard := newLoginAttemptGuard(settings, pool)
 	auditLogger := newSessionAuditLogger(settings)
 
 	routerDependencies := internalapi.RouterDependencies{
-		MemoryAdminService: admin.NewService(pool, settings.EmbeddingDim, admin.PassthroughProjectResolver{}),
+		MemoryAdminService: admin.NewService(pool, settings.EmbeddingDim, newAdminProjectResolver(projectService)),
 		RequireAdminActor:  internalapi.RequireAdminActorFromContext,
 		SessionAuth: buildSessionAuthDependencies(
 			sessionAuthRuntimeDependencies{
@@ -92,6 +86,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 				sessionManager:    sessionManager,
 				loginAttemptGuard: loginAttemptGuard,
 				auditLogger:       auditLogger,
+				projectService:    projectService,
 			},
 		),
 	}
@@ -131,7 +126,7 @@ func buildSessionAuthDependencies(runtimeDependencies sessionAuthRuntimeDependen
 		ListUsers:                listUsersDependency(runtimeDependencies.pool),
 		CreateUser:               createUserDependency(runtimeDependencies.pool),
 		UpdateUser:               updateUserDependency(runtimeDependencies.pool),
-		ResolveProjectIDForWrite: resolveProjectIDForWriteDependency(runtimeDependencies.pool),
+		ResolveProjectIDForWrite: resolveProjectIDForWriteDependency(runtimeDependencies.projectService),
 		CreateEngram:             createEngramDependency(runtimeDependencies.pool, runtimeDependencies.settings.EmbeddingDim),
 		ListEngrams:              listEngramsDependency(runtimeDependencies.pool),
 		QueryEngrams:             queryEngramsDependency(runtimeDependencies.pool, runtimeDependencies.settings.EmbeddingDim),
@@ -186,27 +181,6 @@ func updateUserDependency(
 				Role:         input.Role,
 				IsActive:     input.IsActive,
 				PasswordHash: input.PasswordHash,
-			},
-		)
-	}
-}
-
-func resolveProjectIDForWriteDependency(
-	pool *pgxpool.Pool,
-) func(ctx context.Context, actorUserID uuid.UUID, actorRole models.UserRole, projectID string) (internalapi.SessionProjectResolution, error) {
-	return func(
-		ctx context.Context,
-		actorUserID uuid.UUID,
-		actorRole models.UserRole,
-		projectID string,
-	) (internalapi.SessionProjectResolution, error) {
-		return resolveProjectIDForWrite(
-			projectWriteResolutionRequest{
-				ctx:         ctx,
-				db:          pool,
-				actorUserID: actorUserID,
-				actorRole:   actorRole,
-				projectID:   projectID,
 			},
 		)
 	}
@@ -332,87 +306,6 @@ func auditEventLogger(logger *audit.Logger) internalapi.SessionAuditLogger {
 			metadata,
 		)
 	}
-}
-
-func resolveProjectIDForWrite(input projectWriteResolutionRequest) (internalapi.SessionProjectResolution, error) {
-	normalizedProjectID := strings.TrimSpace(input.projectID)
-	if normalizedProjectID != "" {
-		return resolveExplicitProjectWrite(input, normalizedProjectID)
-	}
-	return resolveDefaultProjectWrite(input)
-}
-
-func resolveExplicitProjectWrite(
-	input projectWriteResolutionRequest,
-	projectID string,
-) (internalapi.SessionProjectResolution, error) {
-	visibleProject, err := getVisibleProjectForActor(input, projectID)
-	if err != nil {
-		return internalapi.SessionProjectResolution{}, err
-	}
-	if visibleProject == nil {
-		if err := ensureProjectForActor(input, projectID); err != nil {
-			return internalapi.SessionProjectResolution{}, err
-		}
-	}
-	return internalapi.SessionProjectResolution{
-		ProjectID:          projectID,
-		UsedDefaultProject: false,
-	}, nil
-}
-
-func resolveDefaultProjectWrite(input projectWriteResolutionRequest) (internalapi.SessionProjectResolution, error) {
-	defaultProjectID, err := repository.GetUserDefaultProjectID(input.ctx, input.db, input.actorUserID)
-	if err != nil {
-		return internalapi.SessionProjectResolution{}, err
-	}
-	if defaultProjectID == nil {
-		return internalapi.SessionProjectResolution{}, internalapi.ErrProjectIDRequiredWhenNoDefaultProject
-	}
-	normalizedDefaultProjectID := strings.TrimSpace(*defaultProjectID)
-	if normalizedDefaultProjectID == "" {
-		return internalapi.SessionProjectResolution{}, internalapi.ErrProjectIDRequiredWhenNoDefaultProject
-	}
-
-	visibleDefaultProject, err := getVisibleProjectForActor(input, normalizedDefaultProjectID)
-	if err != nil {
-		return internalapi.SessionProjectResolution{}, err
-	}
-	if visibleDefaultProject == nil {
-		return internalapi.SessionProjectResolution{}, internalapi.ErrDefaultProjectNotAccessible
-	}
-	return internalapi.SessionProjectResolution{
-		ProjectID:          normalizedDefaultProjectID,
-		UsedDefaultProject: true,
-	}, nil
-}
-
-func getVisibleProjectForActor(
-	input projectWriteResolutionRequest,
-	projectID string,
-) (*models.ProjectRecord, error) {
-	return repository.GetProjectForActor(
-		input.ctx,
-		input.db,
-		repository.ProjectGetInput{
-			ProjectID:       projectID,
-			ActorUserID:     input.actorUserID,
-			ActorRole:       string(input.actorRole),
-			IncludeArchived: false,
-		},
-	)
-}
-
-func ensureProjectForActor(input projectWriteResolutionRequest, projectID string) error {
-	_, err := repository.EnsureProjectExists(
-		input.ctx,
-		input.db,
-		repository.ProjectEnsureInput{
-			ProjectID:   projectID,
-			OwnerUserID: input.actorUserID,
-		},
-	)
-	return err
 }
 
 func lookupSessionUser(pool *pgxpool.Pool) internalapi.SessionUserLookup {
