@@ -3038,3 +3038,28 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP60 - Phase 3 Ingestion Chunking Port (`internal/ingestion/chunking.go`)
+
+- Ported `api/app/ingestion/chunking.py` to Go:
+  - `internal/ingestion/chunking.go`
+- Added deterministic ingestion chunking behavior for:
+  - document normalization and hash generation
+  - deterministic document/chunk IDs
+  - chunk boundary selection with semantic break preference
+  - overlap stepping, snippet generation, token estimates, and metadata
+- Added migrated tests:
+  - `internal/ingestion/chunking_test.go`
+- Executed migrated tests one-by-one:
+  - `TestChunkDocumentTextIsDeterministicForSameInput`
+  - `TestBuildDocumentIDIsStableForSameFingerprint`
+  - `TestNormalizeDocumentTextFlattensMixedNewlines`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/ingestion/chunking.go`: `9.68`
+  - `internal/ingestion/chunking_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
