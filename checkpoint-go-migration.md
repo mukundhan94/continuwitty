@@ -3063,3 +3063,36 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP61 - Phase 3 Ingestion Service Port (`internal/ingestion/service.go`)
+
+- Ported ingestion service + error surface to Go:
+  - `internal/ingestion/errors.go`
+  - `internal/ingestion/service.go`
+- Added ingestion orchestration parity for:
+  - chunk shape checks
+  - text/file size limits
+  - file MIME/UTF-8 validation
+  - text/file ingest document upsert flow with deterministic chunking
+  - blended retrieval wrappers for engrams + document chunks
+- Added migrated ingestion service tests:
+  - `internal/ingestion/service_test.go`
+- Executed tests one-by-one:
+  - `TestChunkDocumentTextIsDeterministicForSameInput`
+  - `TestBuildDocumentIDIsStableForSameFingerprint`
+  - `TestNormalizeDocumentTextFlattensMixedNewlines`
+  - `TestIngestTextRejectsOverlapNotSmallerThanChunkSize`
+  - `TestIngestFileValidationErrors`
+  - `TestIngestTextPersistsChunkedDocument`
+  - `TestIngestFilePersistsFileMetadataAndFallbackTitle`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/ingestion/errors.go`: `10.0`
+  - `internal/ingestion/service.go`: `9.68`
+  - `internal/ingestion/service_test.go`: `10.0`
+  - `internal/ingestion/chunking.go`: `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
