@@ -3162,3 +3162,32 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP64 - Phase 3 Chat Lifecycle Policy Port (`internal/chat/lifecycle_policy.go`)
+
+- Ported `api/app/chat/lifecycle_policy.py` to Go:
+  - `internal/chat/lifecycle_policy.go`
+- Added lifecycle policy parity for:
+  - autosave policy normalization
+  - interval/message-count snapshot triggers
+  - duplicate + low-value snapshot guards
+  - timeline event classification semantics
+  - retention prune-id selection
+- Added migrated tests:
+  - `internal/chat/lifecycle_policy_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeAutosavePolicyKeepsBackwardCompatibility`
+  - `TestIntervalSnapshotTriggerRules`
+  - `TestMessageCountSnapshotTriggerRules`
+  - `TestDuplicateAndLowValueGuards`
+  - `TestRetentionPruningRespectsAgeAndMaxCount`
+  - `TestTimelineEventClassification`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/lifecycle_policy.go`: `9.68`
+  - `internal/chat/lifecycle_policy_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
