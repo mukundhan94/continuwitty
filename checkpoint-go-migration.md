@@ -3127,3 +3127,38 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP63 - Phase 3 OAuth Registration Service Port (`internal/oauth/registration.go`)
+
+- Ported `api/app/oauth/registration.py` into Go service layer:
+  - `internal/oauth/registration.go`
+- Added registration service parity for:
+  - metadata list dedup/sanitization
+  - protected registration auth checks
+  - grant/response/token-auth-method validation
+  - confidential client secret issuance and hashing
+  - OAuth client persistence via repository input mapping
+- Added migrated tests:
+  - `internal/oauth/registration_test.go`
+- Executed tests one-by-one:
+  - `TestDedupStringListTrimsAndDeduplicates`
+  - `TestHandleRegisterNormalizesListsAndIssuesSecret`
+  - `TestHandleRegisterRejectsUnauthorizedSessionUser`
+  - `TestNormalizeScopeDefaultsToMCPRead`
+  - `TestNormalizeScopeAliasesAndDeduplicates`
+  - `TestTokenScopeMapsWriteScope`
+  - `TestValidatePKCES256Only`
+  - `TestOAuthSecretHashAndVerifyRoundTrip`
+  - `TestAuthorizationCodeIsActiveHonorsExpiryAndConsumption`
+  - `TestGeneratedClientCredentialsAreNonEmpty`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/oauth/registration.go`: `10.0`
+  - `internal/oauth/registration_test.go`: `10.0`
+  - `internal/oauth/service.go`: `10.0`
+  - `internal/oauth/service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
