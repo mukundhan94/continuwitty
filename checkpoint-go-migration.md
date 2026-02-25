@@ -3357,3 +3357,30 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP71 - Phase 3 Chat Runtime Operation Port (`internal/chat/message_runtime.go`)
+
+- Extended `api/app/chat/message_runtime.py` operation parity in Go:
+  - `internal/chat/message_runtime.go`
+- Added runtime operation parity for:
+  - payload validation and prepare-generation flow
+  - session/user-message resolution and not-found handling semantics
+  - context + history loading with provider request assembly
+  - assistant reply persistence with provider/model/token metadata and used engram IDs
+- Expanded migrated tests:
+  - `internal/chat/message_runtime_test.go`
+- Executed tests one-by-one:
+  - `TestBuildStreamMetaPayloadIncludesContextReferences`
+  - `TestBuildStreamDonePayloadIncludesReplyAndContextFields`
+  - `TestPrepareGenerationBuildsProviderRequestFromHistoryAndContext`
+  - `TestPrepareGenerationRejectsEmptyPayload`
+  - `TestPersistAssistantReplyWritesProviderMetadata`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/message_runtime.go`: `10.0`
+  - `internal/chat/message_runtime_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
