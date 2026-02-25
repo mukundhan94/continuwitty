@@ -3334,3 +3334,26 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP70 - Phase 3 Chat Runtime Payload Type Port (`internal/chat/message_runtime.go`)
+
+- Ported `api/app/chat/message_runtime.py` stream payload surface to Go:
+  - `internal/chat/message_runtime.go`
+- Added runtime parity for:
+  - prepared generation transport structure
+  - stream meta payload assembly for session/message/context identifiers
+  - stream done payload assembly for reply, context identifiers, and optional debug trace
+- Added migrated tests:
+  - `internal/chat/message_runtime_test.go`
+- Executed tests one-by-one:
+  - `TestBuildStreamMetaPayloadIncludesContextReferences`
+  - `TestBuildStreamDonePayloadIncludesReplyAndContextFields`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/message_runtime.go`: `10.0`
+  - `internal/chat/message_runtime_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
