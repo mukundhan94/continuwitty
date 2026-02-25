@@ -196,6 +196,168 @@ func TestUpdateLifecyclePolicyMapsPayloadToSessionUpdate(t *testing.T) {
 	requireEqualAnyRuntime(t, 45, policy.AutosaveIntervalMinutes)
 }
 
+func TestListMessagesRequiresVisibleSession(t *testing.T) {
+	service := sessionOperationsServiceForTest()
+	listCalled := false
+	service.deps.getChatSession = func(context.Context, repository.Queryer, repository.ChatSessionGetInput) (*models.ChatSessionRecord, error) {
+		return nil, nil
+	}
+	service.deps.listChatMessages = func(context.Context, repository.Queryer, repository.ChatMessageListInput) ([]models.ChatMessageRecord, error) {
+		listCalled = true
+		return []models.ChatMessageRecord{}, nil
+	}
+
+	_, err := service.ListMessages(
+		context.Background(),
+		SessionMessagesRequest{
+			ActorUserID: uuid.MustParse("00000000-0000-0000-0000-000000007341"),
+			SessionID:   uuid.MustParse("00000000-0000-0000-0000-000000007342"),
+			Limit:       100,
+			Offset:      0,
+		},
+	)
+	_ = requireChatServiceError(t, err)
+	if listCalled {
+		t.Fatalf("expected list messages to short-circuit on missing session")
+	}
+}
+
+func TestPinDocumentReturnsPinnedRecord(t *testing.T) {
+	service := sessionOperationsServiceForTest()
+	expected := &models.PinnedDocumentRecord{
+		SessionID:      uuid.MustParse("00000000-0000-0000-0000-000000007362"),
+		DocumentID:     uuid.MustParse("00000000-0000-0000-0000-000000007363"),
+		PinnedByUserID: uuid.MustParse("00000000-0000-0000-0000-000000007361"),
+		CreatedAt:      time.Now().UTC(),
+	}
+	service.deps.pinDocument = func(context.Context, repository.Queryer, repository.ChatPinDocumentInput) (*models.PinnedDocumentRecord, error) {
+		record := *expected
+		return &record, nil
+	}
+
+	record, err := service.PinDocument(
+		context.Background(),
+		SessionPinDocumentRequest{
+			ActorUserID: expected.PinnedByUserID,
+			SessionID:   expected.SessionID,
+			DocumentID:  expected.DocumentID,
+		},
+	)
+	if err != nil {
+		t.Fatalf("pin document: %v", err)
+	}
+	requireEqualAnyRuntime(t, expected.DocumentID, record.DocumentID)
+}
+
+func TestPinEngramReturnsValidationErrorWhenNotAccessible(t *testing.T) {
+	service := sessionOperationsServiceForTest()
+	service.deps.pinEngram = func(
+		context.Context,
+		repository.Queryer,
+		repository.ChatPinEngramInput,
+	) (*models.PinnedEngramRecord, error) {
+		return nil, nil
+	}
+
+	_, err := service.PinEngram(
+		context.Background(),
+		SessionPinEngramRequest{
+			ActorUserID: uuid.MustParse("00000000-0000-0000-0000-000000007351"),
+			SessionID:   uuid.MustParse("00000000-0000-0000-0000-000000007352"),
+			EngramID:    uuid.MustParse("00000000-0000-0000-0000-000000007353"),
+		},
+	)
+	serviceErr := requireChatServiceError(t, err)
+	requireEqualIntRuntime(t, 400, serviceErr.StatusCode())
+}
+
+func TestUnpinReturnsNotFoundWhenMissing(t *testing.T) {
+	testCases := []struct {
+		name           string
+		configure      func(*SessionOperationsService)
+		invoke         func(*SessionOperationsService) error
+		expectedDetail string
+	}{
+		{
+			name: "engram",
+			configure: func(service *SessionOperationsService) {
+				service.deps.unpinEngram = func(context.Context, repository.Queryer, repository.ChatPinEngramInput) (bool, error) {
+					return false, nil
+				}
+			},
+			invoke: func(service *SessionOperationsService) error {
+				return service.UnpinEngram(
+					context.Background(),
+					SessionPinEngramRequest{
+						ActorUserID: uuid.MustParse("00000000-0000-0000-0000-000000007371"),
+						SessionID:   uuid.MustParse("00000000-0000-0000-0000-000000007372"),
+						EngramID:    uuid.MustParse("00000000-0000-0000-0000-000000007373"),
+					},
+				)
+			},
+			expectedDetail: "Pinned engram not found for session",
+		},
+		{
+			name: "document",
+			configure: func(service *SessionOperationsService) {
+				service.deps.unpinDocument = func(context.Context, repository.Queryer, repository.ChatPinDocumentInput) (bool, error) {
+					return false, nil
+				}
+			},
+			invoke: func(service *SessionOperationsService) error {
+				return service.UnpinDocument(
+					context.Background(),
+					SessionPinDocumentRequest{
+						ActorUserID: uuid.MustParse("00000000-0000-0000-0000-000000007381"),
+						SessionID:   uuid.MustParse("00000000-0000-0000-0000-000000007382"),
+						DocumentID:  uuid.MustParse("00000000-0000-0000-0000-000000007383"),
+					},
+				)
+			},
+			expectedDetail: "Pinned document not found for session",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			service := sessionOperationsServiceForTest()
+			testCase.configure(service)
+
+			serviceErr := requireChatServiceError(t, testCase.invoke(service))
+			requireEqualIntRuntime(t, 404, serviceErr.StatusCode())
+			requireEqualAnyRuntime(t, testCase.expectedDetail, serviceErr.Detail())
+		})
+	}
+}
+
+func TestListPinnedEngramsAndDocuments(t *testing.T) {
+	service := sessionOperationsServiceForTest()
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000007391")
+	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000007392")
+	service.deps.getChatSession = func(context.Context, repository.Queryer, repository.ChatSessionGetInput) (*models.ChatSessionRecord, error) {
+		record := sessionOperationsFixtureRecord(actorUserID)
+		record.SessionID = sessionID
+		return &record, nil
+	}
+	service.deps.listPinnedEngrams = func(context.Context, repository.Queryer, repository.ChatPinnedListInput) ([]models.EngramSummary, error) {
+		return []models.EngramSummary{{EngramID: uuid.MustParse("00000000-0000-0000-0000-000000007393"), ProjectID: "project-chat", Title: "Pinned", CreatedAt: time.Now().UTC()}}, nil
+	}
+	service.deps.listPinnedDocuments = func(context.Context, repository.Queryer, repository.ChatPinnedListInput) ([]models.PinnedDocumentRecord, error) {
+		return []models.PinnedDocumentRecord{{SessionID: sessionID, DocumentID: uuid.MustParse("00000000-0000-0000-0000-000000007394"), PinnedByUserID: actorUserID, CreatedAt: time.Now().UTC()}}, nil
+	}
+
+	engrams, err := service.ListPinnedEngrams(context.Background(), actorUserID, sessionID)
+	if err != nil {
+		t.Fatalf("list pinned engrams: %v", err)
+	}
+	documents, err := service.ListPinnedDocuments(context.Background(), actorUserID, sessionID)
+	if err != nil {
+		t.Fatalf("list pinned documents: %v", err)
+	}
+	requireEqualIntRuntime(t, 1, len(engrams))
+	requireEqualIntRuntime(t, 1, len(documents))
+}
+
 func sessionOperationsServiceForTest() *SessionOperationsService {
 	service := &SessionOperationsService{db: nil, deps: defaultSessionOperationsDeps()}
 	service.deps.ensureProjectExists = func(context.Context, repository.Queryer, repository.ProjectEnsureInput) (*models.ProjectRecord, error) {
@@ -215,6 +377,29 @@ func sessionOperationsServiceForTest() *SessionOperationsService {
 	service.deps.updateChatSession = func(context.Context, repository.Queryer, repository.ChatSessionUpdateInput) (*models.ChatSessionRecord, error) {
 		record := sessionOperationsFixtureRecord(uuid.MustParse("00000000-0000-0000-0000-000000007399"))
 		return &record, nil
+	}
+	service.deps.listChatMessages = func(context.Context, repository.Queryer, repository.ChatMessageListInput) ([]models.ChatMessageRecord, error) {
+		return []models.ChatMessageRecord{}, nil
+	}
+	service.deps.listPinnedEngrams = func(context.Context, repository.Queryer, repository.ChatPinnedListInput) ([]models.EngramSummary, error) {
+		return []models.EngramSummary{}, nil
+	}
+	service.deps.listPinnedDocuments = func(context.Context, repository.Queryer, repository.ChatPinnedListInput) ([]models.PinnedDocumentRecord, error) {
+		return []models.PinnedDocumentRecord{}, nil
+	}
+	service.deps.pinEngram = func(context.Context, repository.Queryer, repository.ChatPinEngramInput) (*models.PinnedEngramRecord, error) {
+		record := models.PinnedEngramRecord{SessionID: uuid.MustParse("00000000-0000-0000-0000-000000007390"), EngramID: uuid.MustParse("00000000-0000-0000-0000-000000007398"), PinnedByUserID: uuid.MustParse("00000000-0000-0000-0000-000000007399"), CreatedAt: time.Now().UTC()}
+		return &record, nil
+	}
+	service.deps.pinDocument = func(context.Context, repository.Queryer, repository.ChatPinDocumentInput) (*models.PinnedDocumentRecord, error) {
+		record := models.PinnedDocumentRecord{SessionID: uuid.MustParse("00000000-0000-0000-0000-000000007390"), DocumentID: uuid.MustParse("00000000-0000-0000-0000-000000007397"), PinnedByUserID: uuid.MustParse("00000000-0000-0000-0000-000000007399"), CreatedAt: time.Now().UTC()}
+		return &record, nil
+	}
+	service.deps.unpinEngram = func(context.Context, repository.Queryer, repository.ChatPinEngramInput) (bool, error) {
+		return true, nil
+	}
+	service.deps.unpinDocument = func(context.Context, repository.Queryer, repository.ChatPinDocumentInput) (bool, error) {
+		return true, nil
 	}
 	return service
 }

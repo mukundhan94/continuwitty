@@ -3465,3 +3465,37 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP75 - Phase 3 Chat Session Operations Continuation Port (`internal/chat/session_operations.go`)
+
+- Ported `api/app/chat/session_operations.py` session-operations continuation slice to Go:
+  - `internal/chat/session_operations.go`
+- Added session-operations parity for:
+  - message listing with session visibility checks
+  - pinned engram and pinned document listing for visible sessions
+  - engram/document pin and unpin behavior with typed validation/not-found mapping
+  - shared pin/unpin action abstractions to maintain CodeScene compliance
+- Added migrated tests:
+  - `internal/chat/session_operations_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeSessionCreatePayloadAppliesAutosavePolicy`
+  - `TestNormalizeSessionUpdatePayloadKeepsNonAutosaveUpdatesUntouched`
+  - `TestNormalizeSessionUpdatePayloadDerivesAutosaveFields`
+  - `TestGetSessionReturnsNotFoundErrorWhenMissing`
+  - `TestCreateSessionEnsuresProjectAndCreatesSession`
+  - `TestUpdateLifecyclePolicyReturnsCurrentWhenPayloadIsEmpty`
+  - `TestUpdateLifecyclePolicyMapsPayloadToSessionUpdate`
+  - `TestListMessagesRequiresVisibleSession`
+  - `TestPinDocumentReturnsPinnedRecord`
+  - `TestPinEngramReturnsValidationErrorWhenNotAccessible`
+  - `TestUnpinReturnsNotFoundWhenMissing`
+  - `TestListPinnedEngramsAndDocuments`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/session_operations.go`: `10.0`
+  - `internal/chat/session_operations_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
