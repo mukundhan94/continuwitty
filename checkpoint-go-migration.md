@@ -3281,3 +3281,28 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP68 - Phase 3 Chat Runtime Helper Port (`internal/chat/message_runtime_helpers.go`)
+
+- Ported `api/app/chat/message_runtime.py` helper behavior to Go:
+  - `internal/chat/message_runtime_helpers.go`
+- Added helper parity for:
+  - provider token usage preference + fallback token estimation logic
+  - provider exception mapping to chat provider execution errors with expected status-code map
+  - unknown runtime error passthrough semantics
+- Added migrated tests:
+  - `internal/chat/message_runtime_helpers_test.go`
+- Executed tests one-by-one:
+  - `TestResolveTokenUsagePrefersProviderTotal`
+  - `TestResolveTokenUsageEstimatesWhenTotalMissing`
+  - `TestMapProviderErrorMapsProviderExceptions`
+  - `TestMapProviderErrorReturnsOriginalForUnknownError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/message_runtime_helpers.go`: `10.0`
+  - `internal/chat/message_runtime_helpers_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
