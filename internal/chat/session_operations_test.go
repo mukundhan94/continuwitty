@@ -421,7 +421,11 @@ func TestListPinnedEngramsAndDocuments(t *testing.T) {
 }
 
 func sessionOperationsServiceForTest() *SessionOperationsService {
-	service := &SessionOperationsService{db: nil, deps: defaultSessionOperationsDeps()}
+	service := &SessionOperationsService{
+		db:           nil,
+		deps:         defaultSessionOperationsDeps(),
+		embeddingDim: defaultSessionOperationsEmbeddingDim,
+	}
 	service.deps.ensureProjectExists = func(context.Context, repository.Queryer, repository.ProjectEnsureInput) (*models.ProjectRecord, error) {
 		return &models.ProjectRecord{}, nil
 	}
@@ -445,6 +449,12 @@ func sessionOperationsServiceForTest() *SessionOperationsService {
 	}
 	service.deps.listSessionLinkedEngrams = func(context.Context, repository.Queryer, repository.SessionLinkedEngramsListInput) ([]models.EngramSummary, error) {
 		return []models.EngramSummary{}, nil
+	}
+	service.deps.createEngram = func(context.Context, repository.Queryer, repository.CreateEngramInput) (*models.EngramCreateResponse, error) {
+		return &models.EngramCreateResponse{
+			EngramID:  uuid.MustParse("00000000-0000-0000-0000-000000007396"),
+			CreatedAt: time.Now().UTC(),
+		}, nil
 	}
 	service.deps.listPinnedEngrams = func(context.Context, repository.Queryer, repository.ChatPinnedListInput) ([]models.EngramSummary, error) {
 		return []models.EngramSummary{}, nil

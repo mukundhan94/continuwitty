@@ -114,6 +114,7 @@ type sessionOperationsDeps struct {
 	updateChatSession        func(ctx context.Context, db repository.Queryer, input repository.ChatSessionUpdateInput) (*models.ChatSessionRecord, error)
 	listChatMessages         func(ctx context.Context, db repository.Queryer, input repository.ChatMessageListInput) ([]models.ChatMessageRecord, error)
 	listSessionLinkedEngrams func(ctx context.Context, db repository.Queryer, input repository.SessionLinkedEngramsListInput) ([]models.EngramSummary, error)
+	createEngram             func(ctx context.Context, db repository.Queryer, input repository.CreateEngramInput) (*models.EngramCreateResponse, error)
 	listPinnedEngrams        func(ctx context.Context, db repository.Queryer, input repository.ChatPinnedListInput) ([]models.EngramSummary, error)
 	listPinnedDocuments      func(ctx context.Context, db repository.Queryer, input repository.ChatPinnedListInput) ([]models.PinnedDocumentRecord, error)
 	pinEngram                func(ctx context.Context, db repository.Queryer, input repository.ChatPinEngramInput) (*models.PinnedEngramRecord, error)
@@ -131,6 +132,7 @@ func defaultSessionOperationsDeps() sessionOperationsDeps {
 		updateChatSession:        repository.UpdateChatSession,
 		listChatMessages:         repository.ListChatMessages,
 		listSessionLinkedEngrams: repository.ListSessionLinkedEngrams,
+		createEngram:             repository.CreateEngram,
 		listPinnedEngrams:        repository.ListPinnedEngramSummaries,
 		listPinnedDocuments:      repository.ListPinnedDocuments,
 		pinEngram:                repository.PinEngramToSession,
@@ -142,13 +144,18 @@ func defaultSessionOperationsDeps() sessionOperationsDeps {
 
 // SessionOperationsService ports chat session operations from session_operations.py.
 type SessionOperationsService struct {
-	db   repository.Queryer
-	deps sessionOperationsDeps
+	db           repository.Queryer
+	deps         sessionOperationsDeps
+	embeddingDim int
 }
 
 // NewSessionOperationsService constructs a session operations service.
 func NewSessionOperationsService(db repository.Queryer) *SessionOperationsService {
-	return &SessionOperationsService{db: db, deps: defaultSessionOperationsDeps()}
+	return &SessionOperationsService{
+		db:           db,
+		deps:         defaultSessionOperationsDeps(),
+		embeddingDim: defaultSessionOperationsEmbeddingDim,
+	}
 }
 
 // NormalizeSessionCreatePayload applies backward-compatible autosave policy normalization.

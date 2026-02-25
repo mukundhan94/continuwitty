@@ -3536,3 +3536,47 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP77 - Phase 3 Chat Session Save-as-Engram Port (`internal/chat/session_operations_save.go`)
+
+- Extended chat model parity for save-session payloads:
+  - `internal/models/chat.go`
+- Ported `api/app/chat/session_operations.py` save-session slice to Go:
+  - `internal/chat/session_operations_save.go`
+- Added session-operations parity for:
+  - save-session empty-message validation behavior
+  - abstract normalization with generic snapshot fallback from latest assistant content
+  - engram creation payload mapping including `source_session_id`, `thread_id`, transcript markdown, and retrieval text
+  - dedicated save-session operation file split to preserve >9.5 CodeScene quality constraints
+- Added migrated tests:
+  - `internal/chat/session_operations_save_test.go`
+  - `internal/chat/session_operations_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeSessionCreatePayloadAppliesAutosavePolicy`
+  - `TestNormalizeSessionUpdatePayloadKeepsNonAutosaveUpdatesUntouched`
+  - `TestNormalizeSessionUpdatePayloadDerivesAutosaveFields`
+  - `TestGetSessionReturnsNotFoundErrorWhenMissing`
+  - `TestCreateSessionEnsuresProjectAndCreatesSession`
+  - `TestUpdateLifecyclePolicyReturnsCurrentWhenPayloadIsEmpty`
+  - `TestUpdateLifecyclePolicyMapsPayloadToSessionUpdate`
+  - `TestListMessagesRequiresVisibleSession`
+  - `TestListTimelineEventsExposesConsolidationMergeSemantics`
+  - `TestSaveSessionAsEngramSetsSourceSessionID`
+  - `TestSaveSessionAsEngramDerivesAbstractFromLatestAssistant`
+  - `TestSaveSessionAsEngramRejectsEmptySession`
+  - `TestPinDocumentReturnsPinnedRecord`
+  - `TestPinEngramReturnsValidationErrorWhenNotAccessible`
+  - `TestUnpinReturnsNotFoundWhenMissing`
+  - `TestListPinnedEngramsAndDocuments`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/session_operations.go`: `10.0`
+  - `internal/chat/session_operations_save.go`: `10.0`
+  - `internal/chat/session_operations_test.go`: `10.0`
+  - `internal/chat/session_operations_save_test.go`: `10.0`
+  - `internal/models/chat.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.

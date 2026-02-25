@@ -171,6 +171,22 @@ type ChatMessageRecord struct {
 	CreatedAt      time.Time      `json:"created_at"`
 }
 
+// SaveSessionAsEngramRequest models chat-session save payload.
+type SaveSessionAsEngramRequest struct {
+	Title           string          `json:"title"`
+	Abstract        string          `json:"abstract"`
+	VisibilityScope VisibilityScope `json:"visibility_scope"`
+	Tags            []string        `json:"tags"`
+	Keywords        []string        `json:"keywords"`
+}
+
+// SaveSessionAsEngramResponse models save-session result payload.
+type SaveSessionAsEngramResponse struct {
+	EngramID  uuid.UUID `json:"engram_id"`
+	SessionID uuid.UUID `json:"session_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // PinnedEngramRecord models engram pins associated to chat sessions.
 type PinnedEngramRecord struct {
 	SessionID      uuid.UUID `json:"session_id"`
