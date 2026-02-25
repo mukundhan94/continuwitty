@@ -3255,3 +3255,29 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP67 - Phase 3 Chat Error Surface Port (`internal/chat/errors.go`)
+
+- Ported `api/app/chat/errors.py` to Go:
+  - `internal/chat/errors.go`
+- Added typed chat error parity for:
+  - service error detail + status-code transport
+  - session-not-found default detail and 404 status
+  - validation error 400 status handling
+  - provider execution error default/override status + error code
+- Added migrated tests:
+  - `internal/chat/errors_test.go`
+- Executed tests one-by-one:
+  - `TestNewChatServiceErrorDefaultsStatusCodeToBadRequest`
+  - `TestNewChatSessionNotFoundErrorDefaultsDetail`
+  - `TestNewChatValidationErrorUsesBadRequestStatus`
+  - `TestNewChatProviderExecutionErrorDefaultsAndOverrides`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/errors.go`: `10.0`
+  - `internal/chat/errors_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
