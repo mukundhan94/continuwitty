@@ -3623,3 +3623,30 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP79 - Phase 3 Chat API Unit Baseline Port (`internal/api/chat_api.go`)
+
+- Ported `api/app/chat/api.py` helper + stream route registration baseline to Go:
+  - `internal/api/chat_api.go`
+- Added chat API parity for:
+  - actor user-id resolution from API actor payload
+  - chat service error mapping into HTTP-oriented error shape
+  - SSE event line encoding behavior
+  - chat stream endpoint route registration (`/api/v1/chat/sessions/{session_id}/messages/stream`)
+- Added migrated tests:
+  - `internal/api/chat_api_test.go`
+- Executed tests one-by-one:
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersStreamEndpoint`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api.go`: `10.0`
+  - `internal/api/chat_api_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
