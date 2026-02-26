@@ -25,6 +25,7 @@ type RouterDependencies struct {
 	IngestionOptions   IngestionRouteOptions
 	OAuthRegistration  OAuthRegistrationRouteService
 	OAuthAuthorization OAuthAuthorizationRouteService
+	OAuthToken         OAuthTokenRouteService
 	ChatRouter         chi.Router
 }
 
@@ -89,6 +90,9 @@ func mountOAuthDependencyRoutes(router chi.Router, settings config.Settings, dep
 	}
 	if dependencies.OAuthAuthorization != nil {
 		MountOAuthAuthorizationRoutes(router, settings, dependencies.OAuthAuthorization)
+	}
+	if dependencies.OAuthToken != nil {
+		MountOAuthTokenRoutes(router, settings, dependencies.OAuthToken)
 	}
 }
 

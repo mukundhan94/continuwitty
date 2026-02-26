@@ -59,6 +59,7 @@
 | CP89 | 2026-02-26 | Completed | Phase 4 ingestion file-upload API baseline (`POST /api/v1/ingestion/file`) with multipart validation/options wiring, migrated route tests, and >9.5 code-health gate |
 | CP90 | 2026-02-26 | Completed | Phase 4 OAuth metadata + registration route baseline (`/.well-known/*` + `POST /oauth/register`) with runtime wiring, migrated route tests, and >9.5 code-health gate |
 | CP91 | 2026-02-26 | Completed | Phase 4 OAuth authorization route baseline (`GET /oauth/authorize`) with runtime wiring, migrated route/service tests, and >9.5 code-health gate |
+| CP92 | 2026-02-26 | Completed | Phase 4 OAuth token route baseline (`POST /oauth/token`) with runtime wiring, migrated route/service tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4244,6 +4245,63 @@
   - `internal/api/router_test.go`: `10.0`
   - `internal/oauth/authorization.go`: `10.0`
   - `internal/oauth/authorization_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP92 - Phase 4 OAuth Token Route Baseline (`internal/api/oauth_token_api.go`)
+
+- Added OAuth token route module:
+  - new file: `internal/api/oauth_token_api.go`
+  - mounted endpoint:
+    - `POST /oauth/token`
+  - includes:
+    - OAuth enabled/disabled gating
+    - form payload parsing for token exchange fields
+    - required field validation for token exchange
+    - OAuth error/success response mapping.
+- Added OAuth token exchange service layer:
+  - new files:
+    - `internal/oauth/token.go`
+    - `internal/oauth/token_test.go`
+  - behavior includes:
+    - grant type validation (`authorization_code` only)
+    - OAuth client lookup + confidential-client secret validation
+    - authorization code lookup/hash validation + PKCE checks
+    - authorization code consume semantics
+    - MCP token issuance + scope mapping from OAuth scopes
+    - access token response composition (`access_token`, `token_type`, `expires_in`, `scope`).
+- Updated top-level router/runtime wiring:
+  - `internal/api/router.go`
+  - `internal/api/router_test.go`
+  - `cmd/api/main.go`
+  - new dependency: `RouterDependencies.OAuthToken`
+  - runtime injection: `oauth.NewTokenService(pool)`.
+- Added migrated OAuth token route tests:
+  - new file: `internal/api/oauth_token_api_test.go`
+  - route registration, success response, OAuth error mapping, and validation behavior.
+- Executed tests one-by-one:
+  - `TestHandleTokenRejectsUnsupportedGrantType`
+  - `TestHandleTokenReturnsInvalidClientWhenMissing`
+  - `TestHandleTokenRejectsInvalidClientSecret`
+  - `TestHandleTokenIssuesAccessToken`
+  - `TestBuildOAuthTokenSecretHintFormatsLongSecret`
+  - `TestMountOAuthTokenRoutesRegistersEndpoint`
+  - `TestOAuthTokenRouteWritesSuccessResponse`
+  - `TestOAuthTokenRouteMapsOAuthErrors`
+  - `TestOAuthTokenRouteValidationErrors`
+  - `TestOAuthTokenRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `internal/api/oauth_token_api.go`: `10.0`
+  - `internal/api/oauth_token_api_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+  - `internal/oauth/token.go`: `10.0`
+  - `internal/oauth/token_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

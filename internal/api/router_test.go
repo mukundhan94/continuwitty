@@ -427,6 +427,50 @@ func TestOAuthAuthorizationRoutesMountedWithDependencies(t *testing.T) {
 	}
 }
 
+func TestOAuthTokenRoutesMountedWithDependencies(t *testing.T) {
+	settings := config.Settings{
+		AppSemanticVersion: "1.2.3",
+		AppCommitSHA:       "abc1234",
+		OAuthEnabled:       true,
+	}
+	serviceCalled := false
+	router := NewRouterWithDependencies(
+		settings,
+		RouterDependencies{
+			OAuthToken: fakeOAuthTokenRouteService{
+				handleTokenFn: func(
+					_ context.Context,
+					_ config.Settings,
+					_ internaloauth.TokenRequest,
+				) (internaloauth.TokenResult, error) {
+					serviceCalled = true
+					return internaloauth.TokenResult{
+						ErrorCode:        "invalid_grant",
+						ErrorDescription: "Authorization code is invalid.",
+						StatusCode:       http.StatusBadRequest,
+					}, nil
+				},
+			},
+		},
+	)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/oauth/token",
+		strings.NewReader("grant_type=authorization_code&code=abc&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&client_id=client-1&code_verifier=verifier"),
+	)
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", response.Code)
+	}
+	if !serviceCalled {
+		t.Fatalf("expected oauth token service to be called")
+	}
+}
+
 func exerciseActorScopedDependencyRoute(
 	t *testing.T,
 	dependencies RouterDependencies,

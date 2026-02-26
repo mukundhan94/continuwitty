@@ -77,6 +77,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	projectService := projects.NewService(pool)
 	oauthRegistrationService := oauth.NewRegistrationService(pool)
 	oauthAuthorizationService := oauth.NewAuthorizationService(pool)
+	oauthTokenService := oauth.NewTokenService(pool)
 	ingestionService := ingestion.NewService(
 		pool,
 		settings.EmbeddingDim,
@@ -106,6 +107,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		},
 		OAuthRegistration:  oauthRegistrationService,
 		OAuthAuthorization: oauthAuthorizationService,
+		OAuthToken:         oauthTokenService,
 		ChatRouter:         buildChatRouter(settings, pool),
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
