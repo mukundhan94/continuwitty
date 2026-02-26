@@ -97,6 +97,7 @@
 | CP127 | 2026-02-26 | Completed | Phase 4 MCP chat send-message baseline (`chat.send_message`) with direct/`tools/call` parity, runtime chat-service wiring, migrated tests, and chat/provider error mapping parity under >9.5 code-health gate |
 | CP128 | 2026-02-26 | Completed | Phase 4 MCP chat save-as-engram baseline (`chat.save_as_engram`) with direct/`tools/call` parity, runtime save-session adapter wiring, defaults/validation parity for visibility + metadata fields, migrated tests, and >9.5 code-health gate |
 | CP129 | 2026-02-26 | Completed | Phase 4 MCP engram read-access baseline (`engram.list`, `engram.get`, `engram.collection_list`) with direct/`tools/call` parity, runtime memory-admin adapter wiring, owner/admin visibility parity, migrated tests, and >9.5 code-health gate |
+| CP130 | 2026-02-26 | Completed | Phase 4 MCP engram query/rehydrate baseline (`engram.query`, `engram.rehydrate`) with direct/`tools/call` parity, runtime query+rehydrate adapter wiring, validation/defaults parity, and `-32004` rehydrate not-found mapping under >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3101,6 +3102,48 @@
   - `internal/mcp/compatibility_service_engram_list_test.go`: `9.68`
   - `internal/mcp/compatibility_service_engram_get_test.go`: `10.0`
   - `internal/mcp/compatibility_service_engram_collection_list_test.go`: `9.55`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP130 - Phase 4 MCP Engram Query/Rehydrate Baseline (`engram.query`, `engram.rehydrate`)
+
+- Migrated engram query/rehydrate MCP dispatch paths into Go compatibility mode:
+  - `engram.query`
+  - `engram.rehydrate`.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return payloads directly.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented engram query behavior parity:
+  - required `query` and default `top_k=5`
+  - `top_k` validation range parity (`1..50`)
+  - optional filters: `project_id`, `tags`, `keywords`, `created_after`, `created_before`
+  - invalid query/filter values return `-32602` invalid params.
+- Implemented engram rehydrate behavior parity:
+  - required `engram_id` UUID
+  - missing bundles return `-32004` with `message="Engram not found"` and `data.engram_id`.
+- Added runtime repository-backed adapter wiring in Go API runtime:
+  - `cmd/api/mcp_engram_read_adapter.go`
+  - `cmd/api/main.go` passes engram query + rehydrate dependencies to compatibility MCP service.
+- Refactored engram dispatch registration/query parsing internals for CodeScene compliance:
+  - generic engram dispatch binding in handler registration
+  - extracted query parsing helpers to keep per-function complexity within >9.5 code-health gate.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_query_test.go`
+  - `internal/mcp/compatibility_service_engram_rehydrate_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_read_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_read_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_read_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_query_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_query_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_rehydrate_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

@@ -3,40 +3,27 @@ package mcp
 import "context"
 
 func registerEngramReadToolHandlers(handlers map[string]implementedToolHandler) {
-	handlers["engram.list"] = engramListHandler()
-	handlers["engram.get"] = engramGetHandler()
-	handlers["engram.collection_list"] = engramCollectionListHandler()
+	handlers["engram.list"] = bindEngramDispatch((*CompatibilityService).dispatchEngramListTool)
+	handlers["engram.get"] = bindEngramDispatch((*CompatibilityService).dispatchEngramGetTool)
+	handlers["engram.query"] = bindEngramDispatch((*CompatibilityService).dispatchEngramQueryTool)
+	handlers["engram.rehydrate"] = bindEngramDispatch((*CompatibilityService).dispatchEngramRehydrateTool)
+	handlers["engram.collection_list"] = bindEngramDispatch((*CompatibilityService).dispatchEngramCollectionListTool)
 }
 
-func engramListHandler() implementedToolHandler {
+type engramDispatchFunc func(
+	service *CompatibilityService,
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError)
+
+func bindEngramDispatch(dispatch engramDispatchFunc) implementedToolHandler {
 	return func(
 		service *CompatibilityService,
 		ctx context.Context,
 		actor Actor,
 		params map[string]any,
 	) (map[string]any, bool, *toolDispatchError) {
-		return service.dispatchEngramListTool(ctx, actor, params)
-	}
-}
-
-func engramGetHandler() implementedToolHandler {
-	return func(
-		service *CompatibilityService,
-		ctx context.Context,
-		actor Actor,
-		params map[string]any,
-	) (map[string]any, bool, *toolDispatchError) {
-		return service.dispatchEngramGetTool(ctx, actor, params)
-	}
-}
-
-func engramCollectionListHandler() implementedToolHandler {
-	return func(
-		service *CompatibilityService,
-		ctx context.Context,
-		actor Actor,
-		params map[string]any,
-	) (map[string]any, bool, *toolDispatchError) {
-		return service.dispatchEngramCollectionListTool(ctx, actor, params)
+		return dispatch(service, ctx, actor, params)
 	}
 }

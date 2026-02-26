@@ -119,3 +119,37 @@ func (service *CompatibilityService) dispatchEngramCollectionListTool(
 	}
 	return map[string]any{"collections": collections}, true, nil
 }
+
+func (service *CompatibilityService) dispatchEngramRehydrateTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.engramRehydrate == nil {
+		return nil, false, nil
+	}
+	engramID, ok := requiredUUIDParam(params, "engram_id")
+	if !ok {
+		return nil, true, invalidParamError("engram_id")
+	}
+	bundle, err := service.engramRehydrate.RehydrateEngram(
+		ctx,
+		EngramRehydrateRequest{
+			ActorUserID: actor.UserID,
+			EngramID:    engramID,
+		},
+	)
+	if err != nil {
+		return nil, true, internalToolDispatchError()
+	}
+	if bundle == nil {
+		return nil, true, &toolDispatchError{
+			code:    -32004,
+			message: "Engram not found",
+			data: map[string]any{
+				"engram_id": engramID.String(),
+			},
+		}
+	}
+	return map[string]any{"bundle": *bundle}, true, nil
+}

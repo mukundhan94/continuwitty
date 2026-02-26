@@ -167,6 +167,8 @@ func newMCPCompatibilityService(
 			ProjectDocumentService: newMCPProjectDocumentListAdapter(pool),
 			EngramList:             newMCPEngramListAdapter(memoryAdminService),
 			EngramGet:              newMCPEngramGetAdapter(memoryAdminService),
+			EngramQuery:            newMCPEngramQueryAdapter(pool, settings.EmbeddingDim),
+			EngramRehydrate:        newMCPEngramRehydrateAdapter(pool),
 			EngramCollectionList:   newMCPEngramCollectionListAdapter(memoryAdminService),
 			PinEngramService:       newMCPPinEngramAdapter(pool),
 			UnpinEngramService:     newMCPUnpinEngramAdapter(pool),

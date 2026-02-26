@@ -168,6 +168,22 @@ type EngramGetService interface {
 	) (*models.AdminEngramRecord, error)
 }
 
+// EngramQueryService captures query behavior used by MCP compatibility engram dispatch.
+type EngramQueryService interface {
+	QueryEngrams(
+		ctx context.Context,
+		request EngramQueryDispatchRequest,
+	) ([]models.EngramQueryResult, error)
+}
+
+// EngramRehydrateService captures rehydration behavior used by MCP compatibility engram dispatch.
+type EngramRehydrateService interface {
+	RehydrateEngram(
+		ctx context.Context,
+		request EngramRehydrateRequest,
+	) (*models.RehydrationBundle, error)
+}
+
 // EngramCollectionListService captures collection-list behavior used by MCP compatibility engram dispatch.
 type EngramCollectionListService interface {
 	ListCollections(
@@ -366,6 +382,18 @@ type EngramGetRequest struct {
 	IncludeDeleted bool
 }
 
+// EngramQueryDispatchRequest captures compatibility-level engram query inputs.
+type EngramQueryDispatchRequest struct {
+	ActorUserID uuid.UUID
+	Payload     models.EngramQueryRequest
+}
+
+// EngramRehydrateRequest captures compatibility-level engram rehydration inputs.
+type EngramRehydrateRequest struct {
+	ActorUserID uuid.UUID
+	EngramID    uuid.UUID
+}
+
 // EngramCollectionListRequest captures compatibility-level collection list inputs.
 type EngramCollectionListRequest struct {
 	ActorUserID    uuid.UUID
@@ -395,6 +423,8 @@ type CompatibilityServiceDependencies struct {
 	ProjectDocumentService ProjectDocumentListService
 	EngramList             EngramListService
 	EngramGet              EngramGetService
+	EngramQuery            EngramQueryService
+	EngramRehydrate        EngramRehydrateService
 	EngramCollectionList   EngramCollectionListService
 	PinEngramService       PinEngramService
 	UnpinEngramService     UnpinEngramService
@@ -422,6 +452,8 @@ type CompatibilityService struct {
 	projectDocumentService ProjectDocumentListService
 	engramList             EngramListService
 	engramGet              EngramGetService
+	engramQuery            EngramQueryService
+	engramRehydrate        EngramRehydrateService
 	engramCollectionList   EngramCollectionListService
 	pinEngramService       PinEngramService
 	unpinEngramService     UnpinEngramService
@@ -465,6 +497,8 @@ func NewCompatibilityServiceWithDependencies(
 		projectDocumentService: dependencies.ProjectDocumentService,
 		engramList:             dependencies.EngramList,
 		engramGet:              dependencies.EngramGet,
+		engramQuery:            dependencies.EngramQuery,
+		engramRehydrate:        dependencies.EngramRehydrate,
 		engramCollectionList:   dependencies.EngramCollectionList,
 		pinEngramService:       dependencies.PinEngramService,
 		unpinEngramService:     dependencies.UnpinEngramService,
