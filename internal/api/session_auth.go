@@ -81,6 +81,24 @@ type SessionAuthDependencies struct {
 		limit int,
 		actorUserID uuid.UUID,
 	) ([]models.EngramSourceRecord, error)
+	CreateTokenForOwner func(
+		ctx context.Context,
+		ownerUserID uuid.UUID,
+		payload models.MCPTokenCreateRequest,
+		pepper string,
+	) (*models.MCPTokenCreateResponse, error)
+	ListTokenSummaries func(
+		ctx context.Context,
+		ownerUserID uuid.UUID,
+		limit int,
+		offset int,
+	) ([]models.MCPTokenSummary, error)
+	RevokeTokenForOwner func(
+		ctx context.Context,
+		tokenID uuid.UUID,
+		ownerUserID uuid.UUID,
+	) (*models.MCPTokenSummary, error)
+	MCPTokenPepper string
 }
 
 type sessionAuthDependencies struct {
@@ -130,6 +148,24 @@ type sessionAuthDependencies struct {
 		limit int,
 		actorUserID uuid.UUID,
 	) ([]models.EngramSourceRecord, error)
+	createTokenForOwner func(
+		ctx context.Context,
+		ownerUserID uuid.UUID,
+		payload models.MCPTokenCreateRequest,
+		pepper string,
+	) (*models.MCPTokenCreateResponse, error)
+	listTokenSummaries func(
+		ctx context.Context,
+		ownerUserID uuid.UUID,
+		limit int,
+		offset int,
+	) ([]models.MCPTokenSummary, error)
+	revokeTokenForOwner func(
+		ctx context.Context,
+		tokenID uuid.UUID,
+		ownerUserID uuid.UUID,
+	) (*models.MCPTokenSummary, error)
+	mcpTokenPepper string
 }
 
 type sessionLoginRequest struct {
@@ -170,6 +206,10 @@ func newSessionAuthDependencies(dependencies SessionAuthDependencies) sessionAut
 		queryEngrams:             dependencies.QueryEngrams,
 		getRehydrationBundle:     dependencies.GetRehydrationBundle,
 		getEngramSources:         dependencies.GetEngramSources,
+		createTokenForOwner:      dependencies.CreateTokenForOwner,
+		listTokenSummaries:       dependencies.ListTokenSummaries,
+		revokeTokenForOwner:      dependencies.RevokeTokenForOwner,
+		mcpTokenPepper:           dependencies.MCPTokenPepper,
 	}
 }
 
@@ -186,6 +226,9 @@ func MountSessionAuthRoutes(router chi.Router, dependencies SessionAuthDependenc
 	router.Get("/api/v1/users", deps.handleListUsers)
 	router.Post("/api/v1/users", deps.handleCreateUser)
 	router.Patch("/api/v1/users/{user_id}", deps.handleUpdateUser)
+	router.Post("/api/v1/mcp/tokens", deps.handleCreateMCPToken)
+	router.Get("/api/v1/mcp/tokens", deps.handleListMCPTokens)
+	router.Post("/api/v1/mcp/tokens/{token_id}/revoke", deps.handleRevokeMCPToken)
 	router.Post("/api/v1/engrams", deps.handleCreateEngram)
 	router.Get("/api/v1/engrams", deps.handleListEngrams)
 	router.Post("/api/v1/engrams/query", deps.handleQueryEngrams)

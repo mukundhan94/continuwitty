@@ -168,6 +168,13 @@ func TestSessionAuthRoutesNotMountedWithoutDependencies(t *testing.T) {
 		t.Fatalf("expected users status 404, got %d", usersResponse.Code)
 	}
 
+	mcpTokensRequest := httptest.NewRequest(http.MethodGet, "/api/v1/mcp/tokens", nil)
+	mcpTokensResponse := httptest.NewRecorder()
+	router.ServeHTTP(mcpTokensResponse, mcpTokensRequest)
+	if mcpTokensResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected mcp tokens status 404, got %d", mcpTokensResponse.Code)
+	}
+
 	engramsRequest := httptest.NewRequest(http.MethodGet, "/api/v1/engrams", nil)
 	engramsResponse := httptest.NewRecorder()
 	router.ServeHTTP(engramsResponse, engramsRequest)
@@ -208,45 +215,42 @@ func TestSessionAuthRoutesMountedWithDependencies(t *testing.T) {
 		},
 	)
 
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/session/csrf", nil)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", response.Code)
-	}
-
-	uiRequest := httptest.NewRequest(http.MethodGet, "/login", nil)
-	uiResponse := httptest.NewRecorder()
-	router.ServeHTTP(uiResponse, uiRequest)
-
-	if uiResponse.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", uiResponse.Code)
-	}
-
-	adminUIRequest := httptest.NewRequest(http.MethodGet, "/ui/admin", nil)
-	adminUIResponse := httptest.NewRecorder()
-	router.ServeHTTP(adminUIResponse, adminUIRequest)
-	if adminUIResponse.Code != http.StatusSeeOther {
-		t.Fatalf("expected status 303, got %d", adminUIResponse.Code)
-	}
-	if adminUIResponse.Header().Get("Location") != "/login" {
-		t.Fatalf("expected redirect to /login, got %q", adminUIResponse.Header().Get("Location"))
-	}
-
-	usersRequest := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
-	usersResponse := httptest.NewRecorder()
-	router.ServeHTTP(usersResponse, usersRequest)
-	if usersResponse.Code != http.StatusInternalServerError {
-		t.Fatalf("expected users status 500 when user dependencies are missing, got %d", usersResponse.Code)
-	}
-
-	engramsRequest := httptest.NewRequest(http.MethodGet, "/api/v1/engrams", nil)
-	engramsResponse := httptest.NewRecorder()
-	router.ServeHTTP(engramsResponse, engramsRequest)
-	if engramsResponse.Code != http.StatusInternalServerError {
-		t.Fatalf("expected engrams status 500 when engram dependencies are missing, got %d", engramsResponse.Code)
-	}
+	assertRouteStatus(
+		t,
+		router,
+		"/api/v1/session/csrf",
+		http.StatusOK,
+	)
+	assertRouteStatus(
+		t,
+		router,
+		"/login",
+		http.StatusOK,
+	)
+	assertRouteRedirect(
+		t,
+		router,
+		"/ui/admin",
+		"/login",
+	)
+	assertRouteStatus(
+		t,
+		router,
+		"/api/v1/users",
+		http.StatusInternalServerError,
+	)
+	assertRouteStatus(
+		t,
+		router,
+		"/api/v1/mcp/tokens",
+		http.StatusInternalServerError,
+	)
+	assertRouteStatus(
+		t,
+		router,
+		"/api/v1/engrams",
+		http.StatusInternalServerError,
+	)
 }
 
 func TestChatRoutesMountedWithDependencies(t *testing.T) {
@@ -468,6 +472,39 @@ func TestOAuthTokenRoutesMountedWithDependencies(t *testing.T) {
 	}
 	if !serviceCalled {
 		t.Fatalf("expected oauth token service to be called")
+	}
+}
+
+func assertRouteStatus(
+	t *testing.T,
+	router http.Handler,
+	path string,
+	expectedStatus int,
+) {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, path, nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != expectedStatus {
+		t.Fatalf("expected status %d for %s, got %d", expectedStatus, path, response.Code)
+	}
+}
+
+func assertRouteRedirect(
+	t *testing.T,
+	router http.Handler,
+	path string,
+	expectedLocation string,
+) {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, path, nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect status 303 for %s, got %d", path, response.Code)
+	}
+	if response.Header().Get("Location") != expectedLocation {
+		t.Fatalf("expected redirect location %q for %s, got %q", expectedLocation, path, response.Header().Get("Location"))
 	}
 }
 

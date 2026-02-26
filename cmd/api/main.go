@@ -16,6 +16,7 @@ import (
 	"engram/internal/config"
 	"engram/internal/db"
 	"engram/internal/ingestion"
+	"engram/internal/mcptokens"
 	"engram/internal/models"
 	"engram/internal/oauth"
 	"engram/internal/projects"
@@ -32,6 +33,7 @@ type sessionAuthRuntimeDependencies struct {
 	loginAttemptGuard *auth.LoginAttemptGuard
 	auditLogger       *audit.Logger
 	projectService    projectResolutionService
+	mcpTokenService   *mcptokens.Service
 }
 
 func main() {
@@ -78,6 +80,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	oauthRegistrationService := oauth.NewRegistrationService(pool)
 	oauthAuthorizationService := oauth.NewAuthorizationService(pool)
 	oauthTokenService := oauth.NewTokenService(pool)
+	mcpTokenService := mcptokens.NewService(pool)
 	ingestionService := ingestion.NewService(
 		pool,
 		settings.EmbeddingDim,
@@ -98,6 +101,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 				loginAttemptGuard: loginAttemptGuard,
 				auditLogger:       auditLogger,
 				projectService:    projectService,
+				mcpTokenService:   mcpTokenService,
 			},
 		),
 		ProjectsService:  newProjectRouteServiceAdapter(projectService),
@@ -152,6 +156,10 @@ func buildSessionAuthDependencies(runtimeDependencies sessionAuthRuntimeDependen
 		QueryEngrams:             queryEngramsDependency(runtimeDependencies.pool, runtimeDependencies.settings.EmbeddingDim),
 		GetRehydrationBundle:     getRehydrationBundleDependency(runtimeDependencies.pool),
 		GetEngramSources:         getEngramSourcesDependency(runtimeDependencies.pool),
+		CreateTokenForOwner:      createMCPTokenForOwnerDependency(runtimeDependencies.mcpTokenService),
+		ListTokenSummaries:       listMCPTokenSummariesDependency(runtimeDependencies.mcpTokenService),
+		RevokeTokenForOwner:      revokeMCPTokenForOwnerDependency(runtimeDependencies.mcpTokenService),
+		MCPTokenPepper:           runtimeDependencies.settings.MCPTokenPepper,
 		CookieSecure:             config.IsProductionEnv(runtimeDependencies.settings),
 		LoginAttemptGuard:        runtimeDependencies.loginAttemptGuard,
 		LogAuditEvent:            auditEventLogger(runtimeDependencies.auditLogger),
@@ -305,6 +313,67 @@ func getEngramSourcesDependency(
 		actorUserID uuid.UUID,
 	) ([]models.EngramSourceRecord, error) {
 		return repository.GetEngramSources(ctx, pool, engramID, limit, &actorUserID)
+	}
+}
+
+func createMCPTokenForOwnerDependency(
+	service *mcptokens.Service,
+) func(
+	ctx context.Context,
+	ownerUserID uuid.UUID,
+	payload models.MCPTokenCreateRequest,
+	pepper string,
+) (*models.MCPTokenCreateResponse, error) {
+	if service == nil {
+		return nil
+	}
+	return func(
+		ctx context.Context,
+		ownerUserID uuid.UUID,
+		payload models.MCPTokenCreateRequest,
+		pepper string,
+	) (*models.MCPTokenCreateResponse, error) {
+		return service.CreateTokenForOwner(ctx, ownerUserID, payload, pepper)
+	}
+}
+
+func listMCPTokenSummariesDependency(
+	service *mcptokens.Service,
+) func(
+	ctx context.Context,
+	ownerUserID uuid.UUID,
+	limit int,
+	offset int,
+) ([]models.MCPTokenSummary, error) {
+	if service == nil {
+		return nil
+	}
+	return func(
+		ctx context.Context,
+		ownerUserID uuid.UUID,
+		limit int,
+		offset int,
+	) ([]models.MCPTokenSummary, error) {
+		return service.ListTokenSummaries(ctx, ownerUserID, limit, offset)
+	}
+}
+
+func revokeMCPTokenForOwnerDependency(
+	service *mcptokens.Service,
+) func(
+	ctx context.Context,
+	tokenID uuid.UUID,
+	ownerUserID uuid.UUID,
+) (*models.MCPTokenSummary, error) {
+	if service == nil {
+		return nil
+	}
+	return func(
+		ctx context.Context,
+		tokenID uuid.UUID,
+		ownerUserID uuid.UUID,
+	) (*models.MCPTokenSummary, error) {
+		return service.RevokeTokenForOwner(ctx, tokenID, ownerUserID)
 	}
 }
 

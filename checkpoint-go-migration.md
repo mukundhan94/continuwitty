@@ -61,6 +61,7 @@
 | CP91 | 2026-02-26 | Completed | Phase 4 OAuth authorization route baseline (`GET /oauth/authorize`) with runtime wiring, migrated route/service tests, and >9.5 code-health gate |
 | CP92 | 2026-02-26 | Completed | Phase 4 OAuth token route baseline (`POST /oauth/token`) with runtime wiring, migrated route/service tests, and >9.5 code-health gate |
 | CP93 | 2026-02-26 | Completed | Phase 4 MCP token service baseline (`internal/mcptokens/service.go`) with migrated unit tests and >9.5 code-health gate |
+| CP94 | 2026-02-26 | Completed | Phase 4 MCP token API route baseline (`/api/v1/mcp/tokens` + revoke) with runtime wiring, migrated router/session tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4341,6 +4342,48 @@
   - `internal/mcptokens/service_test.go`: `10.0`
   - `internal/mcptokens/errors.go`: `N/A` (const/error declarations only)
   - `internal/models/mcp_token_api.go`: `N/A` (struct-only DTO file)
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP94 - Phase 4 MCP Token API Route Baseline (`internal/api/session_mcp_tokens.go`)
+
+- Added session-auth MCP token API routes:
+  - new file: `internal/api/session_mcp_tokens.go`
+  - mounted endpoints:
+    - `POST /api/v1/mcp/tokens`
+    - `GET /api/v1/mcp/tokens`
+    - `POST /api/v1/mcp/tokens/{token_id}/revoke`
+  - behavior includes:
+    - admin-only authorization gate via existing session actor context
+    - create payload validation/defaulting (`name`, `scope`, `expires_in_days`)
+    - revoke payload validation (`reason` length)
+    - owner-scoped create/list/revoke service dispatch
+    - audit event emission for create/revoke actions.
+- Updated session auth dependency contracts and route mounting:
+  - `internal/api/session_auth.go`
+  - added MCP token service callbacks + pepper wiring into dependency shape.
+- Updated runtime dependency wiring for MCP token service:
+  - `cmd/api/main.go`
+  - runtime now injects `mcptokens.NewService(pool)` through session-auth dependency adapters.
+- Extended router coverage for session-auth mounted/unmounted behavior:
+  - `internal/api/router_test.go`
+  - confirms `/api/v1/mcp/tokens` returns:
+    - `404` when session auth routes are not mounted
+    - `500` when mounted but MCP token dependencies are intentionally absent.
+- Executed tests one-by-one:
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+- Focused/full verification:
+  - `go test ./internal/api ./internal/mcptokens ./cmd/api`
+  - `go test ./...`
+  - both passed.
+- CodeScene checks:
+  - `internal/api/session_auth.go`: `10.0`
+  - `internal/api/session_mcp_tokens.go`: `9.68`
+  - `internal/api/router_test.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
