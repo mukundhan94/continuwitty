@@ -62,6 +62,7 @@
 | CP92 | 2026-02-26 | Completed | Phase 4 OAuth token route baseline (`POST /oauth/token`) with runtime wiring, migrated route/service tests, and >9.5 code-health gate |
 | CP93 | 2026-02-26 | Completed | Phase 4 MCP token service baseline (`internal/mcptokens/service.go`) with migrated unit tests and >9.5 code-health gate |
 | CP94 | 2026-02-26 | Completed | Phase 4 MCP token API route baseline (`/api/v1/mcp/tokens` + revoke) with runtime wiring, migrated router/session tests, and >9.5 code-health gate |
+| CP95 | 2026-02-26 | Completed | Phase 3 workflow service baseline (`internal/workflow/agent.go`) with migrated unit tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4384,6 +4385,36 @@
   - `internal/api/session_mcp_tokens.go`: `9.68`
   - `internal/api/router_test.go`: `10.0`
   - `cmd/api/main.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP95 - Phase 3 Workflow Service Baseline (`internal/workflow/agent.go`)
+
+- Added workflow state-machine service parity for `api/app/agent_workflow.py`:
+  - new files:
+    - `internal/workflow/agent.go`
+    - `internal/workflow/agent_test.go`
+  - behavior includes:
+    - run lifecycle stages: collect -> synthesize -> snapshot -> persist
+    - in-memory thread checkpoint storage (`Run`, `GetState`, `Resume`)
+    - resume merge semantics for notes/assumptions/tags/keywords/sources
+    - snapshot threshold logic (`snapshot_enabled`, `snapshot_every_n_notes`)
+    - engram persistence hooks for snapshot/final outputs via injected creator callback.
+- Executed tests one-by-one:
+  - `TestRunCreatesEngramAndStoresState`
+  - `TestResumeAppendsNotesWithoutPersistence`
+  - `TestSnapshotCreationOnNoteThreshold`
+  - `TestSnapshotCreationContinuesAcrossResume`
+  - `TestGetStateAndResumeNotFound`
+- Focused/full verification:
+  - `go test ./internal/workflow ./internal/api ./cmd/api`
+  - `go test ./...`
+  - both passed.
+- CodeScene checks:
+  - `internal/workflow/agent.go`: `10.0`
+  - `internal/workflow/agent_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
