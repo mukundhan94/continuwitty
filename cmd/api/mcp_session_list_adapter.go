@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"engram/internal/chat"
 	"engram/internal/mcp"
 	"engram/internal/models"
 	"engram/internal/repository"
@@ -26,7 +27,7 @@ func newMCPSessionGetAdapter(db repository.Queryer) mcp.SessionGetService {
 	return mcpSessionListAdapter{db: db}
 }
 
-func newMCPMessageListAdapter(db repository.Queryer) mcp.MessageListService {
+func newMCPTimelineListAdapter(db repository.Queryer) mcp.TimelineListService {
 	if db == nil {
 		return nil
 	}
@@ -63,18 +64,37 @@ func (adapter mcpSessionListAdapter) GetSession(
 	)
 }
 
-func (adapter mcpSessionListAdapter) ListMessages(
+func (adapter mcpSessionListAdapter) ListTimeline(
 	ctx context.Context,
-	request mcp.MessageListRequest,
-) ([]models.ChatMessageRecord, error) {
-	return repository.ListChatMessages(
+	request mcp.TimelineListRequest,
+) ([]models.ChatTimelineEvent, error) {
+	linked, err := repository.ListSessionLinkedEngrams(
 		ctx,
 		adapter.db,
-		repository.ChatMessageListInput{
+		repository.SessionLinkedEngramsListInput{
 			SessionID:   request.SessionID,
 			ActorUserID: request.ActorUserID,
 			Limit:       request.Limit,
 			Offset:      request.Offset,
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
+	events := make([]models.ChatTimelineEvent, 0, len(linked))
+	for _, item := range linked {
+		semantics := chat.ClassifyTimelineEvent(item.Tags)
+		events = append(events, models.ChatTimelineEvent{
+			EventID:                  item.EngramID,
+			SessionID:                request.SessionID,
+			EventType:                semantics.EventType,
+			Title:                    item.Title,
+			Abstract:                 item.Abstract,
+			Tags:                     append([]string(nil), item.Tags...),
+			ConsolidationGroupKey:    semantics.ConsolidationGroupKey,
+			ConsolidationMergedCount: semantics.ConsolidationMergedCount,
+			CreatedAt:                item.CreatedAt,
+		})
+	}
+	return events, nil
 }

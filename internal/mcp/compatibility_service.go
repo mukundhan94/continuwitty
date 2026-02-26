@@ -64,6 +64,14 @@ type MessageListService interface {
 	) ([]models.ChatMessageRecord, error)
 }
 
+// TimelineListService captures timeline listing behavior used by MCP compatibility chat dispatch.
+type TimelineListService interface {
+	ListTimeline(
+		ctx context.Context,
+		request TimelineListRequest,
+	) ([]models.ChatTimelineEvent, error)
+}
+
 // SessionListRequest captures compatibility-level session list inputs.
 type SessionListRequest struct {
 	ActorUserID uuid.UUID
@@ -86,21 +94,31 @@ type MessageListRequest struct {
 	Offset      int
 }
 
+// TimelineListRequest captures compatibility-level timeline list inputs.
+type TimelineListRequest struct {
+	ActorUserID uuid.UUID
+	SessionID   uuid.UUID
+	Limit       int
+	Offset      int
+}
+
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
-	ProjectService ProjectListService
-	SessionService SessionListService
-	SessionGet     SessionGetService
-	MessageService MessageListService
+	ProjectService  ProjectListService
+	SessionService  SessionListService
+	SessionGet      SessionGetService
+	MessageService  MessageListService
+	TimelineService TimelineListService
 }
 
 // CompatibilityService provides baseline MCP interop behavior while the full tool catalog migrates.
 type CompatibilityService struct {
-	serverVersion  string
-	projectService ProjectListService
-	sessionService SessionListService
-	sessionGet     SessionGetService
-	messageService MessageListService
+	serverVersion   string
+	projectService  ProjectListService
+	sessionService  SessionListService
+	sessionGet      SessionGetService
+	messageService  MessageListService
+	timelineService TimelineListService
 }
 
 // NewCompatibilityService builds a compatibility MCP service with stable initialize/tool-list behavior.
@@ -121,11 +139,12 @@ func NewCompatibilityServiceWithDependencies(
 		trimmed = "0.1.0"
 	}
 	return &CompatibilityService{
-		serverVersion:  trimmed,
-		projectService: dependencies.ProjectService,
-		sessionService: dependencies.SessionService,
-		sessionGet:     dependencies.SessionGet,
-		messageService: dependencies.MessageService,
+		serverVersion:   trimmed,
+		projectService:  dependencies.ProjectService,
+		sessionService:  dependencies.SessionService,
+		sessionGet:      dependencies.SessionGet,
+		messageService:  dependencies.MessageService,
+		timelineService: dependencies.TimelineService,
 	}
 }
 

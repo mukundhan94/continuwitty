@@ -24,6 +24,8 @@ const (
 	defaultChatSessionsOffset = 0
 	defaultChatMessagesLimit  = 200
 	defaultChatMessagesOffset = 0
+	defaultChatTimelineLimit  = 100
+	defaultChatTimelineOffset = 0
 )
 
 type toolDispatchError struct {
@@ -46,7 +48,14 @@ var implementedToolHandlers = map[string]implementedToolHandler{
 		actor Actor,
 		params map[string]any,
 	) (map[string]any, bool, *toolDispatchError) {
-		return service.dispatchChatGetSessionTool(ctx, actor, params)
+		return service.dispatchSessionPayloadTool(
+			ctx,
+			actor,
+			params,
+			func(session models.ChatSessionRecord) map[string]any {
+				return map[string]any{"session": session}
+			},
+		)
 	},
 	"chat.list_sessions": func(
 		service *CompatibilityService,
@@ -62,7 +71,14 @@ var implementedToolHandlers = map[string]implementedToolHandler{
 		actor Actor,
 		params map[string]any,
 	) (map[string]any, bool, *toolDispatchError) {
-		return service.dispatchChatGetLifecyclePolicyTool(ctx, actor, params)
+		return service.dispatchSessionPayloadTool(
+			ctx,
+			actor,
+			params,
+			func(session models.ChatSessionRecord) map[string]any {
+				return map[string]any{"lifecycle_policy": lifecyclePolicyPayload(session)}
+			},
+		)
 	},
 	"chat.list_messages": func(
 		service *CompatibilityService,
@@ -70,7 +86,67 @@ var implementedToolHandlers = map[string]implementedToolHandler{
 		actor Actor,
 		params map[string]any,
 	) (map[string]any, bool, *toolDispatchError) {
-		return service.dispatchChatListMessagesTool(ctx, actor, params)
+		if service.messageService == nil {
+			return nil, false, nil
+		}
+		return service.dispatchSessionCollectionTool(
+			ctx,
+			actor,
+			params,
+			defaultChatMessagesLimit,
+			defaultChatMessagesOffset,
+			"messages",
+			func(
+				ctx context.Context,
+				actorUserID uuid.UUID,
+				sessionID uuid.UUID,
+				paging pagingParams,
+			) (any, error) {
+				return service.messageService.ListMessages(
+					ctx,
+					MessageListRequest{
+						ActorUserID: actorUserID,
+						SessionID:   sessionID,
+						Limit:       paging.limit,
+						Offset:      paging.offset,
+					},
+				)
+			},
+		)
+	},
+	"chat.list_timeline": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		if service.timelineService == nil {
+			return nil, false, nil
+		}
+		return service.dispatchSessionCollectionTool(
+			ctx,
+			actor,
+			params,
+			defaultChatTimelineLimit,
+			defaultChatTimelineOffset,
+			"events",
+			func(
+				ctx context.Context,
+				actorUserID uuid.UUID,
+				sessionID uuid.UUID,
+				paging pagingParams,
+			) (any, error) {
+				return service.timelineService.ListTimeline(
+					ctx,
+					TimelineListRequest{
+						ActorUserID: actorUserID,
+						SessionID:   sessionID,
+						Limit:       paging.limit,
+						Offset:      paging.offset,
+					},
+				)
+			},
+		)
 	},
 	"user.get_profile": func(
 		_ *CompatibilityService,
@@ -135,71 +211,6 @@ func (service *CompatibilityService) dispatchImplementedTool(
 	return handler(service, ctx, actor, params)
 }
 
-func (service *CompatibilityService) dispatchChatGetSessionTool(
-	ctx context.Context,
-	actor Actor,
-	params map[string]any,
-) (map[string]any, bool, *toolDispatchError) {
-	return service.dispatchSessionDerivedTool(
-		ctx,
-		actor,
-		params,
-		func(session models.ChatSessionRecord) map[string]any {
-			return map[string]any{"session": session}
-		},
-	)
-}
-
-func (service *CompatibilityService) dispatchChatGetLifecyclePolicyTool(
-	ctx context.Context,
-	actor Actor,
-	params map[string]any,
-) (map[string]any, bool, *toolDispatchError) {
-	return service.dispatchSessionDerivedTool(
-		ctx,
-		actor,
-		params,
-		func(session models.ChatSessionRecord) map[string]any {
-			return map[string]any{"lifecycle_policy": lifecyclePolicyPayload(session)}
-		},
-	)
-}
-
-func (service *CompatibilityService) dispatchChatListMessagesTool(
-	ctx context.Context,
-	actor Actor,
-	params map[string]any,
-) (map[string]any, bool, *toolDispatchError) {
-	if service.messageService == nil {
-		return nil, false, nil
-	}
-	session, handled, dispatchErr := service.lookupChatSession(ctx, actor, params)
-	if dispatchErr != nil || !handled {
-		return nil, handled, dispatchErr
-	}
-	paging, pagingErr := parsePagingParams(
-		params,
-		defaultChatMessagesLimit,
-		defaultChatMessagesOffset,
-	)
-	if pagingErr != nil {
-		return nil, true, pagingErr
-	}
-	messages, err := service.messageService.ListMessages(
-		ctx,
-		MessageListRequest{
-			ActorUserID: actor.UserID,
-			SessionID:   session.SessionID,
-			Limit:       paging.limit,
-			Offset:      paging.offset,
-		},
-	)
-	if err != nil {
-		return nil, true, internalToolDispatchError()
-	}
-	return map[string]any{"messages": messages}, true, nil
-}
-
 func (service *CompatibilityService) lookupChatSession(
 	ctx context.Context,
 	actor Actor,
@@ -228,7 +239,7 @@ func (service *CompatibilityService) lookupChatSession(
 	return session, true, nil
 }
 
-func (service *CompatibilityService) dispatchSessionDerivedTool(
+func (service *CompatibilityService) dispatchSessionPayloadTool(
 	ctx context.Context,
 	actor Actor,
 	params map[string]any,
@@ -239,6 +250,35 @@ func (service *CompatibilityService) dispatchSessionDerivedTool(
 		return nil, handled, dispatchErr
 	}
 	return buildPayload(*session), true, nil
+}
+
+func (service *CompatibilityService) dispatchSessionCollectionTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+	defaultLimit int,
+	defaultOffset int,
+	collectionKey string,
+	collect func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+		paging pagingParams,
+	) (any, error),
+) (map[string]any, bool, *toolDispatchError) {
+	session, handled, dispatchErr := service.lookupChatSession(ctx, actor, params)
+	if dispatchErr != nil || !handled {
+		return nil, handled, dispatchErr
+	}
+	paging, pagingErr := parsePagingParams(params, defaultLimit, defaultOffset)
+	if pagingErr != nil {
+		return nil, true, pagingErr
+	}
+	items, err := collect(ctx, actor.UserID, session.SessionID, paging)
+	if err != nil {
+		return nil, true, internalToolDispatchError()
+	}
+	return map[string]any{collectionKey: items}, true, nil
 }
 
 func lifecyclePolicyPayload(session models.ChatSessionRecord) map[string]any {
