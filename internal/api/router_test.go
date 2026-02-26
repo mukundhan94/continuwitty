@@ -92,6 +92,13 @@ func TestMemoryAdminRoutesNotMountedWithoutDependencies(t *testing.T) {
 	if projectsResponse.Code != http.StatusNotFound {
 		t.Fatalf("expected projects status 404, got %d", projectsResponse.Code)
 	}
+
+	ingestionRequest := httptest.NewRequest(http.MethodGet, "/api/v1/ingestion/documents", nil)
+	ingestionResponse := httptest.NewRecorder()
+	router.ServeHTTP(ingestionResponse, ingestionRequest)
+	if ingestionResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected ingestion status 404, got %d", ingestionResponse.Code)
+	}
 }
 
 func TestMemoryAdminRoutesMountedWithDependencies(t *testing.T) {
@@ -262,39 +269,85 @@ func TestChatRoutesMountedWithDependencies(t *testing.T) {
 	}
 }
 
-func TestProjectRoutesMountedWithDependencies(t *testing.T) {
-	settings := config.Settings{AppSemanticVersion: "1.2.3", AppCommitSHA: "abc1234"}
-	serviceCalled := false
-	router := NewRouterWithDependencies(
-		settings,
-		RouterDependencies{
-			ProjectsService: fakeProjectService{
-				listProjectsFn: func(
-					_ context.Context,
-					_ ProjectListRouteRequest,
-				) ([]models.ProjectRecord, error) {
-					serviceCalled = true
-					return []models.ProjectRecord{}, nil
-				},
+func TestDataRoutesMountedWithDependencies(t *testing.T) {
+	testCases := []struct {
+		name              string
+		path              string
+		buildDependencies func(serviceCalled *bool) RouterDependencies
+	}{
+		{
+			name: "projects",
+			path: "/api/v1/projects",
+			buildDependencies: func(serviceCalled *bool) RouterDependencies {
+				return RouterDependencies{
+					ProjectsService: fakeProjectService{
+						listProjectsFn: func(
+							_ context.Context,
+							_ ProjectListRouteRequest,
+						) ([]models.ProjectRecord, error) {
+							*serviceCalled = true
+							return []models.ProjectRecord{}, nil
+						},
+					},
+				}
 			},
 		},
-	)
+		{
+			name: "ingestion",
+			path: "/api/v1/ingestion/documents",
+			buildDependencies: func(serviceCalled *bool) RouterDependencies {
+				return RouterDependencies{
+					IngestionService: fakeIngestionService{
+						listDocumentsFn: func(
+							_ context.Context,
+							_ IngestionListDocumentsRouteRequest,
+						) ([]models.DocumentRecord, error) {
+							*serviceCalled = true
+							return []models.DocumentRecord{}, nil
+						},
+					},
+				}
+			},
+		},
+	}
 
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			serviceCalled := false
+			statusCode := exerciseActorScopedDependencyRoute(
+				t,
+				testCase.buildDependencies(&serviceCalled),
+				testCase.path,
+			)
+			if statusCode != http.StatusOK {
+				t.Fatalf("expected status 200, got %d", statusCode)
+			}
+			if !serviceCalled {
+				t.Fatalf("expected route service to be called")
+			}
+		})
+	}
+}
+
+func exerciseActorScopedDependencyRoute(
+	t *testing.T,
+	dependencies RouterDependencies,
+	path string,
+) int {
+	t.Helper()
+	router := NewRouterWithDependencies(
+		config.Settings{AppSemanticVersion: "1.2.3", AppCommitSHA: "abc1234"},
+		dependencies,
+	)
+	request := httptest.NewRequest(http.MethodGet, path, nil)
 	request = WithAdminActor(
 		request,
 		AdminActor{
-			UserID: uuid.MustParse("00000000-0000-0000-0000-000000000241"),
+			UserID: uuid.MustParse("00000000-0000-0000-0000-000000000242"),
 			Role:   "analyst",
 		},
 	)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", response.Code)
-	}
-	if !serviceCalled {
-		t.Fatalf("expected project service to be called")
-	}
+	return response.Code
 }

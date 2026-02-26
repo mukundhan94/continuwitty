@@ -15,6 +15,7 @@ import (
 	"engram/internal/auth"
 	"engram/internal/config"
 	"engram/internal/db"
+	"engram/internal/ingestion"
 	"engram/internal/models"
 	"engram/internal/projects"
 	"engram/internal/repository"
@@ -73,6 +74,12 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		os.Exit(1)
 	}
 	projectService := projects.NewService(pool)
+	ingestionService := ingestion.NewService(
+		pool,
+		settings.EmbeddingDim,
+		settings.IngestionMaxFileBytes,
+		settings.IngestionMaxTextChars,
+	)
 	loginAttemptGuard := newLoginAttemptGuard(settings, pool)
 	auditLogger := newSessionAuditLogger(settings)
 
@@ -89,8 +96,9 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 				projectService:    projectService,
 			},
 		),
-		ProjectsService: newProjectRouteServiceAdapter(projectService),
-		ChatRouter:      buildChatRouter(settings, pool),
+		ProjectsService:  newProjectRouteServiceAdapter(projectService),
+		IngestionService: newIngestionRouteServiceAdapter(ingestionService),
+		ChatRouter:       buildChatRouter(settings, pool),
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)

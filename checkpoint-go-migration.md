@@ -55,6 +55,7 @@
 | CP85 | 2026-02-26 | Completed | Phase 3 router integration baseline (chat router dependency mounting in top-level API router) with migrated router tests and >9.5 code-health gate |
 | CP86 | 2026-02-26 | Completed | Phase 4 runtime chat integration baseline (`cmd/api` wires DB-backed chat services/router deps into runtime assembly) with migrated unit tests and >9.5 code-health gate |
 | CP87 | 2026-02-26 | Completed | Phase 4 projects API baseline (`/api/v1/projects` + `/api/v1/projects/default`) with runtime adapter wiring, migrated route tests, and >9.5 code-health gate |
+| CP88 | 2026-02-26 | Completed | Phase 4 ingestion API baseline (`/api/v1/ingestion/text`, `/documents`, `/query`, `/query/blended`) with runtime adapter wiring, migrated route tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4040,6 +4041,55 @@
   - `internal/api/router.go`: `10.0`
   - `internal/api/router_test.go`: `10.0`
   - `internal/models/project.go`: `N/A` (no CodeScene score returned).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP88 - Phase 4 Ingestion API Baseline (`internal/api/ingestion_api.go`)
+
+- Added ingestion API route module for migration parity:
+  - `internal/api/ingestion_api.go`
+  - mounted endpoints:
+    - `POST /api/v1/ingestion/text`
+    - `GET /api/v1/ingestion/documents`
+    - `POST /api/v1/ingestion/query`
+    - `POST /api/v1/ingestion/query/blended`
+  - includes:
+    - actor resolution from session context
+    - payload/query normalization + defaults + bounds validation
+    - ingestion service error mapping to HTTP responses.
+- Added runtime adapter wiring for ingestion routes:
+  - `cmd/api/ingestion_routes_adapter.go`
+  - adapts `ingestion.Service` to API route contract.
+- Updated runtime/router composition:
+  - `cmd/api/main.go`
+  - `internal/api/router.go`
+  - `internal/api/router_test.go`
+  - `RouterDependencies.IngestionService` mounts ingestion routes when configured.
+- Added migrated tests:
+  - `internal/api/ingestion_api_test.go`
+  - route registration + defaults + error mapping + actor requirement.
+- Executed tests one-by-one:
+  - `TestMountIngestionRoutesRegistersEndpoints`
+  - `TestIngestTextHandlerWritesCreatedResponse`
+  - `TestListDocumentsHandlerUsesDefaultPaging`
+  - `TestQueryDocumentsHandlerAppliesDefaultTopK`
+  - `TestQueryBlendedHandlerAppliesDefaultTopK`
+  - `TestIngestionRoutesRequireAuthenticatedActor`
+  - `TestIngestTextHandlerMapsServiceError`
+  - `TestMemoryAdminRoutesNotMountedWithoutDependencies`
+  - `TestDataRoutesMountedWithDependencies`
+  - `TestBuildChatRouterRegistersRuntimeRoutes`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/ingestion_routes_adapter.go`: `10.0`
+  - `internal/api/ingestion_api.go`: `10.0`
+  - `internal/api/ingestion_api_test.go`: `9.68`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

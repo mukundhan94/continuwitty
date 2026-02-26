@@ -21,6 +21,7 @@ type RouterDependencies struct {
 	RequireAdminActor  RequireAdminActor
 	SessionAuth        SessionAuthDependencies
 	ProjectsService    ProjectService
+	IngestionService   IngestionService
 	ChatRouter         chi.Router
 }
 
@@ -53,6 +54,9 @@ func NewRouterWithDependencies(settings config.Settings, dependencies RouterDepe
 	}
 	if dependencies.ProjectsService != nil {
 		MountProjectRoutes(router, dependencies.ProjectsService)
+	}
+	if dependencies.IngestionService != nil {
+		MountIngestionRoutes(router, dependencies.IngestionService)
 	}
 	if dependencies.ChatRouter != nil {
 		router.Handle("/api/v1/chat", dependencies.ChatRouter)
