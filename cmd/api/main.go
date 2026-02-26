@@ -17,6 +17,7 @@ import (
 	"engram/internal/db"
 	"engram/internal/ingestion"
 	"engram/internal/models"
+	"engram/internal/oauth"
 	"engram/internal/projects"
 	"engram/internal/repository"
 
@@ -74,6 +75,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		os.Exit(1)
 	}
 	projectService := projects.NewService(pool)
+	oauthRegistrationService := oauth.NewRegistrationService(pool)
 	ingestionService := ingestion.NewService(
 		pool,
 		settings.EmbeddingDim,
@@ -101,7 +103,8 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		IngestionOptions: internalapi.IngestionRouteOptions{
 			MaxMetadataJSONBytes: settings.IngestionMaxMetadataJSONBytes,
 		},
-		ChatRouter: buildChatRouter(settings, pool),
+		OAuthRegistration: oauthRegistrationService,
+		ChatRouter:        buildChatRouter(settings, pool),
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)

@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"engram/internal/admin"
 	"engram/internal/auth"
 	"engram/internal/config"
 	"engram/internal/models"
+	internaloauth "engram/internal/oauth"
 
 	"github.com/google/uuid"
 )
@@ -326,6 +328,61 @@ func TestDataRoutesMountedWithDependencies(t *testing.T) {
 				t.Fatalf("expected route service to be called")
 			}
 		})
+	}
+}
+
+func TestOAuthRoutesMountedWithDependencies(t *testing.T) {
+	settings := config.Settings{
+		AppSemanticVersion: "1.2.3",
+		AppCommitSHA:       "abc1234",
+		OAuthEnabled:       true,
+	}
+	serviceCalled := false
+	router := NewRouterWithDependencies(
+		settings,
+		RouterDependencies{
+			OAuthRegistration: fakeOAuthRegistrationRouteService{
+				handleRegisterFn: func(
+					_ context.Context,
+					_ config.Settings,
+					_ internaloauth.RegistrationRequest,
+					_ *internaloauth.SessionUser,
+				) (internaloauth.RegistrationResponse, error) {
+					serviceCalled = true
+					return internaloauth.RegistrationResponse{
+						ClientID:                "engram_client_123",
+						ClientName:              "Engram MCP Client",
+						RedirectURIs:            []string{"https://client.example/callback"},
+						GrantTypes:              []string{"authorization_code"},
+						ResponseTypes:           []string{"code"},
+						TokenEndpointAuthMethod: "none",
+						ClientIDIssuedAt:        1767225600,
+					}, nil
+				},
+			},
+		},
+	)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/oauth/register",
+		strings.NewReader(`{"redirect_uris":["https://client.example/callback"]}`),
+	)
+	request = WithAdminActor(
+		request,
+		AdminActor{
+			UserID: uuid.MustParse("00000000-0000-0000-0000-000000000963"),
+			Role:   "admin",
+		},
+	)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", response.Code)
+	}
+	if !serviceCalled {
+		t.Fatalf("expected oauth registration service to be called")
 	}
 }
 

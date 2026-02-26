@@ -57,6 +57,7 @@
 | CP87 | 2026-02-26 | Completed | Phase 4 projects API baseline (`/api/v1/projects` + `/api/v1/projects/default`) with runtime adapter wiring, migrated route tests, and >9.5 code-health gate |
 | CP88 | 2026-02-26 | Completed | Phase 4 ingestion API baseline (`/api/v1/ingestion/text`, `/documents`, `/query`, `/query/blended`) with runtime adapter wiring, migrated route tests, and >9.5 code-health gate |
 | CP89 | 2026-02-26 | Completed | Phase 4 ingestion file-upload API baseline (`POST /api/v1/ingestion/file`) with multipart validation/options wiring, migrated route tests, and >9.5 code-health gate |
+| CP90 | 2026-02-26 | Completed | Phase 4 OAuth metadata + registration route baseline (`/.well-known/*` + `POST /oauth/register`) with runtime wiring, migrated route tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4137,6 +4138,55 @@
   - `internal/api/ingestion_api.go`: `10.0`
   - `internal/api/ingestion_api_test.go`: `10.0`
   - `internal/api/router.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP90 - Phase 4 OAuth Metadata + Registration Route Baseline (`internal/api/oauth_api.go`)
+
+- Added OAuth route module for discovery + dynamic registration parity:
+  - new file: `internal/api/oauth_api.go`
+  - mounted endpoints:
+    - `GET /.well-known/oauth-authorization-server`
+    - `GET /.well-known/openid-configuration`
+    - `GET /.well-known/oauth-protected-resource`
+    - `GET /.well-known/oauth-protected-resource/*`
+    - `POST /oauth/register`
+  - includes:
+    - OAuth enabled/disabled gating for metadata endpoints
+    - issuer derivation via `internal/oauth.IssuerURLForRequest`
+    - OAuth metadata payload parity for server/openid/protected-resource responses
+    - registration payload decoding/defaulting + registration error mapping (`error` + `error_description`).
+- Updated top-level router dependency composition:
+  - `internal/api/router.go`
+  - `RouterDependencies.OAuthRegistration` now mounts OAuth routes when configured.
+- Updated runtime assembly wiring:
+  - `cmd/api/main.go`
+  - injects `oauth.NewRegistrationService(pool)` into router dependencies.
+- Added migrated route tests:
+  - new file: `internal/api/oauth_api_test.go`
+  - validates route registration, metadata responses, registration success/error mapping, and validation failures.
+- Extended router integration tests:
+  - `internal/api/router_test.go`
+  - added `TestOAuthRoutesMountedWithDependencies`.
+- Executed tests one-by-one:
+  - `TestMountOAuthRoutesRegistersEndpoints`
+  - `TestOAuthAuthorizationServerMetadataUsesConfiguredIssuer`
+  - `TestOpenIDConfigurationAddsOIDCFields`
+  - `TestOAuthProtectedResourceMetadataScopedPath`
+  - `TestOAuthRegisterClientWritesCreatedResponse`
+  - `TestOAuthRegisterClientMapsRegistrationErrors`
+  - `TestOAuthRouteValidationErrors`
+  - `TestOAuthRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `internal/api/oauth_api.go`: `10.0`
+  - `internal/api/oauth_api_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

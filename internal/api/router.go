@@ -23,6 +23,7 @@ type RouterDependencies struct {
 	ProjectsService    ProjectService
 	IngestionService   IngestionService
 	IngestionOptions   IngestionRouteOptions
+	OAuthRegistration  OAuthRegistrationRouteService
 	ChatRouter         chi.Router
 }
 
@@ -52,6 +53,9 @@ func NewRouterWithDependencies(settings config.Settings, dependencies RouterDepe
 	if dependencies.SessionAuth.SessionManager != nil {
 		MountSessionAuthRoutes(router, dependencies.SessionAuth)
 		MountSessionUIRoutes(router, dependencies.SessionAuth)
+	}
+	if dependencies.OAuthRegistration != nil {
+		MountOAuthRoutes(router, settings, dependencies.OAuthRegistration)
 	}
 	if dependencies.ProjectsService != nil {
 		MountProjectRoutes(router, dependencies.ProjectsService)
