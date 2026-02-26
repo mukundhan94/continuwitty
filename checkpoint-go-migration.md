@@ -47,6 +47,7 @@
 | CP32 | 2026-02-22 | Completed | UI/admin auth integration hardening (`/ui/admin` role-gating parity + auth/session code-health uplift) |
 | CP33 | 2026-02-22 | Completed | Auth/session continuation (`/api/v1/users` role-aware API parity + session/user route health uplift) |
 | CP34 | 2026-02-22 | In Progress | Auth/session continuation follow-up (incremental non-checkpoint file code-health uplift toward >9.5 baseline) |
+| CP80 | 2026-02-26 | Completed | Phase 3 chat API session-derivative route baseline (`save-engram` + `continue`) with migrated unit tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3641,6 +3642,39 @@
   - `TestHandleChatServiceErrorMapsChatServiceException`
   - `TestSSEEventEncodesPayloadLine`
   - `TestCreateChatRouterRegistersStreamEndpoint`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api.go`: `10.0`
+  - `internal/api/chat_api_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP80 - Phase 3 Chat API Session-Derivative Routes Baseline (`internal/api/chat_api.go`)
+
+- Extended `api/app/chat/api.py` route parity to Go for session-derivative operations:
+  - `POST /api/v1/chat/sessions/{session_id}/save-engram`
+  - `POST /api/v1/chat/sessions/{session_id}/continue`
+- Refactored chat API handler composition to keep file-level code health above threshold:
+  - introduced shared generic created-route handler
+  - reduced duplicated route-handler wrappers via generic route binding
+- Expanded migrated tests:
+  - `internal/api/chat_api_test.go`
+  - route registration for stream/derivative/all-route configurations
+  - save-session handler success payload/argument forwarding
+  - continue-session handler success payload/argument forwarding
+  - continue-session error mapping parity
+- Executed tests one-by-one:
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersConfiguredEndpoints`
+  - `TestSaveSessionAsEngramHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerMapsChatServiceError`
 - Full Go verification:
   - `go test ./...` passed.
 - CodeScene checks:

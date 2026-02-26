@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"engram/internal/chat"
+	"engram/internal/models"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -25,6 +26,22 @@ type ChatStreamService interface {
 		sessionID uuid.UUID,
 		payload chat.ChatMessageCreateRequest,
 	) ([]chat.StreamEvent, error)
+}
+
+// ChatSessionDerivativeService captures save/continue session behavior.
+type ChatSessionDerivativeService interface {
+	SaveSessionAsEngram(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+		payload models.SaveSessionAsEngramRequest,
+	) (models.SaveSessionAsEngramResponse, error)
+	ContinueSession(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+		payload models.ContinueSessionRequest,
+	) (models.ContinueSessionResponse, error)
 }
 
 type chatHTTPError struct {
@@ -95,40 +112,144 @@ func streamSSEEvents(events []chat.StreamEvent) []byte {
 	return encoded
 }
 
-// CreateChatRouter mounts the initial chat stream route baseline for migration parity.
-func CreateChatRouter(chatService ChatStreamService, requireAPIActor ChatActorResolver) chi.Router {
-	router := chi.NewRouter()
-	router.Post("/api/v1/chat/sessions/{session_id}/messages/stream", func(writer http.ResponseWriter, request *http.Request) {
-		sessionID, err := uuid.Parse(chi.URLParam(request, "session_id"))
+func writeChatError(writer http.ResponseWriter, statusCode int, detail string) {
+	writeJSON(writer, statusCode, map[string]string{"detail": detail})
+}
+
+func writeChatRouteError(writer http.ResponseWriter, err error) {
+	var httpError *chatHTTPError
+	if errors.As(err, &httpError) {
+		writeChatError(writer, httpError.StatusCode(), httpError.Detail())
+		return
+	}
+	writeChatError(writer, http.StatusInternalServerError, "Internal server error")
+}
+
+func resolveChatRouteActorAndSession(
+	request *http.Request,
+	requireAPIActor ChatActorResolver,
+) (uuid.UUID, uuid.UUID, error) {
+	sessionID, err := uuid.Parse(chi.URLParam(request, "session_id"))
+	if err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	actorID, err := actorUserID(request, requireAPIActor)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	return actorID, sessionID, nil
+}
+
+func decodeChatPayload[T any](request *http.Request, payload *T) error {
+	return json.NewDecoder(request.Body).Decode(payload)
+}
+
+func streamMessageHandler(
+	chatService ChatStreamService,
+	requireAPIActor ChatActorResolver,
+) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		actorID, sessionID, err := resolveChatRouteActorAndSession(request, requireAPIActor)
 		if err != nil {
-			http.Error(writer, "Invalid session id", http.StatusBadRequest)
-			return
-		}
-		actorID, err := actorUserID(request, requireAPIActor)
-		if err != nil {
-			http.Error(writer, "Unauthorized", http.StatusUnauthorized)
+			writeChatError(writer, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
 		payload := chat.ChatMessageCreateRequest{}
-		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
-			http.Error(writer, "Invalid payload", http.StatusBadRequest)
+		if err := decodeChatPayload(request, &payload); err != nil {
+			writeChatError(writer, http.StatusBadRequest, "Invalid payload")
 			return
 		}
 		events, err := handleChatServiceError(func() ([]chat.StreamEvent, error) {
 			return chatService.StreamMessageEvents(request.Context(), actorID, sessionID, payload)
 		})
 		if err != nil {
-			var httpError *chatHTTPError
-			if errors.As(err, &httpError) {
-				http.Error(writer, httpError.Detail(), httpError.StatusCode())
-				return
-			}
-			http.Error(writer, "Internal server error", http.StatusInternalServerError)
+			writeChatRouteError(writer, err)
 			return
 		}
 		writer.Header().Set("Content-Type", "text/event-stream")
 		writer.WriteHeader(http.StatusOK)
 		_, _ = writer.Write(streamSSEEvents(events))
+	}
+}
+
+func handleChatCreatedRoute[Payload any, Result any](
+	writer http.ResponseWriter,
+	request *http.Request,
+	requireAPIActor ChatActorResolver,
+	operation func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+		payload Payload,
+	) (Result, error),
+) {
+	actorID, sessionID, err := resolveChatRouteActorAndSession(request, requireAPIActor)
+	if err != nil {
+		writeChatError(writer, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	var payload Payload
+	if err := decodeChatPayload(request, &payload); err != nil {
+		writeChatError(writer, http.StatusBadRequest, "Invalid payload")
+		return
+	}
+	result, err := handleChatServiceError(func() (Result, error) {
+		return operation(request.Context(), actorID, sessionID, payload)
 	})
+	if err != nil {
+		writeChatRouteError(writer, err)
+		return
+	}
+	writeJSON(writer, http.StatusCreated, result)
+}
+
+func chatCreatedRouteHandler[Payload any, Result any](
+	requireAPIActor ChatActorResolver,
+	operation func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+		payload Payload,
+	) (Result, error),
+) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		handleChatCreatedRoute(
+			writer,
+			request,
+			requireAPIActor,
+			operation,
+		)
+	}
+}
+
+// CreateChatRouter mounts chat API routes for migration parity.
+func CreateChatRouter(
+	streamService ChatStreamService,
+	sessionService ChatSessionDerivativeService,
+	requireAPIActor ChatActorResolver,
+) chi.Router {
+	router := chi.NewRouter()
+	if streamService != nil {
+		router.Post(
+			"/api/v1/chat/sessions/{session_id}/messages/stream",
+			streamMessageHandler(streamService, requireAPIActor),
+		)
+	}
+	if sessionService != nil {
+		router.Post(
+			"/api/v1/chat/sessions/{session_id}/save-engram",
+			chatCreatedRouteHandler(
+				requireAPIActor,
+				sessionService.SaveSessionAsEngram,
+			),
+		)
+		router.Post(
+			"/api/v1/chat/sessions/{session_id}/continue",
+			chatCreatedRouteHandler(
+				requireAPIActor,
+				sessionService.ContinueSession,
+			),
+		)
+	}
 	return router
 }
