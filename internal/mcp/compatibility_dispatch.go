@@ -54,6 +54,14 @@ var implementedToolHandlers = map[string]implementedToolHandler{
 	) (map[string]any, bool, *toolDispatchError) {
 		return service.dispatchChatListSessionsTool(ctx, actor, params)
 	},
+	"chat.get_lifecycle_policy": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchChatGetLifecyclePolicyTool(ctx, actor, params)
+	},
 	"user.get_profile": func(
 		_ *CompatibilityService,
 		_ context.Context,
@@ -122,6 +130,32 @@ func (service *CompatibilityService) dispatchChatGetSessionTool(
 	actor Actor,
 	params map[string]any,
 ) (map[string]any, bool, *toolDispatchError) {
+	session, handled, dispatchErr := service.lookupChatSession(ctx, actor, params)
+	if dispatchErr != nil || !handled {
+		return nil, handled, dispatchErr
+	}
+	return map[string]any{"session": *session}, true, nil
+}
+
+func (service *CompatibilityService) dispatchChatGetLifecyclePolicyTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	session, handled, dispatchErr := service.lookupChatSession(ctx, actor, params)
+	if dispatchErr != nil || !handled {
+		return nil, handled, dispatchErr
+	}
+	return map[string]any{
+		"lifecycle_policy": lifecyclePolicyPayload(*session),
+	}, true, nil
+}
+
+func (service *CompatibilityService) lookupChatSession(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (*models.ChatSessionRecord, bool, *toolDispatchError) {
 	if service.sessionGet == nil {
 		return nil, false, nil
 	}
@@ -142,7 +176,18 @@ func (service *CompatibilityService) dispatchChatGetSessionTool(
 	if session == nil {
 		return nil, true, invalidParamsWithStatus(404, "Chat session not found")
 	}
-	return map[string]any{"session": *session}, true, nil
+	return session, true, nil
+}
+
+func lifecyclePolicyPayload(session models.ChatSessionRecord) map[string]any {
+	return map[string]any{
+		"autosave_enabled":          session.AutosaveEnabled,
+		"autosave_strategy":         session.AutosaveStrategy,
+		"autosave_interval_minutes": session.AutosaveIntervalMinutes,
+		"autosave_min_messages":     session.AutosaveMinMessages,
+		"retention_days":            session.RetentionDays,
+		"retention_max_snapshots":   session.RetentionMaxSnapshots,
+	}
 }
 
 func (service *CompatibilityService) dispatchUserListProjectsTool(
