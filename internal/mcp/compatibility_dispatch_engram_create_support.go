@@ -58,15 +58,22 @@ func parseEngramCreatePayload(params map[string]any) (models.MemoryEngramCreate,
 }
 
 func decodeEngramCreatePayload(params map[string]any) (models.MemoryEngramCreate, bool) {
-	raw, err := json.Marshal(params)
-	if err != nil {
-		return models.MemoryEngramCreate{}, false
-	}
 	payload := models.MemoryEngramCreate{}
-	if err := json.Unmarshal(raw, &payload); err != nil {
+	if !decodeMapParams(params, &payload) {
 		return models.MemoryEngramCreate{}, false
 	}
 	return payload, true
+}
+
+func decodeMapParams(params map[string]any, destination any) bool {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return false
+	}
+	if err := json.Unmarshal(raw, destination); err != nil {
+		return false
+	}
+	return true
 }
 
 func normalizeEngramCreatePayload(payload *models.MemoryEngramCreate) {

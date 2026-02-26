@@ -99,6 +99,7 @@
 | CP129 | 2026-02-26 | Completed | Phase 4 MCP engram read-access baseline (`engram.list`, `engram.get`, `engram.collection_list`) with direct/`tools/call` parity, runtime memory-admin adapter wiring, owner/admin visibility parity, migrated tests, and >9.5 code-health gate |
 | CP130 | 2026-02-26 | Completed | Phase 4 MCP engram query/rehydrate baseline (`engram.query`, `engram.rehydrate`) with direct/`tools/call` parity, runtime query+rehydrate adapter wiring, validation/defaults parity, and `-32004` rehydrate not-found mapping under >9.5 code-health gate |
 | CP131 | 2026-02-26 | Completed | Phase 4 MCP engram create baseline (`engram.create`) with direct/`tools/call` parity, runtime project-resolution + repository write wiring, payload normalization/validation parity, and project-resolution error mapping under >9.5 code-health gate |
+| CP132 | 2026-02-26 | Completed | Phase 4 MCP engram conversation-create baseline (`engram.create_from_conversation`) with direct/`tools/call` parity, runtime conversation-write + enrichment report shaping, payload normalization/validation parity, and project-resolution error mapping under >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3183,6 +3184,44 @@
   - `internal/mcp/compatibility_dispatch_engram_primary_handlers.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_engram_create_support.go`: `10.0`
   - `internal/mcp/compatibility_service_engram_create_test.go`: `9.54`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP132 - Phase 4 MCP Engram Conversation-Create Baseline (`engram.create_from_conversation`)
+
+- Migrated `engram.create_from_conversation` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"engram": {...}, "enrichment_report": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented conversation-create payload behavior parity:
+  - map-to-typed payload decoding from MCP params
+  - normalization parity for trimmed text/default arrays/default visibility scope (`private`)
+  - required `title` + `conversation_markdown` validation
+  - invalid payload/fields return `-32602` invalid params.
+- Added runtime conversation-to-engram adapter wiring:
+  - `cmd/api/mcp_engram_create_adapter.go` now supports both `engram.create` and `engram.create_from_conversation`
+  - resolves project context for writes
+  - persists via `repository.CreateEngramWithReport` (`mcp.engram.create_from_conversation`)
+  - emits condensed enrichment report fields plus resolved project metadata.
+- Implemented project-resolution error mapping parity for conversation-create:
+  - missing/inaccessible default project -> `-32602` with `status_code=422`
+  - missing project -> `-32602` with `status_code=404`
+  - unexpected failures -> `-32603`.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_create_conversation_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_create_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_create_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_create_conversation_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_create_conversation_test.go`: `9.68`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
