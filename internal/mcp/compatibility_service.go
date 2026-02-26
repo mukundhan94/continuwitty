@@ -184,6 +184,14 @@ type EngramRehydrateService interface {
 	) (*models.RehydrationBundle, error)
 }
 
+// EngramCreateService captures engram create behavior used by MCP compatibility engram dispatch.
+type EngramCreateService interface {
+	CreateEngram(
+		ctx context.Context,
+		request EngramCreateRequest,
+	) (*models.EngramCreateResponse, error)
+}
+
 // EngramCollectionListService captures collection-list behavior used by MCP compatibility engram dispatch.
 type EngramCollectionListService interface {
 	ListCollections(
@@ -394,6 +402,13 @@ type EngramRehydrateRequest struct {
 	EngramID    uuid.UUID
 }
 
+// EngramCreateRequest captures compatibility-level engram create inputs.
+type EngramCreateRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	Payload     models.MemoryEngramCreate
+}
+
 // EngramCollectionListRequest captures compatibility-level collection list inputs.
 type EngramCollectionListRequest struct {
 	ActorUserID    uuid.UUID
@@ -425,6 +440,7 @@ type CompatibilityServiceDependencies struct {
 	EngramGet              EngramGetService
 	EngramQuery            EngramQueryService
 	EngramRehydrate        EngramRehydrateService
+	EngramCreate           EngramCreateService
 	EngramCollectionList   EngramCollectionListService
 	PinEngramService       PinEngramService
 	UnpinEngramService     UnpinEngramService
@@ -454,6 +470,7 @@ type CompatibilityService struct {
 	engramGet              EngramGetService
 	engramQuery            EngramQueryService
 	engramRehydrate        EngramRehydrateService
+	engramCreate           EngramCreateService
 	engramCollectionList   EngramCollectionListService
 	pinEngramService       PinEngramService
 	unpinEngramService     UnpinEngramService
@@ -499,6 +516,7 @@ func NewCompatibilityServiceWithDependencies(
 		engramGet:              dependencies.EngramGet,
 		engramQuery:            dependencies.EngramQuery,
 		engramRehydrate:        dependencies.EngramRehydrate,
+		engramCreate:           dependencies.EngramCreate,
 		engramCollectionList:   dependencies.EngramCollectionList,
 		pinEngramService:       dependencies.PinEngramService,
 		unpinEngramService:     dependencies.UnpinEngramService,
