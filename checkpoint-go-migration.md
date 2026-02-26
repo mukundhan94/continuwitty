@@ -60,6 +60,7 @@
 | CP90 | 2026-02-26 | Completed | Phase 4 OAuth metadata + registration route baseline (`/.well-known/*` + `POST /oauth/register`) with runtime wiring, migrated route tests, and >9.5 code-health gate |
 | CP91 | 2026-02-26 | Completed | Phase 4 OAuth authorization route baseline (`GET /oauth/authorize`) with runtime wiring, migrated route/service tests, and >9.5 code-health gate |
 | CP92 | 2026-02-26 | Completed | Phase 4 OAuth token route baseline (`POST /oauth/token`) with runtime wiring, migrated route/service tests, and >9.5 code-health gate |
+| CP93 | 2026-02-26 | Completed | Phase 4 MCP token service baseline (`internal/mcptokens/service.go`) with migrated unit tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4302,6 +4303,44 @@
   - `internal/api/router_test.go`: `10.0`
   - `internal/oauth/token.go`: `10.0`
   - `internal/oauth/token_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP93 - Phase 4 MCP Token Service Baseline (`internal/mcptokens/service.go`)
+
+- Added MCP token service layer parity for `api/app/mcp_tokens/service.py`:
+  - new files:
+    - `internal/mcptokens/service.go`
+    - `internal/mcptokens/errors.go`
+    - `internal/mcptokens/service_test.go`
+  - service behaviors:
+    - token material helpers (`token_hash`, secret hint, plaintext compose/parse, verify)
+    - normalized policy-list handling for `allowed_tools` and `allowed_project_ids`
+    - token active-state evaluation (`expires_at` + `revoked_at`)
+    - owner-scoped create/list/revoke orchestration over `internal/repository/mcp_token.go`.
+- Added API DTO models used by service and upcoming route layer:
+  - new file: `internal/models/mcp_token_api.go`
+  - includes:
+    - `MCPTokenCreateRequest`
+    - `MCPTokenCreateResponse`
+    - `MCPTokenSummary`
+    - `MCPTokenRevokeRequest`.
+- Executed migrated tests one-by-one:
+  - `TestIssueTokenParseAndVerifyRoundTrip`
+  - `TestTokenIsActiveHandlesExpiryAndRevocation`
+  - `TestCreateTokenForOwnerNormalizesLists`
+  - `TestListTokenSummariesAndRevokeTokenForOwner`
+- Focused and full verification:
+  - `go test ./internal/mcptokens ./internal/models ./internal/oauth`
+  - `go test ./...`
+  - both passed.
+- CodeScene checks:
+  - `internal/mcptokens/service.go`: `9.68`
+  - `internal/mcptokens/service_test.go`: `10.0`
+  - `internal/mcptokens/errors.go`: `N/A` (const/error declarations only)
+  - `internal/models/mcp_token_api.go`: `N/A` (struct-only DTO file)
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
