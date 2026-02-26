@@ -40,15 +40,27 @@ type ProjectListService interface {
 	) (string, error)
 }
 
+// SessionListService captures session listing behavior used by MCP compatibility user dispatch.
+type SessionListService interface {
+	ListSessions(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		limit int,
+		offset int,
+	) ([]models.ChatSessionRecord, error)
+}
+
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
 	ProjectService ProjectListService
+	SessionService SessionListService
 }
 
 // CompatibilityService provides baseline MCP interop behavior while the full tool catalog migrates.
 type CompatibilityService struct {
 	serverVersion  string
 	projectService ProjectListService
+	sessionService SessionListService
 }
 
 // NewCompatibilityService builds a compatibility MCP service with stable initialize/tool-list behavior.
@@ -71,6 +83,7 @@ func NewCompatibilityServiceWithDependencies(
 	return &CompatibilityService{
 		serverVersion:  trimmed,
 		projectService: dependencies.ProjectService,
+		sessionService: dependencies.SessionService,
 	}
 }
 

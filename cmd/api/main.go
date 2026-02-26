@@ -91,6 +91,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		settings.AppSemanticVersion,
 		mcp.CompatibilityServiceDependencies{
 			ProjectService: projectService,
+			SessionService: newMCPSessionListAdapter(pool),
 		},
 	)
 	mcpTransportLimiter := newMCPTransportRateLimiter(settings, pool)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -15,8 +16,10 @@ import (
 )
 
 const (
-	defaultProjectListLimit  = 500
-	defaultProjectListOffset = 0
+	defaultProjectListLimit   = 500
+	defaultProjectListOffset  = 0
+	defaultUserProjectsLimit  = 1000
+	defaultUserProjectsOffset = 0
 )
 
 type toolDispatchError struct {
@@ -34,6 +37,8 @@ func (service *CompatibilityService) dispatchImplementedTool(
 	switch method {
 	case "user.get_profile":
 		return map[string]any{"profile": actorPayload(actor)}, true, nil
+	case "user.list_projects":
+		return service.dispatchUserListProjectsTool(ctx, actor)
 	case "project.list":
 		return service.dispatchProjectListTool(ctx, actor, params)
 	case "project.create":
@@ -45,6 +50,27 @@ func (service *CompatibilityService) dispatchImplementedTool(
 	default:
 		return nil, false, nil
 	}
+}
+
+func (service *CompatibilityService) dispatchUserListProjectsTool(
+	ctx context.Context,
+	actor Actor,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.sessionService == nil {
+		return nil, false, nil
+	}
+	sessions, err := service.sessionService.ListSessions(
+		ctx,
+		actor.UserID,
+		defaultUserProjectsLimit,
+		defaultUserProjectsOffset,
+	)
+	if err != nil {
+		return nil, true, internalToolDispatchError()
+	}
+	return map[string]any{
+		"project_ids": uniqueSortedProjectIDs(sessions),
+	}, true, nil
 }
 
 func (service *CompatibilityService) dispatchProjectListTool(
@@ -206,6 +232,23 @@ func optionalString(value *string) any {
 		return nil
 	}
 	return *value
+}
+
+func uniqueSortedProjectIDs(sessions []models.ChatSessionRecord) []string {
+	seen := map[string]struct{}{}
+	for _, session := range sessions {
+		projectID := strings.TrimSpace(session.ProjectID)
+		if projectID == "" {
+			continue
+		}
+		seen[projectID] = struct{}{}
+	}
+	projectIDs := make([]string, 0, len(seen))
+	for projectID := range seen {
+		projectIDs = append(projectIDs, projectID)
+	}
+	sort.Strings(projectIDs)
+	return projectIDs
 }
 
 func requiredStringParam(params map[string]any, key string) (string, bool) {

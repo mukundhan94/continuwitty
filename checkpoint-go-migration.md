@@ -76,6 +76,7 @@
 | CP106 | 2026-02-26 | Completed | Phase 4 MCP first dispatched-tools baseline (`user.get_profile` + `project.list`) with `tools/call` envelope parity, runtime project-service wiring, migrated tests, and >9.5 code-health gate |
 | CP107 | 2026-02-26 | Completed | Phase 4 MCP project-default dispatch baseline (`project.get_default` + `project.set_default`) with direct/`tools/call` parity, service-error mapping, migrated tests, and >9.5 code-health gate |
 | CP108 | 2026-02-26 | Completed | Phase 4 MCP project-create dispatch baseline (`project.create`) with direct/`tools/call` parity, owner UUID validation, migrated tests, and >9.5 code-health gate |
+| CP109 | 2026-02-26 | Completed | Phase 4 MCP user-project dispatch baseline (`user.list_projects`) with session-derived sorted project IDs, direct/`tools/call` parity, runtime session-list wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4955,6 +4956,35 @@
   - `internal/mcp/compatibility_dispatch.go`: `9.68`
   - `internal/mcp/compatibility_service_project_list_support_test.go`: `9.68`
   - `internal/mcp/compatibility_service_project_create_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP109 - Phase 4 MCP User-Projects Dispatch Baseline (`user.list_projects`)
+
+- Migrated `user.list_projects` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"project_ids": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented session-derived project ID behavior parity:
+  - list sessions for actor with window `(limit=1000, offset=0)`
+  - collect non-empty project IDs
+  - deduplicate and return sorted ascending IDs.
+- Added runtime session-list adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_list_adapter.go`
+  - `cmd/api/main.go` passes session-list service dependency to compatibility MCP service.
+- Extended compatibility tests:
+  - `internal/mcp/compatibility_service_user_projects_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_user_projects_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
