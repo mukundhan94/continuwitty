@@ -66,6 +66,7 @@
 | CP96 | 2026-02-26 | Completed | Phase 4 agent workflow API route baseline (`/api/v1/agent-runs*`) with runtime wiring, migrated route tests, and >9.5 code-health gate |
 | CP97 | 2026-02-26 | Completed | Phase 3 export/import API baseline (`/api/v1/projects/{project_id}/export|import`) with dependency-aware router mount, migrated route tests, and >9.5 code-health gate |
 | CP98 | 2026-02-26 | Completed | Phase 3 export/import service baseline (`internal/export/service*`) with migrated unit tests and >9.5 code-health gate |
+| CP99 | 2026-02-26 | Completed | Phase 4 export/import runtime integration baseline (`cmd/api` wiring + router mount tests) with >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4571,6 +4572,34 @@
   - `internal/export/service_import_skip_fixture_test.go`: `10.0`
   - `internal/export/service_import_rename_fixture_test.go`: `10.0`
   - `internal/export/service_test_helpers_test.go`: `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP99 - Phase 4 Export/Import Runtime Integration Baseline (`cmd/api/main.go`)
+
+- Wired export/import service into runtime dependency assembly:
+  - updated `cmd/api/main.go`
+  - runtime now builds:
+    - shared `memoryAdminService`
+    - `export.NewService(pool, projectService, memoryAdminService, settings.EmbeddingDim)`
+  - injects export service into `RouterDependencies.ExportService`.
+- Added router-level dependency mount coverage:
+  - new file: `internal/api/export_router_test.go`
+  - tests:
+    - export routes are absent (`404`) without dependency wiring
+    - export route is mounted and callable (`200`) when `ExportService` is injected.
+- Executed tests one-by-one:
+  - `TestExportRoutesNotMountedWithoutDependencies`
+  - `TestExportRoutesMountedWithDependencies`
+- Focused/full verification:
+  - `go test ./internal/export ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `internal/api/export_router_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

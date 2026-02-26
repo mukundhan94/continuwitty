@@ -15,6 +15,7 @@ import (
 	"engram/internal/auth"
 	"engram/internal/config"
 	"engram/internal/db"
+	internalexport "engram/internal/export"
 	"engram/internal/ingestion"
 	"engram/internal/mcptokens"
 	"engram/internal/models"
@@ -91,9 +92,11 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	)
 	loginAttemptGuard := newLoginAttemptGuard(settings, pool)
 	auditLogger := newSessionAuditLogger(settings)
+	memoryAdminService := admin.NewService(pool, settings.EmbeddingDim, newAdminProjectResolver(projectService))
+	exportService := internalexport.NewService(pool, projectService, memoryAdminService, settings.EmbeddingDim)
 
 	routerDependencies := internalapi.RouterDependencies{
-		MemoryAdminService: admin.NewService(pool, settings.EmbeddingDim, newAdminProjectResolver(projectService)),
+		MemoryAdminService: memoryAdminService,
 		RequireAdminActor:  internalapi.RequireAdminActorFromContext,
 		SessionAuth: buildSessionAuthDependencies(
 			sessionAuthRuntimeDependencies{
@@ -116,6 +119,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		OAuthToken:         oauthTokenService,
 		ChatRouter:         buildChatRouter(settings, pool),
 		AgentWorkflow:      agentWorkflowService,
+		ExportService:      exportService,
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
