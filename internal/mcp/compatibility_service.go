@@ -200,6 +200,22 @@ type EngramCreateFromConversationService interface {
 	) (*EngramCreateFromConversationResponse, error)
 }
 
+// EngramDeleteService captures engram delete behavior used by MCP compatibility engram dispatch.
+type EngramDeleteService interface {
+	DeleteEngram(
+		ctx context.Context,
+		request EngramDeleteRequest,
+	) (*EngramDeleteResponse, error)
+}
+
+// EngramRestoreService captures engram restore behavior used by MCP compatibility engram dispatch.
+type EngramRestoreService interface {
+	RestoreEngram(
+		ctx context.Context,
+		request EngramRestoreRequest,
+	) (*EngramRestoreResponse, error)
+}
+
 // EngramCollectionListService captures collection-list behavior used by MCP compatibility engram dispatch.
 type EngramCollectionListService interface {
 	ListCollections(
@@ -439,6 +455,33 @@ type EngramCreateFromConversationResponse struct {
 	EnrichmentReport map[string]any              `json:"enrichment_report"`
 }
 
+// EngramDeleteRequest captures compatibility-level engram delete inputs.
+type EngramDeleteRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	EngramID    uuid.UUID
+	Reason      *string
+}
+
+// EngramDeleteResponse captures compatibility-level engram delete outputs.
+type EngramDeleteResponse struct {
+	EngramID uuid.UUID `json:"engram_id"`
+	Deleted  bool      `json:"deleted"`
+}
+
+// EngramRestoreRequest captures compatibility-level engram restore inputs.
+type EngramRestoreRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	EngramID    uuid.UUID
+}
+
+// EngramRestoreResponse captures compatibility-level engram restore outputs.
+type EngramRestoreResponse struct {
+	EngramID uuid.UUID `json:"engram_id"`
+	Restored bool      `json:"restored"`
+}
+
 // EngramCollectionListRequest captures compatibility-level collection list inputs.
 type EngramCollectionListRequest struct {
 	ActorUserID    uuid.UUID
@@ -472,6 +515,8 @@ type CompatibilityServiceDependencies struct {
 	EngramRehydrate          EngramRehydrateService
 	EngramCreate             EngramCreateService
 	EngramCreateConversation EngramCreateFromConversationService
+	EngramDelete             EngramDeleteService
+	EngramRestore            EngramRestoreService
 	EngramCollectionList     EngramCollectionListService
 	PinEngramService         PinEngramService
 	UnpinEngramService       UnpinEngramService
@@ -503,6 +548,8 @@ type CompatibilityService struct {
 	engramRehydrate          EngramRehydrateService
 	engramCreate             EngramCreateService
 	engramCreateConversation EngramCreateFromConversationService
+	engramDelete             EngramDeleteService
+	engramRestore            EngramRestoreService
 	engramCollectionList     EngramCollectionListService
 	pinEngramService         PinEngramService
 	unpinEngramService       UnpinEngramService
@@ -550,6 +597,8 @@ func NewCompatibilityServiceWithDependencies(
 		engramRehydrate:          dependencies.EngramRehydrate,
 		engramCreate:             dependencies.EngramCreate,
 		engramCreateConversation: dependencies.EngramCreateConversation,
+		engramDelete:             dependencies.EngramDelete,
+		engramRestore:            dependencies.EngramRestore,
 		engramCollectionList:     dependencies.EngramCollectionList,
 		pinEngramService:         dependencies.PinEngramService,
 		unpinEngramService:       dependencies.UnpinEngramService,

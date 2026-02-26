@@ -37,6 +37,20 @@ func newMCPEngramCollectionListAdapter(service *admin.Service) mcp.EngramCollect
 	return mcpEngramAdminAdapter{service: service}
 }
 
+func newMCPEngramDeleteAdapter(service *admin.Service) mcp.EngramDeleteService {
+	if service == nil {
+		return nil
+	}
+	return mcpEngramAdminAdapter{service: service}
+}
+
+func newMCPEngramRestoreAdapter(service *admin.Service) mcp.EngramRestoreService {
+	if service == nil {
+		return nil
+	}
+	return mcpEngramAdminAdapter{service: service}
+}
+
 func (adapter mcpEngramAdminAdapter) ListEngrams(
 	ctx context.Context,
 	request mcp.EngramListRequest,
@@ -89,6 +103,47 @@ func (adapter mcpEngramAdminAdapter) ListCollections(
 			IncludeDeleted: request.IncludeDeleted,
 			Limit:          request.Limit,
 			Offset:         request.Offset,
+		},
+	)
+}
+
+func (adapter mcpEngramAdminAdapter) executeVisibleEngramMutation(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	actorRole models.UserRole,
+	engramID uuid.UUID,
+	mutate func(context.Context, uuid.UUID) (engramMutationOutcome, error),
+) (*engramMutationOutcome, error) {
+	visible, err := adapter.loadVisibleEngramForMutation(ctx, actorUserID, actorRole, engramID)
+	if err != nil {
+		return nil, err
+	}
+	if visible == nil {
+		return nil, nil
+	}
+	mutation, err := mutate(ctx, engramID)
+	if err != nil {
+		if errors.Is(err, admin.ErrEngramNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &mutation, nil
+}
+
+func (adapter mcpEngramAdminAdapter) loadVisibleEngramForMutation(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	actorRole models.UserRole,
+	engramID uuid.UUID,
+) (*models.AdminEngramRecord, error) {
+	return adapter.GetEngram(
+		ctx,
+		mcp.EngramGetRequest{
+			ActorUserID:    actorUserID,
+			ActorRole:      actorRole,
+			EngramID:       engramID,
+			IncludeDeleted: true,
 		},
 	)
 }

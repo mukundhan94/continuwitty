@@ -100,6 +100,7 @@
 | CP130 | 2026-02-26 | Completed | Phase 4 MCP engram query/rehydrate baseline (`engram.query`, `engram.rehydrate`) with direct/`tools/call` parity, runtime query+rehydrate adapter wiring, validation/defaults parity, and `-32004` rehydrate not-found mapping under >9.5 code-health gate |
 | CP131 | 2026-02-26 | Completed | Phase 4 MCP engram create baseline (`engram.create`) with direct/`tools/call` parity, runtime project-resolution + repository write wiring, payload normalization/validation parity, and project-resolution error mapping under >9.5 code-health gate |
 | CP132 | 2026-02-26 | Completed | Phase 4 MCP engram conversation-create baseline (`engram.create_from_conversation`) with direct/`tools/call` parity, runtime conversation-write + enrichment report shaping, payload normalization/validation parity, and project-resolution error mapping under >9.5 code-health gate |
+| CP133 | 2026-02-26 | Completed | Phase 4 MCP engram mutation baseline (`engram.delete`, `engram.restore`) with direct/`tools/call` parity, runtime memory-admin mutation wiring, `-32004` not-found mapping with `engram_id`, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3222,6 +3223,49 @@
   - `internal/mcp/compatibility_dispatch_engram_create_support.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_engram_create_conversation_support.go`: `10.0`
   - `internal/mcp/compatibility_service_engram_create_conversation_test.go`: `9.68`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP133 - Phase 4 MCP Engram Mutation Baseline (`engram.delete`, `engram.restore`)
+
+- Migrated `engram.delete` and `engram.restore` MCP dispatch paths into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls: `engram.delete`, `engram.restore`
+  - `tools/call` aliases: `engram_delete`, `engram_restore`
+  - success payload shape parity: `{"result": {...}}`.
+- Implemented mutation payload parity:
+  - required `engram_id` UUID for both tools
+  - optional `reason` string for delete
+  - invalid/missing params return `-32602`.
+- Added mutation not-found parity:
+  - both tools return `-32004` with `data.engram_id` when target engram is missing/inaccessible.
+- Added runtime mutation adapter wiring and access gating:
+  - wired `EngramDelete` and `EngramRestore` dependencies in `cmd/api/main.go`
+  - added runtime adapters for delete/restore operations
+  - enforced owner/admin visibility parity for mutation pre-checks via shared admin adapter visibility lookup.
+- Added dispatch registration/support modules:
+  - `internal/mcp/compatibility_dispatch_engram_mutation_handlers.go`
+  - `internal/mcp/compatibility_dispatch_engram_state_mutation_support.go`.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_delete_test.go`
+  - `internal/mcp/compatibility_service_engram_restore_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_adapter.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_delete_adapter.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_mutation_support.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_restore_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_mutation_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_state_mutation_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_delete_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_restore_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
