@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"engram/internal/models"
+	"engram/internal/projects"
 
 	"github.com/google/uuid"
 )
@@ -24,6 +25,12 @@ type ProjectListService interface {
 		limit int,
 		offset int,
 	) ([]models.ProjectRecord, error)
+	CreateProject(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		request projects.CreateProjectRequest,
+	) (*models.ProjectRecord, error)
 	GetDefaultProjectID(ctx context.Context, actorUserID uuid.UUID) (*string, error)
 	SetDefaultProjectID(
 		ctx context.Context,

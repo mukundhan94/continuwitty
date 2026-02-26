@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"engram/internal/models"
+	"engram/internal/projects"
 
 	"github.com/google/uuid"
 )
@@ -45,6 +46,15 @@ func (fakeProjectListService) GetDefaultProjectID(
 	_ context.Context,
 	_ uuid.UUID,
 ) (*string, error) {
+	return nil, nil
+}
+
+func (fakeProjectListService) CreateProject(
+	_ context.Context,
+	_ uuid.UUID,
+	_ models.UserRole,
+	_ projects.CreateProjectRequest,
+) (*models.ProjectRecord, error) {
 	return nil, nil
 }
 

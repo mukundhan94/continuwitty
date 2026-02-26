@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"engram/internal/models"
 	"engram/internal/projects"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -33,6 +36,8 @@ func (service *CompatibilityService) dispatchImplementedTool(
 		return map[string]any{"profile": actorPayload(actor)}, true, nil
 	case "project.list":
 		return service.dispatchProjectListTool(ctx, actor, params)
+	case "project.create":
+		return service.dispatchProjectCreateTool(ctx, actor, params)
 	case "project.get_default":
 		return service.dispatchProjectGetDefaultTool(ctx, actor)
 	case "project.set_default":
@@ -75,6 +80,35 @@ func (service *CompatibilityService) dispatchProjectListTool(
 		return nil, true, &toolDispatchError{code: -32603, message: "Internal error"}
 	}
 	return map[string]any{"projects": projects}, true, nil
+}
+
+func (service *CompatibilityService) dispatchProjectCreateTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.projectService == nil {
+		return nil, false, nil
+	}
+	ownerUserID, ok := optionalUUIDParam(params, "owner_user_id")
+	if !ok {
+		return nil, true, invalidParamError("owner_user_id")
+	}
+	created, err := service.projectService.CreateProject(
+		ctx,
+		actor.UserID,
+		normalizedActorRole(actor),
+		projects.CreateProjectRequest{
+			ProjectID:   stringParamWithDefault(params, "project_id", ""),
+			Name:        stringParamWithDefault(params, "name", ""),
+			Description: stringParamWithDefault(params, "description", ""),
+			OwnerUserID: ownerUserID,
+		},
+	)
+	if err != nil {
+		return nil, true, mapProjectCreateError(err)
+	}
+	return map[string]any{"project": created}, true, nil
 }
 
 func (service *CompatibilityService) dispatchProjectGetDefaultTool(
@@ -143,6 +177,15 @@ func mapProjectServiceError(err error) *toolDispatchError {
 	}
 }
 
+func mapProjectCreateError(err error) *toolDispatchError {
+	switch {
+	case errors.Is(err, projects.ErrProjectIDMustNotBeBlank):
+		return invalidParamError("project_id")
+	default:
+		return internalToolDispatchError()
+	}
+}
+
 func invalidParamsWithStatus(statusCode int, detail string) *toolDispatchError {
 	return &toolDispatchError{
 		code:    -32602,
@@ -176,6 +219,30 @@ func requiredStringParam(params map[string]any, key string) (string, bool) {
 	}
 	value = strings.TrimSpace(value)
 	return value, value != ""
+}
+
+func stringParamWithDefault(params map[string]any, key string, defaultValue string) string {
+	rawValue, ok := optionalParamValue(params, key)
+	if !ok {
+		return defaultValue
+	}
+	return fmt.Sprint(rawValue)
+}
+
+func optionalUUIDParam(params map[string]any, key string) (*uuid.UUID, bool) {
+	rawValue, ok := optionalParamValue(params, key)
+	if !ok {
+		return nil, true
+	}
+	candidate := strings.TrimSpace(fmt.Sprint(rawValue))
+	if candidate == "" {
+		return nil, false
+	}
+	parsed, err := uuid.Parse(candidate)
+	if err != nil {
+		return nil, false
+	}
+	return &parsed, true
 }
 
 func optionalBoolParam(params map[string]any, key string, defaultValue bool) (bool, bool) {

@@ -75,6 +75,7 @@
 | CP105 | 2026-02-26 | Completed | Phase 4 MCP direct-method compatibility baseline (dotted/underscore tool methods + token policy parity) with migrated tests and >9.5 code-health gate |
 | CP106 | 2026-02-26 | Completed | Phase 4 MCP first dispatched-tools baseline (`user.get_profile` + `project.list`) with `tools/call` envelope parity, runtime project-service wiring, migrated tests, and >9.5 code-health gate |
 | CP107 | 2026-02-26 | Completed | Phase 4 MCP project-default dispatch baseline (`project.get_default` + `project.set_default`) with direct/`tools/call` parity, service-error mapping, migrated tests, and >9.5 code-health gate |
+| CP108 | 2026-02-26 | Completed | Phase 4 MCP project-create dispatch baseline (`project.create`) with direct/`tools/call` parity, owner UUID validation, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4926,6 +4927,34 @@
   - `internal/mcp/compatibility_dispatch.go`: `9.68`
   - `internal/mcp/compatibility_service_project_list_support_test.go`: `9.68`
   - `internal/mcp/compatibility_service_project_default_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP108 - Phase 4 MCP Project-Create Dispatch Baseline (`internal/mcp/compatibility_dispatch.go`)
+
+- Migrated `project.create` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"project": ...}`
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Added project-create parameter handling parity:
+  - `project_id`, `name`, `description` now follow permissive string coercion behavior.
+  - optional `owner_user_id` now validates as UUID and returns `-32602` on invalid values.
+- Added project-create service error mapping:
+  - blank `project_id` -> `-32602` invalid params
+  - unexpected failures -> `-32603` internal error.
+- Extended compatibility tests:
+  - `internal/mcp/compatibility_service_project_create_test.go`
+  - updated `internal/mcp/compatibility_service_project_list_support_test.go` stubs to satisfy expanded project-service interface.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_project_list_support_test.go`: `9.68`
+  - `internal/mcp/compatibility_service_project_create_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
