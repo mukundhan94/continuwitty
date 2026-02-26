@@ -3,14 +3,15 @@ package mcp
 import (
 	"context"
 	"testing"
+
+	"engram/internal/models"
 )
 
 func TestCompatibilityServiceInitialize(t *testing.T) {
-	service := NewCompatibilityService("1.2.3")
-	frame := singleFrame(t, service.StreamCall(
-		context.Background(),
+	frame := runCompatibilityRequest(
+		t,
 		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "init", Method: "initialize"}},
-	))
+	)
 
 	result, ok := frame["result"].(map[string]any)
 	if !ok {
@@ -31,70 +32,107 @@ func TestCompatibilityServiceInitialize(t *testing.T) {
 }
 
 func TestCompatibilityServiceToolsList(t *testing.T) {
-	service := NewCompatibilityService("1.2.3")
-	frame := singleFrame(t, service.StreamCall(
-		context.Background(),
+	frame := runCompatibilityRequest(
+		t,
 		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "tools-list", Method: "tools/list"}},
-	))
+	)
 
-	result, ok := frame["result"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected tools/list result payload")
+	toolNames := toolNamesFromFrame(t, frame)
+	if len(toolNames) != len(toolCatalogOrder) {
+		t.Fatalf("expected %d tools, got %d", len(toolCatalogOrder), len(toolNames))
 	}
-	tools, ok := result["tools"].([]map[string]any)
-	if !ok {
-		t.Fatalf("expected tools list payload")
-	}
-	if len(tools) != 0 {
-		t.Fatalf("expected no tools in compatibility service, got %d", len(tools))
+	if !containsString(toolNames, "chat_create_session") {
+		t.Fatalf("expected chat_create_session in tool list")
 	}
 }
 
-func TestCompatibilityServiceToolsCallMissingName(t *testing.T) {
-	service := NewCompatibilityService("1.2.3")
-	frame := singleFrame(t, service.StreamCall(
-		context.Background(),
+func TestCompatibilityServiceToolsListRespectsReadScope(t *testing.T) {
+	frame := runCompatibilityRequest(
+		t,
+		StreamCallRequest{
+			Request: JSONRPCRequest{JSONRPC: "2.0", ID: "tools-list", Method: "tools/list"},
+			TokenAuth: &models.MCPTokenAuthContext{
+				Scope: models.MCPTokenScopeRead,
+			},
+		},
+	)
+
+	toolNames := toolNamesFromFrame(t, frame)
+	if containsString(toolNames, "chat_create_session") {
+		t.Fatalf("expected write tool to be hidden for read scope")
+	}
+	if !containsString(toolNames, "engram_query") {
+		t.Fatalf("expected read tool engram_query to remain visible")
+	}
+}
+
+func TestCompatibilityServiceErrorMappings(t *testing.T) {
+	testCases := []struct {
+		name         string
+		request      StreamCallRequest
+		expectedCode int
+	}{
+		{
+			name: "tools/call missing name",
+			request: StreamCallRequest{
+				Request: JSONRPCRequest{
+					JSONRPC: "2.0",
+					ID:      "tools-call",
+					Method:  "tools/call",
+					Params:  map[string]any{},
+				},
+			},
+			expectedCode: -32602,
+		},
+		{
+			name: "unknown method",
+			request: StreamCallRequest{
+				Request: JSONRPCRequest{
+					JSONRPC: "2.0",
+					ID:      "custom",
+					Method:  "engram.query",
+				},
+			},
+			expectedCode: -32601,
+		},
+		{
+			name: "known tool not implemented",
+			request: StreamCallRequest{
+				Request: JSONRPCRequest{
+					JSONRPC: "2.0",
+					ID:      "tools-call",
+					Method:  "tools/call",
+					Params:  map[string]any{"name": "engram_query"},
+				},
+			},
+			expectedCode: -32000,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			assertRequestErrorCode(t, testCase.request, testCase.expectedCode)
+		})
+	}
+}
+
+func TestCompatibilityServiceToolsCallRejectsWriteToolForReadToken(t *testing.T) {
+	assertRequestErrorCode(
+		t,
 		StreamCallRequest{
 			Request: JSONRPCRequest{
 				JSONRPC: "2.0",
 				ID:      "tools-call",
 				Method:  "tools/call",
-				Params:  map[string]any{},
+				Params:  map[string]any{"name": "chat_send_message"},
+			},
+			TokenAuth: &models.MCPTokenAuthContext{
+				Scope: models.MCPTokenScopeRead,
 			},
 		},
-	))
-
-	errorPayload, ok := frame["error"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected error payload")
-	}
-	code, ok := errorPayload["code"].(int)
-	if !ok {
-		t.Fatalf("expected integer error code")
-	}
-	if code != -32602 {
-		t.Fatalf("expected invalid params code -32602, got %d", code)
-	}
-}
-
-func TestCompatibilityServiceUnknownMethod(t *testing.T) {
-	service := NewCompatibilityService("1.2.3")
-	frame := singleFrame(t, service.StreamCall(
-		context.Background(),
-		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "custom", Method: "engram.query"}},
-	))
-
-	errorPayload, ok := frame["error"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected error payload")
-	}
-	code, ok := errorPayload["code"].(int)
-	if !ok {
-		t.Fatalf("expected integer error code")
-	}
-	if code != -32601 {
-		t.Fatalf("expected method not found code -32601, got %d", code)
-	}
+		-32003,
+	)
 }
 
 func singleFrame(t *testing.T, frames <-chan Frame) Frame {
@@ -107,4 +145,64 @@ func singleFrame(t *testing.T, frames <-chan Frame) Frame {
 		t.Fatalf("expected a single frame")
 	}
 	return frame
+}
+
+func runCompatibilityRequest(t *testing.T, request StreamCallRequest) Frame {
+	t.Helper()
+	service := NewCompatibilityService("1.2.3")
+	return singleFrame(t, service.StreamCall(context.Background(), request))
+}
+
+func assertRequestErrorCode(t *testing.T, request StreamCallRequest, expectedCode int) {
+	t.Helper()
+	frame := runCompatibilityRequest(t, request)
+	errorPayload := errorPayloadFromFrame(t, frame)
+	requireErrorCode(t, errorPayload, expectedCode)
+}
+
+func toolNamesFromFrame(t *testing.T, frame Frame) []string {
+	t.Helper()
+	result, ok := frame["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected result payload in frame")
+	}
+	rawTools, ok := result["tools"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected tools payload")
+	}
+	toolNames := make([]string, 0, len(rawTools))
+	for _, tool := range rawTools {
+		name, _ := tool["name"].(string)
+		toolNames = append(toolNames, name)
+	}
+	return toolNames
+}
+
+func errorPayloadFromFrame(t *testing.T, frame Frame) map[string]any {
+	t.Helper()
+	errorPayload, ok := frame["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error payload")
+	}
+	return errorPayload
+}
+
+func requireErrorCode(t *testing.T, errorPayload map[string]any, expected int) {
+	t.Helper()
+	code, ok := errorPayload["code"].(int)
+	if !ok {
+		t.Fatalf("expected integer error code")
+	}
+	if code != expected {
+		t.Fatalf("expected error code %d, got %d", expected, code)
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }

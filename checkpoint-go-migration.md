@@ -71,6 +71,7 @@
 | CP101 | 2026-02-26 | Completed | Phase 4 MCP stream transport baseline (`/api/v1/mcp/stream`) with compatibility service, router/runtime wiring, and >9.5 code-health gate |
 | CP102 | 2026-02-26 | Completed | Phase 4 MCP stream actor-auth baseline (bearer token + session fallback) with router/runtime wiring, migrated tests, and >9.5 code-health gate |
 | CP103 | 2026-02-26 | Completed | Phase 4 MCP stream transport rate-limit baseline (429 + `Retry-After`) with router/runtime wiring, migrated tests, and >9.5 code-health gate |
+| CP104 | 2026-02-26 | Completed | Phase 4 MCP catalog visibility baseline (`tools/list` + scope/allowlist policy filtering) with migrated tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4788,6 +4789,45 @@
   - `internal/api/mcp_stream_test.go`: `10.0`
   - `internal/api/router.go`: `10.0`
   - `cmd/api/main.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP104 - Phase 4 MCP Catalog Visibility Baseline (`internal/mcp/catalog.go`)
+
+- Added MCP catalog primitives for compatibility service:
+  - new file: `internal/mcp/catalog.go`
+  - includes:
+    - read/write tool scope sets
+    - deterministic catalog ordering
+    - dotted/underscore tool-name normalization
+    - alias mapping (`engram.pin_to_session` -> `chat.pin_engram`)
+    - token-aware `tools/list` visibility filtering (scope + allowed-tools policy).
+- Updated compatibility MCP service behavior:
+  - `internal/mcp/compatibility_service.go`
+  - `tools/list` now returns a non-empty public catalog (`chat_*`, `engram_*`, `project_*`, `user_*`)
+  - `tools/call` behavior now distinguishes:
+    - unknown tool -> `-32601`
+    - known but not yet ported in Go dispatch -> `-32000` (`Tool not implemented`)
+    - token policy failures (scope/allowlist) -> `-32003`.
+- Added migrated MCP compatibility tests:
+  - `internal/mcp/compatibility_service_test.go`
+  - coverage includes:
+    - initialize contract
+    - tool catalog visibility defaults
+    - read-scope filtering for write tools
+    - error mapping for missing name / unknown method / not-implemented tool
+    - scope-based write rejection.
+- Focused/full verification:
+  - `go test ./internal/mcp -count=1`
+  - `go test ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - all passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/catalog.go`: `9.68`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

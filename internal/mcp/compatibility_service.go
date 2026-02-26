@@ -3,6 +3,8 @@ package mcp
 import (
 	"context"
 	"strings"
+
+	"engram/internal/models"
 )
 
 const (
@@ -34,7 +36,7 @@ func (service *CompatibilityService) StreamCall(ctx context.Context, request Str
 	frames := make(chan Frame, 1)
 	go func() {
 		defer close(frames)
-		response := service.dispatch(request.Request)
+		response := service.dispatch(request.Request, request.TokenAuth)
 		select {
 		case <-ctx.Done():
 			return
@@ -44,7 +46,10 @@ func (service *CompatibilityService) StreamCall(ctx context.Context, request Str
 	return frames
 }
 
-func (service *CompatibilityService) dispatch(request JSONRPCRequest) Frame {
+func (service *CompatibilityService) dispatch(
+	request JSONRPCRequest,
+	tokenAuth *models.MCPTokenAuthContext,
+) Frame {
 	if strings.TrimSpace(request.Method) == "" {
 		return invalidRequestFrame(request.ID)
 	}
@@ -63,21 +68,37 @@ func (service *CompatibilityService) dispatch(request JSONRPCRequest) Frame {
 		})
 	case "tools/list":
 		return successFrame(request.ID, map[string]any{
-			"tools": []map[string]any{},
+			"tools": buildVisiblePublicToolCatalog(tokenAuth),
 		})
 	case "tools/call":
-		return service.dispatchToolsCall(request.ID, request.Params)
+		return service.dispatchToolsCall(request.ID, request.Params, tokenAuth)
 	default:
 		return methodNotFoundFrame(request.ID, request.Method)
 	}
 }
 
-func (service *CompatibilityService) dispatchToolsCall(requestID any, params map[string]any) Frame {
+func (service *CompatibilityService) dispatchToolsCall(
+	requestID any,
+	params map[string]any,
+	tokenAuth *models.MCPTokenAuthContext,
+) Frame {
 	name, ok := requiredToolName(params)
 	if !ok {
 		return invalidParamsFrame(requestID, map[string]any{"missing": "name"})
 	}
-	return methodNotFoundFrame(requestID, name)
+	dottedName := toDottedToolName(name)
+	if !toolExists(dottedName) {
+		return methodNotFoundFrame(requestID, name)
+	}
+	if policyError := authorizeToolCall(dottedName, tokenAuth); policyError != nil {
+		return errorFrame(requestID, policyError.code, policyError.message, policyError.data)
+	}
+	return errorFrame(
+		requestID,
+		-32000,
+		"Tool not implemented",
+		map[string]any{"method": canonicalToolName(dottedName)},
+	)
 }
 
 func requiredToolName(params map[string]any) (string, bool) {
