@@ -87,6 +87,7 @@
 | CP117 | 2026-02-26 | Completed | Phase 4 MCP chat pin-engram mutation baseline (`chat.pin_engram` / `engram.pin_to_session`) with direct/`tools/call` parity, runtime pin adapter wiring, dispatch modularization for >9.5 code-health, migrated tests, and safeguard pass |
 | CP118 | 2026-02-26 | Completed | Phase 4 MCP chat unpin-engram mutation baseline (`chat.unpin_engram`) with direct/`tools/call` parity, runtime unpin adapter wiring, migrated tests, and >9.5 code-health gate |
 | CP119 | 2026-02-26 | Completed | Phase 4 MCP chat pin-document mutation baseline (`chat.pin_document`) with direct/`tools/call` parity, runtime pin-document adapter wiring, migrated tests, and >9.5 code-health gate |
+| CP120 | 2026-02-26 | Completed | Phase 4 MCP chat unpin-document mutation baseline (`chat.unpin_document`) with direct/`tools/call` parity, runtime unpin-document adapter wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -2728,6 +2729,39 @@
   - `internal/mcp/compatibility_dispatch_chat_mutation_handlers.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_chat_pin_document_support.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_pin_document_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP120 - Phase 4 MCP Chat Unpin-Document Mutation Baseline (`chat.unpin_document`)
+
+- Migrated `chat.unpin_document` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"removed": true}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented required mutation parameter behavior parity:
+  - required `session_id` UUID
+  - required `document_id` UUID
+  - missing/invalid values return `-32602` invalid params.
+- Implemented unpin result/error parity:
+  - successful unpin returns `removed=true`
+  - missing pin returns `-32602` with `status_code=404` and `detail="Pinned document not found for session"`.
+- Added runtime unpin-document mutation adapter wiring in Go API runtime:
+  - `cmd/api/mcp_unpin_document_adapter.go`
+  - `cmd/api/main.go` passes unpin-document dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_unpin_document_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_unpin_document_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_mutation_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_unpin_document_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_unpin_document_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
