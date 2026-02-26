@@ -17,6 +17,10 @@ const (
 	defaultChatTimelineOffset         = 0
 	defaultChatProjectDocumentsLimit  = 200
 	defaultChatProjectDocumentsOffset = 0
+	defaultEngramListLimit            = 200
+	defaultEngramListOffset           = 0
+	defaultCollectionListLimit        = 200
+	defaultCollectionListOffset       = 0
 )
 
 type toolDispatchError struct {
@@ -86,6 +90,7 @@ func buildImplementedToolHandlers() map[string]implementedToolHandler {
 		},
 	}
 	registerChatToolHandlers(handlers)
+	registerEngramToolHandlers(handlers)
 	return handlers
 }
 

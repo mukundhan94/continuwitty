@@ -96,6 +96,7 @@
 | CP126 | 2026-02-26 | Completed | Phase 4 MCP chat restore-session baseline (`chat.restore_session`) with direct/`tools/call` parity and owner/admin lifecycle access hardening across restore/delete, migrated tests, runtime wiring, and >9.5 code-health gate |
 | CP127 | 2026-02-26 | Completed | Phase 4 MCP chat send-message baseline (`chat.send_message`) with direct/`tools/call` parity, runtime chat-service wiring, migrated tests, and chat/provider error mapping parity under >9.5 code-health gate |
 | CP128 | 2026-02-26 | Completed | Phase 4 MCP chat save-as-engram baseline (`chat.save_as_engram`) with direct/`tools/call` parity, runtime save-session adapter wiring, defaults/validation parity for visibility + metadata fields, migrated tests, and >9.5 code-health gate |
+| CP129 | 2026-02-26 | Completed | Phase 4 MCP engram read-access baseline (`engram.list`, `engram.get`, `engram.collection_list`) with direct/`tools/call` parity, runtime memory-admin adapter wiring, owner/admin visibility parity, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3050,6 +3051,56 @@
   - `internal/mcp/compatibility_dispatch_chat_primary_handlers.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP129 - Phase 4 MCP Engram Read-Access Baseline (`engram.list`, `engram.get`, `engram.collection_list`)
+
+- Migrated engram read-access MCP dispatch paths into Go compatibility mode:
+  - `engram.list`
+  - `engram.get`
+  - `engram.collection_list`.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return payloads directly.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented engram list behavior parity:
+  - defaults: `include_deleted=false`, `limit=200`, `offset=0`
+  - optional filters: `project_id`, `session_id`, `q`
+  - invalid `include_deleted`, paging, `session_id`, or `q` values return `-32602` invalid params.
+- Implemented engram get behavior parity:
+  - required `engram_id` UUID
+  - default `include_deleted=true`
+  - missing/inaccessible records return `-32602` with `status_code=404` and `detail="Engram not found"`.
+- Implemented collection list behavior parity:
+  - defaults: `include_deleted=false`, `limit=200`, `offset=0`
+  - optional `project_id` filter
+  - invalid `include_deleted` or paging values return `-32602` invalid params.
+- Added runtime memory-admin adapter wiring in Go API runtime:
+  - `cmd/api/mcp_engram_admin_adapter.go`
+  - `cmd/api/main.go` passes engram list/get/collection-list dependencies to compatibility MCP service.
+- Added owner/admin visibility parity in runtime adapter:
+  - non-admin calls are owner-scoped for list/collection-list
+  - non-admin `engram.get` returns not-found parity for non-owned engrams.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_list_test.go`
+  - `internal/mcp/compatibility_service_engram_get_test.go`
+  - `internal/mcp/compatibility_service_engram_collection_list_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_read_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_read_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_list_test.go`: `9.68`
+  - `internal/mcp/compatibility_service_engram_get_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_collection_list_test.go`: `9.55`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

@@ -152,6 +152,30 @@ type ProjectDocumentListService interface {
 	) ([]models.DocumentRecord, error)
 }
 
+// EngramListService captures engram listing behavior used by MCP compatibility engram dispatch.
+type EngramListService interface {
+	ListEngrams(
+		ctx context.Context,
+		request EngramListRequest,
+	) ([]models.AdminEngramRecord, error)
+}
+
+// EngramGetService captures engram lookup behavior used by MCP compatibility engram dispatch.
+type EngramGetService interface {
+	GetEngram(
+		ctx context.Context,
+		request EngramGetRequest,
+	) (*models.AdminEngramRecord, error)
+}
+
+// EngramCollectionListService captures collection-list behavior used by MCP compatibility engram dispatch.
+type EngramCollectionListService interface {
+	ListCollections(
+		ctx context.Context,
+		request EngramCollectionListRequest,
+	) ([]models.EngramCollectionRecord, error)
+}
+
 // PinEngramService captures engram pinning behavior used by MCP compatibility chat dispatch.
 type PinEngramService interface {
 	PinEngram(
@@ -322,6 +346,36 @@ type SessionPinDocumentRequest struct {
 	DocumentID  uuid.UUID
 }
 
+// EngramListRequest captures compatibility-level engram list inputs.
+type EngramListRequest struct {
+	ActorUserID    uuid.UUID
+	ActorRole      models.UserRole
+	ProjectID      *string
+	SessionID      *uuid.UUID
+	QueryText      *string
+	IncludeDeleted bool
+	Limit          int
+	Offset         int
+}
+
+// EngramGetRequest captures compatibility-level engram get inputs.
+type EngramGetRequest struct {
+	ActorUserID    uuid.UUID
+	ActorRole      models.UserRole
+	EngramID       uuid.UUID
+	IncludeDeleted bool
+}
+
+// EngramCollectionListRequest captures compatibility-level collection list inputs.
+type EngramCollectionListRequest struct {
+	ActorUserID    uuid.UUID
+	ActorRole      models.UserRole
+	ProjectID      *string
+	IncludeDeleted bool
+	Limit          int
+	Offset         int
+}
+
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
 	ProjectService         ProjectListService
@@ -339,6 +393,9 @@ type CompatibilityServiceDependencies struct {
 	PinnedEngramService    PinnedEngramListService
 	PinnedDocumentService  PinnedDocumentListService
 	ProjectDocumentService ProjectDocumentListService
+	EngramList             EngramListService
+	EngramGet              EngramGetService
+	EngramCollectionList   EngramCollectionListService
 	PinEngramService       PinEngramService
 	UnpinEngramService     UnpinEngramService
 	PinDocumentService     PinDocumentService
@@ -363,6 +420,9 @@ type CompatibilityService struct {
 	pinnedEngramService    PinnedEngramListService
 	pinnedDocumentService  PinnedDocumentListService
 	projectDocumentService ProjectDocumentListService
+	engramList             EngramListService
+	engramGet              EngramGetService
+	engramCollectionList   EngramCollectionListService
 	pinEngramService       PinEngramService
 	unpinEngramService     UnpinEngramService
 	pinDocumentService     PinDocumentService
@@ -403,6 +463,9 @@ func NewCompatibilityServiceWithDependencies(
 		pinnedEngramService:    dependencies.PinnedEngramService,
 		pinnedDocumentService:  dependencies.PinnedDocumentService,
 		projectDocumentService: dependencies.ProjectDocumentService,
+		engramList:             dependencies.EngramList,
+		engramGet:              dependencies.EngramGet,
+		engramCollectionList:   dependencies.EngramCollectionList,
 		pinEngramService:       dependencies.PinEngramService,
 		unpinEngramService:     dependencies.UnpinEngramService,
 		pinDocumentService:     dependencies.PinDocumentService,
