@@ -93,6 +93,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 			ProjectService: projectService,
 			SessionService: newMCPSessionListAdapter(pool),
 			SessionGet:     newMCPSessionGetAdapter(pool),
+			MessageService: newMCPMessageListAdapter(pool),
 		},
 	)
 	mcpTransportLimiter := newMCPTransportRateLimiter(settings, pool)

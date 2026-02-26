@@ -26,6 +26,13 @@ func newMCPSessionGetAdapter(db repository.Queryer) mcp.SessionGetService {
 	return mcpSessionListAdapter{db: db}
 }
 
+func newMCPMessageListAdapter(db repository.Queryer) mcp.MessageListService {
+	if db == nil {
+		return nil
+	}
+	return mcpSessionListAdapter{db: db}
+}
+
 func (adapter mcpSessionListAdapter) ListSessions(
 	ctx context.Context,
 	request mcp.SessionListRequest,
@@ -52,6 +59,22 @@ func (adapter mcpSessionListAdapter) GetSession(
 		repository.ChatSessionGetInput{
 			SessionID:   request.SessionID,
 			ActorUserID: request.ActorUserID,
+		},
+	)
+}
+
+func (adapter mcpSessionListAdapter) ListMessages(
+	ctx context.Context,
+	request mcp.MessageListRequest,
+) ([]models.ChatMessageRecord, error) {
+	return repository.ListChatMessages(
+		ctx,
+		adapter.db,
+		repository.ChatMessageListInput{
+			SessionID:   request.SessionID,
+			ActorUserID: request.ActorUserID,
+			Limit:       request.Limit,
+			Offset:      request.Offset,
 		},
 	)
 }

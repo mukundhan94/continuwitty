@@ -80,6 +80,7 @@
 | CP110 | 2026-02-26 | Completed | Phase 4 MCP chat session-query baseline (`chat.list_sessions`) with direct/`tools/call` parity, optional project filter + paging defaults, runtime session-list request-shape hardening, migrated tests, and >9.5 code-health gate |
 | CP111 | 2026-02-26 | Completed | Phase 4 MCP chat session-get baseline (`chat.get_session`) with direct/`tools/call` parity, required UUID validation, not-found mapping, runtime session-get wiring, migrated tests, and >9.5 code-health gate |
 | CP112 | 2026-02-26 | Completed | Phase 4 MCP chat lifecycle-policy query baseline (`chat.get_lifecycle_policy`) with direct/`tools/call` parity, required UUID validation, session-based policy projection, migrated tests, and >9.5 code-health gate |
+| CP113 | 2026-02-26 | Completed | Phase 4 MCP chat messages-query baseline (`chat.list_messages`) with direct/`tools/call` parity, required session lookup, paging defaults, runtime message-list wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -5078,6 +5079,39 @@
 - CodeScene checks (checkpoint-touched files, all >= 9.5):
   - `internal/mcp/compatibility_dispatch.go`: `9.68`
   - `internal/mcp/compatibility_service_chat_lifecycle_policy_test.go`: `9.68`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP113 - Phase 4 MCP Chat Messages-Query Baseline (`chat.list_messages`)
+
+- Migrated `chat.list_messages` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"messages": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented session-scoped message-query behavior:
+  - required `session_id` UUID validation with existing session visibility checks
+  - paging defaults (`limit=200`, `offset=0`)
+  - invalid paging values return `-32602` invalid params.
+- Added runtime message-list adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_list_adapter.go`
+  - `cmd/api/main.go` passes message-list dependency to compatibility MCP service.
+- Refactored compatibility dispatch internals to preserve code-health constraints:
+  - session-derived dispatch helper extraction
+  - shared paging parser
+  - simplified integer parameter parsing.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_messages_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_messages_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

@@ -22,6 +22,8 @@ const (
 	defaultUserProjectsOffset = 0
 	defaultChatSessionsLimit  = 50
 	defaultChatSessionsOffset = 0
+	defaultChatMessagesLimit  = 200
+	defaultChatMessagesOffset = 0
 )
 
 type toolDispatchError struct {
@@ -61,6 +63,14 @@ var implementedToolHandlers = map[string]implementedToolHandler{
 		params map[string]any,
 	) (map[string]any, bool, *toolDispatchError) {
 		return service.dispatchChatGetLifecyclePolicyTool(ctx, actor, params)
+	},
+	"chat.list_messages": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchChatListMessagesTool(ctx, actor, params)
 	},
 	"user.get_profile": func(
 		_ *CompatibilityService,
@@ -130,11 +140,14 @@ func (service *CompatibilityService) dispatchChatGetSessionTool(
 	actor Actor,
 	params map[string]any,
 ) (map[string]any, bool, *toolDispatchError) {
-	session, handled, dispatchErr := service.lookupChatSession(ctx, actor, params)
-	if dispatchErr != nil || !handled {
-		return nil, handled, dispatchErr
-	}
-	return map[string]any{"session": *session}, true, nil
+	return service.dispatchSessionDerivedTool(
+		ctx,
+		actor,
+		params,
+		func(session models.ChatSessionRecord) map[string]any {
+			return map[string]any{"session": session}
+		},
+	)
 }
 
 func (service *CompatibilityService) dispatchChatGetLifecyclePolicyTool(
@@ -142,13 +155,49 @@ func (service *CompatibilityService) dispatchChatGetLifecyclePolicyTool(
 	actor Actor,
 	params map[string]any,
 ) (map[string]any, bool, *toolDispatchError) {
+	return service.dispatchSessionDerivedTool(
+		ctx,
+		actor,
+		params,
+		func(session models.ChatSessionRecord) map[string]any {
+			return map[string]any{"lifecycle_policy": lifecyclePolicyPayload(session)}
+		},
+	)
+}
+
+func (service *CompatibilityService) dispatchChatListMessagesTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.messageService == nil {
+		return nil, false, nil
+	}
 	session, handled, dispatchErr := service.lookupChatSession(ctx, actor, params)
 	if dispatchErr != nil || !handled {
 		return nil, handled, dispatchErr
 	}
-	return map[string]any{
-		"lifecycle_policy": lifecyclePolicyPayload(*session),
-	}, true, nil
+	paging, pagingErr := parsePagingParams(
+		params,
+		defaultChatMessagesLimit,
+		defaultChatMessagesOffset,
+	)
+	if pagingErr != nil {
+		return nil, true, pagingErr
+	}
+	messages, err := service.messageService.ListMessages(
+		ctx,
+		MessageListRequest{
+			ActorUserID: actor.UserID,
+			SessionID:   session.SessionID,
+			Limit:       paging.limit,
+			Offset:      paging.offset,
+		},
+	)
+	if err != nil {
+		return nil, true, internalToolDispatchError()
+	}
+	return map[string]any{"messages": messages}, true, nil
 }
 
 func (service *CompatibilityService) lookupChatSession(
@@ -177,6 +226,19 @@ func (service *CompatibilityService) lookupChatSession(
 		return nil, true, invalidParamsWithStatus(404, "Chat session not found")
 	}
 	return session, true, nil
+}
+
+func (service *CompatibilityService) dispatchSessionDerivedTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+	buildPayload func(models.ChatSessionRecord) map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	session, handled, dispatchErr := service.lookupChatSession(ctx, actor, params)
+	if dispatchErr != nil || !handled {
+		return nil, handled, dispatchErr
+	}
+	return buildPayload(*session), true, nil
 }
 
 func lifecyclePolicyPayload(session models.ChatSessionRecord) map[string]any {
@@ -222,21 +284,21 @@ func (service *CompatibilityService) dispatchChatListSessionsTool(
 	if service.sessionService == nil {
 		return nil, false, nil
 	}
-	limit, ok := optionalIntParam(params, "limit", defaultChatSessionsLimit)
-	if !ok {
-		return nil, true, invalidParamError("limit")
-	}
-	offset, ok := optionalIntParam(params, "offset", defaultChatSessionsOffset)
-	if !ok {
-		return nil, true, invalidParamError("offset")
+	paging, pagingErr := parsePagingParams(
+		params,
+		defaultChatSessionsLimit,
+		defaultChatSessionsOffset,
+	)
+	if pagingErr != nil {
+		return nil, true, pagingErr
 	}
 	sessions, err := service.sessionService.ListSessions(
 		ctx,
 		SessionListRequest{
 			ActorUserID: actor.UserID,
 			ProjectID:   optionalProjectIDParam(params, "project_id"),
-			Limit:       limit,
-			Offset:      offset,
+			Limit:       paging.limit,
+			Offset:      paging.offset,
 		},
 	)
 	if err != nil {
@@ -499,22 +561,33 @@ func optionalBoolParam(params map[string]any, key string, defaultValue bool) (bo
 	}
 }
 
+type pagingParams struct {
+	limit  int
+	offset int
+}
+
+func parsePagingParams(
+	params map[string]any,
+	defaultLimit int,
+	defaultOffset int,
+) (pagingParams, *toolDispatchError) {
+	limit, ok := optionalIntParam(params, "limit", defaultLimit)
+	if !ok {
+		return pagingParams{}, invalidParamError("limit")
+	}
+	offset, ok := optionalIntParam(params, "offset", defaultOffset)
+	if !ok {
+		return pagingParams{}, invalidParamError("offset")
+	}
+	return pagingParams{limit: limit, offset: offset}, nil
+}
+
 func optionalIntParam(params map[string]any, key string, defaultValue int) (int, bool) {
 	rawValue, ok := optionalParamValue(params, key)
 	if !ok {
 		return defaultValue, true
 	}
 	switch value := rawValue.(type) {
-	case int:
-		return value, true
-	case int8:
-		return int(value), true
-	case int16:
-		return int(value), true
-	case int32:
-		return int(value), true
-	case int64:
-		return int(value), true
 	case float64:
 		intValue := int(value)
 		if float64(intValue) != value {
@@ -527,15 +600,17 @@ func optionalIntParam(params map[string]any, key string, defaultValue int) (int,
 			return 0, false
 		}
 		return intValue, true
-	case string:
-		intValue, err := strconv.Atoi(strings.TrimSpace(value))
-		if err != nil {
-			return 0, false
-		}
-		return intValue, true
 	default:
+		return parseIntValue(fmt.Sprint(rawValue))
+	}
+}
+
+func parseIntValue(raw string) (int, bool) {
+	intValue, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
 		return 0, false
 	}
+	return intValue, true
 }
 
 func optionalParamValue(params map[string]any, key string) (any, bool) {
