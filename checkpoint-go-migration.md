@@ -92,6 +92,7 @@
 | CP122 | 2026-02-26 | Completed | Phase 4 MCP chat create-session baseline (`chat.create_session`) with direct/`tools/call` parity, required project/title validation, runtime session-create wiring, migrated tests, and >9.5 code-health gate |
 | CP123 | 2026-02-26 | Completed | Phase 4 MCP chat lifecycle-policy update baseline (`chat.update_lifecycle_policy`) with direct/`tools/call` parity, required session validation, partial field updates, runtime update wiring, migrated tests, and >9.5 code-health gate |
 | CP124 | 2026-02-26 | Completed | Phase 4 MCP chat continue-session baseline (`chat.continue_session`) with direct/`tools/call` parity, required session validation, optional title passthrough, runtime continuation wiring, migrated tests, and >9.5 code-health gate |
+| CP125 | 2026-02-26 | Completed | Phase 4 MCP chat delete-session baseline (`chat.delete_session`) with direct/`tools/call` parity, required session validation, optional delete controls, runtime memory-admin wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -2901,6 +2902,42 @@
   - `internal/mcp/compatibility_dispatch_chat_primary_handlers.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_chat_continue_session_support.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_continue_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP125 - Phase 4 MCP Chat Delete-Session Baseline (`chat.delete_session`)
+
+- Migrated `chat.delete_session` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"result": {"session_id": ..., "deleted": true, "linked_engrams_deleted": ...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented delete-session parameter behavior parity:
+  - required `session_id` UUID
+  - optional `delete_linked_engrams` (default `false`)
+  - optional `reason` string
+  - invalid values return `-32602` invalid params.
+- Implemented delete-session result/error parity:
+  - successful deletes return session delete result payload
+  - missing session returns `-32602` with `status_code=404` and `detail="Session not found"`
+  - service failures map to `-32603`.
+- Added runtime session-delete adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_delete_adapter.go`
+  - `cmd/api/main.go` passes session-delete dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_delete_session_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_delete_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_lifecycle_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_delete_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_delete_session_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

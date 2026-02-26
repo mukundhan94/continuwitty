@@ -86,8 +86,9 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	oauthRegistrationService := oauth.NewRegistrationService(pool)
 	oauthAuthorizationService := oauth.NewAuthorizationService(pool)
 	oauthTokenService := oauth.NewTokenService(pool)
+	memoryAdminService := admin.NewService(pool, settings.EmbeddingDim, newAdminProjectResolver(projectService))
 	mcpTokenService := mcptokens.NewService(pool)
-	mcpService := newMCPCompatibilityService(settings, pool, projectService)
+	mcpService := newMCPCompatibilityService(settings, pool, projectService, memoryAdminService)
 	mcpTransportLimiter := newMCPTransportRateLimiter(settings, pool)
 	mcpActorResolver := mcp.NewActorResolver(
 		settings,
@@ -103,7 +104,6 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	)
 	loginAttemptGuard := newLoginAttemptGuard(settings, pool)
 	auditLogger := newSessionAuditLogger(settings)
-	memoryAdminService := admin.NewService(pool, settings.EmbeddingDim, newAdminProjectResolver(projectService))
 	exportService := internalexport.NewService(pool, projectService, memoryAdminService, settings.EmbeddingDim)
 
 	routerDependencies := internalapi.RouterDependencies{
@@ -145,6 +145,7 @@ func newMCPCompatibilityService(
 	settings config.Settings,
 	pool *pgxpool.Pool,
 	projectService *projects.Service,
+	memoryAdminService *admin.Service,
 ) *mcp.CompatibilityService {
 	return mcp.NewCompatibilityServiceWithDependencies(
 		settings.AppSemanticVersion,
@@ -154,6 +155,7 @@ func newMCPCompatibilityService(
 			SessionGet:             newMCPSessionGetAdapter(pool),
 			SessionCreate:          newMCPSessionCreateAdapter(pool),
 			SessionContinue:        newMCPSessionContinueAdapter(pool),
+			SessionDelete:          newMCPSessionDeleteAdapter(memoryAdminService),
 			LifecyclePolicyUpdate:  newMCPLifecyclePolicyUpdateAdapter(pool),
 			MessageService:         newMCPMessageListAdapter(pool),
 			TimelineService:        newMCPTimelineListAdapter(pool),

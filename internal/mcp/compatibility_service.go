@@ -72,6 +72,14 @@ type SessionContinueService interface {
 	) (*models.ContinueSessionResponse, error)
 }
 
+// SessionDeleteService captures session-delete behavior used by MCP compatibility chat dispatch.
+type SessionDeleteService interface {
+	DeleteSession(
+		ctx context.Context,
+		request SessionDeleteRequest,
+	) (*SessionDeleteResponse, error)
+}
+
 // LifecyclePolicyUpdateService captures lifecycle-policy updates used by MCP compatibility chat dispatch.
 type LifecyclePolicyUpdateService interface {
 	UpdateLifecyclePolicy(
@@ -173,6 +181,21 @@ type SessionContinueRequest struct {
 	Payload     models.ContinueSessionRequest
 }
 
+// SessionDeleteRequest captures compatibility-level delete-session inputs.
+type SessionDeleteRequest struct {
+	ActorUserID         uuid.UUID
+	SessionID           uuid.UUID
+	DeleteLinkedEngrams bool
+	Reason              *string
+}
+
+// SessionDeleteResponse captures delete-session outputs.
+type SessionDeleteResponse struct {
+	SessionID            uuid.UUID `json:"session_id"`
+	Deleted              bool      `json:"deleted"`
+	LinkedEngramsDeleted int       `json:"linked_engrams_deleted"`
+}
+
 // SessionLifecyclePolicyUpdateRequest captures compatibility-level lifecycle update inputs.
 type SessionLifecyclePolicyUpdateRequest struct {
 	ActorUserID             uuid.UUID
@@ -242,6 +265,7 @@ type CompatibilityServiceDependencies struct {
 	SessionGet             SessionGetService
 	SessionCreate          SessionCreateService
 	SessionContinue        SessionContinueService
+	SessionDelete          SessionDeleteService
 	LifecyclePolicyUpdate  LifecyclePolicyUpdateService
 	MessageService         MessageListService
 	TimelineService        TimelineListService
@@ -262,6 +286,7 @@ type CompatibilityService struct {
 	sessionGet             SessionGetService
 	sessionCreate          SessionCreateService
 	sessionContinue        SessionContinueService
+	sessionDelete          SessionDeleteService
 	lifecyclePolicyUpdate  LifecyclePolicyUpdateService
 	messageService         MessageListService
 	timelineService        TimelineListService
@@ -298,6 +323,7 @@ func NewCompatibilityServiceWithDependencies(
 		sessionGet:             dependencies.SessionGet,
 		sessionCreate:          dependencies.SessionCreate,
 		sessionContinue:        dependencies.SessionContinue,
+		sessionDelete:          dependencies.SessionDelete,
 		lifecyclePolicyUpdate:  dependencies.LifecyclePolicyUpdate,
 		messageService:         dependencies.MessageService,
 		timelineService:        dependencies.TimelineService,
