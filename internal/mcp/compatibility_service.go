@@ -64,6 +64,14 @@ type SessionCreateService interface {
 	) (*models.ChatSessionRecord, error)
 }
 
+// LifecyclePolicyUpdateService captures lifecycle-policy updates used by MCP compatibility chat dispatch.
+type LifecyclePolicyUpdateService interface {
+	UpdateLifecyclePolicy(
+		ctx context.Context,
+		request SessionLifecyclePolicyUpdateRequest,
+	) (*models.ChatSessionRecord, error)
+}
+
 // MessageListService captures message listing behavior used by MCP compatibility chat dispatch.
 type MessageListService interface {
 	ListMessages(
@@ -150,6 +158,18 @@ type SessionCreateRequest struct {
 	Payload     models.ChatSessionCreateRequest
 }
 
+// SessionLifecyclePolicyUpdateRequest captures compatibility-level lifecycle update inputs.
+type SessionLifecyclePolicyUpdateRequest struct {
+	ActorUserID             uuid.UUID
+	SessionID               uuid.UUID
+	AutosaveEnabled         *bool
+	AutosaveStrategy        *models.ChatAutosaveStrategy
+	AutosaveIntervalMinutes *int
+	AutosaveMinMessages     *int
+	RetentionDays           *int
+	RetentionMaxSnapshots   *int
+}
+
 // SessionGetRequest captures compatibility-level session lookup inputs.
 type SessionGetRequest struct {
 	ActorUserID uuid.UUID
@@ -206,6 +226,7 @@ type CompatibilityServiceDependencies struct {
 	SessionService         SessionListService
 	SessionGet             SessionGetService
 	SessionCreate          SessionCreateService
+	LifecyclePolicyUpdate  LifecyclePolicyUpdateService
 	MessageService         MessageListService
 	TimelineService        TimelineListService
 	PinnedEngramService    PinnedEngramListService
@@ -224,6 +245,7 @@ type CompatibilityService struct {
 	sessionService         SessionListService
 	sessionGet             SessionGetService
 	sessionCreate          SessionCreateService
+	lifecyclePolicyUpdate  LifecyclePolicyUpdateService
 	messageService         MessageListService
 	timelineService        TimelineListService
 	pinnedEngramService    PinnedEngramListService
@@ -258,6 +280,7 @@ func NewCompatibilityServiceWithDependencies(
 		sessionService:         dependencies.SessionService,
 		sessionGet:             dependencies.SessionGet,
 		sessionCreate:          dependencies.SessionCreate,
+		lifecyclePolicyUpdate:  dependencies.LifecyclePolicyUpdate,
 		messageService:         dependencies.MessageService,
 		timelineService:        dependencies.TimelineService,
 		pinnedEngramService:    dependencies.PinnedEngramService,

@@ -90,6 +90,7 @@
 | CP120 | 2026-02-26 | Completed | Phase 4 MCP chat unpin-document mutation baseline (`chat.unpin_document`) with direct/`tools/call` parity, runtime unpin-document adapter wiring, migrated tests, and >9.5 code-health gate |
 | CP121 | 2026-02-26 | Completed | Phase 4 MCP chat project-document query baseline (`chat.list_project_documents`) with direct/`tools/call` parity, paging defaults, runtime document-list wiring, migrated tests, and >9.5 code-health gate |
 | CP122 | 2026-02-26 | Completed | Phase 4 MCP chat create-session baseline (`chat.create_session`) with direct/`tools/call` parity, required project/title validation, runtime session-create wiring, migrated tests, and >9.5 code-health gate |
+| CP123 | 2026-02-26 | Completed | Phase 4 MCP chat lifecycle-policy update baseline (`chat.update_lifecycle_policy`) with direct/`tools/call` parity, required session validation, partial field updates, runtime update wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -2830,6 +2831,40 @@
   - `internal/mcp/compatibility_dispatch_chat_create_session_support.go`: `9.68`
   - `internal/mcp/compatibility_service_chat_create_session_test.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_create_session_support_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP123 - Phase 4 MCP Chat Lifecycle-Policy Update Baseline (`chat.update_lifecycle_policy`)
+
+- Migrated `chat.update_lifecycle_policy` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"lifecycle_policy": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented lifecycle-update parameter behavior parity:
+  - required `session_id` UUID
+  - optional partial lifecycle update fields (`autosave_*`, `retention_*`) with strict type validation
+  - invalid values return `-32602` invalid params.
+- Implemented lifecycle-update result/error parity:
+  - empty update payload returns current policy snapshot
+  - missing session returns `-32602` with `status_code=404` and `detail="Chat session not found"`
+  - service failures map to `-32603`.
+- Added runtime lifecycle-policy update adapter wiring in Go API runtime:
+  - `cmd/api/mcp_lifecycle_policy_update_adapter.go`
+  - `cmd/api/main.go` passes lifecycle-policy-update dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_lifecycle_policy_update_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_lifecycle_policy_update_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_lifecycle_policy_update_support.go`: `9.68`
+  - `internal/mcp/compatibility_service_chat_lifecycle_policy_update_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
