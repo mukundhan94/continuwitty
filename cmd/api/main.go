@@ -97,6 +97,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 			TimelineService:       newMCPTimelineListAdapter(pool),
 			PinnedEngramService:   newMCPPinnedEngramListAdapter(pool),
 			PinnedDocumentService: newMCPPinnedDocumentListAdapter(pool),
+			PinEngramService:      newMCPPinEngramAdapter(pool),
 		},
 	)
 	mcpTransportLimiter := newMCPTransportRateLimiter(settings, pool)

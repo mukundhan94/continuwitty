@@ -88,6 +88,14 @@ type PinnedDocumentListService interface {
 	) ([]models.PinnedDocumentRecord, error)
 }
 
+// PinEngramService captures engram pinning behavior used by MCP compatibility chat dispatch.
+type PinEngramService interface {
+	PinEngram(
+		ctx context.Context,
+		request SessionPinEngramRequest,
+	) (*models.PinnedEngramRecord, error)
+}
+
 // SessionListRequest captures compatibility-level session list inputs.
 type SessionListRequest struct {
 	ActorUserID uuid.UUID
@@ -124,6 +132,13 @@ type SessionScopedRequest struct {
 	SessionID   uuid.UUID
 }
 
+// SessionPinEngramRequest captures compatibility-level pin-engram inputs.
+type SessionPinEngramRequest struct {
+	ActorUserID uuid.UUID
+	SessionID   uuid.UUID
+	EngramID    uuid.UUID
+}
+
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
 	ProjectService        ProjectListService
@@ -133,6 +148,7 @@ type CompatibilityServiceDependencies struct {
 	TimelineService       TimelineListService
 	PinnedEngramService   PinnedEngramListService
 	PinnedDocumentService PinnedDocumentListService
+	PinEngramService      PinEngramService
 }
 
 // CompatibilityService provides baseline MCP interop behavior while the full tool catalog migrates.
@@ -145,6 +161,7 @@ type CompatibilityService struct {
 	timelineService       TimelineListService
 	pinnedEngramService   PinnedEngramListService
 	pinnedDocumentService PinnedDocumentListService
+	pinEngramService      PinEngramService
 }
 
 // NewCompatibilityService builds a compatibility MCP service with stable initialize/tool-list behavior.
@@ -173,6 +190,7 @@ func NewCompatibilityServiceWithDependencies(
 		timelineService:       dependencies.TimelineService,
 		pinnedEngramService:   dependencies.PinnedEngramService,
 		pinnedDocumentService: dependencies.PinnedDocumentService,
+		pinEngramService:      dependencies.PinEngramService,
 	}
 }
 

@@ -84,6 +84,7 @@
 | CP114 | 2026-02-26 | Completed | Phase 4 MCP chat timeline-query baseline (`chat.list_timeline`) with direct/`tools/call` parity, required session lookup, timeline event projection wiring, migrated tests, and >9.5 code-health gate |
 | CP115 | 2026-02-26 | Completed | Phase 4 MCP chat pinned-engrams query baseline (`chat.list_pinned_engrams`) with direct/`tools/call` parity, required session lookup, runtime pinned-engram wiring, migrated tests, and >9.5 code-health gate |
 | CP116 | 2026-02-26 | Completed | Phase 4 MCP chat pinned-documents query baseline (`chat.list_pinned_documents`) with direct/`tools/call` parity, required session lookup, runtime pinned-document wiring, migrated tests, and >9.5 code-health gate |
+| CP117 | 2026-02-26 | Completed | Phase 4 MCP chat pin-engram mutation baseline (`chat.pin_engram` / `engram.pin_to_session`) with direct/`tools/call` parity, runtime pin adapter wiring, dispatch modularization for >9.5 code-health, migrated tests, and safeguard pass |
 
 ## Checkpoint Details
 
@@ -2659,6 +2660,49 @@
 - CodeScene checks:
   - `internal/repository/engram_write_test.go` score improved from `9.26` -> `10.0`
   - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP117 - Phase 4 MCP Chat Pin-Engram Mutation Baseline (`chat.pin_engram` / `engram.pin_to_session`)
+
+- Migrated write-path pin tool dispatch into Go compatibility mode:
+  - canonical method: `chat.pin_engram`
+  - direct alias parity: `engram.pin_to_session`
+  - `tools/call` alias parity: `engram_pin_to_session`.
+- Implemented required mutation parameter behavior parity:
+  - required `session_id` UUID
+  - required `engram_id` UUID
+  - missing/invalid values return `-32602` invalid params.
+- Implemented mutation result/error parity:
+  - success payload returns `{"pinned": {...}}`
+  - missing/inaccessible target returns `-32602` with `status_code=404` and `detail="Engram not found or session inaccessible"`.
+- Added runtime pin mutation adapter wiring in Go API runtime:
+  - `cmd/api/mcp_pin_engram_adapter.go`
+  - `cmd/api/main.go` passes pin-engram dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_pin_engram_test.go`.
+- Refactored MCP dispatch for code-health compliance while preserving behavior:
+  - split dispatch helpers into focused chat registration/support files
+  - preserved full tool-map behavior with table-driven handler registration.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_pin_engram_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_collection_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_mutation_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_lookup.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_collection_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_pin_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_pin_engram_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
