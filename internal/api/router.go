@@ -24,6 +24,7 @@ type RouterDependencies struct {
 	IngestionService   IngestionService
 	IngestionOptions   IngestionRouteOptions
 	OAuthRegistration  OAuthRegistrationRouteService
+	OAuthAuthorization OAuthAuthorizationRouteService
 	ChatRouter         chi.Router
 }
 
@@ -34,10 +35,19 @@ func NewRouterWithDependencies(settings config.Settings, dependencies RouterDepe
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 
+	mountHealthRoute(router)
+	mountVersionRoute(router, settings)
+	mountDependencyRoutes(router, settings, dependencies)
+	return router
+}
+
+func mountHealthRoute(router chi.Router) {
 	router.Get("/healthz", func(writer http.ResponseWriter, _ *http.Request) {
 		writeJSON(writer, http.StatusOK, map[string]string{"status": "ok"})
 	})
+}
 
+func mountVersionRoute(router chi.Router, settings config.Settings) {
 	router.Route("/api/v1", func(versioned chi.Router) {
 		versioned.Get("/version", func(writer http.ResponseWriter, _ *http.Request) {
 			writeJSON(writer, http.StatusOK, map[string]string{
@@ -47,28 +57,61 @@ func NewRouterWithDependencies(settings config.Settings, dependencies RouterDepe
 			})
 		})
 	})
-	if dependencies.MemoryAdminService != nil && dependencies.RequireAdminActor != nil {
-		MountMemoryAdminRoutes(router, dependencies.MemoryAdminService, dependencies.RequireAdminActor)
+}
+
+func mountDependencyRoutes(router chi.Router, settings config.Settings, dependencies RouterDependencies) {
+	mountMemoryAdminDependencyRoutes(router, dependencies)
+	mountSessionDependencyRoutes(router, dependencies)
+	mountOAuthDependencyRoutes(router, settings, dependencies)
+	mountProjectDependencyRoutes(router, dependencies)
+	mountIngestionDependencyRoutes(router, dependencies)
+	mountChatDependencyRoutes(router, dependencies)
+}
+
+func mountMemoryAdminDependencyRoutes(router chi.Router, dependencies RouterDependencies) {
+	if dependencies.MemoryAdminService == nil || dependencies.RequireAdminActor == nil {
+		return
 	}
-	if dependencies.SessionAuth.SessionManager != nil {
-		MountSessionAuthRoutes(router, dependencies.SessionAuth)
-		MountSessionUIRoutes(router, dependencies.SessionAuth)
+	MountMemoryAdminRoutes(router, dependencies.MemoryAdminService, dependencies.RequireAdminActor)
+}
+
+func mountSessionDependencyRoutes(router chi.Router, dependencies RouterDependencies) {
+	if dependencies.SessionAuth.SessionManager == nil {
+		return
 	}
+	MountSessionAuthRoutes(router, dependencies.SessionAuth)
+	MountSessionUIRoutes(router, dependencies.SessionAuth)
+}
+
+func mountOAuthDependencyRoutes(router chi.Router, settings config.Settings, dependencies RouterDependencies) {
 	if dependencies.OAuthRegistration != nil {
 		MountOAuthRoutes(router, settings, dependencies.OAuthRegistration)
 	}
-	if dependencies.ProjectsService != nil {
-		MountProjectRoutes(router, dependencies.ProjectsService)
+	if dependencies.OAuthAuthorization != nil {
+		MountOAuthAuthorizationRoutes(router, settings, dependencies.OAuthAuthorization)
 	}
-	if dependencies.IngestionService != nil {
-		MountIngestionRoutes(router, dependencies.IngestionService, dependencies.IngestionOptions)
-	}
-	if dependencies.ChatRouter != nil {
-		router.Handle("/api/v1/chat", dependencies.ChatRouter)
-		router.Handle("/api/v1/chat/*", dependencies.ChatRouter)
-	}
+}
 
-	return router
+func mountProjectDependencyRoutes(router chi.Router, dependencies RouterDependencies) {
+	if dependencies.ProjectsService == nil {
+		return
+	}
+	MountProjectRoutes(router, dependencies.ProjectsService)
+}
+
+func mountIngestionDependencyRoutes(router chi.Router, dependencies RouterDependencies) {
+	if dependencies.IngestionService == nil {
+		return
+	}
+	MountIngestionRoutes(router, dependencies.IngestionService, dependencies.IngestionOptions)
+}
+
+func mountChatDependencyRoutes(router chi.Router, dependencies RouterDependencies) {
+	if dependencies.ChatRouter == nil {
+		return
+	}
+	router.Handle("/api/v1/chat", dependencies.ChatRouter)
+	router.Handle("/api/v1/chat/*", dependencies.ChatRouter)
 }
 
 func writeJSON(writer http.ResponseWriter, statusCode int, body any) {

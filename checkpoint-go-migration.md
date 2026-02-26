@@ -58,6 +58,7 @@
 | CP88 | 2026-02-26 | Completed | Phase 4 ingestion API baseline (`/api/v1/ingestion/text`, `/documents`, `/query`, `/query/blended`) with runtime adapter wiring, migrated route tests, and >9.5 code-health gate |
 | CP89 | 2026-02-26 | Completed | Phase 4 ingestion file-upload API baseline (`POST /api/v1/ingestion/file`) with multipart validation/options wiring, migrated route tests, and >9.5 code-health gate |
 | CP90 | 2026-02-26 | Completed | Phase 4 OAuth metadata + registration route baseline (`/.well-known/*` + `POST /oauth/register`) with runtime wiring, migrated route tests, and >9.5 code-health gate |
+| CP91 | 2026-02-26 | Completed | Phase 4 OAuth authorization route baseline (`GET /oauth/authorize`) with runtime wiring, migrated route/service tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4187,6 +4188,62 @@
   - `internal/api/oauth_api_test.go`: `10.0`
   - `internal/api/router.go`: `10.0`
   - `internal/api/router_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP91 - Phase 4 OAuth Authorization Route Baseline (`internal/api/oauth_authorize_api.go`)
+
+- Added OAuth authorization route module:
+  - new file: `internal/api/oauth_authorize_api.go`
+  - mounted endpoint:
+    - `GET /oauth/authorize`
+  - includes:
+    - OAuth enabled/disabled gating
+    - required query validation for `response_type`, `client_id`, and `redirect_uri`
+    - request decoding for scope/state/PKCE/resource values
+    - redirect vs OAuth error mapping from authorization service outputs.
+- Added OAuth authorization service layer:
+  - new files:
+    - `internal/oauth/authorization.go`
+    - `internal/oauth/authorization_test.go`
+  - behavior includes:
+    - OAuth client + redirect validation
+    - public-client PKCE enforcement
+    - login redirect fallback for unauthenticated actor context
+    - authorization code creation + hashed persistence through repository
+    - success/error redirect URL composition parity helpers.
+- Updated top-level router/runtime wiring:
+  - `internal/api/router.go`
+  - `internal/api/router_test.go`
+  - `cmd/api/main.go`
+  - new dependency: `RouterDependencies.OAuthAuthorization`
+  - runtime now injects `oauth.NewAuthorizationService(pool)`.
+- Added migrated authorization route tests:
+  - new file: `internal/api/oauth_authorize_api_test.go`
+  - route registration, redirect path, OAuth error mapping, required-field checks, and request-context forwarding.
+- Executed tests one-by-one:
+  - `TestHandleAuthorizeReturnsJSONErrorWhenClientMissing`
+  - `TestHandleAuthorizeRedirectsOnUnsupportedResponseType`
+  - `TestHandleAuthorizeRedirectsToLoginWhenSessionMissing`
+  - `TestHandleAuthorizeCreatesCodeAndReturnsRedirect`
+  - `TestMountOAuthAuthorizationRoutesRegistersEndpoint`
+  - `TestOAuthAuthorizeRouteHandlesServiceResult`
+  - `TestOAuthAuthorizeRouteRejectsMissingRequiredFields`
+  - `TestOAuthAuthorizeRouteReturnsNotFoundWhenDisabled`
+  - `TestOAuthAuthorizeRouteBuildsRequestContext`
+  - `TestOAuthAuthorizationRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `internal/api/oauth_authorize_api.go`: `10.0`
+  - `internal/api/oauth_authorize_api_test.go`: `9.92`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+  - `internal/oauth/authorization.go`: `10.0`
+  - `internal/oauth/authorization_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

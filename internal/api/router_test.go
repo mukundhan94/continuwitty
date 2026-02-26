@@ -386,6 +386,47 @@ func TestOAuthRoutesMountedWithDependencies(t *testing.T) {
 	}
 }
 
+func TestOAuthAuthorizationRoutesMountedWithDependencies(t *testing.T) {
+	settings := config.Settings{
+		AppSemanticVersion: "1.2.3",
+		AppCommitSHA:       "abc1234",
+		OAuthEnabled:       true,
+	}
+	serviceCalled := false
+	router := NewRouterWithDependencies(
+		settings,
+		RouterDependencies{
+			OAuthAuthorization: fakeOAuthAuthorizationRouteService{
+				handleAuthorizeFn: func(
+					_ context.Context,
+					_ config.Settings,
+					_ internaloauth.AuthorizationRequest,
+				) (internaloauth.AuthorizationResult, error) {
+					serviceCalled = true
+					return internaloauth.AuthorizationResult{
+						RedirectURL: "https://client.example/callback?code=abc123",
+					}, nil
+				},
+			},
+		},
+	)
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/oauth/authorize?response_type=code&client_id=client-1&redirect_uri=https://client.example/callback",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("expected status 303, got %d", response.Code)
+	}
+	if !serviceCalled {
+		t.Fatalf("expected oauth authorization service to be called")
+	}
+}
+
 func exerciseActorScopedDependencyRoute(
 	t *testing.T,
 	dependencies RouterDependencies,

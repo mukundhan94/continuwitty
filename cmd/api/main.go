@@ -76,6 +76,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	}
 	projectService := projects.NewService(pool)
 	oauthRegistrationService := oauth.NewRegistrationService(pool)
+	oauthAuthorizationService := oauth.NewAuthorizationService(pool)
 	ingestionService := ingestion.NewService(
 		pool,
 		settings.EmbeddingDim,
@@ -103,8 +104,9 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		IngestionOptions: internalapi.IngestionRouteOptions{
 			MaxMetadataJSONBytes: settings.IngestionMaxMetadataJSONBytes,
 		},
-		OAuthRegistration: oauthRegistrationService,
-		ChatRouter:        buildChatRouter(settings, pool),
+		OAuthRegistration:  oauthRegistrationService,
+		OAuthAuthorization: oauthAuthorizationService,
+		ChatRouter:         buildChatRouter(settings, pool),
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
