@@ -17,7 +17,7 @@ import (
 
 func TestMountMCPRoutesProbeEndpoints(t *testing.T) {
 	router := chi.NewRouter()
-	MountMCPRoutes(router, &fakeMCPRouteService{}, newTestMCPActorResolver())
+	MountMCPRoutes(router, &fakeMCPRouteService{}, newTestMCPActorResolver(), nil)
 
 	getRequest := httptest.NewRequest(http.MethodGet, "/api/v1/mcp/stream", nil)
 	getResponse := httptest.NewRecorder()
@@ -50,7 +50,7 @@ func TestMountMCPRoutesNotificationAccepted(t *testing.T) {
 			notificationCalled = request.Method == "notifications/initialized"
 			return nil
 		},
-	}, newTestMCPActorResolver())
+	}, newTestMCPActorResolver(), nil)
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -87,7 +87,7 @@ func TestMountMCPRoutesJSONResponseMode(t *testing.T) {
 			close(frames)
 			return frames
 		},
-	}, newTestMCPActorResolver())
+	}, newTestMCPActorResolver(), nil)
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -131,7 +131,7 @@ func TestMountMCPRoutesSSEResponseMode(t *testing.T) {
 			close(frames)
 			return frames
 		},
-	}, newTestMCPActorResolver())
+	}, newTestMCPActorResolver(), nil)
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -166,7 +166,7 @@ func TestMountMCPRoutesJSONFallbackFrame(t *testing.T) {
 			close(frames)
 			return frames
 		},
-	}, newTestMCPActorResolver())
+	}, newTestMCPActorResolver(), nil)
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -206,6 +206,7 @@ func TestMountMCPRoutesWritesAuthErrorFromResolver(t *testing.T) {
 				}
 			},
 		},
+		nil,
 	)
 
 	request := httptest.NewRequest(
@@ -234,6 +235,7 @@ func TestMountMCPRoutesResolverFailureDefaultsToInternalError(t *testing.T) {
 				return mcp.ResolvedActor{}, errors.New("resolver failure")
 			},
 		},
+		nil,
 	)
 
 	request := httptest.NewRequest(
@@ -246,6 +248,67 @@ func TestMountMCPRoutesResolverFailureDefaultsToInternalError(t *testing.T) {
 
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status 500, got %d", response.Code)
+	}
+}
+
+func TestMountMCPRoutesWritesRateLimitError(t *testing.T) {
+	router := chi.NewRouter()
+	MountMCPRoutes(
+		router,
+		&fakeMCPRouteService{},
+		newTestMCPActorResolver(),
+		&fakeMCPTransportRateLimiter{
+			consumeFn: func(_ string) (bool, int) {
+				return false, 9
+			},
+		},
+	)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/mcp/stream",
+		strings.NewReader(`{"jsonrpc":"2.0","id":"init","method":"initialize","params":{}}`),
+	)
+	request.RemoteAddr = "10.0.0.8:4343"
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected status 429, got %d", response.Code)
+	}
+	if response.Header().Get("Retry-After") != "9" {
+		t.Fatalf("expected retry-after header 9")
+	}
+	if !strings.Contains(response.Body.String(), "Too many MCP transport requests") {
+		t.Fatalf("expected rate-limit detail in payload")
+	}
+}
+
+func TestTransportRateLimitKeyUsesIPAndAuthorizationFingerprint(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/mcp/stream", nil)
+	request.RemoteAddr = "203.0.113.14:443"
+	request.Header.Set("Authorization", "Bearer secret-token")
+
+	key := transportRateLimitKey(request)
+	if !strings.HasPrefix(key, "203.0.113.14:") {
+		t.Fatalf("expected key prefix with client ip, got %q", key)
+	}
+	parts := strings.Split(key, ":")
+	if len(parts) != 2 {
+		t.Fatalf("expected key to contain two segments, got %q", key)
+	}
+	if len(parts[1]) != 24 {
+		t.Fatalf("expected 24-char auth fingerprint, got %d", len(parts[1]))
+	}
+}
+
+func TestTransportRateLimitKeyAnonymousWhenAuthorizationMissing(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/mcp/stream", nil)
+	request.RemoteAddr = "127.0.0.1:8000"
+
+	key := transportRateLimitKey(request)
+	if key != "127.0.0.1:anonymous" {
+		t.Fatalf("expected anonymous fingerprint key, got %q", key)
 	}
 }
 
@@ -292,4 +355,15 @@ func newTestMCPActorResolver() *fakeMCPActorResolver {
 			}, nil
 		},
 	}
+}
+
+type fakeMCPTransportRateLimiter struct {
+	consumeFn func(key string) (bool, int)
+}
+
+func (limiter *fakeMCPTransportRateLimiter) Consume(key string) (bool, int) {
+	if limiter.consumeFn != nil {
+		return limiter.consumeFn(key)
+	}
+	return true, 0
 }

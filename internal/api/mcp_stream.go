@@ -1,8 +1,12 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -14,8 +18,17 @@ import (
 )
 
 // MountMCPRoutes registers MCP stream transport endpoints.
-func MountMCPRoutes(router chi.Router, service mcp.Service, actorResolver mcp.HTTPActorResolver) {
-	deps := mcpRouteDependencies{service: service, actorResolver: actorResolver}
+func MountMCPRoutes(
+	router chi.Router,
+	service mcp.Service,
+	actorResolver mcp.HTTPActorResolver,
+	transportRateLimiter MCPTransportRateLimiter,
+) {
+	deps := mcpRouteDependencies{
+		service:              service,
+		actorResolver:        actorResolver,
+		transportRateLimiter: transportRateLimiter,
+	}
 	router.Route("/api/v1/mcp", func(mcpRouter chi.Router) {
 		mcpRouter.Get("/stream", deps.handleProbe)
 		mcpRouter.Head("/stream", deps.handleProbeHead)
@@ -23,9 +36,15 @@ func MountMCPRoutes(router chi.Router, service mcp.Service, actorResolver mcp.HT
 	})
 }
 
+// MCPTransportRateLimiter captures request-burst limiting behavior for MCP transport routes.
+type MCPTransportRateLimiter interface {
+	Consume(key string) (bool, int)
+}
+
 type mcpRouteDependencies struct {
-	service       mcp.Service
-	actorResolver mcp.HTTPActorResolver
+	service              mcp.Service
+	actorResolver        mcp.HTTPActorResolver
+	transportRateLimiter MCPTransportRateLimiter
 }
 
 func (dependencies mcpRouteDependencies) handleProbe(writer http.ResponseWriter, _ *http.Request) {
@@ -47,32 +66,59 @@ func (dependencies mcpRouteDependencies) handleStream(writer http.ResponseWriter
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "MCP service is not configured"})
 		return
 	}
+	payload, ok := decodeMCPJSONRPCPayload(writer, request)
+	if !ok {
+		return
+	}
+	if err := dependencies.enforceTransportRateLimit(request); err != nil {
+		writeMCPRouteError(writer, err)
+		return
+	}
+	if payload.IsNotification() {
+		dependencies.handleNotificationStreamRequest(writer, request, payload)
+		return
+	}
+	dependencies.handleCallStreamRequest(writer, request, payload)
+}
 
+func decodeMCPJSONRPCPayload(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (mcp.JSONRPCRequest, bool) {
 	payload := mcp.JSONRPCRequest{}
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
 		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "Invalid payload"})
+		return mcp.JSONRPCRequest{}, false
+	}
+	return payload, true
+}
+
+func (dependencies mcpRouteDependencies) handleNotificationStreamRequest(
+	writer http.ResponseWriter,
+	request *http.Request,
+	payload mcp.JSONRPCRequest,
+) {
+	if _, err := dependencies.resolveActor(request); err != nil {
+		writeMCPRouteError(writer, err)
 		return
 	}
-
-	if payload.IsNotification() {
-		if _, err := dependencies.resolveActor(request); err != nil {
-			writeMCPRouteError(writer, err)
-			return
-		}
-		if err := dependencies.service.HandleNotification(request.Context(), payload); err != nil {
-			writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "Internal server error"})
-			return
-		}
-		writer.WriteHeader(http.StatusAccepted)
+	if err := dependencies.service.HandleNotification(request.Context(), payload); err != nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "Internal server error"})
 		return
 	}
+	writer.WriteHeader(http.StatusAccepted)
+}
 
+func (dependencies mcpRouteDependencies) handleCallStreamRequest(
+	writer http.ResponseWriter,
+	request *http.Request,
+	payload mcp.JSONRPCRequest,
+) {
 	resolvedActor, err := dependencies.resolveActor(request)
 	if err != nil {
 		writeMCPRouteError(writer, err)
 		return
 	}
-
 	frames := dependencies.service.StreamCall(request.Context(), mcp.StreamCallRequest{
 		Request:   payload,
 		Actor:     resolvedActor.Actor,
@@ -90,6 +136,24 @@ func (dependencies mcpRouteDependencies) resolveActor(request *http.Request) (mc
 		return mcp.ResolvedActor{}, errors.New("mcp actor resolver is not configured")
 	}
 	return dependencies.actorResolver.ResolveActor(request)
+}
+
+func (dependencies mcpRouteDependencies) enforceTransportRateLimit(request *http.Request) error {
+	if dependencies.transportRateLimiter == nil {
+		return nil
+	}
+	key := transportRateLimitKey(request)
+	allowed, retrySeconds := dependencies.transportRateLimiter.Consume(key)
+	if allowed {
+		return nil
+	}
+	return &mcpRouteHTTPError{
+		statusCode: http.StatusTooManyRequests,
+		detail:     fmt.Sprintf("Too many MCP transport requests. Retry in %d seconds.", retrySeconds),
+		headers: map[string]string{
+			"Retry-After": strconv.Itoa(retrySeconds),
+		},
+	}
 }
 
 func writeSSEFrames(writer http.ResponseWriter, frames <-chan mcp.Frame) {
@@ -215,15 +279,57 @@ func parseQuality(parameters []string) float64 {
 }
 
 func writeMCPRouteError(writer http.ResponseWriter, err error) {
-	authErr := &mcp.AuthError{}
-	if errors.As(err, &authErr) {
-		for key, value := range authErr.Headers {
-			writer.Header().Set(key, value)
-		}
-		writeJSON(writer, authErr.StatusCode, map[string]string{"detail": authErr.Detail})
+	if writeMCPAuthError(writer, err) {
+		return
+	}
+	if writeMCPHTTPError(writer, err) {
 		return
 	}
 	writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "Internal server error"})
+}
+
+func writeMCPAuthError(writer http.ResponseWriter, err error) bool {
+	authErr := &mcp.AuthError{}
+	if !errors.As(err, &authErr) {
+		return false
+	}
+	writeMCPResponseError(writer, authErr.StatusCode, authErr.Detail, authErr.Headers)
+	return true
+}
+
+func writeMCPHTTPError(writer http.ResponseWriter, err error) bool {
+	routeErr := &mcpRouteHTTPError{}
+	if !errors.As(err, &routeErr) {
+		return false
+	}
+	writeMCPResponseError(writer, routeErr.statusCode, routeErr.detail, routeErr.headers)
+	return true
+}
+
+func writeMCPResponseError(
+	writer http.ResponseWriter,
+	statusCode int,
+	detail string,
+	headers map[string]string,
+) {
+	writeMCPHeaders(writer, headers)
+	writeJSON(writer, statusCode, map[string]string{"detail": detail})
+}
+
+func writeMCPHeaders(writer http.ResponseWriter, headers map[string]string) {
+	for key, value := range headers {
+		writer.Header().Set(key, value)
+	}
+}
+
+type mcpRouteHTTPError struct {
+	statusCode int
+	detail     string
+	headers    map[string]string
+}
+
+func (err *mcpRouteHTTPError) Error() string {
+	return err.detail
 }
 
 func parseAcceptItem(item string) (string, float64, bool) {
@@ -244,4 +350,35 @@ func maxFloat(left float64, right float64) float64 {
 		return right
 	}
 	return left
+}
+
+func transportRateLimitKey(request *http.Request) string {
+	return transportClientIP(request) + ":" + authorizationFingerprint(request)
+}
+
+func transportClientIP(request *http.Request) string {
+	if request == nil {
+		return "unknown"
+	}
+	remoteAddress := strings.TrimSpace(request.RemoteAddr)
+	if remoteAddress == "" {
+		return "unknown"
+	}
+	host, _, err := net.SplitHostPort(remoteAddress)
+	if err == nil {
+		return host
+	}
+	return remoteAddress
+}
+
+func authorizationFingerprint(request *http.Request) string {
+	if request == nil {
+		return "anonymous"
+	}
+	authorization := strings.TrimSpace(request.Header.Get("Authorization"))
+	if authorization == "" {
+		return "anonymous"
+	}
+	digest := sha256.Sum256([]byte(authorization))
+	return hex.EncodeToString(digest[:])[:24]
 }

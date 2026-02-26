@@ -70,6 +70,7 @@
 | CP100 | 2026-02-26 | Completed | Phase 4 export/import API error-mapping hardening (service error -> HTTP status parity) with migrated route tests and >9.5 code-health gate |
 | CP101 | 2026-02-26 | Completed | Phase 4 MCP stream transport baseline (`/api/v1/mcp/stream`) with compatibility service, router/runtime wiring, and >9.5 code-health gate |
 | CP102 | 2026-02-26 | Completed | Phase 4 MCP stream actor-auth baseline (bearer token + session fallback) with router/runtime wiring, migrated tests, and >9.5 code-health gate |
+| CP103 | 2026-02-26 | Completed | Phase 4 MCP stream transport rate-limit baseline (429 + `Retry-After`) with router/runtime wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4745,6 +4746,48 @@
   - `internal/api/router.go`: `10.0`
   - `cmd/api/main.go`: `10.0`
   - `internal/mcp/auth_errors.go`: `Code Health score: None` (constants-only helper file).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP103 - Phase 4 MCP Stream Transport Rate-Limit Baseline (`internal/api/mcp_stream.go`)
+
+- Added MCP transport request rate-limit support to stream routes:
+  - `internal/api/mcp_stream.go`
+  - behavior includes:
+    - rate-limit gate applied on MCP POST stream requests before dispatch
+    - deterministic rate-limit key derivation using client IP + authorization fingerprint
+    - `429` response mapping with:
+      - detail: `Too many MCP transport requests. Retry in N seconds.`
+      - `Retry-After` response header.
+- Added transport limiter abstraction for MCP route dependencies:
+  - `internal/api/mcp_stream.go`
+    - new `MCPTransportRateLimiter` interface (`Consume(key) -> allowed,retrySeconds`).
+  - `internal/api/router.go`
+    - new optional dependency: `RouterDependencies.MCPTransportLimiter`
+    - routed into `MountMCPRoutes(...)`.
+- Updated runtime wiring for distributed MCP transport limiter:
+  - `cmd/api/main.go`
+    - new `newMCPTransportRateLimiter(...)` helper using:
+      - `MCP_TRANSPORT_RATE_LIMIT_*` settings
+      - namespace `mcp_transport`
+      - `rate_limit_state` distributed store (`auth.NewPGXRateLimitStore`).
+- Added/updated migrated tests:
+  - `internal/api/mcp_stream_test.go`
+    - rate-limit response/headers
+    - transport key derivation behavior (ip + authorization fingerprint)
+    - anonymous fingerprint fallback when authorization is missing.
+- Focused/full verification:
+  - `go test ./internal/api ./cmd/api -count=1`
+  - `go test ./internal/mcp -count=1`
+  - `go test ./... -count=1`
+  - all passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/api/mcp_stream.go`: `10.0`
+  - `internal/api/mcp_stream_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

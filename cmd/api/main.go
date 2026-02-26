@@ -88,6 +88,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	oauthTokenService := oauth.NewTokenService(pool)
 	mcpTokenService := mcptokens.NewService(pool)
 	mcpService := mcp.NewCompatibilityService(settings.AppSemanticVersion)
+	mcpTransportLimiter := newMCPTransportRateLimiter(settings, pool)
 	mcpActorResolver := mcp.NewActorResolver(
 		settings,
 		pool,
@@ -124,14 +125,15 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		IngestionOptions: internalapi.IngestionRouteOptions{
 			MaxMetadataJSONBytes: settings.IngestionMaxMetadataJSONBytes,
 		},
-		OAuthRegistration:  oauthRegistrationService,
-		OAuthAuthorization: oauthAuthorizationService,
-		OAuthToken:         oauthTokenService,
-		ChatRouter:         buildChatRouter(settings, pool),
-		AgentWorkflow:      agentWorkflowService,
-		ExportService:      exportService,
-		MCPService:         mcpService,
-		MCPActorResolver:   mcpActorResolver,
+		OAuthRegistration:   oauthRegistrationService,
+		OAuthAuthorization:  oauthAuthorizationService,
+		OAuthToken:          oauthTokenService,
+		ChatRouter:          buildChatRouter(settings, pool),
+		AgentWorkflow:       agentWorkflowService,
+		ExportService:       exportService,
+		MCPService:          mcpService,
+		MCPActorResolver:    mcpActorResolver,
+		MCPTransportLimiter: mcpTransportLimiter,
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
@@ -162,6 +164,17 @@ func newLoginAttemptGuard(settings config.Settings, pool *pgxpool.Pool) *auth.Lo
 	rateLimitStore := auth.NewPGXRateLimitStore(pool)
 	loginAttemptGuard.SetDistributedStore(auth.DefaultLoginAttemptNamespace, rateLimitStore)
 	return loginAttemptGuard
+}
+
+func newMCPTransportRateLimiter(settings config.Settings, pool *pgxpool.Pool) *auth.RequestRateLimiter {
+	limiter := auth.NewRequestRateLimiter(
+		settings.MCPTransportRateLimitMaxRequests,
+		settings.MCPTransportRateLimitWindowSeconds,
+		settings.MCPTransportRateLimitBlockSeconds,
+		"mcp_transport",
+	)
+	limiter.SetDistributedStore(auth.NewPGXRateLimitStore(pool))
+	return limiter
 }
 
 func newSessionAuditLogger(settings config.Settings) *audit.Logger {

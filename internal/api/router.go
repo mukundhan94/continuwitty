@@ -19,20 +19,21 @@ func NewRouter(settings config.Settings) http.Handler {
 
 // RouterDependencies captures optional services required by composed API routes.
 type RouterDependencies struct {
-	MemoryAdminService MemoryAdminService
-	RequireAdminActor  RequireAdminActor
-	SessionAuth        SessionAuthDependencies
-	ProjectsService    ProjectService
-	IngestionService   IngestionService
-	IngestionOptions   IngestionRouteOptions
-	OAuthRegistration  OAuthRegistrationRouteService
-	OAuthAuthorization OAuthAuthorizationRouteService
-	OAuthToken         OAuthTokenRouteService
-	ChatRouter         chi.Router
-	AgentWorkflow      AgentWorkflowRouteService
-	ExportService      export.Service
-	MCPService         mcp.Service
-	MCPActorResolver   mcp.HTTPActorResolver
+	MemoryAdminService  MemoryAdminService
+	RequireAdminActor   RequireAdminActor
+	SessionAuth         SessionAuthDependencies
+	ProjectsService     ProjectService
+	IngestionService    IngestionService
+	IngestionOptions    IngestionRouteOptions
+	OAuthRegistration   OAuthRegistrationRouteService
+	OAuthAuthorization  OAuthAuthorizationRouteService
+	OAuthToken          OAuthTokenRouteService
+	ChatRouter          chi.Router
+	AgentWorkflow       AgentWorkflowRouteService
+	ExportService       export.Service
+	MCPService          mcp.Service
+	MCPActorResolver    mcp.HTTPActorResolver
+	MCPTransportLimiter MCPTransportRateLimiter
 }
 
 // NewRouterWithDependencies builds the API router and mounts dependency-backed routes.
@@ -145,7 +146,12 @@ func mountMCPDependencyRoutes(router chi.Router, dependencies RouterDependencies
 	if dependencies.MCPService == nil || dependencies.MCPActorResolver == nil {
 		return
 	}
-	MountMCPRoutes(router, dependencies.MCPService, dependencies.MCPActorResolver)
+	MountMCPRoutes(
+		router,
+		dependencies.MCPService,
+		dependencies.MCPActorResolver,
+		dependencies.MCPTransportLimiter,
+	)
 }
 
 func writeJSON(writer http.ResponseWriter, statusCode int, body any) {
