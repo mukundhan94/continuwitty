@@ -72,6 +72,14 @@ type TimelineListService interface {
 	) ([]models.ChatTimelineEvent, error)
 }
 
+// PinnedEngramListService captures pinned-engram listing behavior used by MCP compatibility chat dispatch.
+type PinnedEngramListService interface {
+	ListPinnedEngrams(
+		ctx context.Context,
+		request SessionScopedRequest,
+	) ([]models.EngramSummary, error)
+}
+
 // SessionListRequest captures compatibility-level session list inputs.
 type SessionListRequest struct {
 	ActorUserID uuid.UUID
@@ -102,23 +110,31 @@ type TimelineListRequest struct {
 	Offset      int
 }
 
+// SessionScopedRequest captures compatibility-level actor/session identity inputs.
+type SessionScopedRequest struct {
+	ActorUserID uuid.UUID
+	SessionID   uuid.UUID
+}
+
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
-	ProjectService  ProjectListService
-	SessionService  SessionListService
-	SessionGet      SessionGetService
-	MessageService  MessageListService
-	TimelineService TimelineListService
+	ProjectService      ProjectListService
+	SessionService      SessionListService
+	SessionGet          SessionGetService
+	MessageService      MessageListService
+	TimelineService     TimelineListService
+	PinnedEngramService PinnedEngramListService
 }
 
 // CompatibilityService provides baseline MCP interop behavior while the full tool catalog migrates.
 type CompatibilityService struct {
-	serverVersion   string
-	projectService  ProjectListService
-	sessionService  SessionListService
-	sessionGet      SessionGetService
-	messageService  MessageListService
-	timelineService TimelineListService
+	serverVersion       string
+	projectService      ProjectListService
+	sessionService      SessionListService
+	sessionGet          SessionGetService
+	messageService      MessageListService
+	timelineService     TimelineListService
+	pinnedEngramService PinnedEngramListService
 }
 
 // NewCompatibilityService builds a compatibility MCP service with stable initialize/tool-list behavior.
@@ -139,12 +155,13 @@ func NewCompatibilityServiceWithDependencies(
 		trimmed = "0.1.0"
 	}
 	return &CompatibilityService{
-		serverVersion:   trimmed,
-		projectService:  dependencies.ProjectService,
-		sessionService:  dependencies.SessionService,
-		sessionGet:      dependencies.SessionGet,
-		messageService:  dependencies.MessageService,
-		timelineService: dependencies.TimelineService,
+		serverVersion:       trimmed,
+		projectService:      dependencies.ProjectService,
+		sessionService:      dependencies.SessionService,
+		sessionGet:          dependencies.SessionGet,
+		messageService:      dependencies.MessageService,
+		timelineService:     dependencies.TimelineService,
+		pinnedEngramService: dependencies.PinnedEngramService,
 	}
 }
 

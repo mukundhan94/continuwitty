@@ -90,11 +90,12 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	mcpService := mcp.NewCompatibilityServiceWithDependencies(
 		settings.AppSemanticVersion,
 		mcp.CompatibilityServiceDependencies{
-			ProjectService:  projectService,
-			SessionService:  newMCPSessionListAdapter(pool),
-			SessionGet:      newMCPSessionGetAdapter(pool),
-			MessageService:  newMCPMessageListAdapter(pool),
-			TimelineService: newMCPTimelineListAdapter(pool),
+			ProjectService:      projectService,
+			SessionService:      newMCPSessionListAdapter(pool),
+			SessionGet:          newMCPSessionGetAdapter(pool),
+			MessageService:      newMCPMessageListAdapter(pool),
+			TimelineService:     newMCPTimelineListAdapter(pool),
+			PinnedEngramService: newMCPPinnedEngramListAdapter(pool),
 		},
 	)
 	mcpTransportLimiter := newMCPTransportRateLimiter(settings, pool)

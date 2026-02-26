@@ -148,6 +148,35 @@ var implementedToolHandlers = map[string]implementedToolHandler{
 			},
 		)
 	},
+	"chat.list_pinned_engrams": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		if service.pinnedEngramService == nil {
+			return nil, false, nil
+		}
+		return service.dispatchSessionScopedCollectionTool(
+			ctx,
+			actor,
+			params,
+			"pinned_engrams",
+			func(
+				ctx context.Context,
+				actorUserID uuid.UUID,
+				sessionID uuid.UUID,
+			) (any, error) {
+				return service.pinnedEngramService.ListPinnedEngrams(
+					ctx,
+					SessionScopedRequest{
+						ActorUserID: actorUserID,
+						SessionID:   sessionID,
+					},
+				)
+			},
+		)
+	},
 	"user.get_profile": func(
 		_ *CompatibilityService,
 		_ context.Context,
@@ -275,6 +304,28 @@ func (service *CompatibilityService) dispatchSessionCollectionTool(
 		return nil, true, pagingErr
 	}
 	items, err := collect(ctx, actor.UserID, session.SessionID, paging)
+	if err != nil {
+		return nil, true, internalToolDispatchError()
+	}
+	return map[string]any{collectionKey: items}, true, nil
+}
+
+func (service *CompatibilityService) dispatchSessionScopedCollectionTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+	collectionKey string,
+	collect func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+	) (any, error),
+) (map[string]any, bool, *toolDispatchError) {
+	session, handled, dispatchErr := service.lookupChatSession(ctx, actor, params)
+	if dispatchErr != nil || !handled {
+		return nil, handled, dispatchErr
+	}
+	items, err := collect(ctx, actor.UserID, session.SessionID)
 	if err != nil {
 		return nil, true, internalToolDispatchError()
 	}
