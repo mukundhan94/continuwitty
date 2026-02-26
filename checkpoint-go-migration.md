@@ -63,6 +63,7 @@
 | CP93 | 2026-02-26 | Completed | Phase 4 MCP token service baseline (`internal/mcptokens/service.go`) with migrated unit tests and >9.5 code-health gate |
 | CP94 | 2026-02-26 | Completed | Phase 4 MCP token API route baseline (`/api/v1/mcp/tokens` + revoke) with runtime wiring, migrated router/session tests, and >9.5 code-health gate |
 | CP95 | 2026-02-26 | Completed | Phase 3 workflow service baseline (`internal/workflow/agent.go`) with migrated unit tests and >9.5 code-health gate |
+| CP96 | 2026-02-26 | Completed | Phase 4 agent workflow API route baseline (`/api/v1/agent-runs*`) with runtime wiring, migrated route tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4415,6 +4416,52 @@
 - CodeScene checks:
   - `internal/workflow/agent.go`: `10.0`
   - `internal/workflow/agent_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP96 - Phase 4 Agent Workflow API Route Baseline (`internal/api/agent_workflow_api.go`)
+
+- Added agent workflow API routes:
+  - new file: `internal/api/agent_workflow_api.go`
+  - mounted endpoints:
+    - `POST /api/v1/agent-runs`
+    - `GET /api/v1/agent-runs/{thread_id}`
+    - `POST /api/v1/agent-runs/{thread_id}/resume`
+  - behavior includes:
+    - request decoding/defaults for workflow run/resume payloads
+    - validation for required run fields and snapshot interval bounds
+    - thread-not-found handling parity (`404`, `Thread state not found`)
+    - run/get/resume response mapping with workflow state payload.
+- Added route-level tests:
+  - new file: `internal/api/agent_workflow_api_test.go`
+  - covers endpoint registration, validation, not-found/error mapping, and response snapshot copy semantics.
+- Updated top-level router dependency graph:
+  - `internal/api/router.go`
+  - new dependency: `RouterDependencies.AgentWorkflow`.
+- Updated runtime assembly wiring:
+  - `cmd/api/main.go`
+  - runtime now injects `workflow.NewService(...)` and repository-backed engram creator callback for snapshot/persist outputs.
+- Extended router integration tests:
+  - `internal/api/router_test.go`
+  - added `TestAgentWorkflowRoutesMountedWithDependencies`.
+- Executed tests one-by-one:
+  - `TestMountAgentWorkflowRoutesRegistersEndpoints`
+  - `TestAgentWorkflowRoutesValidationErrors`
+  - `TestAgentWorkflowRoutesNotFoundAndErrors`
+  - `TestBuildAgentRunResponseCopiesSnapshotIDs`
+  - `TestAgentWorkflowRoutesMountedWithDependencies`
+- Focused/full verification:
+  - `go test ./internal/api ./internal/workflow ./cmd/api`
+  - `go test ./...`
+  - both passed.
+- CodeScene checks:
+  - `internal/api/agent_workflow_api.go`: `10.0`
+  - `internal/api/agent_workflow_api_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

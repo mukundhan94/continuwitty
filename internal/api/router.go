@@ -27,6 +27,7 @@ type RouterDependencies struct {
 	OAuthAuthorization OAuthAuthorizationRouteService
 	OAuthToken         OAuthTokenRouteService
 	ChatRouter         chi.Router
+	AgentWorkflow      AgentWorkflowRouteService
 }
 
 // NewRouterWithDependencies builds the API router and mounts dependency-backed routes.
@@ -67,6 +68,7 @@ func mountDependencyRoutes(router chi.Router, settings config.Settings, dependen
 	mountProjectDependencyRoutes(router, dependencies)
 	mountIngestionDependencyRoutes(router, dependencies)
 	mountChatDependencyRoutes(router, dependencies)
+	mountAgentWorkflowDependencyRoutes(router, dependencies)
 }
 
 func mountMemoryAdminDependencyRoutes(router chi.Router, dependencies RouterDependencies) {
@@ -116,6 +118,13 @@ func mountChatDependencyRoutes(router chi.Router, dependencies RouterDependencie
 	}
 	router.Handle("/api/v1/chat", dependencies.ChatRouter)
 	router.Handle("/api/v1/chat/*", dependencies.ChatRouter)
+}
+
+func mountAgentWorkflowDependencyRoutes(router chi.Router, dependencies RouterDependencies) {
+	if dependencies.AgentWorkflow == nil {
+		return
+	}
+	MountAgentWorkflowRoutes(router, dependencies.AgentWorkflow)
 }
 
 func writeJSON(writer http.ResponseWriter, statusCode int, body any) {

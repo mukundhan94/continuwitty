@@ -13,6 +13,7 @@ import (
 	"engram/internal/config"
 	"engram/internal/models"
 	internaloauth "engram/internal/oauth"
+	"engram/internal/workflow"
 
 	"github.com/google/uuid"
 )
@@ -332,6 +333,41 @@ func TestDataRoutesMountedWithDependencies(t *testing.T) {
 				t.Fatalf("expected route service to be called")
 			}
 		})
+	}
+}
+
+func TestAgentWorkflowRoutesMountedWithDependencies(t *testing.T) {
+	settings := config.Settings{AppSemanticVersion: "1.2.3", AppCommitSHA: "abc1234"}
+	serviceCalled := false
+	router := NewRouterWithDependencies(
+		settings,
+		RouterDependencies{
+			AgentWorkflow: fakeAgentWorkflowRouteService{
+				runFn: func(_ context.Context, request workflow.AgentRunRequest) (workflow.AgentState, error) {
+					serviceCalled = true
+					return workflow.AgentState{
+						ThreadID: request.ThreadID,
+						Status:   "completed",
+					}, nil
+				},
+			},
+		},
+	)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/agent-runs",
+		strings.NewReader(`{"project_id":"project-agent","thread_id":"thread-1","objective":"objective"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.Code)
+	}
+	if !serviceCalled {
+		t.Fatalf("expected workflow service to be called")
 	}
 }
 

@@ -21,6 +21,7 @@ import (
 	"engram/internal/oauth"
 	"engram/internal/projects"
 	"engram/internal/repository"
+	"engram/internal/workflow"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -81,6 +82,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	oauthAuthorizationService := oauth.NewAuthorizationService(pool)
 	oauthTokenService := oauth.NewTokenService(pool)
 	mcpTokenService := mcptokens.NewService(pool)
+	agentWorkflowService := workflow.NewService(newWorkflowEngramCreator(pool, settings.EmbeddingDim))
 	ingestionService := ingestion.NewService(
 		pool,
 		settings.EmbeddingDim,
@@ -113,6 +115,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		OAuthAuthorization: oauthAuthorizationService,
 		OAuthToken:         oauthTokenService,
 		ChatRouter:         buildChatRouter(settings, pool),
+		AgentWorkflow:      agentWorkflowService,
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
@@ -374,6 +377,27 @@ func revokeMCPTokenForOwnerDependency(
 		ownerUserID uuid.UUID,
 	) (*models.MCPTokenSummary, error) {
 		return service.RevokeTokenForOwner(ctx, tokenID, ownerUserID)
+	}
+}
+
+func newWorkflowEngramCreator(
+	pool *pgxpool.Pool,
+	embeddingDim int,
+) workflow.EngramCreator {
+	return func(
+		ctx context.Context,
+		payload models.MemoryEngramCreate,
+		enrichmentOrigin string,
+	) (*models.EngramCreateResponse, error) {
+		return repository.CreateEngram(
+			ctx,
+			pool,
+			repository.CreateEngramInput{
+				Payload:          payload,
+				EmbeddingDim:     embeddingDim,
+				EnrichmentOrigin: enrichmentOrigin,
+			},
+		)
 	}
 }
 
