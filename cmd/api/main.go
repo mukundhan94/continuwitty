@@ -98,7 +98,10 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		),
 		ProjectsService:  newProjectRouteServiceAdapter(projectService),
 		IngestionService: newIngestionRouteServiceAdapter(ingestionService),
-		ChatRouter:       buildChatRouter(settings, pool),
+		IngestionOptions: internalapi.IngestionRouteOptions{
+			MaxMetadataJSONBytes: settings.IngestionMaxMetadataJSONBytes,
+		},
+		ChatRouter: buildChatRouter(settings, pool),
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)

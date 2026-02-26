@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"engram/internal/ingestion"
@@ -36,6 +39,9 @@ const (
 	defaultIngestChunkOverlapChars = 180
 	minIngestChunkOverlapChars     = 0
 	maxIngestChunkOverlapChars     = 1600
+
+	defaultIngestMetadataJSONMaxBytes = 20000
+	defaultMultipartMaxMemoryBytes    = 32 << 20
 )
 
 // IngestionTextPayload captures `/ingestion/text` payload values.
@@ -72,10 +78,39 @@ type boundedIntRule struct {
 	errorDetail  string
 }
 
+// IngestionRouteOptions captures route-level ingestion parser settings.
+type IngestionRouteOptions struct {
+	MaxMetadataJSONBytes int
+}
+
 // IngestionTextRouteRequest captures actor-scoped text-ingestion route input.
 type IngestionTextRouteRequest struct {
 	ActorUserID uuid.UUID
 	Payload     IngestionTextPayload
+}
+
+// IngestionFileUpload captures uploaded file details used by ingestion routes.
+type IngestionFileUpload struct {
+	Filename     string
+	MimeType     *string
+	ContentBytes []byte
+}
+
+// IngestionFilePayload captures `/ingestion/file` payload values.
+type IngestionFilePayload struct {
+	ProjectID         string                  `json:"project_id"`
+	Title             *string                 `json:"title,omitempty"`
+	VisibilityScope   *models.VisibilityScope `json:"visibility_scope,omitempty"`
+	ChunkSizeChars    *int                    `json:"chunk_size_chars,omitempty"`
+	ChunkOverlapChars *int                    `json:"chunk_overlap_chars,omitempty"`
+	Metadata          map[string]any          `json:"metadata,omitempty"`
+}
+
+// IngestionFileRouteRequest captures actor-scoped file-ingestion route input.
+type IngestionFileRouteRequest struct {
+	ActorUserID uuid.UUID
+	Payload     IngestionFilePayload
+	Upload      IngestionFileUpload
 }
 
 // IngestionListDocumentsRouteRequest captures actor-scoped list-documents route input.
@@ -101,6 +136,7 @@ type IngestionBlendedQueryRouteRequest struct {
 // IngestionService captures ingestion route behavior used by REST handlers.
 type IngestionService interface {
 	IngestText(ctx context.Context, request IngestionTextRouteRequest) (ingestion.DocumentIngestResponse, error)
+	IngestFile(ctx context.Context, request IngestionFileRouteRequest) (ingestion.DocumentIngestResponse, error)
 	ListDocuments(ctx context.Context, request IngestionListDocumentsRouteRequest) ([]models.DocumentRecord, error)
 	QueryDocumentChunks(
 		ctx context.Context,
@@ -204,6 +240,46 @@ func normalizeIngestionTextOptionalFields(payload IngestionTextPayload) Ingestio
 	return payload
 }
 
+func normalizeIngestionFilePayload(payload IngestionFilePayload) (IngestionFilePayload, error) {
+	payload.ProjectID = strings.TrimSpace(payload.ProjectID)
+	if payload.ProjectID == "" {
+		return IngestionFilePayload{}, newIngestionValidationError("project_id is required")
+	}
+	chunkSizeChars, err := resolveBoundedInt(payload.ChunkSizeChars, boundedIntRule{
+		defaultValue: defaultIngestChunkSizeChars,
+		minimumValue: minIngestChunkSizeChars,
+		maximumValue: maxIngestChunkSizeChars,
+		errorDetail:  "chunk_size_chars must be between 300 and 4000",
+	})
+	if err != nil {
+		return IngestionFilePayload{}, err
+	}
+	chunkOverlapChars, err := resolveBoundedInt(payload.ChunkOverlapChars, boundedIntRule{
+		defaultValue: defaultIngestChunkOverlapChars,
+		minimumValue: minIngestChunkOverlapChars,
+		maximumValue: maxIngestChunkOverlapChars,
+		errorDetail:  "chunk_overlap_chars must be between 0 and 1600",
+	})
+	if err != nil {
+		return IngestionFilePayload{}, err
+	}
+	if chunkOverlapChars >= chunkSizeChars {
+		return IngestionFilePayload{}, newIngestionValidationError(
+			"chunk_overlap_chars must be smaller than chunk_size_chars",
+		)
+	}
+	payload.ChunkSizeChars = &chunkSizeChars
+	payload.ChunkOverlapChars = &chunkOverlapChars
+	if payload.VisibilityScope == nil {
+		privateScope := models.VisibilityScopePrivate
+		payload.VisibilityScope = &privateScope
+	}
+	if payload.Metadata == nil {
+		payload.Metadata = map[string]any{}
+	}
+	return payload, nil
+}
+
 func resolveBoundedInt(
 	value *int,
 	rule boundedIntRule,
@@ -224,6 +300,162 @@ func decodeIngestionTextPayload(request *http.Request) (IngestionTextPayload, er
 		return IngestionTextPayload{}, err
 	}
 	return normalizeIngestionTextPayload(payload)
+}
+
+func parseFormIntField(
+	formValues map[string][]string,
+	fieldName string,
+	rule boundedIntRule,
+) (int, error) {
+	value := strings.TrimSpace(firstFormValue(formValues, fieldName))
+	if value == "" {
+		return rule.defaultValue, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, newIngestionValidationError(fieldName + " must be an integer")
+	}
+	return resolveBoundedInt(&parsed, rule)
+}
+
+func parseFormVisibilityScope(formValues map[string][]string) (*models.VisibilityScope, error) {
+	rawVisibility := strings.TrimSpace(firstFormValue(formValues, "visibility_scope"))
+	if rawVisibility == "" {
+		privateScope := models.VisibilityScopePrivate
+		return &privateScope, nil
+	}
+	parsed, err := models.ParseVisibilityScope(rawVisibility)
+	if err != nil {
+		return nil, newIngestionValidationError("visibility_scope is invalid")
+	}
+	return &parsed, nil
+}
+
+func parseMetadataJSON(metadataJSON string, maxBytes int) (map[string]any, error) {
+	trimmed := strings.TrimSpace(metadataJSON)
+	if trimmed == "" {
+		return map[string]any{}, nil
+	}
+	if len([]byte(trimmed)) > maxBytes {
+		return nil, ingestion.ServiceError{
+			Detail:     "metadata_json exceeds max allowed size of " + strconv.Itoa(maxBytes) + " bytes",
+			StatusCode: http.StatusRequestEntityTooLarge,
+		}
+	}
+	var parsed any
+	if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil {
+		return nil, newIngestionValidationError("metadata_json must be valid JSON")
+	}
+	parsedMap, ok := parsed.(map[string]any)
+	if !ok {
+		return nil, newIngestionValidationError("metadata_json must be a JSON object")
+	}
+	return parsedMap, nil
+}
+
+func readIngestionUpload(request *http.Request) (IngestionFileUpload, error) {
+	file, header, err := request.FormFile("file")
+	if err != nil {
+		return IngestionFileUpload{}, newIngestionValidationError("file is required")
+	}
+	defer file.Close()
+	contentBytes, err := io.ReadAll(file)
+	if err != nil {
+		return IngestionFileUpload{}, err
+	}
+	mimeTypeValue := strings.TrimSpace(header.Header.Get("Content-Type"))
+	var mimeType *string
+	if mimeTypeValue != "" {
+		mimeType = &mimeTypeValue
+	}
+	filename := header.Filename
+	if strings.TrimSpace(filename) == "" {
+		filename = "uploaded.txt"
+	}
+	return IngestionFileUpload{
+		Filename:     filename,
+		MimeType:     mimeType,
+		ContentBytes: contentBytes,
+	}, nil
+}
+
+func parseIngestionFilePayload(
+	request *http.Request,
+	options IngestionRouteOptions,
+) (IngestionFilePayload, IngestionFileUpload, error) {
+	if err := request.ParseMultipartForm(defaultMultipartMaxMemoryBytes); err != nil {
+		return IngestionFilePayload{}, IngestionFileUpload{}, newIngestionValidationError("invalid multipart form")
+	}
+	formValues := request.MultipartForm.Value
+	chunkSizeChars, err := parseFormIntField(formValues, "chunk_size_chars", boundedIntRule{
+		defaultValue: defaultIngestChunkSizeChars,
+		minimumValue: minIngestChunkSizeChars,
+		maximumValue: maxIngestChunkSizeChars,
+		errorDetail:  "chunk_size_chars must be between 300 and 4000",
+	})
+	if err != nil {
+		return IngestionFilePayload{}, IngestionFileUpload{}, err
+	}
+	chunkOverlapChars, err := parseFormIntField(formValues, "chunk_overlap_chars", boundedIntRule{
+		defaultValue: defaultIngestChunkOverlapChars,
+		minimumValue: minIngestChunkOverlapChars,
+		maximumValue: maxIngestChunkOverlapChars,
+		errorDetail:  "chunk_overlap_chars must be between 0 and 1600",
+	})
+	if err != nil {
+		return IngestionFilePayload{}, IngestionFileUpload{}, err
+	}
+	visibilityScope, err := parseFormVisibilityScope(formValues)
+	if err != nil {
+		return IngestionFilePayload{}, IngestionFileUpload{}, err
+	}
+	metadata, err := parseMetadataJSON(
+		firstFormValue(formValues, "metadata_json"),
+		resolveIngestionOptions(options).MaxMetadataJSONBytes,
+	)
+	if err != nil {
+		return IngestionFilePayload{}, IngestionFileUpload{}, err
+	}
+	title := optionalFormValue(formValues, "title")
+	upload, err := readIngestionUpload(request)
+	if err != nil {
+		return IngestionFilePayload{}, IngestionFileUpload{}, err
+	}
+	normalizedPayload, err := normalizeIngestionFilePayload(IngestionFilePayload{
+		ProjectID:         firstFormValue(formValues, "project_id"),
+		Title:             title,
+		VisibilityScope:   visibilityScope,
+		ChunkSizeChars:    &chunkSizeChars,
+		ChunkOverlapChars: &chunkOverlapChars,
+		Metadata:          metadata,
+	})
+	if err != nil {
+		return IngestionFilePayload{}, IngestionFileUpload{}, err
+	}
+	return normalizedPayload, upload, nil
+}
+
+func firstFormValue(formValues map[string][]string, key string) string {
+	values, ok := formValues[key]
+	if !ok || len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
+func optionalFormValue(formValues map[string][]string, key string) *string {
+	value := strings.TrimSpace(firstFormValue(formValues, key))
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func resolveIngestionOptions(options IngestionRouteOptions) IngestionRouteOptions {
+	if options.MaxMetadataJSONBytes <= 0 {
+		options.MaxMetadataJSONBytes = defaultIngestMetadataJSONMaxBytes
+	}
+	return options
 }
 
 func decodeDocumentChunkQueryPayload(request *http.Request) (models.DocumentChunkQueryRequest, error) {
@@ -352,6 +584,34 @@ func ingestTextHandler(service IngestionService) http.HandlerFunc {
 	)
 }
 
+func ingestFileHandler(service IngestionService, options IngestionRouteOptions) http.HandlerFunc {
+	resolvedOptions := resolveIngestionOptions(options)
+	return func(writer http.ResponseWriter, request *http.Request) {
+		actorUserID, _, ok := requireProjectActor(writer, request)
+		if !ok {
+			return
+		}
+		payload, upload, err := parseIngestionFilePayload(request, resolvedOptions)
+		if err != nil {
+			writeIngestionRouteError(writer, err)
+			return
+		}
+		result, err := service.IngestFile(
+			request.Context(),
+			IngestionFileRouteRequest{
+				ActorUserID: actorUserID,
+				Payload:     payload,
+				Upload:      upload,
+			},
+		)
+		if err != nil {
+			writeIngestionRouteError(writer, err)
+			return
+		}
+		writeJSON(writer, http.StatusCreated, result)
+	}
+}
+
 func listDocumentsHandler(service IngestionService) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		actorUserID, _, ok := requireProjectActor(writer, request)
@@ -409,11 +669,12 @@ func ingestionQueryRouteHandler[Payload any, Request any, Result any](
 }
 
 // MountIngestionRoutes registers ingestion REST routes.
-func MountIngestionRoutes(router chi.Router, service IngestionService) {
+func MountIngestionRoutes(router chi.Router, service IngestionService, options IngestionRouteOptions) {
 	if service == nil {
 		return
 	}
 	router.Post("/api/v1/ingestion/text", ingestTextHandler(service))
+	router.Post("/api/v1/ingestion/file", ingestFileHandler(service, options))
 	router.Get("/api/v1/ingestion/documents", listDocumentsHandler(service))
 	router.Post(
 		"/api/v1/ingestion/query",

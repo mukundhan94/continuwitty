@@ -19,6 +19,13 @@ type ingestionRouteServiceAdapter struct {
 	service *ingestion.Service
 }
 
+type resolvedIngestionPayloadOptions struct {
+	visibilityScope models.VisibilityScope
+	chunkSizeChars  int
+	chunkOverlap    int
+	metadata        map[string]any
+}
+
 func newIngestionRouteServiceAdapter(service *ingestion.Service) internalapi.IngestionService {
 	if service == nil {
 		return nil
@@ -30,7 +37,12 @@ func (adapter ingestionRouteServiceAdapter) IngestText(
 	ctx context.Context,
 	request internalapi.IngestionTextRouteRequest,
 ) (ingestion.DocumentIngestResponse, error) {
-	visibilityScope := resolveVisibilityScope(request.Payload.VisibilityScope)
+	options := resolveIngestionPayloadOptions(
+		request.Payload.VisibilityScope,
+		request.Payload.ChunkSizeChars,
+		request.Payload.ChunkOverlapChars,
+		request.Payload.Metadata,
+	)
 	return adapter.service.IngestText(
 		ctx,
 		request.ActorUserID,
@@ -38,12 +50,65 @@ func (adapter ingestionRouteServiceAdapter) IngestText(
 			ProjectID:         request.Payload.ProjectID,
 			Title:             request.Payload.Title,
 			Text:              request.Payload.Text,
-			VisibilityScope:   visibilityScope,
-			ChunkSizeChars:    resolveOptionalInt(request.Payload.ChunkSizeChars, defaultAdapterChunkSizeChars),
-			ChunkOverlapChars: resolveOptionalInt(request.Payload.ChunkOverlapChars, defaultAdapterChunkOverlapChars),
-			Metadata:          request.Payload.Metadata,
+			VisibilityScope:   options.visibilityScope,
+			ChunkSizeChars:    options.chunkSizeChars,
+			ChunkOverlapChars: options.chunkOverlap,
+			Metadata:          options.metadata,
 		},
 	)
+}
+
+func (adapter ingestionRouteServiceAdapter) IngestFile(
+	ctx context.Context,
+	request internalapi.IngestionFileRouteRequest,
+) (ingestion.DocumentIngestResponse, error) {
+	filePayload := newFileIngestRequest(request.Upload)
+	payloadOptions := resolveIngestionPayloadOptions(
+		request.Payload.VisibilityScope,
+		request.Payload.ChunkSizeChars,
+		request.Payload.ChunkOverlapChars,
+		request.Payload.Metadata,
+	)
+	servicePayload := ingestion.DocumentIngestFileRequest{
+		ProjectID:         request.Payload.ProjectID,
+		Title:             request.Payload.Title,
+		VisibilityScope:   payloadOptions.visibilityScope,
+		ChunkSizeChars:    payloadOptions.chunkSizeChars,
+		ChunkOverlapChars: payloadOptions.chunkOverlap,
+		Metadata:          payloadOptions.metadata,
+	}
+	response, err := adapter.service.IngestFile(
+		ctx,
+		request.ActorUserID,
+		servicePayload,
+		filePayload,
+	)
+	if err != nil {
+		return ingestion.DocumentIngestResponse{}, err
+	}
+	return response, nil
+}
+
+func newFileIngestRequest(upload internalapi.IngestionFileUpload) ingestion.FileIngestRequest {
+	return ingestion.FileIngestRequest{
+		Filename:     upload.Filename,
+		MimeType:     upload.MimeType,
+		ContentBytes: upload.ContentBytes,
+	}
+}
+
+func resolveIngestionPayloadOptions(
+	scope *models.VisibilityScope,
+	chunkSizeChars *int,
+	chunkOverlapChars *int,
+	metadata map[string]any,
+) resolvedIngestionPayloadOptions {
+	return resolvedIngestionPayloadOptions{
+		visibilityScope: resolveVisibilityScope(scope),
+		chunkSizeChars:  resolveOptionalInt(chunkSizeChars, defaultAdapterChunkSizeChars),
+		chunkOverlap:    resolveOptionalInt(chunkOverlapChars, defaultAdapterChunkOverlapChars),
+		metadata:        metadata,
+	}
 }
 
 func (adapter ingestionRouteServiceAdapter) ListDocuments(

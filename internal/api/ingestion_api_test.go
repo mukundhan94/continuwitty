@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +23,10 @@ type fakeIngestionService struct {
 	ingestTextFn func(
 		ctx context.Context,
 		request IngestionTextRouteRequest,
+	) (ingestion.DocumentIngestResponse, error)
+	ingestFileFn func(
+		ctx context.Context,
+		request IngestionFileRouteRequest,
 	) (ingestion.DocumentIngestResponse, error)
 	listDocumentsFn func(
 		ctx context.Context,
@@ -43,6 +50,16 @@ func (service fakeIngestionService) IngestText(
 		return ingestion.DocumentIngestResponse{}, nil
 	}
 	return service.ingestTextFn(ctx, request)
+}
+
+func (service fakeIngestionService) IngestFile(
+	ctx context.Context,
+	request IngestionFileRouteRequest,
+) (ingestion.DocumentIngestResponse, error) {
+	if service.ingestFileFn == nil {
+		return ingestion.DocumentIngestResponse{}, nil
+	}
+	return service.ingestFileFn(ctx, request)
 }
 
 func (service fakeIngestionService) ListDocuments(
@@ -77,11 +94,12 @@ func (service fakeIngestionService) QueryBlended(
 
 func TestMountIngestionRoutesRegistersEndpoints(t *testing.T) {
 	router := chi.NewRouter()
-	MountIngestionRoutes(router, fakeIngestionService{})
+	MountIngestionRoutes(router, fakeIngestionService{}, IngestionRouteOptions{})
 	routes := collectChatRoutes(t, router)
 
 	requiredRoutes := []string{
 		"/api/v1/ingestion/text",
+		"/api/v1/ingestion/file",
 		"/api/v1/ingestion/documents",
 		"/api/v1/ingestion/query",
 		"/api/v1/ingestion/query/blended",
@@ -116,7 +134,7 @@ func TestIngestTextHandlerWritesCreatedResponse(t *testing.T) {
 		},
 	}
 	router := chi.NewRouter()
-	MountIngestionRoutes(router, service)
+	MountIngestionRoutes(router, service, IngestionRouteOptions{})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -127,28 +145,123 @@ func TestIngestTextHandlerWritesCreatedResponse(t *testing.T) {
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 
-	if response.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d", response.Code)
-	}
-	if captured.ActorUserID != actorID {
-		t.Fatalf("expected actor id %s, got %s", actorID, captured.ActorUserID)
-	}
-	if captured.Payload.ChunkSizeChars == nil || *captured.Payload.ChunkSizeChars != defaultIngestChunkSizeChars {
-		t.Fatalf("expected default chunk size %d, got %#v", defaultIngestChunkSizeChars, captured.Payload.ChunkSizeChars)
-	}
-	if captured.Payload.ChunkOverlapChars == nil || *captured.Payload.ChunkOverlapChars != defaultIngestChunkOverlapChars {
-		t.Fatalf(
-			"expected default chunk overlap %d, got %#v",
-			defaultIngestChunkOverlapChars,
-			captured.Payload.ChunkOverlapChars,
-		)
-	}
-	var payload ingestion.DocumentIngestResponse
-	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	assertIngestionStatusCode(t, response, http.StatusCreated)
+	assertDefaultIngestTextRequest(t, captured, actorID)
+	payload := decodeIngestionResponse(t, response)
 	if payload.Document.DocumentID != documentID {
 		t.Fatalf("expected document id %s, got %s", documentID, payload.Document.DocumentID)
+	}
+}
+
+func TestIngestFileHandlerWritesCreatedResponse(t *testing.T) {
+	actorID := uuid.MustParse("00000000-0000-0000-0000-000000000957")
+	captured := IngestionFileRouteRequest{}
+	documentID := uuid.MustParse("00000000-0000-0000-0000-000000000958")
+	service := fakeIngestionService{
+		ingestFileFn: func(
+			_ context.Context,
+			request IngestionFileRouteRequest,
+		) (ingestion.DocumentIngestResponse, error) {
+			captured = request
+			timestamp := time.Date(2026, 2, 26, 17, 15, 0, 0, time.UTC)
+			return ingestion.DocumentIngestResponse{
+				Document: models.DocumentRecord{
+					DocumentID:      documentID,
+					OwnerUserID:     actorID,
+					ProjectID:       request.Payload.ProjectID,
+					Title:           "Imported Notes",
+					SourceType:      models.DocumentSourceTypeFile,
+					SourceName:      &request.Upload.Filename,
+					MimeType:        request.Upload.MimeType,
+					VisibilityScope: models.VisibilityScopePrivate,
+					ContentHash:     "hash",
+					ChunkCount:      2,
+					CreatedAt:       timestamp,
+					UpdatedAt:       timestamp,
+				},
+			}, nil
+		},
+	}
+	router := chi.NewRouter()
+	MountIngestionRoutes(router, service, IngestionRouteOptions{})
+
+	request := newIngestFileMultipartRequest(t, ingestFileMultipartRequestInput{
+		path: "/api/v1/ingestion/file",
+		formFields: map[string]string{
+			"project_id":    "project-alpha",
+			"title":         "Imported Notes",
+			"metadata_json": `{"source":"upload"}`,
+		},
+		filename:    "notes.txt",
+		contentType: "text/plain",
+		fileBody:    "line one\nline two",
+	})
+	request = WithAdminActor(request, AdminActor{UserID: actorID, Role: "analyst"})
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	assertIngestionStatusCode(t, response, http.StatusCreated)
+	if captured.Payload.ProjectID != "project-alpha" {
+		t.Fatalf("expected project_id project-alpha, got %q", captured.Payload.ProjectID)
+	}
+	if captured.Payload.Title == nil || *captured.Payload.Title != "Imported Notes" {
+		t.Fatalf("expected title Imported Notes, got %#v", captured.Payload.Title)
+	}
+	if captured.Upload.Filename != "notes.txt" {
+		t.Fatalf("expected filename notes.txt, got %q", captured.Upload.Filename)
+	}
+	if string(captured.Upload.ContentBytes) != "line one\nline two" {
+		t.Fatalf("unexpected upload content: %q", string(captured.Upload.ContentBytes))
+	}
+}
+
+func TestIngestFileHandlerRejectsInvalidMetadataJSON(t *testing.T) {
+	testCases := []struct {
+		name           string
+		actorUserID    uuid.UUID
+		routeOptions   IngestionRouteOptions
+		metadataJSON   string
+		expectedStatus int
+	}{
+		{
+			name:           "invalid json shape",
+			actorUserID:    uuid.MustParse("00000000-0000-0000-0000-000000000959"),
+			routeOptions:   IngestionRouteOptions{},
+			metadataJSON:   "{invalid",
+			expectedStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			name:           "metadata too large",
+			actorUserID:    uuid.MustParse("00000000-0000-0000-0000-000000000960"),
+			routeOptions:   IngestionRouteOptions{MaxMetadataJSONBytes: 8},
+			metadataJSON:   `{"long":"value"}`,
+			expectedStatus: http.StatusRequestEntityTooLarge,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			router := chi.NewRouter()
+			MountIngestionRoutes(router, fakeIngestionService{}, testCase.routeOptions)
+
+			request := newIngestFileMultipartRequest(t, ingestFileMultipartRequestInput{
+				path: "/api/v1/ingestion/file",
+				formFields: map[string]string{
+					"project_id":    "project-alpha",
+					"metadata_json": testCase.metadataJSON,
+				},
+				filename:    "notes.txt",
+				contentType: "text/plain",
+				fileBody:    "line one\nline two",
+			})
+			request = WithAdminActor(
+				request,
+				AdminActor{UserID: testCase.actorUserID, Role: "analyst"},
+			)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+
+			assertIngestionStatusCode(t, response, testCase.expectedStatus)
+		})
 	}
 }
 
@@ -162,7 +275,7 @@ func TestListDocumentsHandlerUsesDefaultPaging(t *testing.T) {
 		},
 	}
 	router := chi.NewRouter()
-	MountIngestionRoutes(router, service)
+	MountIngestionRoutes(router, service, IngestionRouteOptions{})
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/ingestion/documents", nil)
 	request = WithAdminActor(request, AdminActor{UserID: actorID, Role: "viewer"})
@@ -199,7 +312,7 @@ func TestQueryDocumentsHandlerAppliesDefaultTopK(t *testing.T) {
 		},
 	}
 	router := chi.NewRouter()
-	MountIngestionRoutes(router, service)
+	MountIngestionRoutes(router, service, IngestionRouteOptions{})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -231,7 +344,7 @@ func TestQueryBlendedHandlerAppliesDefaultTopK(t *testing.T) {
 		},
 	}
 	router := chi.NewRouter()
-	MountIngestionRoutes(router, service)
+	MountIngestionRoutes(router, service, IngestionRouteOptions{})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -259,7 +372,7 @@ func TestQueryBlendedHandlerAppliesDefaultTopK(t *testing.T) {
 
 func TestIngestionRoutesRequireAuthenticatedActor(t *testing.T) {
 	router := chi.NewRouter()
-	MountIngestionRoutes(router, fakeIngestionService{})
+	MountIngestionRoutes(router, fakeIngestionService{}, IngestionRouteOptions{})
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/ingestion/documents", nil)
 	response := httptest.NewRecorder()
@@ -280,7 +393,7 @@ func TestIngestTextHandlerMapsServiceError(t *testing.T) {
 		},
 	}
 	router := chi.NewRouter()
-	MountIngestionRoutes(router, service)
+	MountIngestionRoutes(router, service, IngestionRouteOptions{})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -294,7 +407,76 @@ func TestIngestTextHandlerMapsServiceError(t *testing.T) {
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 
-	if response.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected status 422, got %d", response.Code)
+	assertIngestionStatusCode(t, response, http.StatusUnprocessableEntity)
+}
+
+func assertIngestionStatusCode(t *testing.T, response *httptest.ResponseRecorder, expectedStatus int) {
+	t.Helper()
+	if response.Code != expectedStatus {
+		t.Fatalf("expected status %d, got %d", expectedStatus, response.Code)
 	}
+}
+
+func assertDefaultIngestTextRequest(t *testing.T, request IngestionTextRouteRequest, actorID uuid.UUID) {
+	t.Helper()
+	if request.ActorUserID != actorID {
+		t.Fatalf("expected actor id %s, got %s", actorID, request.ActorUserID)
+	}
+	if request.Payload.ChunkSizeChars == nil || *request.Payload.ChunkSizeChars != defaultIngestChunkSizeChars {
+		t.Fatalf("expected default chunk size %d, got %#v", defaultIngestChunkSizeChars, request.Payload.ChunkSizeChars)
+	}
+	if request.Payload.ChunkOverlapChars == nil || *request.Payload.ChunkOverlapChars != defaultIngestChunkOverlapChars {
+		t.Fatalf(
+			"expected default chunk overlap %d, got %#v",
+			defaultIngestChunkOverlapChars,
+			request.Payload.ChunkOverlapChars,
+		)
+	}
+}
+
+func decodeIngestionResponse(
+	t *testing.T,
+	response *httptest.ResponseRecorder,
+) ingestion.DocumentIngestResponse {
+	t.Helper()
+	payload := ingestion.DocumentIngestResponse{}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return payload
+}
+
+type ingestFileMultipartRequestInput struct {
+	path        string
+	formFields  map[string]string
+	filename    string
+	contentType string
+	fileBody    string
+}
+
+func newIngestFileMultipartRequest(t *testing.T, input ingestFileMultipartRequestInput) *http.Request {
+	t.Helper()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	for key, value := range input.formFields {
+		if err := writer.WriteField(key, value); err != nil {
+			t.Fatalf("write field %q: %v", key, err)
+		}
+	}
+	fileHeader := textproto.MIMEHeader{}
+	fileHeader.Set("Content-Disposition", `form-data; name="file"; filename="`+input.filename+`"`)
+	fileHeader.Set("Content-Type", input.contentType)
+	part, err := writer.CreatePart(fileHeader)
+	if err != nil {
+		t.Fatalf("create file part: %v", err)
+	}
+	if _, err := part.Write([]byte(input.fileBody)); err != nil {
+		t.Fatalf("write file part: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodPost, input.path, body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	return request
 }

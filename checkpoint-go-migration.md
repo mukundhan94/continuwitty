@@ -56,6 +56,7 @@
 | CP86 | 2026-02-26 | Completed | Phase 4 runtime chat integration baseline (`cmd/api` wires DB-backed chat services/router deps into runtime assembly) with migrated unit tests and >9.5 code-health gate |
 | CP87 | 2026-02-26 | Completed | Phase 4 projects API baseline (`/api/v1/projects` + `/api/v1/projects/default`) with runtime adapter wiring, migrated route tests, and >9.5 code-health gate |
 | CP88 | 2026-02-26 | Completed | Phase 4 ingestion API baseline (`/api/v1/ingestion/text`, `/documents`, `/query`, `/query/blended`) with runtime adapter wiring, migrated route tests, and >9.5 code-health gate |
+| CP89 | 2026-02-26 | Completed | Phase 4 ingestion file-upload API baseline (`POST /api/v1/ingestion/file`) with multipart validation/options wiring, migrated route tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4090,6 +4091,52 @@
   - `internal/api/ingestion_api_test.go`: `9.68`
   - `internal/api/router.go`: `10.0`
   - `internal/api/router_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP89 - Phase 4 Ingestion File-Upload Route Baseline (`internal/api/ingestion_api.go`)
+
+- Extended ingestion API route module for file-upload parity:
+  - `internal/api/ingestion_api.go`
+  - added endpoint:
+    - `POST /api/v1/ingestion/file`
+  - includes:
+    - multipart form parsing (`file` + route fields)
+    - `metadata_json` decoding with route-level max-byte guard
+    - chunk/default normalization parity and service error mapping.
+- Added route-level ingestion options wiring:
+  - `internal/api/router.go`
+  - `cmd/api/main.go`
+  - `RouterDependencies.IngestionOptions` now provides parser limits for ingestion routes.
+- Updated runtime ingestion adapter contract:
+  - `cmd/api/ingestion_routes_adapter.go`
+  - added `IngestFile` adapter path to `ingestion.Service.IngestFile`.
+- Expanded migrated tests:
+  - `internal/api/ingestion_api_test.go`
+  - added file-upload happy path and metadata rejection coverage.
+- Executed tests one-by-one:
+  - `TestMountIngestionRoutesRegistersEndpoints`
+  - `TestIngestTextHandlerWritesCreatedResponse`
+  - `TestIngestFileHandlerWritesCreatedResponse`
+  - `TestIngestFileHandlerRejectsInvalidMetadataJSON`
+  - `TestListDocumentsHandlerUsesDefaultPaging`
+  - `TestQueryDocumentsHandlerAppliesDefaultTopK`
+  - `TestQueryBlendedHandlerAppliesDefaultTopK`
+  - `TestIngestionRoutesRequireAuthenticatedActor`
+  - `TestIngestTextHandlerMapsServiceError`
+  - `TestDataRoutesMountedWithDependencies`
+  - `TestBuildChatRouterRegistersRuntimeRoutes`
+  - `TestProjectResolutionAdaptersReturnServiceResolution`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/ingestion_routes_adapter.go`: `10.0`
+  - `internal/api/ingestion_api.go`: `10.0`
+  - `internal/api/ingestion_api_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

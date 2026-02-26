@@ -22,6 +22,7 @@ type RouterDependencies struct {
 	SessionAuth        SessionAuthDependencies
 	ProjectsService    ProjectService
 	IngestionService   IngestionService
+	IngestionOptions   IngestionRouteOptions
 	ChatRouter         chi.Router
 }
 
@@ -56,7 +57,7 @@ func NewRouterWithDependencies(settings config.Settings, dependencies RouterDepe
 		MountProjectRoutes(router, dependencies.ProjectsService)
 	}
 	if dependencies.IngestionService != nil {
-		MountIngestionRoutes(router, dependencies.IngestionService)
+		MountIngestionRoutes(router, dependencies.IngestionService, dependencies.IngestionOptions)
 	}
 	if dependencies.ChatRouter != nil {
 		router.Handle("/api/v1/chat", dependencies.ChatRouter)
