@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"engram/internal/models"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -12,18 +14,50 @@ const (
 	mcpServerName      = "engram-vault-mcp"
 )
 
+// ProjectListService captures project listing behavior used by MCP compatibility tool dispatch.
+type ProjectListService interface {
+	ListProjects(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		includeArchived bool,
+		limit int,
+		offset int,
+	) ([]models.ProjectRecord, error)
+}
+
+// CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
+type CompatibilityServiceDependencies struct {
+	ProjectService ProjectListService
+}
+
 // CompatibilityService provides baseline MCP interop behavior while the full tool catalog migrates.
 type CompatibilityService struct {
-	serverVersion string
+	serverVersion  string
+	projectService ProjectListService
 }
 
 // NewCompatibilityService builds a compatibility MCP service with stable initialize/tool-list behavior.
 func NewCompatibilityService(serverVersion string) *CompatibilityService {
+	return NewCompatibilityServiceWithDependencies(
+		serverVersion,
+		CompatibilityServiceDependencies{},
+	)
+}
+
+// NewCompatibilityServiceWithDependencies builds a compatibility MCP service with dependency-backed tool dispatch.
+func NewCompatibilityServiceWithDependencies(
+	serverVersion string,
+	dependencies CompatibilityServiceDependencies,
+) *CompatibilityService {
 	trimmed := strings.TrimSpace(serverVersion)
 	if trimmed == "" {
 		trimmed = "0.1.0"
 	}
-	return &CompatibilityService{serverVersion: trimmed}
+	return &CompatibilityService{
+		serverVersion:  trimmed,
+		projectService: dependencies.ProjectService,
+	}
 }
 
 // HandleNotification accepts JSON-RPC notifications and intentionally no-ops.
@@ -36,7 +70,7 @@ func (service *CompatibilityService) StreamCall(ctx context.Context, request Str
 	frames := make(chan Frame, 1)
 	go func() {
 		defer close(frames)
-		response := service.dispatch(request.Request, request.TokenAuth)
+		response := service.dispatch(ctx, request.Request, request.Actor, request.TokenAuth)
 		select {
 		case <-ctx.Done():
 			return
@@ -47,7 +81,9 @@ func (service *CompatibilityService) StreamCall(ctx context.Context, request Str
 }
 
 func (service *CompatibilityService) dispatch(
+	ctx context.Context,
 	request JSONRPCRequest,
+	actor Actor,
 	tokenAuth *models.MCPTokenAuthContext,
 ) Frame {
 	if strings.TrimSpace(request.Method) == "" {
@@ -71,54 +107,100 @@ func (service *CompatibilityService) dispatch(
 			"tools": buildVisiblePublicToolCatalog(tokenAuth),
 		})
 	case "tools/call":
-		return service.dispatchToolsCall(request.ID, request.Params, tokenAuth)
+		return service.dispatchToolsCall(toolsCallInput{
+			ctx:       ctx,
+			requestID: request.ID,
+			params:    request.Params,
+			actor:     actor,
+			tokenAuth: tokenAuth,
+		})
 	default:
-		return service.dispatchDirectToolMethod(
-			request.ID,
-			request.Method,
-			tokenAuth,
-		)
+		return service.dispatchDirectToolMethod(directToolCallInput{
+			ctx:       ctx,
+			requestID: request.ID,
+			method:    request.Method,
+			params:    request.Params,
+			actor:     actor,
+			tokenAuth: tokenAuth,
+		})
 	}
 }
 
-func (service *CompatibilityService) dispatchToolsCall(
-	requestID any,
-	params map[string]any,
-	tokenAuth *models.MCPTokenAuthContext,
-) Frame {
-	name, ok := requiredToolName(params)
+type toolsCallInput struct {
+	ctx       context.Context
+	requestID any
+	params    map[string]any
+	actor     Actor
+	tokenAuth *models.MCPTokenAuthContext
+}
+
+func (service *CompatibilityService) dispatchToolsCall(input toolsCallInput) Frame {
+	name, ok := requiredToolName(input.params)
 	if !ok {
-		return invalidParamsFrame(requestID, map[string]any{"missing": "name"})
+		return invalidParamsFrame(input.requestID, map[string]any{"missing": "name"})
+	}
+	arguments, ok := toolCallArguments(input.params)
+	if !ok {
+		return invalidParamsFrame(input.requestID, map[string]any{"invalid": "arguments"})
 	}
 	dottedName := toDottedToolName(name)
 	if !toolExists(dottedName) {
-		return methodNotFoundFrame(requestID, name)
+		return methodNotFoundFrame(input.requestID, name)
 	}
-	if policyError := authorizeToolCall(dottedName, tokenAuth); policyError != nil {
-		return errorFrame(requestID, policyError.code, policyError.message, policyError.data)
+	if policyError := authorizeToolCall(dottedName, input.tokenAuth); policyError != nil {
+		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
+	}
+	payload, handled, dispatchError := service.dispatchImplementedTool(
+		input.ctx,
+		canonicalToolName(dottedName),
+		input.actor,
+		arguments,
+	)
+	if dispatchError != nil {
+		return errorFrame(input.requestID, dispatchError.code, dispatchError.message, dispatchError.data)
+	}
+	if handled {
+		return successFrame(input.requestID, buildToolCallSuccessResult(name, payload))
 	}
 	return errorFrame(
-		requestID,
+		input.requestID,
 		-32000,
 		"Tool not implemented",
 		map[string]any{"method": canonicalToolName(dottedName)},
 	)
 }
 
-func (service *CompatibilityService) dispatchDirectToolMethod(
-	requestID any,
-	method string,
-	tokenAuth *models.MCPTokenAuthContext,
-) Frame {
-	dottedMethod := toDottedToolName(method)
+type directToolCallInput struct {
+	ctx       context.Context
+	requestID any
+	method    string
+	params    map[string]any
+	actor     Actor
+	tokenAuth *models.MCPTokenAuthContext
+}
+
+func (service *CompatibilityService) dispatchDirectToolMethod(input directToolCallInput) Frame {
+	dottedMethod := toDottedToolName(input.method)
 	if !toolExists(dottedMethod) {
-		return methodNotFoundFrame(requestID, method)
+		return methodNotFoundFrame(input.requestID, input.method)
 	}
-	if policyError := authorizeToolCall(dottedMethod, tokenAuth); policyError != nil {
-		return errorFrame(requestID, policyError.code, policyError.message, policyError.data)
+	if policyError := authorizeToolCall(dottedMethod, input.tokenAuth); policyError != nil {
+		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
+	}
+	payload, handled, dispatchError := service.dispatchImplementedTool(
+		input.ctx,
+		canonicalToolName(dottedMethod),
+		input.actor,
+		input.params,
+	)
+	if dispatchError != nil {
+		return errorFrame(input.requestID, dispatchError.code, dispatchError.message, dispatchError.data)
+	}
+	if handled {
+		return successFrame(input.requestID, payload)
 	}
 	return errorFrame(
-		requestID,
+		input.requestID,
 		-32000,
 		"Tool not implemented",
 		map[string]any{"method": canonicalToolName(dottedMethod)},
@@ -136,6 +218,15 @@ func requiredToolName(params map[string]any) (string, bool) {
 	}
 	name = strings.TrimSpace(name)
 	return name, name != ""
+}
+
+func toolCallArguments(params map[string]any) (map[string]any, bool) {
+	rawArguments, ok := params["arguments"]
+	if !ok || rawArguments == nil {
+		return map[string]any{}, true
+	}
+	arguments, ok := rawArguments.(map[string]any)
+	return arguments, ok
 }
 
 func successFrame(id any, result map[string]any) Frame {

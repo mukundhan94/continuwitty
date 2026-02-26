@@ -73,6 +73,7 @@
 | CP103 | 2026-02-26 | Completed | Phase 4 MCP stream transport rate-limit baseline (429 + `Retry-After`) with router/runtime wiring, migrated tests, and >9.5 code-health gate |
 | CP104 | 2026-02-26 | Completed | Phase 4 MCP catalog visibility baseline (`tools/list` + scope/allowlist policy filtering) with migrated tests and >9.5 code-health gate |
 | CP105 | 2026-02-26 | Completed | Phase 4 MCP direct-method compatibility baseline (dotted/underscore tool methods + token policy parity) with migrated tests and >9.5 code-health gate |
+| CP106 | 2026-02-26 | Completed | Phase 4 MCP first dispatched-tools baseline (`user.get_profile` + `project.list`) with `tools/call` envelope parity, runtime project-service wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4860,6 +4861,42 @@
   - `internal/mcp/catalog.go`: `9.68`
   - `internal/mcp/compatibility_service.go`: `10.0`
   - `internal/mcp/compatibility_service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP106 - Phase 4 MCP First Dispatched-Tools Baseline (`internal/mcp/compatibility_*`)
+
+- Migrated the first non-stub MCP tool dispatch paths into Go compatibility mode:
+  - `user.get_profile` now returns actor profile payload for both direct method and `tools/call` paths.
+  - `project.list` now dispatches into Go `projects.Service` through injected dependencies.
+- Added `tools/call` result envelope parity for implemented tools:
+  - `tool_name`
+  - `structuredContent`
+  - `content` text JSON payload
+  - `isError=false`.
+- Added dependency-backed compatibility service wiring:
+  - `cmd/api/main.go` now constructs MCP compatibility service with `ProjectService` dependency.
+- Refactored compatibility dispatch into focused files to keep code health >= 9.5 and pass safeguard gates:
+  - `internal/mcp/compatibility_service.go`
+  - `internal/mcp/compatibility_dispatch.go`.
+- Added migrated tests for implemented tool paths and argument forwarding:
+  - `internal/mcp/compatibility_service_test.go`
+  - `internal/mcp/compatibility_service_dispatch_test.go`
+  - `internal/mcp/compatibility_service_project_list_test.go`
+  - `internal/mcp/compatibility_service_project_list_support_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_dispatch_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_project_list_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_project_list_support_test.go`: `9.68`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

@@ -85,6 +85,21 @@ func TestCompatibilityServiceErrorMappings(t *testing.T) {
 			expectedCode: -32602,
 		},
 		{
+			name: "tools/call invalid arguments",
+			request: StreamCallRequest{
+				Request: JSONRPCRequest{
+					JSONRPC: "2.0",
+					ID:      "tools-call",
+					Method:  "tools/call",
+					Params: map[string]any{
+						"name":      "project_list",
+						"arguments": "invalid",
+					},
+				},
+			},
+			expectedCode: -32602,
+		},
+		{
 			name: "unknown method",
 			request: StreamCallRequest{
 				Request: JSONRPCRequest{

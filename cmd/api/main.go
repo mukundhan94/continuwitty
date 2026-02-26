@@ -87,7 +87,12 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	oauthAuthorizationService := oauth.NewAuthorizationService(pool)
 	oauthTokenService := oauth.NewTokenService(pool)
 	mcpTokenService := mcptokens.NewService(pool)
-	mcpService := mcp.NewCompatibilityService(settings.AppSemanticVersion)
+	mcpService := mcp.NewCompatibilityServiceWithDependencies(
+		settings.AppSemanticVersion,
+		mcp.CompatibilityServiceDependencies{
+			ProjectService: projectService,
+		},
+	)
 	mcpTransportLimiter := newMCPTransportRateLimiter(settings, pool)
 	mcpActorResolver := mcp.NewActorResolver(
 		settings,
