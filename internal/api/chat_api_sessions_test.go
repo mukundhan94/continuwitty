@@ -35,6 +35,21 @@ type fakeChatSessionService struct {
 		sessionID uuid.UUID,
 		payload models.ChatSessionUpdateRequest,
 	) (*models.ChatSessionRecord, error)
+	getLifecyclePolicyFn func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+	) (chat.ChatLifecyclePolicy, error)
+	updateLifecyclePolicyFn func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+		payload chat.ChatLifecyclePolicyUpdateRequest,
+	) (chat.ChatLifecyclePolicy, error)
+	listTimelineEventsFn func(
+		ctx context.Context,
+		request chat.SessionTimelineRequest,
+	) ([]models.ChatTimelineEvent, error)
 }
 
 func newFakeChatSessionService() fakeChatSessionService {
@@ -66,6 +81,27 @@ func newFakeChatSessionService() fakeChatSessionService {
 			models.ChatSessionUpdateRequest,
 		) (*models.ChatSessionRecord, error) {
 			return nil, nil
+		},
+		getLifecyclePolicyFn: func(
+			context.Context,
+			uuid.UUID,
+			uuid.UUID,
+		) (chat.ChatLifecyclePolicy, error) {
+			return chat.ChatLifecyclePolicy{}, nil
+		},
+		updateLifecyclePolicyFn: func(
+			context.Context,
+			uuid.UUID,
+			uuid.UUID,
+			chat.ChatLifecyclePolicyUpdateRequest,
+		) (chat.ChatLifecyclePolicy, error) {
+			return chat.ChatLifecyclePolicy{}, nil
+		},
+		listTimelineEventsFn: func(
+			context.Context,
+			chat.SessionTimelineRequest,
+		) ([]models.ChatTimelineEvent, error) {
+			return []models.ChatTimelineEvent{}, nil
 		},
 	}
 }
@@ -100,6 +136,30 @@ func (service fakeChatSessionService) UpdateSession(
 	payload models.ChatSessionUpdateRequest,
 ) (*models.ChatSessionRecord, error) {
 	return service.updateSessionFn(ctx, actorUserID, sessionID, payload)
+}
+
+func (service fakeChatSessionService) GetLifecyclePolicy(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	sessionID uuid.UUID,
+) (chat.ChatLifecyclePolicy, error) {
+	return service.getLifecyclePolicyFn(ctx, actorUserID, sessionID)
+}
+
+func (service fakeChatSessionService) UpdateLifecyclePolicy(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	sessionID uuid.UUID,
+	payload chat.ChatLifecyclePolicyUpdateRequest,
+) (chat.ChatLifecyclePolicy, error) {
+	return service.updateLifecyclePolicyFn(ctx, actorUserID, sessionID, payload)
+}
+
+func (service fakeChatSessionService) ListTimelineEvents(
+	ctx context.Context,
+	request chat.SessionTimelineRequest,
+) ([]models.ChatTimelineEvent, error) {
+	return service.listTimelineEventsFn(ctx, request)
 }
 
 func chatSessionFixture(

@@ -49,6 +49,7 @@
 | CP34 | 2026-02-22 | In Progress | Auth/session continuation follow-up (incremental non-checkpoint file code-health uplift toward >9.5 baseline) |
 | CP80 | 2026-02-26 | Completed | Phase 3 chat API session-derivative route baseline (`save-engram` + `continue`) with migrated unit tests and >9.5 code-health gate |
 | CP81 | 2026-02-26 | Completed | Phase 3 chat API session CRUD route baseline (`create/list/get/update`) with query defaults and >9.5 code-health gate |
+| CP82 | 2026-02-26 | Completed | Phase 3 chat API lifecycle/timeline route baseline (`lifecycle-policy` + `timeline`) with migrated unit tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3728,6 +3729,59 @@
   - `internal/api/chat_api_test.go`: `10.0`
   - `internal/api/chat_api_sessions.go`: `10.0`
   - `internal/api/chat_api_sessions_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP82 - Phase 3 Chat API Lifecycle + Timeline Routes Baseline (`internal/api/chat_api_lifecycle.go`)
+
+- Extended `api/app/chat/api.py` route parity to Go for lifecycle/timeline operations:
+  - `GET /api/v1/chat/sessions/{session_id}/lifecycle-policy`
+  - `PATCH /api/v1/chat/sessions/{session_id}/lifecycle-policy`
+  - `GET /api/v1/chat/sessions/{session_id}/timeline`
+- Added lifecycle route module:
+  - `internal/api/chat_api_lifecycle.go`
+  - lifecycle get/update handlers with chat-service error mapping parity
+  - timeline list handler with query defaults:
+    - `limit=100` default with bounds `1..500`
+    - `offset=0` default with non-negative bounds
+  - invalid query handling (`400`, `"Invalid query parameters"`).
+- Extended chat session route service contract and registration:
+  - `internal/api/chat_api_sessions.go`
+  - `registerChatSessionRoutes` now mounts lifecycle/timeline routes.
+- Added and updated migrated tests:
+  - `internal/api/chat_api_lifecycle_test.go`
+  - `internal/api/chat_api_sessions_test.go` (service test double expanded for lifecycle/timeline methods).
+- Executed tests one-by-one:
+  - `TestCreateChatRouterRegistersLifecycleRoutesWhenSessionServiceConfigured`
+  - `TestGetLifecyclePolicyHandlerWritesResponse`
+  - `TestUpdateLifecyclePolicyHandlerWritesResponse`
+  - `TestListTimelineEventsHandlerUsesDefaultPaging`
+  - `TestListTimelineEventsHandlerRejectsInvalidLimit`
+  - `TestCreateChatRouterRegistersSessionRoutesWhenSessionServiceConfigured`
+  - `TestCreateSessionHandlerWritesCreatedResponse`
+  - `TestListSessionsHandlerUsesDefaultPaging`
+  - `TestListSessionsHandlerRejectsInvalidLimit`
+  - `TestGetSessionHandlerMapsChatServiceError`
+  - `TestUpdateSessionHandlerWritesUpdatedResponse`
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersConfiguredEndpoints`
+  - `TestSaveSessionAsEngramHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerMapsChatServiceError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api.go`: `10.0`
+  - `internal/api/chat_api_test.go`: `10.0`
+  - `internal/api/chat_api_sessions.go`: `10.0`
+  - `internal/api/chat_api_sessions_test.go`: `10.0`
+  - `internal/api/chat_api_lifecycle.go`: `10.0`
+  - `internal/api/chat_api_lifecycle_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

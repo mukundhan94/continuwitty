@@ -44,6 +44,21 @@ type ChatSessionService interface {
 		sessionID uuid.UUID,
 		payload models.ChatSessionUpdateRequest,
 	) (*models.ChatSessionRecord, error)
+	GetLifecyclePolicy(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+	) (chat.ChatLifecyclePolicy, error)
+	UpdateLifecyclePolicy(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+		payload chat.ChatLifecyclePolicyUpdateRequest,
+	) (chat.ChatLifecyclePolicy, error)
+	ListTimelineEvents(
+		ctx context.Context,
+		request chat.SessionTimelineRequest,
+	) ([]models.ChatTimelineEvent, error)
 }
 
 type chatSessionListQuery struct {
@@ -238,4 +253,5 @@ func registerChatSessionRoutes(
 			http.StatusOK,
 		),
 	)
+	registerChatLifecycleRoutes(router, sessionService, requireAPIActor)
 }
