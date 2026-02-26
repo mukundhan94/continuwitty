@@ -91,6 +91,7 @@
 | CP121 | 2026-02-26 | Completed | Phase 4 MCP chat project-document query baseline (`chat.list_project_documents`) with direct/`tools/call` parity, paging defaults, runtime document-list wiring, migrated tests, and >9.5 code-health gate |
 | CP122 | 2026-02-26 | Completed | Phase 4 MCP chat create-session baseline (`chat.create_session`) with direct/`tools/call` parity, required project/title validation, runtime session-create wiring, migrated tests, and >9.5 code-health gate |
 | CP123 | 2026-02-26 | Completed | Phase 4 MCP chat lifecycle-policy update baseline (`chat.update_lifecycle_policy`) with direct/`tools/call` parity, required session validation, partial field updates, runtime update wiring, migrated tests, and >9.5 code-health gate |
+| CP124 | 2026-02-26 | Completed | Phase 4 MCP chat continue-session baseline (`chat.continue_session`) with direct/`tools/call` parity, required session validation, optional title passthrough, runtime continuation wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -2865,6 +2866,41 @@
   - `internal/mcp/compatibility_dispatch_chat_session_handlers.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_chat_lifecycle_policy_update_support.go`: `9.68`
   - `internal/mcp/compatibility_service_chat_lifecycle_policy_update_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP124 - Phase 4 MCP Chat Continue-Session Baseline (`chat.continue_session`)
+
+- Migrated `chat.continue_session` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"continuation": {"session": {...}, "carried_engram_ids": [...]}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented continue-session parameter behavior parity:
+  - required `session_id` UUID
+  - optional `title` passthrough (`nil` when omitted)
+  - invalid values return `-32602` invalid params.
+- Implemented continue-session result/error parity:
+  - successful continuation returns created session + carried engram IDs
+  - missing source session returns `-32602` with `status_code=404` and `detail="Chat session not found"`
+  - service failures map to `-32603`.
+- Added runtime continue-session adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_continue_adapter.go`
+  - `cmd/api/main.go` passes session-continue dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_continue_session_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_continue_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_continue_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_continue_session_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

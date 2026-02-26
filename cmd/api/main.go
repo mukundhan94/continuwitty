@@ -153,6 +153,7 @@ func newMCPCompatibilityService(
 			SessionService:         newMCPSessionListAdapter(pool),
 			SessionGet:             newMCPSessionGetAdapter(pool),
 			SessionCreate:          newMCPSessionCreateAdapter(pool),
+			SessionContinue:        newMCPSessionContinueAdapter(pool),
 			LifecyclePolicyUpdate:  newMCPLifecyclePolicyUpdateAdapter(pool),
 			MessageService:         newMCPMessageListAdapter(pool),
 			TimelineService:        newMCPTimelineListAdapter(pool),

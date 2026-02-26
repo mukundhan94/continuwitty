@@ -64,6 +64,14 @@ type SessionCreateService interface {
 	) (*models.ChatSessionRecord, error)
 }
 
+// SessionContinueService captures session continuation behavior used by MCP compatibility chat dispatch.
+type SessionContinueService interface {
+	ContinueSession(
+		ctx context.Context,
+		request SessionContinueRequest,
+	) (*models.ContinueSessionResponse, error)
+}
+
 // LifecyclePolicyUpdateService captures lifecycle-policy updates used by MCP compatibility chat dispatch.
 type LifecyclePolicyUpdateService interface {
 	UpdateLifecyclePolicy(
@@ -158,6 +166,13 @@ type SessionCreateRequest struct {
 	Payload     models.ChatSessionCreateRequest
 }
 
+// SessionContinueRequest captures compatibility-level continue-session inputs.
+type SessionContinueRequest struct {
+	ActorUserID uuid.UUID
+	SessionID   uuid.UUID
+	Payload     models.ContinueSessionRequest
+}
+
 // SessionLifecyclePolicyUpdateRequest captures compatibility-level lifecycle update inputs.
 type SessionLifecyclePolicyUpdateRequest struct {
 	ActorUserID             uuid.UUID
@@ -226,6 +241,7 @@ type CompatibilityServiceDependencies struct {
 	SessionService         SessionListService
 	SessionGet             SessionGetService
 	SessionCreate          SessionCreateService
+	SessionContinue        SessionContinueService
 	LifecyclePolicyUpdate  LifecyclePolicyUpdateService
 	MessageService         MessageListService
 	TimelineService        TimelineListService
@@ -245,6 +261,7 @@ type CompatibilityService struct {
 	sessionService         SessionListService
 	sessionGet             SessionGetService
 	sessionCreate          SessionCreateService
+	sessionContinue        SessionContinueService
 	lifecyclePolicyUpdate  LifecyclePolicyUpdateService
 	messageService         MessageListService
 	timelineService        TimelineListService
@@ -280,6 +297,7 @@ func NewCompatibilityServiceWithDependencies(
 		sessionService:         dependencies.SessionService,
 		sessionGet:             dependencies.SessionGet,
 		sessionCreate:          dependencies.SessionCreate,
+		sessionContinue:        dependencies.SessionContinue,
 		lifecyclePolicyUpdate:  dependencies.LifecyclePolicyUpdate,
 		messageService:         dependencies.MessageService,
 		timelineService:        dependencies.TimelineService,
