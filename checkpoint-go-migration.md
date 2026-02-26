@@ -94,6 +94,7 @@
 | CP124 | 2026-02-26 | Completed | Phase 4 MCP chat continue-session baseline (`chat.continue_session`) with direct/`tools/call` parity, required session validation, optional title passthrough, runtime continuation wiring, migrated tests, and >9.5 code-health gate |
 | CP125 | 2026-02-26 | Completed | Phase 4 MCP chat delete-session baseline (`chat.delete_session`) with direct/`tools/call` parity, required session validation, optional delete controls, runtime memory-admin wiring, migrated tests, and >9.5 code-health gate |
 | CP126 | 2026-02-26 | Completed | Phase 4 MCP chat restore-session baseline (`chat.restore_session`) with direct/`tools/call` parity and owner/admin lifecycle access hardening across restore/delete, migrated tests, runtime wiring, and >9.5 code-health gate |
+| CP127 | 2026-02-26 | Completed | Phase 4 MCP chat send-message baseline (`chat.send_message`) with direct/`tools/call` parity, runtime chat-service wiring, migrated tests, and chat/provider error mapping parity under >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -2978,6 +2979,40 @@
   - `internal/mcp/compatibility_dispatch_chat_restore_session_support.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_delete_session_test.go`: `9.68`
   - `internal/mcp/compatibility_service_chat_restore_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP127 - Phase 4 MCP Chat Send-Message Baseline (`chat.send_message`)
+
+- Migrated `chat.send_message` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"message": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented send-message parameter behavior parity:
+  - required `session_id` UUID
+  - `content_text` defaults to empty string when omitted
+  - invalid `session_id` values return `-32602` invalid params.
+- Implemented structured error mapping parity for chat send failures:
+  - provider execution errors -> `-32020` with `status_code` + `error_code`
+  - chat service errors -> `-32010` with `status_code`
+  - untyped/internal errors -> `-32603`.
+- Added runtime send-message adapter wiring in Go API runtime:
+  - `cmd/api/mcp_message_send_adapter.go`
+  - `cmd/api/main.go` passes send-message dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_send_message_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_message_send_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_send_message_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_send_message_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

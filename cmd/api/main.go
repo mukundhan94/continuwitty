@@ -159,6 +159,7 @@ func newMCPCompatibilityService(
 			SessionRestore:         newMCPSessionRestoreAdapter(memoryAdminService),
 			LifecyclePolicyUpdate:  newMCPLifecyclePolicyUpdateAdapter(pool),
 			MessageService:         newMCPMessageListAdapter(pool),
+			MessageSend:            newMCPMessageSendAdapter(settings, pool),
 			TimelineService:        newMCPTimelineListAdapter(pool),
 			PinnedEngramService:    newMCPPinnedEngramListAdapter(pool),
 			PinnedDocumentService:  newMCPPinnedDocumentListAdapter(pool),

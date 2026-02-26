@@ -104,6 +104,14 @@ type MessageListService interface {
 	) ([]models.ChatMessageRecord, error)
 }
 
+// MessageSendService captures message-send behavior used by MCP compatibility chat dispatch.
+type MessageSendService interface {
+	SendMessage(
+		ctx context.Context,
+		request SessionMessageSendRequest,
+	) (*MessageSendResponse, error)
+}
+
 // TimelineListService captures timeline listing behavior used by MCP compatibility chat dispatch.
 type TimelineListService interface {
 	ListTimeline(
@@ -244,6 +252,25 @@ type MessageListRequest struct {
 	Offset      int
 }
 
+// SessionMessageSendRequest captures compatibility-level send-message inputs.
+type SessionMessageSendRequest struct {
+	ActorUserID uuid.UUID
+	SessionID   uuid.UUID
+	ContentText string
+}
+
+// MessageSendResponse captures send-message outputs.
+type MessageSendResponse struct {
+	SessionID            uuid.UUID      `json:"session_id"`
+	MessageID            uuid.UUID      `json:"message_id"`
+	ReplyMessageID       uuid.UUID      `json:"reply_message_id"`
+	AssistantText        string         `json:"assistant_text"`
+	UsedEngramIDs        []uuid.UUID    `json:"used_engram_ids"`
+	UsedDocumentChunkIDs []uuid.UUID    `json:"used_document_chunk_ids"`
+	SourceReferences     any            `json:"source_references"`
+	DebugTrace           map[string]any `json:"debug_trace,omitempty"`
+}
+
 // TimelineListRequest captures compatibility-level timeline list inputs.
 type TimelineListRequest struct {
 	ActorUserID uuid.UUID
@@ -291,6 +318,7 @@ type CompatibilityServiceDependencies struct {
 	SessionRestore         SessionRestoreService
 	LifecyclePolicyUpdate  LifecyclePolicyUpdateService
 	MessageService         MessageListService
+	MessageSend            MessageSendService
 	TimelineService        TimelineListService
 	PinnedEngramService    PinnedEngramListService
 	PinnedDocumentService  PinnedDocumentListService
@@ -313,6 +341,7 @@ type CompatibilityService struct {
 	sessionRestore         SessionRestoreService
 	lifecyclePolicyUpdate  LifecyclePolicyUpdateService
 	messageService         MessageListService
+	messageSend            MessageSendService
 	timelineService        TimelineListService
 	pinnedEngramService    PinnedEngramListService
 	pinnedDocumentService  PinnedDocumentListService
@@ -351,6 +380,7 @@ func NewCompatibilityServiceWithDependencies(
 		sessionRestore:         dependencies.SessionRestore,
 		lifecyclePolicyUpdate:  dependencies.LifecyclePolicyUpdate,
 		messageService:         dependencies.MessageService,
+		messageSend:            dependencies.MessageSend,
 		timelineService:        dependencies.TimelineService,
 		pinnedEngramService:    dependencies.PinnedEngramService,
 		pinnedDocumentService:  dependencies.PinnedDocumentService,
