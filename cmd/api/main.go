@@ -17,6 +17,7 @@ import (
 	"engram/internal/db"
 	internalexport "engram/internal/export"
 	"engram/internal/ingestion"
+	"engram/internal/mcp"
 	"engram/internal/mcptokens"
 	"engram/internal/models"
 	"engram/internal/oauth"
@@ -83,6 +84,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	oauthAuthorizationService := oauth.NewAuthorizationService(pool)
 	oauthTokenService := oauth.NewTokenService(pool)
 	mcpTokenService := mcptokens.NewService(pool)
+	mcpService := mcp.NewCompatibilityService(settings.AppSemanticVersion)
 	agentWorkflowService := workflow.NewService(newWorkflowEngramCreator(pool, settings.EmbeddingDim))
 	ingestionService := ingestion.NewService(
 		pool,
@@ -120,6 +122,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		ChatRouter:         buildChatRouter(settings, pool),
 		AgentWorkflow:      agentWorkflowService,
 		ExportService:      exportService,
+		MCPService:         mcpService,
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)

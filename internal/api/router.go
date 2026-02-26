@@ -6,6 +6,7 @@ import (
 
 	"engram/internal/config"
 	"engram/internal/export"
+	"engram/internal/mcp"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -30,6 +31,7 @@ type RouterDependencies struct {
 	ChatRouter         chi.Router
 	AgentWorkflow      AgentWorkflowRouteService
 	ExportService      export.Service
+	MCPService         mcp.Service
 }
 
 // NewRouterWithDependencies builds the API router and mounts dependency-backed routes.
@@ -72,6 +74,7 @@ func mountDependencyRoutes(router chi.Router, settings config.Settings, dependen
 	mountChatDependencyRoutes(router, dependencies)
 	mountAgentWorkflowDependencyRoutes(router, dependencies)
 	mountExportDependencyRoutes(router, dependencies)
+	mountMCPDependencyRoutes(router, dependencies)
 }
 
 func mountMemoryAdminDependencyRoutes(router chi.Router, dependencies RouterDependencies) {
@@ -135,6 +138,13 @@ func mountExportDependencyRoutes(router chi.Router, dependencies RouterDependenc
 		return
 	}
 	MountExportRoutes(router, dependencies.ExportService)
+}
+
+func mountMCPDependencyRoutes(router chi.Router, dependencies RouterDependencies) {
+	if dependencies.MCPService == nil {
+		return
+	}
+	MountMCPRoutes(router, dependencies.MCPService)
 }
 
 func writeJSON(writer http.ResponseWriter, statusCode int, body any) {

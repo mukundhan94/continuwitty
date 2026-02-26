@@ -68,6 +68,7 @@
 | CP98 | 2026-02-26 | Completed | Phase 3 export/import service baseline (`internal/export/service*`) with migrated unit tests and >9.5 code-health gate |
 | CP99 | 2026-02-26 | Completed | Phase 4 export/import runtime integration baseline (`cmd/api` wiring + router mount tests) with >9.5 code-health gate |
 | CP100 | 2026-02-26 | Completed | Phase 4 export/import API error-mapping hardening (service error -> HTTP status parity) with migrated route tests and >9.5 code-health gate |
+| CP101 | 2026-02-26 | Completed | Phase 4 MCP stream transport baseline (`/api/v1/mcp/stream`) with compatibility service, router/runtime wiring, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4635,6 +4636,56 @@
 - CodeScene checks:
   - `internal/api/export_api.go`: `9.68`
   - `internal/api/export_api_errors_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP101 - Phase 4 MCP Stream Transport Baseline (`/api/v1/mcp/stream`)
+
+- Added MCP transport/domain baseline in Go:
+  - `internal/mcp/types.go` for JSON-RPC request/frame contracts.
+  - `internal/mcp/compatibility_service.go` with compatibility behavior for:
+    - `initialize`
+    - `tools/list`
+    - notification acceptance (`notifications/initialized` and other no-op notifications)
+  - `internal/mcp/service.go` now compiles against concrete request/frame types.
+- Added MCP stream route module:
+  - `internal/api/mcp_stream.go`
+  - mounted endpoints:
+    - `GET /api/v1/mcp/stream` (probe payload)
+    - `HEAD /api/v1/mcp/stream`
+    - `POST /api/v1/mcp/stream`
+  - behavior includes:
+    - notification handling (`202 Accepted`) with no response frames
+    - request/response JSON mode for MCP initialize/tool calls
+    - SSE mode (`text/event-stream`) with `jsonrpc` events
+    - Accept-header quality parsing parity (`application/json` preferred on tie)
+    - fallback terminal error frame when no matching terminal response is emitted.
+- Updated router/runtime dependency wiring:
+  - `internal/api/router.go`
+    - new optional dependency: `RouterDependencies.MCPService`
+    - conditional route mounting via `mountMCPDependencyRoutes`.
+  - `cmd/api/main.go`
+    - runtime now injects `mcp.NewCompatibilityService(settings.AppSemanticVersion)`.
+- Added migrated MCP tests:
+  - `internal/mcp/compatibility_service_test.go`
+  - `internal/api/mcp_stream_test.go`
+  - `internal/api/mcp_router_test.go`
+- Focused/full verification:
+  - `go test ./internal/mcp ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5 where scored):
+  - `internal/mcp/types.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
+  - `internal/api/mcp_stream.go`: `10.0`
+  - `internal/api/mcp_stream_test.go`: `10.0`
+  - `internal/api/mcp_router_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`
+  - `internal/mcp/service.go`: `Code Health score: None` (interface-only file; no degradations).
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
