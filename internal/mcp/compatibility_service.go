@@ -80,6 +80,14 @@ type PinnedEngramListService interface {
 	) ([]models.EngramSummary, error)
 }
 
+// PinnedDocumentListService captures pinned-document listing behavior used by MCP compatibility chat dispatch.
+type PinnedDocumentListService interface {
+	ListPinnedDocuments(
+		ctx context.Context,
+		request SessionScopedRequest,
+	) ([]models.PinnedDocumentRecord, error)
+}
+
 // SessionListRequest captures compatibility-level session list inputs.
 type SessionListRequest struct {
 	ActorUserID uuid.UUID
@@ -118,23 +126,25 @@ type SessionScopedRequest struct {
 
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
-	ProjectService      ProjectListService
-	SessionService      SessionListService
-	SessionGet          SessionGetService
-	MessageService      MessageListService
-	TimelineService     TimelineListService
-	PinnedEngramService PinnedEngramListService
+	ProjectService        ProjectListService
+	SessionService        SessionListService
+	SessionGet            SessionGetService
+	MessageService        MessageListService
+	TimelineService       TimelineListService
+	PinnedEngramService   PinnedEngramListService
+	PinnedDocumentService PinnedDocumentListService
 }
 
 // CompatibilityService provides baseline MCP interop behavior while the full tool catalog migrates.
 type CompatibilityService struct {
-	serverVersion       string
-	projectService      ProjectListService
-	sessionService      SessionListService
-	sessionGet          SessionGetService
-	messageService      MessageListService
-	timelineService     TimelineListService
-	pinnedEngramService PinnedEngramListService
+	serverVersion         string
+	projectService        ProjectListService
+	sessionService        SessionListService
+	sessionGet            SessionGetService
+	messageService        MessageListService
+	timelineService       TimelineListService
+	pinnedEngramService   PinnedEngramListService
+	pinnedDocumentService PinnedDocumentListService
 }
 
 // NewCompatibilityService builds a compatibility MCP service with stable initialize/tool-list behavior.
@@ -155,13 +165,14 @@ func NewCompatibilityServiceWithDependencies(
 		trimmed = "0.1.0"
 	}
 	return &CompatibilityService{
-		serverVersion:       trimmed,
-		projectService:      dependencies.ProjectService,
-		sessionService:      dependencies.SessionService,
-		sessionGet:          dependencies.SessionGet,
-		messageService:      dependencies.MessageService,
-		timelineService:     dependencies.TimelineService,
-		pinnedEngramService: dependencies.PinnedEngramService,
+		serverVersion:         trimmed,
+		projectService:        dependencies.ProjectService,
+		sessionService:        dependencies.SessionService,
+		sessionGet:            dependencies.SessionGet,
+		messageService:        dependencies.MessageService,
+		timelineService:       dependencies.TimelineService,
+		pinnedEngramService:   dependencies.PinnedEngramService,
+		pinnedDocumentService: dependencies.PinnedDocumentService,
 	}
 }
 

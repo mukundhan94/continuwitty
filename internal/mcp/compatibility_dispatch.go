@@ -177,6 +177,35 @@ var implementedToolHandlers = map[string]implementedToolHandler{
 			},
 		)
 	},
+	"chat.list_pinned_documents": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		if service.pinnedDocumentService == nil {
+			return nil, false, nil
+		}
+		return service.dispatchSessionScopedCollectionTool(
+			ctx,
+			actor,
+			params,
+			"pinned_documents",
+			func(
+				ctx context.Context,
+				actorUserID uuid.UUID,
+				sessionID uuid.UUID,
+			) (any, error) {
+				return service.pinnedDocumentService.ListPinnedDocuments(
+					ctx,
+					SessionScopedRequest{
+						ActorUserID: actorUserID,
+						SessionID:   sessionID,
+					},
+				)
+			},
+		)
+	},
 	"user.get_profile": func(
 		_ *CompatibilityService,
 		_ context.Context,

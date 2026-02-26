@@ -83,6 +83,7 @@
 | CP113 | 2026-02-26 | Completed | Phase 4 MCP chat messages-query baseline (`chat.list_messages`) with direct/`tools/call` parity, required session lookup, paging defaults, runtime message-list wiring, migrated tests, and >9.5 code-health gate |
 | CP114 | 2026-02-26 | Completed | Phase 4 MCP chat timeline-query baseline (`chat.list_timeline`) with direct/`tools/call` parity, required session lookup, timeline event projection wiring, migrated tests, and >9.5 code-health gate |
 | CP115 | 2026-02-26 | Completed | Phase 4 MCP chat pinned-engrams query baseline (`chat.list_pinned_engrams`) with direct/`tools/call` parity, required session lookup, runtime pinned-engram wiring, migrated tests, and >9.5 code-health gate |
+| CP116 | 2026-02-26 | Completed | Phase 4 MCP chat pinned-documents query baseline (`chat.list_pinned_documents`) with direct/`tools/call` parity, required session lookup, runtime pinned-document wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -5172,6 +5173,34 @@
   - `internal/mcp/compatibility_service.go`: `10.0`
   - `internal/mcp/compatibility_dispatch.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_pinned_engrams_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP116 - Phase 4 MCP Chat Pinned-Documents Query Baseline (`chat.list_pinned_documents`)
+
+- Migrated `chat.list_pinned_documents` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"pinned_documents": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented session-scoped pinned-document query behavior:
+  - required `session_id` UUID validation with existing session visibility checks
+  - invalid/missing session IDs return `-32602` invalid params.
+- Added runtime pinned-document adapter wiring in Go API runtime:
+  - `cmd/api/mcp_pinned_document_list_adapter.go`
+  - `cmd/api/main.go` passes pinned-document-list dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_pinned_documents_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_pinned_document_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_pinned_documents_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
