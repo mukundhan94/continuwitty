@@ -77,6 +77,7 @@
 | CP107 | 2026-02-26 | Completed | Phase 4 MCP project-default dispatch baseline (`project.get_default` + `project.set_default`) with direct/`tools/call` parity, service-error mapping, migrated tests, and >9.5 code-health gate |
 | CP108 | 2026-02-26 | Completed | Phase 4 MCP project-create dispatch baseline (`project.create`) with direct/`tools/call` parity, owner UUID validation, migrated tests, and >9.5 code-health gate |
 | CP109 | 2026-02-26 | Completed | Phase 4 MCP user-project dispatch baseline (`user.list_projects`) with session-derived sorted project IDs, direct/`tools/call` parity, runtime session-list wiring, migrated tests, and >9.5 code-health gate |
+| CP110 | 2026-02-26 | Completed | Phase 4 MCP chat session-query baseline (`chat.list_sessions`) with direct/`tools/call` parity, optional project filter + paging defaults, runtime session-list request-shape hardening, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4985,6 +4986,38 @@
   - `internal/mcp/compatibility_service.go`: `10.0`
   - `internal/mcp/compatibility_dispatch.go`: `9.68`
   - `internal/mcp/compatibility_service_user_projects_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP110 - Phase 4 MCP Chat Session-Query Baseline (`chat.list_sessions`)
+
+- Migrated `chat.list_sessions` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"sessions": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented chat session list parameter behavior parity:
+  - optional `project_id` filter support
+  - paging defaults (`limit=50`, `offset=0`)
+  - invalid paging values return `-32602` invalid params.
+- Hardened MCP session-list dependency shape for code-health/safeguard compliance:
+  - replaced high-argument list calls with request struct:
+    - `internal/mcp.SessionListRequest`
+    - updated runtime adapter and tests accordingly.
+- Added/updated MCP tests:
+  - `internal/mcp/compatibility_service_chat_sessions_test.go`
+  - `internal/mcp/compatibility_service_user_projects_test.go`
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_user_projects_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_sessions_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

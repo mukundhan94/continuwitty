@@ -59,6 +59,9 @@ func TestCompatibilityServiceUserListProjectsParity(t *testing.T) {
 			if sessionService.call.limit != defaultUserProjectsLimit || sessionService.call.offset != defaultUserProjectsOffset {
 				t.Fatalf("expected default user project list window forwarded")
 			}
+			if sessionService.call.projectID != nil {
+				t.Fatalf("expected user.list_projects to use nil project filter")
+			}
 		})
 	}
 }
@@ -117,6 +120,7 @@ func toStringSlice(t *testing.T, value any) []string {
 
 type sessionListCall struct {
 	actorUserID uuid.UUID
+	projectID   *string
 	limit       int
 	offset      int
 }
@@ -129,11 +133,14 @@ type fakeSessionListService struct {
 
 func (service *fakeSessionListService) ListSessions(
 	_ context.Context,
-	actorUserID uuid.UUID,
-	limit int,
-	offset int,
+	request SessionListRequest,
 ) ([]models.ChatSessionRecord, error) {
-	service.call = sessionListCall{actorUserID: actorUserID, limit: limit, offset: offset}
+	service.call = sessionListCall{
+		actorUserID: request.ActorUserID,
+		projectID:   request.ProjectID,
+		limit:       request.Limit,
+		offset:      request.Offset,
+	}
 	if service.err != nil {
 		return nil, service.err
 	}

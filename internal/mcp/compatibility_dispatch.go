@@ -20,6 +20,8 @@ const (
 	defaultProjectListOffset  = 0
 	defaultUserProjectsLimit  = 1000
 	defaultUserProjectsOffset = 0
+	defaultChatSessionsLimit  = 50
+	defaultChatSessionsOffset = 0
 )
 
 type toolDispatchError struct {
@@ -35,6 +37,8 @@ func (service *CompatibilityService) dispatchImplementedTool(
 	params map[string]any,
 ) (map[string]any, bool, *toolDispatchError) {
 	switch method {
+	case "chat.list_sessions":
+		return service.dispatchChatListSessionsTool(ctx, actor, params)
 	case "user.get_profile":
 		return map[string]any{"profile": actorPayload(actor)}, true, nil
 	case "user.list_projects":
@@ -61,9 +65,12 @@ func (service *CompatibilityService) dispatchUserListProjectsTool(
 	}
 	sessions, err := service.sessionService.ListSessions(
 		ctx,
-		actor.UserID,
-		defaultUserProjectsLimit,
-		defaultUserProjectsOffset,
+		SessionListRequest{
+			ActorUserID: actor.UserID,
+			ProjectID:   nil,
+			Limit:       defaultUserProjectsLimit,
+			Offset:      defaultUserProjectsOffset,
+		},
 	)
 	if err != nil {
 		return nil, true, internalToolDispatchError()
@@ -71,6 +78,37 @@ func (service *CompatibilityService) dispatchUserListProjectsTool(
 	return map[string]any{
 		"project_ids": uniqueSortedProjectIDs(sessions),
 	}, true, nil
+}
+
+func (service *CompatibilityService) dispatchChatListSessionsTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.sessionService == nil {
+		return nil, false, nil
+	}
+	limit, ok := optionalIntParam(params, "limit", defaultChatSessionsLimit)
+	if !ok {
+		return nil, true, invalidParamError("limit")
+	}
+	offset, ok := optionalIntParam(params, "offset", defaultChatSessionsOffset)
+	if !ok {
+		return nil, true, invalidParamError("offset")
+	}
+	sessions, err := service.sessionService.ListSessions(
+		ctx,
+		SessionListRequest{
+			ActorUserID: actor.UserID,
+			ProjectID:   optionalProjectIDParam(params, "project_id"),
+			Limit:       limit,
+			Offset:      offset,
+		},
+	)
+	if err != nil {
+		return nil, true, internalToolDispatchError()
+	}
+	return map[string]any{"sessions": sessions}, true, nil
 }
 
 func (service *CompatibilityService) dispatchProjectListTool(
@@ -262,6 +300,18 @@ func requiredStringParam(params map[string]any, key string) (string, bool) {
 	}
 	value = strings.TrimSpace(value)
 	return value, value != ""
+}
+
+func optionalProjectIDParam(params map[string]any, key string) *string {
+	rawValue, ok := optionalParamValue(params, key)
+	if !ok {
+		return nil
+	}
+	text := strings.TrimSpace(fmt.Sprint(rawValue))
+	if text == "" {
+		return nil
+	}
+	return &text
 }
 
 func stringParamWithDefault(params map[string]any, key string, defaultValue string) string {

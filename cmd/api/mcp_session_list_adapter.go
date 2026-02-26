@@ -6,8 +6,6 @@ import (
 	"engram/internal/mcp"
 	"engram/internal/models"
 	"engram/internal/repository"
-
-	"github.com/google/uuid"
 )
 
 type mcpSessionListAdapter struct {
@@ -23,18 +21,16 @@ func newMCPSessionListAdapter(db repository.Queryer) mcp.SessionListService {
 
 func (adapter mcpSessionListAdapter) ListSessions(
 	ctx context.Context,
-	actorUserID uuid.UUID,
-	limit int,
-	offset int,
+	request mcp.SessionListRequest,
 ) ([]models.ChatSessionRecord, error) {
 	return repository.ListChatSessions(
 		ctx,
 		adapter.db,
 		repository.ChatSessionListInput{
-			ActorUserID: actorUserID,
-			ProjectID:   nil,
-			Limit:       limit,
-			Offset:      offset,
+			ActorUserID: request.ActorUserID,
+			ProjectID:   request.ProjectID,
+			Limit:       request.Limit,
+			Offset:      request.Offset,
 		},
 	)
 }

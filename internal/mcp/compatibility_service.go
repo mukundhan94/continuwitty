@@ -44,10 +44,16 @@ type ProjectListService interface {
 type SessionListService interface {
 	ListSessions(
 		ctx context.Context,
-		actorUserID uuid.UUID,
-		limit int,
-		offset int,
+		request SessionListRequest,
 	) ([]models.ChatSessionRecord, error)
+}
+
+// SessionListRequest captures compatibility-level session list inputs.
+type SessionListRequest struct {
+	ActorUserID uuid.UUID
+	ProjectID   *string
+	Limit       int
+	Offset      int
 }
 
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
