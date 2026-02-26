@@ -85,6 +85,7 @@
 | CP115 | 2026-02-26 | Completed | Phase 4 MCP chat pinned-engrams query baseline (`chat.list_pinned_engrams`) with direct/`tools/call` parity, required session lookup, runtime pinned-engram wiring, migrated tests, and >9.5 code-health gate |
 | CP116 | 2026-02-26 | Completed | Phase 4 MCP chat pinned-documents query baseline (`chat.list_pinned_documents`) with direct/`tools/call` parity, required session lookup, runtime pinned-document wiring, migrated tests, and >9.5 code-health gate |
 | CP117 | 2026-02-26 | Completed | Phase 4 MCP chat pin-engram mutation baseline (`chat.pin_engram` / `engram.pin_to_session`) with direct/`tools/call` parity, runtime pin adapter wiring, dispatch modularization for >9.5 code-health, migrated tests, and safeguard pass |
+| CP118 | 2026-02-26 | Completed | Phase 4 MCP chat unpin-engram mutation baseline (`chat.unpin_engram`) with direct/`tools/call` parity, runtime unpin adapter wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -2660,6 +2661,39 @@
 - CodeScene checks:
   - `internal/repository/engram_write_test.go` score improved from `9.26` -> `10.0`
   - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP118 - Phase 4 MCP Chat Unpin-Engram Mutation Baseline (`chat.unpin_engram`)
+
+- Migrated `chat.unpin_engram` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"removed": true}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented required mutation parameter behavior parity:
+  - required `session_id` UUID
+  - required `engram_id` UUID
+  - missing/invalid values return `-32602` invalid params.
+- Implemented unpin result/error parity:
+  - successful unpin returns `removed=true`
+  - missing pin returns `-32602` with `status_code=404` and `detail="Pinned engram not found for session"`.
+- Added runtime unpin mutation adapter wiring in Go API runtime:
+  - `cmd/api/mcp_unpin_engram_adapter.go`
+  - `cmd/api/main.go` passes unpin-engram dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_unpin_engram_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_unpin_engram_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_mutation_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_unpin_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_unpin_engram_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
