@@ -7,9 +7,21 @@ import (
 )
 
 func registerChatSessionToolHandlers(handlers map[string]implementedToolHandler) {
+	handlers["chat.create_session"] = chatCreateSessionHandler()
 	handlers["chat.get_session"] = chatGetSessionHandler()
 	handlers["chat.list_sessions"] = chatListSessionsHandler()
 	handlers["chat.get_lifecycle_policy"] = chatGetLifecyclePolicyHandler()
+}
+
+func chatCreateSessionHandler() implementedToolHandler {
+	return func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchChatCreateSessionTool(ctx, actor, params)
+	}
 }
 
 func chatGetSessionHandler() implementedToolHandler {

@@ -87,23 +87,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	oauthAuthorizationService := oauth.NewAuthorizationService(pool)
 	oauthTokenService := oauth.NewTokenService(pool)
 	mcpTokenService := mcptokens.NewService(pool)
-	mcpService := mcp.NewCompatibilityServiceWithDependencies(
-		settings.AppSemanticVersion,
-		mcp.CompatibilityServiceDependencies{
-			ProjectService:         projectService,
-			SessionService:         newMCPSessionListAdapter(pool),
-			SessionGet:             newMCPSessionGetAdapter(pool),
-			MessageService:         newMCPMessageListAdapter(pool),
-			TimelineService:        newMCPTimelineListAdapter(pool),
-			PinnedEngramService:    newMCPPinnedEngramListAdapter(pool),
-			PinnedDocumentService:  newMCPPinnedDocumentListAdapter(pool),
-			ProjectDocumentService: newMCPProjectDocumentListAdapter(pool),
-			PinEngramService:       newMCPPinEngramAdapter(pool),
-			UnpinEngramService:     newMCPUnpinEngramAdapter(pool),
-			PinDocumentService:     newMCPPinDocumentAdapter(pool),
-			UnpinDocumentService:   newMCPUnpinDocumentAdapter(pool),
-		},
-	)
+	mcpService := newMCPCompatibilityService(settings, pool, projectService)
 	mcpTransportLimiter := newMCPTransportRateLimiter(settings, pool)
 	mcpActorResolver := mcp.NewActorResolver(
 		settings,
@@ -155,6 +139,31 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
 	logger.Info("session-authenticated actor context enabled")
 	return handler
+}
+
+func newMCPCompatibilityService(
+	settings config.Settings,
+	pool *pgxpool.Pool,
+	projectService *projects.Service,
+) *mcp.CompatibilityService {
+	return mcp.NewCompatibilityServiceWithDependencies(
+		settings.AppSemanticVersion,
+		mcp.CompatibilityServiceDependencies{
+			ProjectService:         projectService,
+			SessionService:         newMCPSessionListAdapter(pool),
+			SessionGet:             newMCPSessionGetAdapter(pool),
+			SessionCreate:          newMCPSessionCreateAdapter(pool),
+			MessageService:         newMCPMessageListAdapter(pool),
+			TimelineService:        newMCPTimelineListAdapter(pool),
+			PinnedEngramService:    newMCPPinnedEngramListAdapter(pool),
+			PinnedDocumentService:  newMCPPinnedDocumentListAdapter(pool),
+			ProjectDocumentService: newMCPProjectDocumentListAdapter(pool),
+			PinEngramService:       newMCPPinEngramAdapter(pool),
+			UnpinEngramService:     newMCPUnpinEngramAdapter(pool),
+			PinDocumentService:     newMCPPinDocumentAdapter(pool),
+			UnpinDocumentService:   newMCPUnpinDocumentAdapter(pool),
+		},
+	)
 }
 
 func resolveMCPActorFromSessionContext(request *http.Request) (mcp.Actor, error) {

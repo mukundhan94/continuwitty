@@ -89,6 +89,7 @@
 | CP119 | 2026-02-26 | Completed | Phase 4 MCP chat pin-document mutation baseline (`chat.pin_document`) with direct/`tools/call` parity, runtime pin-document adapter wiring, migrated tests, and >9.5 code-health gate |
 | CP120 | 2026-02-26 | Completed | Phase 4 MCP chat unpin-document mutation baseline (`chat.unpin_document`) with direct/`tools/call` parity, runtime unpin-document adapter wiring, migrated tests, and >9.5 code-health gate |
 | CP121 | 2026-02-26 | Completed | Phase 4 MCP chat project-document query baseline (`chat.list_project_documents`) with direct/`tools/call` parity, paging defaults, runtime document-list wiring, migrated tests, and >9.5 code-health gate |
+| CP122 | 2026-02-26 | Completed | Phase 4 MCP chat create-session baseline (`chat.create_session`) with direct/`tools/call` parity, required project/title validation, runtime session-create wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -2796,6 +2797,39 @@
   - `internal/mcp/compatibility_dispatch_chat_project_documents_support.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_project_documents_test.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_project_documents_support_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP122 - Phase 4 MCP Chat Create-Session Baseline (`chat.create_session`)
+
+- Migrated `chat.create_session` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"session": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented create-session parameter behavior parity:
+  - required `project_id` and `title`
+  - enum validation for `provider`, `visibility_scope`, and `autosave_strategy`
+  - default application for optional create fields (`model_id`, `system_prompt`, autosave and retention values)
+  - invalid params return `-32602`.
+- Added runtime session-create adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_create_adapter.go`
+  - `cmd/api/main.go` passes session-create dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_create_session_test.go`
+  - `internal/mcp/compatibility_service_chat_create_session_support_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `9.55`
+  - `cmd/api/mcp_session_create_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_create_session_support.go`: `9.68`
+  - `internal/mcp/compatibility_service_chat_create_session_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_create_session_support_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

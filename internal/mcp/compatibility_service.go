@@ -56,6 +56,14 @@ type SessionGetService interface {
 	) (*models.ChatSessionRecord, error)
 }
 
+// SessionCreateService captures session creation behavior used by MCP compatibility chat dispatch.
+type SessionCreateService interface {
+	CreateSession(
+		ctx context.Context,
+		request SessionCreateRequest,
+	) (*models.ChatSessionRecord, error)
+}
+
 // MessageListService captures message listing behavior used by MCP compatibility chat dispatch.
 type MessageListService interface {
 	ListMessages(
@@ -136,6 +144,12 @@ type SessionListRequest struct {
 	Offset      int
 }
 
+// SessionCreateRequest captures compatibility-level session create inputs.
+type SessionCreateRequest struct {
+	ActorUserID uuid.UUID
+	Payload     models.ChatSessionCreateRequest
+}
+
 // SessionGetRequest captures compatibility-level session lookup inputs.
 type SessionGetRequest struct {
 	ActorUserID uuid.UUID
@@ -191,6 +205,7 @@ type CompatibilityServiceDependencies struct {
 	ProjectService         ProjectListService
 	SessionService         SessionListService
 	SessionGet             SessionGetService
+	SessionCreate          SessionCreateService
 	MessageService         MessageListService
 	TimelineService        TimelineListService
 	PinnedEngramService    PinnedEngramListService
@@ -208,6 +223,7 @@ type CompatibilityService struct {
 	projectService         ProjectListService
 	sessionService         SessionListService
 	sessionGet             SessionGetService
+	sessionCreate          SessionCreateService
 	messageService         MessageListService
 	timelineService        TimelineListService
 	pinnedEngramService    PinnedEngramListService
@@ -241,6 +257,7 @@ func NewCompatibilityServiceWithDependencies(
 		projectService:         dependencies.ProjectService,
 		sessionService:         dependencies.SessionService,
 		sessionGet:             dependencies.SessionGet,
+		sessionCreate:          dependencies.SessionCreate,
 		messageService:         dependencies.MessageService,
 		timelineService:        dependencies.TimelineService,
 		pinnedEngramService:    dependencies.PinnedEngramService,
