@@ -88,6 +88,14 @@ type PinnedDocumentListService interface {
 	) ([]models.PinnedDocumentRecord, error)
 }
 
+// ProjectDocumentListService captures project-document listing behavior used by MCP compatibility chat dispatch.
+type ProjectDocumentListService interface {
+	ListProjectDocuments(
+		ctx context.Context,
+		request ProjectDocumentListRequest,
+	) ([]models.DocumentRecord, error)
+}
+
 // PinEngramService captures engram pinning behavior used by MCP compatibility chat dispatch.
 type PinEngramService interface {
 	PinEngram(
@@ -156,6 +164,14 @@ type SessionScopedRequest struct {
 	SessionID   uuid.UUID
 }
 
+// ProjectDocumentListRequest captures compatibility-level project document list inputs.
+type ProjectDocumentListRequest struct {
+	ActorUserID uuid.UUID
+	ProjectID   *string
+	Limit       int
+	Offset      int
+}
+
 // SessionPinEngramRequest captures compatibility-level pin-engram inputs.
 type SessionPinEngramRequest struct {
 	ActorUserID uuid.UUID
@@ -172,33 +188,35 @@ type SessionPinDocumentRequest struct {
 
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
-	ProjectService        ProjectListService
-	SessionService        SessionListService
-	SessionGet            SessionGetService
-	MessageService        MessageListService
-	TimelineService       TimelineListService
-	PinnedEngramService   PinnedEngramListService
-	PinnedDocumentService PinnedDocumentListService
-	PinEngramService      PinEngramService
-	UnpinEngramService    UnpinEngramService
-	PinDocumentService    PinDocumentService
-	UnpinDocumentService  UnpinDocumentService
+	ProjectService         ProjectListService
+	SessionService         SessionListService
+	SessionGet             SessionGetService
+	MessageService         MessageListService
+	TimelineService        TimelineListService
+	PinnedEngramService    PinnedEngramListService
+	PinnedDocumentService  PinnedDocumentListService
+	ProjectDocumentService ProjectDocumentListService
+	PinEngramService       PinEngramService
+	UnpinEngramService     UnpinEngramService
+	PinDocumentService     PinDocumentService
+	UnpinDocumentService   UnpinDocumentService
 }
 
 // CompatibilityService provides baseline MCP interop behavior while the full tool catalog migrates.
 type CompatibilityService struct {
-	serverVersion         string
-	projectService        ProjectListService
-	sessionService        SessionListService
-	sessionGet            SessionGetService
-	messageService        MessageListService
-	timelineService       TimelineListService
-	pinnedEngramService   PinnedEngramListService
-	pinnedDocumentService PinnedDocumentListService
-	pinEngramService      PinEngramService
-	unpinEngramService    UnpinEngramService
-	pinDocumentService    PinDocumentService
-	unpinDocumentService  UnpinDocumentService
+	serverVersion          string
+	projectService         ProjectListService
+	sessionService         SessionListService
+	sessionGet             SessionGetService
+	messageService         MessageListService
+	timelineService        TimelineListService
+	pinnedEngramService    PinnedEngramListService
+	pinnedDocumentService  PinnedDocumentListService
+	projectDocumentService ProjectDocumentListService
+	pinEngramService       PinEngramService
+	unpinEngramService     UnpinEngramService
+	pinDocumentService     PinDocumentService
+	unpinDocumentService   UnpinDocumentService
 }
 
 // NewCompatibilityService builds a compatibility MCP service with stable initialize/tool-list behavior.
@@ -219,18 +237,19 @@ func NewCompatibilityServiceWithDependencies(
 		trimmed = "0.1.0"
 	}
 	return &CompatibilityService{
-		serverVersion:         trimmed,
-		projectService:        dependencies.ProjectService,
-		sessionService:        dependencies.SessionService,
-		sessionGet:            dependencies.SessionGet,
-		messageService:        dependencies.MessageService,
-		timelineService:       dependencies.TimelineService,
-		pinnedEngramService:   dependencies.PinnedEngramService,
-		pinnedDocumentService: dependencies.PinnedDocumentService,
-		pinEngramService:      dependencies.PinEngramService,
-		unpinEngramService:    dependencies.UnpinEngramService,
-		pinDocumentService:    dependencies.PinDocumentService,
-		unpinDocumentService:  dependencies.UnpinDocumentService,
+		serverVersion:          trimmed,
+		projectService:         dependencies.ProjectService,
+		sessionService:         dependencies.SessionService,
+		sessionGet:             dependencies.SessionGet,
+		messageService:         dependencies.MessageService,
+		timelineService:        dependencies.TimelineService,
+		pinnedEngramService:    dependencies.PinnedEngramService,
+		pinnedDocumentService:  dependencies.PinnedDocumentService,
+		projectDocumentService: dependencies.ProjectDocumentService,
+		pinEngramService:       dependencies.PinEngramService,
+		unpinEngramService:     dependencies.UnpinEngramService,
+		pinDocumentService:     dependencies.PinDocumentService,
+		unpinDocumentService:   dependencies.UnpinDocumentService,
 	}
 }
 

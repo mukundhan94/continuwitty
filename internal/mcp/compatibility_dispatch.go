@@ -5,16 +5,18 @@ import (
 )
 
 const (
-	defaultProjectListLimit   = 500
-	defaultProjectListOffset  = 0
-	defaultUserProjectsLimit  = 1000
-	defaultUserProjectsOffset = 0
-	defaultChatSessionsLimit  = 50
-	defaultChatSessionsOffset = 0
-	defaultChatMessagesLimit  = 200
-	defaultChatMessagesOffset = 0
-	defaultChatTimelineLimit  = 100
-	defaultChatTimelineOffset = 0
+	defaultProjectListLimit           = 500
+	defaultProjectListOffset          = 0
+	defaultUserProjectsLimit          = 1000
+	defaultUserProjectsOffset         = 0
+	defaultChatSessionsLimit          = 50
+	defaultChatSessionsOffset         = 0
+	defaultChatMessagesLimit          = 200
+	defaultChatMessagesOffset         = 0
+	defaultChatTimelineLimit          = 100
+	defaultChatTimelineOffset         = 0
+	defaultChatProjectDocumentsLimit  = 200
+	defaultChatProjectDocumentsOffset = 0
 )
 
 type toolDispatchError struct {

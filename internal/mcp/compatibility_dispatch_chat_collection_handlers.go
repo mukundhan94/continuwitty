@@ -11,6 +11,7 @@ func registerChatCollectionToolHandlers(handlers map[string]implementedToolHandl
 	handlers["chat.list_timeline"] = chatListTimelineHandler()
 	handlers["chat.list_pinned_engrams"] = chatListPinnedEngramsHandler()
 	handlers["chat.list_pinned_documents"] = chatListPinnedDocumentsHandler()
+	handlers["chat.list_project_documents"] = chatListProjectDocumentsHandler()
 }
 
 func chatListMessagesHandler() implementedToolHandler {
@@ -148,5 +149,16 @@ func chatListPinnedDocumentsHandler() implementedToolHandler {
 				)
 			},
 		)
+	}
+}
+
+func chatListProjectDocumentsHandler() implementedToolHandler {
+	return func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchChatListProjectDocumentsTool(ctx, actor, params)
 	}
 }

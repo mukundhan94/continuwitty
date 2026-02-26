@@ -88,6 +88,7 @@
 | CP118 | 2026-02-26 | Completed | Phase 4 MCP chat unpin-engram mutation baseline (`chat.unpin_engram`) with direct/`tools/call` parity, runtime unpin adapter wiring, migrated tests, and >9.5 code-health gate |
 | CP119 | 2026-02-26 | Completed | Phase 4 MCP chat pin-document mutation baseline (`chat.pin_document`) with direct/`tools/call` parity, runtime pin-document adapter wiring, migrated tests, and >9.5 code-health gate |
 | CP120 | 2026-02-26 | Completed | Phase 4 MCP chat unpin-document mutation baseline (`chat.unpin_document`) with direct/`tools/call` parity, runtime unpin-document adapter wiring, migrated tests, and >9.5 code-health gate |
+| CP121 | 2026-02-26 | Completed | Phase 4 MCP chat project-document query baseline (`chat.list_project_documents`) with direct/`tools/call` parity, paging defaults, runtime document-list wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -2762,6 +2763,39 @@
   - `internal/mcp/compatibility_dispatch_chat_mutation_handlers.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_chat_unpin_document_support.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_unpin_document_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP121 - Phase 4 MCP Chat Project-Document Query Baseline (`chat.list_project_documents`)
+
+- Migrated `chat.list_project_documents` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"documents": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented project-document query parameter behavior parity:
+  - optional `project_id` filter support
+  - paging defaults (`limit=200`, `offset=0`)
+  - invalid paging values return `-32602` invalid params.
+- Added runtime project-document list adapter wiring in Go API runtime:
+  - `cmd/api/mcp_project_document_list_adapter.go`
+  - `cmd/api/main.go` passes project-document-list dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_project_documents_test.go`
+  - `internal/mcp/compatibility_service_chat_project_documents_support_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_project_document_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_collection_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_project_documents_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_project_documents_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_project_documents_support_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
