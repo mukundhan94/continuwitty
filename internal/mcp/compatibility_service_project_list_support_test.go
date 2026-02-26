@@ -41,6 +41,22 @@ func (service fakeProjectListService) ListProjects(
 	return []models.ProjectRecord{buildProjectRecord(service.ownerUserID)}, nil
 }
 
+func (fakeProjectListService) GetDefaultProjectID(
+	_ context.Context,
+	_ uuid.UUID,
+) (*string, error) {
+	return nil, nil
+}
+
+func (fakeProjectListService) SetDefaultProjectID(
+	_ context.Context,
+	_ uuid.UUID,
+	_ models.UserRole,
+	_ string,
+) (string, error) {
+	return "", nil
+}
+
 func dispatchProjectListForTest(
 	t *testing.T,
 	actorUserID uuid.UUID,

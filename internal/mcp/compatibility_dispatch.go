@@ -3,10 +3,12 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 
 	"engram/internal/models"
+	"engram/internal/projects"
 )
 
 const (
@@ -31,6 +33,10 @@ func (service *CompatibilityService) dispatchImplementedTool(
 		return map[string]any{"profile": actorPayload(actor)}, true, nil
 	case "project.list":
 		return service.dispatchProjectListTool(ctx, actor, params)
+	case "project.get_default":
+		return service.dispatchProjectGetDefaultTool(ctx, actor)
+	case "project.set_default":
+		return service.dispatchProjectSetDefaultTool(ctx, actor, params)
 	default:
 		return nil, false, nil
 	}
@@ -71,6 +77,44 @@ func (service *CompatibilityService) dispatchProjectListTool(
 	return map[string]any{"projects": projects}, true, nil
 }
 
+func (service *CompatibilityService) dispatchProjectGetDefaultTool(
+	ctx context.Context,
+	actor Actor,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.projectService == nil {
+		return nil, false, nil
+	}
+	defaultProjectID, err := service.projectService.GetDefaultProjectID(ctx, actor.UserID)
+	if err != nil {
+		return nil, true, internalToolDispatchError()
+	}
+	return map[string]any{"default_project_id": optionalString(defaultProjectID)}, true, nil
+}
+
+func (service *CompatibilityService) dispatchProjectSetDefaultTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.projectService == nil {
+		return nil, false, nil
+	}
+	projectID, ok := requiredStringParam(params, "project_id")
+	if !ok {
+		return nil, true, invalidParamError("project_id")
+	}
+	defaultProjectID, err := service.projectService.SetDefaultProjectID(
+		ctx,
+		actor.UserID,
+		normalizedActorRole(actor),
+		projectID,
+	)
+	if err != nil {
+		return nil, true, mapProjectServiceError(err)
+	}
+	return map[string]any{"default_project_id": defaultProjectID}, true, nil
+}
+
 func invalidParamError(field string) *toolDispatchError {
 	return &toolDispatchError{
 		code:    -32602,
@@ -79,8 +123,59 @@ func invalidParamError(field string) *toolDispatchError {
 	}
 }
 
+func internalToolDispatchError() *toolDispatchError {
+	return &toolDispatchError{
+		code:    -32603,
+		message: "Internal error",
+	}
+}
+
+func mapProjectServiceError(err error) *toolDispatchError {
+	switch {
+	case errors.Is(err, projects.ErrProjectIDMustNotBeBlank):
+		return invalidParamError("project_id")
+	case errors.Is(err, projects.ErrProjectNotFound):
+		return invalidParamsWithStatus(404, "Project not found")
+	case errors.Is(err, projects.ErrUserNotFound):
+		return invalidParamsWithStatus(404, "User not found")
+	default:
+		return internalToolDispatchError()
+	}
+}
+
+func invalidParamsWithStatus(statusCode int, detail string) *toolDispatchError {
+	return &toolDispatchError{
+		code:    -32602,
+		message: "Invalid params",
+		data: map[string]any{
+			"status_code": statusCode,
+			"detail":      detail,
+		},
+	}
+}
+
 func normalizedActorRole(actor Actor) models.UserRole {
 	return models.UserRole(strings.ToLower(strings.TrimSpace(actor.Role)))
+}
+
+func optionalString(value *string) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func requiredStringParam(params map[string]any, key string) (string, bool) {
+	rawValue, ok := optionalParamValue(params, key)
+	if !ok {
+		return "", false
+	}
+	value, ok := rawValue.(string)
+	if !ok {
+		return "", false
+	}
+	value = strings.TrimSpace(value)
+	return value, value != ""
 }
 
 func optionalBoolParam(params map[string]any, key string, defaultValue bool) (bool, bool) {

@@ -24,6 +24,13 @@ type ProjectListService interface {
 		limit int,
 		offset int,
 	) ([]models.ProjectRecord, error)
+	GetDefaultProjectID(ctx context.Context, actorUserID uuid.UUID) (*string, error)
+	SetDefaultProjectID(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		projectID string,
+	) (string, error)
 }
 
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
