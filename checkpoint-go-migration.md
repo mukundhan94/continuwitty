@@ -64,6 +64,7 @@
 | CP94 | 2026-02-26 | Completed | Phase 4 MCP token API route baseline (`/api/v1/mcp/tokens` + revoke) with runtime wiring, migrated router/session tests, and >9.5 code-health gate |
 | CP95 | 2026-02-26 | Completed | Phase 3 workflow service baseline (`internal/workflow/agent.go`) with migrated unit tests and >9.5 code-health gate |
 | CP96 | 2026-02-26 | Completed | Phase 4 agent workflow API route baseline (`/api/v1/agent-runs*`) with runtime wiring, migrated route tests, and >9.5 code-health gate |
+| CP97 | 2026-02-26 | Completed | Phase 3 export/import API baseline (`/api/v1/projects/{project_id}/export|import`) with dependency-aware router mount, migrated route tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4462,6 +4463,51 @@
   - `internal/api/router.go`: `10.0`
   - `internal/api/router_test.go`: `10.0`
   - `cmd/api/main.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP97 - Phase 3 Export/Import API Route Baseline (`internal/api/export_api.go`)
+
+- Added export/import route module:
+  - new file: `internal/api/export_api.go`
+  - mounted endpoints:
+    - `GET /api/v1/projects/{project_id}/export`
+    - `POST /api/v1/projects/{project_id}/import`
+  - behavior includes:
+    - admin-actor auth requirement via existing request context actor
+    - export query parsing/validation for `format`, `collection_ids`, and `include_embeddings`
+    - import multipart file parsing and `conflict_policy` validation/defaulting
+    - JSON export payload responses and ZIP export payload responses (`export.json`)
+    - service-driven export/import orchestration with API-level error mapping.
+- Added export package contract/types baseline:
+  - new file: `internal/export/types.go`
+  - includes:
+    - export format parsing (`json`, `zip`)
+    - import conflict policy parsing (`skip`, `overwrite`, `rename`)
+    - export/import request/response models and service interface.
+- Updated top-level router dependency graph:
+  - `internal/api/router.go`
+  - new dependency: `RouterDependencies.ExportService`
+  - conditional dependency route mount: `mountExportDependencyRoutes(...)`.
+- Added migrated export/import route tests:
+  - new file: `internal/api/export_api_test.go`
+  - coverage for JSON/ZIP responses, multipart import payload forwarding, validation failures, and auth failures.
+- Executed tests one-by-one:
+  - `TestMountExportRoutesJSONResponse`
+  - `TestMountExportRoutesZIPResponse`
+  - `TestMountExportRoutesImportReadsFile`
+  - `TestMountExportRoutesValidationAndAuthErrors`
+- Focused/full verification:
+  - `go test ./internal/api ./internal/export ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks:
+  - `internal/api/export_api.go`: `9.68`
+  - `internal/api/export_api_test.go`: `9.53`
+  - `internal/api/router.go`: `10.0`
+  - `internal/export/types.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
