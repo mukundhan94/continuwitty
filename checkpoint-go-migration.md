@@ -93,6 +93,7 @@
 | CP123 | 2026-02-26 | Completed | Phase 4 MCP chat lifecycle-policy update baseline (`chat.update_lifecycle_policy`) with direct/`tools/call` parity, required session validation, partial field updates, runtime update wiring, migrated tests, and >9.5 code-health gate |
 | CP124 | 2026-02-26 | Completed | Phase 4 MCP chat continue-session baseline (`chat.continue_session`) with direct/`tools/call` parity, required session validation, optional title passthrough, runtime continuation wiring, migrated tests, and >9.5 code-health gate |
 | CP125 | 2026-02-26 | Completed | Phase 4 MCP chat delete-session baseline (`chat.delete_session`) with direct/`tools/call` parity, required session validation, optional delete controls, runtime memory-admin wiring, migrated tests, and >9.5 code-health gate |
+| CP126 | 2026-02-26 | Completed | Phase 4 MCP chat restore-session baseline (`chat.restore_session`) with direct/`tools/call` parity and owner/admin lifecycle access hardening across restore/delete, migrated tests, runtime wiring, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -2938,6 +2939,45 @@
   - `internal/mcp/compatibility_dispatch_chat_session_lifecycle_handlers.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_chat_delete_session_support.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_delete_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP126 - Phase 4 MCP Chat Restore-Session Baseline (`chat.restore_session`)
+
+- Migrated `chat.restore_session` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"result": {"session_id": ..., "restored": true}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented restore-session parameter behavior parity:
+  - required `session_id` UUID
+  - invalid values return `-32602` invalid params.
+- Implemented session lifecycle access hardening for both restore and delete:
+  - owner/admin guard added in runtime lifecycle adapter before mutation calls
+  - inaccessible sessions return not-found parity payload (`-32602`, `status_code=404`, `detail="Session not found"`).
+- Implemented restore-session result/error parity:
+  - successful restores return session restore result payload
+  - missing session returns `-32602` with 404 detail
+  - service failures map to `-32603`.
+- Added runtime session-restore adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_delete_adapter.go` now provides both delete + restore adapters with access checks
+  - `cmd/api/main.go` passes session-restore dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_restore_session_test.go`
+  - updated `internal/mcp/compatibility_service_chat_delete_session_test.go` for actor-role forwarding.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_delete_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_lifecycle_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_delete_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_restore_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_delete_session_test.go`: `9.68`
+  - `internal/mcp/compatibility_service_chat_restore_session_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

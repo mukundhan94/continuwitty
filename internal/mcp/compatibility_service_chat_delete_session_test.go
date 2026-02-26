@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	"engram/internal/models"
+
 	"github.com/google/uuid"
 )
 
@@ -29,16 +31,19 @@ func TestCompatibilityServiceChatDeleteSessionParity(t *testing.T) {
 		name            string
 		request         StreamCallRequest
 		asToolsCallPath bool
+		expectedRole    models.UserRole
 	}{
 		{
 			name:            "direct",
 			request:         directToolRequest(actorUserID.String(), "chat.delete_session", params),
 			asToolsCallPath: false,
+			expectedRole:    models.UserRoleViewer,
 		},
 		{
 			name:            "tools call",
 			request:         toolsCallRequest(actorUserID.String(), "chat_delete_session", params),
 			asToolsCallPath: true,
+			expectedRole:    models.UserRoleAnalyst,
 		},
 	}
 
@@ -54,18 +59,17 @@ func TestCompatibilityServiceChatDeleteSessionParity(t *testing.T) {
 			if !reflect.DeepEqual(*deleteService.response, result) {
 				t.Fatalf("expected delete result payload to match service output")
 			}
-			if deleteService.call.ActorUserID != actorUserID {
-				t.Fatalf("expected actor user id forwarded")
-			}
-			if deleteService.call.SessionID != sessionID {
-				t.Fatalf("expected session id forwarded")
-			}
-			if !deleteService.call.DeleteLinkedEngrams {
-				t.Fatalf("expected delete_linked_engrams to be forwarded")
-			}
-			if deleteService.call.Reason == nil || *deleteService.call.Reason != "cleanup" {
-				t.Fatalf("expected reason to be forwarded")
-			}
+			assertDeleteSessionCall(
+				t,
+				deleteService.call,
+				deleteSessionCallExpectation{
+					actorUserID:         actorUserID,
+					actorRole:           testCase.expectedRole,
+					sessionID:           sessionID,
+					deleteLinkedEngrams: true,
+					reason:              stringPtr("cleanup"),
+				},
+			)
 		})
 	}
 }
@@ -191,6 +195,48 @@ func assertDeleteSessionNotFoundErrorData(t *testing.T, errorPayload map[string]
 	}
 	if data["detail"] != "Session not found" {
 		t.Fatalf("expected session-not-found detail in error data")
+	}
+}
+
+type deleteSessionCallExpectation struct {
+	actorUserID         uuid.UUID
+	actorRole           models.UserRole
+	sessionID           uuid.UUID
+	deleteLinkedEngrams bool
+	reason              *string
+}
+
+func assertDeleteSessionCall(
+	t *testing.T,
+	call SessionDeleteRequest,
+	expected deleteSessionCallExpectation,
+) {
+	t.Helper()
+	if call.ActorUserID != expected.actorUserID {
+		t.Fatalf("expected actor user id forwarded")
+	}
+	if call.ActorRole != expected.actorRole {
+		t.Fatalf("expected normalized actor role forwarded")
+	}
+	if call.SessionID != expected.sessionID {
+		t.Fatalf("expected session id forwarded")
+	}
+	if call.DeleteLinkedEngrams != expected.deleteLinkedEngrams {
+		t.Fatalf("expected delete_linked_engrams to be forwarded")
+	}
+	assertOptionalDeleteReason(t, call.Reason, expected.reason)
+}
+
+func assertOptionalDeleteReason(t *testing.T, actual *string, expected *string) {
+	t.Helper()
+	if expected == nil {
+		if actual != nil {
+			t.Fatalf("expected reason to be omitted")
+		}
+		return
+	}
+	if actual == nil || *actual != *expected {
+		t.Fatalf("expected reason to be forwarded")
 	}
 }
 

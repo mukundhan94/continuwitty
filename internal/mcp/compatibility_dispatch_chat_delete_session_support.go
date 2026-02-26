@@ -26,6 +26,7 @@ func (service *CompatibilityService) dispatchChatDeleteSessionTool(
 		ctx,
 		SessionDeleteRequest{
 			ActorUserID:         actor.UserID,
+			ActorRole:           normalizedActorRole(actor),
 			SessionID:           sessionID,
 			DeleteLinkedEngrams: deleteLinkedEngrams,
 			Reason:              reason,

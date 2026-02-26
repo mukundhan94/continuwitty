@@ -156,6 +156,7 @@ func newMCPCompatibilityService(
 			SessionCreate:          newMCPSessionCreateAdapter(pool),
 			SessionContinue:        newMCPSessionContinueAdapter(pool),
 			SessionDelete:          newMCPSessionDeleteAdapter(memoryAdminService),
+			SessionRestore:         newMCPSessionRestoreAdapter(memoryAdminService),
 			LifecyclePolicyUpdate:  newMCPLifecyclePolicyUpdateAdapter(pool),
 			MessageService:         newMCPMessageListAdapter(pool),
 			TimelineService:        newMCPTimelineListAdapter(pool),
