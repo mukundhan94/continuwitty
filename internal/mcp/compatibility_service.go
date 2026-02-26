@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"strings"
+	"time"
 
 	"engram/internal/models"
 	"engram/internal/projects"
@@ -198,6 +199,14 @@ type EngramCreateFromConversationService interface {
 		ctx context.Context,
 		request EngramCreateFromConversationRequest,
 	) (*EngramCreateFromConversationResponse, error)
+}
+
+// EngramUpdateService captures engram update behavior used by MCP compatibility engram dispatch.
+type EngramUpdateService interface {
+	UpdateEngram(
+		ctx context.Context,
+		request EngramUpdateRequest,
+	) (*models.AdminEngramRecord, error)
 }
 
 // EngramDeleteService captures engram delete behavior used by MCP compatibility engram dispatch.
@@ -455,6 +464,21 @@ type EngramCreateFromConversationResponse struct {
 	EnrichmentReport map[string]any              `json:"enrichment_report"`
 }
 
+// EngramUpdateRequest captures compatibility-level engram update inputs.
+type EngramUpdateRequest struct {
+	ActorUserID             uuid.UUID
+	ActorRole               models.UserRole
+	EngramID                uuid.UUID
+	ExpectedUpdatedAt       *time.Time
+	Title                   *string
+	Abstract                *string
+	DetailedSummaryMarkdown *string
+	Tags                    *[]string
+	Keywords                *[]string
+	VisibilityScope         *models.VisibilityScope
+	Sources                 *[]models.AdminEngramSourceInput
+}
+
 // EngramDeleteRequest captures compatibility-level engram delete inputs.
 type EngramDeleteRequest struct {
 	ActorUserID uuid.UUID
@@ -515,6 +539,7 @@ type CompatibilityServiceDependencies struct {
 	EngramRehydrate          EngramRehydrateService
 	EngramCreate             EngramCreateService
 	EngramCreateConversation EngramCreateFromConversationService
+	EngramUpdate             EngramUpdateService
 	EngramDelete             EngramDeleteService
 	EngramRestore            EngramRestoreService
 	EngramCollectionList     EngramCollectionListService
@@ -548,6 +573,7 @@ type CompatibilityService struct {
 	engramRehydrate          EngramRehydrateService
 	engramCreate             EngramCreateService
 	engramCreateConversation EngramCreateFromConversationService
+	engramUpdate             EngramUpdateService
 	engramDelete             EngramDeleteService
 	engramRestore            EngramRestoreService
 	engramCollectionList     EngramCollectionListService
@@ -597,6 +623,7 @@ func NewCompatibilityServiceWithDependencies(
 		engramRehydrate:          dependencies.EngramRehydrate,
 		engramCreate:             dependencies.EngramCreate,
 		engramCreateConversation: dependencies.EngramCreateConversation,
+		engramUpdate:             dependencies.EngramUpdate,
 		engramDelete:             dependencies.EngramDelete,
 		engramRestore:            dependencies.EngramRestore,
 		engramCollectionList:     dependencies.EngramCollectionList,

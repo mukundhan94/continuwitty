@@ -101,6 +101,7 @@
 | CP131 | 2026-02-26 | Completed | Phase 4 MCP engram create baseline (`engram.create`) with direct/`tools/call` parity, runtime project-resolution + repository write wiring, payload normalization/validation parity, and project-resolution error mapping under >9.5 code-health gate |
 | CP132 | 2026-02-26 | Completed | Phase 4 MCP engram conversation-create baseline (`engram.create_from_conversation`) with direct/`tools/call` parity, runtime conversation-write + enrichment report shaping, payload normalization/validation parity, and project-resolution error mapping under >9.5 code-health gate |
 | CP133 | 2026-02-26 | Completed | Phase 4 MCP engram mutation baseline (`engram.delete`, `engram.restore`) with direct/`tools/call` parity, runtime memory-admin mutation wiring, `-32004` not-found mapping with `engram_id`, migrated tests, and >9.5 code-health gate |
+| CP134 | 2026-02-26 | Completed | Phase 4 MCP engram update baseline (`engram.update`) with direct/`tools/call` parity, runtime memory-admin update wiring, stale-write (`409`) error mapping, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3266,6 +3267,42 @@
   - `internal/mcp/compatibility_dispatch_engram_state_mutation_support.go`: `10.0`
   - `internal/mcp/compatibility_service_engram_delete_test.go`: `10.0`
   - `internal/mcp/compatibility_service_engram_restore_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP134 - Phase 4 MCP Engram Update Baseline (`engram.update`)
+
+- Migrated `engram.update` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct call: `engram.update`
+  - `tools/call` alias: `engram_update`
+  - success payload shape parity: `{"engram": {...}}`.
+- Implemented update payload parsing/validation parity:
+  - required `engram_id` UUID
+  - optional fields: `title`, `abstract`, `detailed_summary_markdown`, `tags`, `keywords`, `visibility_scope`, `expected_updated_at`, `sources`
+  - invalid payload fields return `-32602`.
+- Implemented mutation error mapping parity:
+  - missing/inaccessible engram -> `-32004` with `data.engram_id`
+  - stale update (`admin.ErrEngramStale`) -> `-32602` with `status_code=409`
+  - unexpected failures -> `-32603`.
+- Added runtime update adapter wiring:
+  - `cmd/api/mcp_engram_admin_update_adapter.go`
+  - dependency wiring in `cmd/api/main.go`
+  - owner/admin visibility pre-check parity before update execution.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_update_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_update_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_update_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_update_test.go`: `9.68`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
