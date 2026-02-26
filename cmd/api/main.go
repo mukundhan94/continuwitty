@@ -89,6 +89,7 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 				projectService:    projectService,
 			},
 		),
+		ChatRouter: buildChatRouter(settings, pool),
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)

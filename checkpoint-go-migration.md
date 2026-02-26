@@ -53,6 +53,7 @@
 | CP83 | 2026-02-26 | Completed | Phase 3 chat API message route baseline (`messages` list/send + stream mount refactor) with migrated unit tests and >9.5 code-health gate |
 | CP84 | 2026-02-26 | Completed | Phase 3 chat API pinned-resource route baseline (`engrams/documents` list/pin/unpin) with migrated unit tests and >9.5 code-health gate |
 | CP85 | 2026-02-26 | Completed | Phase 3 router integration baseline (chat router dependency mounting in top-level API router) with migrated router tests and >9.5 code-health gate |
+| CP86 | 2026-02-26 | Completed | Phase 4 runtime chat integration baseline (`cmd/api` wires DB-backed chat services/router deps into runtime assembly) with migrated unit tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3944,6 +3945,45 @@
 - CodeScene checks:
   - `internal/api/router.go`: `10.0`
   - `internal/api/router_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP86 - Phase 4 Runtime Chat Integration Baseline (`cmd/api/main.go`)
+
+- Added runtime chat wiring and dependency composition:
+  - new file: `cmd/api/chat_runtime.go`
+  - builds DB-backed chat router dependencies for:
+    - `chat.SessionOperationsService`
+    - `chat.ChatMessageRuntime` with repository/context adapters
+    - `chat.ChatService` with provider resolution + lifecycle maintenance
+  - added context actor bridge for chat routes:
+    - `chatActorResolverFromContext` maps request actor context to chat actor payload.
+- Updated API runtime assembly:
+  - `cmd/api/main.go`
+  - injects `RouterDependencies.ChatRouter` via `buildChatRouter(settings, pool)` so `/api/v1/chat/*` routes are active in runtime composition.
+- Added migrated runtime wiring tests:
+  - `cmd/api/chat_runtime_test.go`
+  - coverage includes:
+    - runtime chat route registration
+    - provider resolver behavior (known + unknown provider)
+    - actor resolver mapping + missing-actor failure
+    - runtime metadata mapping copy semantics.
+- Executed tests one-by-one:
+  - `TestBuildChatRouterRegistersRuntimeRoutes`
+  - `TestResolveChatProviderDependencyResolvesConfiguredProvider`
+  - `TestResolveChatProviderDependencyRejectsUnknownProvider`
+  - `TestChatActorResolverFromContextReturnsActorPayload`
+  - `TestChatActorResolverFromContextRejectsMissingActor`
+  - `TestMapRuntimeMessageMetadataConvertsTokenUsageAndCopiesSlices`
+  - `TestChatRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/chat_runtime.go`: `10.0`
+  - `cmd/api/chat_runtime_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
