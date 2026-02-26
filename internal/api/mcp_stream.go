@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -13,8 +14,8 @@ import (
 )
 
 // MountMCPRoutes registers MCP stream transport endpoints.
-func MountMCPRoutes(router chi.Router, service mcp.Service) {
-	deps := mcpRouteDependencies{service: service}
+func MountMCPRoutes(router chi.Router, service mcp.Service, actorResolver mcp.HTTPActorResolver) {
+	deps := mcpRouteDependencies{service: service, actorResolver: actorResolver}
 	router.Route("/api/v1/mcp", func(mcpRouter chi.Router) {
 		mcpRouter.Get("/stream", deps.handleProbe)
 		mcpRouter.Head("/stream", deps.handleProbeHead)
@@ -23,7 +24,8 @@ func MountMCPRoutes(router chi.Router, service mcp.Service) {
 }
 
 type mcpRouteDependencies struct {
-	service mcp.Service
+	service       mcp.Service
+	actorResolver mcp.HTTPActorResolver
 }
 
 func (dependencies mcpRouteDependencies) handleProbe(writer http.ResponseWriter, _ *http.Request) {
@@ -53,6 +55,10 @@ func (dependencies mcpRouteDependencies) handleStream(writer http.ResponseWriter
 	}
 
 	if payload.IsNotification() {
+		if _, err := dependencies.resolveActor(request); err != nil {
+			writeMCPRouteError(writer, err)
+			return
+		}
 		if err := dependencies.service.HandleNotification(request.Context(), payload); err != nil {
 			writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "Internal server error"})
 			return
@@ -61,12 +67,29 @@ func (dependencies mcpRouteDependencies) handleStream(writer http.ResponseWriter
 		return
 	}
 
-	frames := dependencies.service.StreamCall(request.Context(), mcp.StreamCallRequest{Request: payload})
+	resolvedActor, err := dependencies.resolveActor(request)
+	if err != nil {
+		writeMCPRouteError(writer, err)
+		return
+	}
+
+	frames := dependencies.service.StreamCall(request.Context(), mcp.StreamCallRequest{
+		Request:   payload,
+		Actor:     resolvedActor.Actor,
+		TokenAuth: resolvedActor.TokenAuth,
+	})
 	if prefersSSE(request.Header.Get("accept")) {
 		writeSSEFrames(writer, frames)
 		return
 	}
 	writeJSONRPCResponse(writer, payload.ID, frames)
+}
+
+func (dependencies mcpRouteDependencies) resolveActor(request *http.Request) (mcp.ResolvedActor, error) {
+	if dependencies.actorResolver == nil {
+		return mcp.ResolvedActor{}, errors.New("mcp actor resolver is not configured")
+	}
+	return dependencies.actorResolver.ResolveActor(request)
 }
 
 func writeSSEFrames(writer http.ResponseWriter, frames <-chan mcp.Frame) {
@@ -189,6 +212,18 @@ func parseQuality(parameters []string) float64 {
 		}
 	}
 	return quality
+}
+
+func writeMCPRouteError(writer http.ResponseWriter, err error) {
+	authErr := &mcp.AuthError{}
+	if errors.As(err, &authErr) {
+		for key, value := range authErr.Headers {
+			writer.Header().Set(key, value)
+		}
+		writeJSON(writer, authErr.StatusCode, map[string]string{"detail": authErr.Detail})
+		return
+	}
+	writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "Internal server error"})
 }
 
 func parseAcceptItem(item string) (string, float64, bool) {

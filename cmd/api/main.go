@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -38,6 +39,8 @@ type sessionAuthRuntimeDependencies struct {
 	projectService    projectResolutionService
 	mcpTokenService   *mcptokens.Service
 }
+
+var errMissingSessionActorForMCP = errors.New("session actor missing for mcp")
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -85,6 +88,11 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 	oauthTokenService := oauth.NewTokenService(pool)
 	mcpTokenService := mcptokens.NewService(pool)
 	mcpService := mcp.NewCompatibilityService(settings.AppSemanticVersion)
+	mcpActorResolver := mcp.NewActorResolver(
+		settings,
+		pool,
+		resolveMCPActorFromSessionContext,
+	)
 	agentWorkflowService := workflow.NewService(newWorkflowEngramCreator(pool, settings.EmbeddingDim))
 	ingestionService := ingestion.NewService(
 		pool,
@@ -123,11 +131,26 @@ func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgx
 		AgentWorkflow:      agentWorkflowService,
 		ExportService:      exportService,
 		MCPService:         mcpService,
+		MCPActorResolver:   mcpActorResolver,
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
 	logger.Info("session-authenticated actor context enabled")
 	return handler
+}
+
+func resolveMCPActorFromSessionContext(request *http.Request) (mcp.Actor, error) {
+	if request == nil {
+		return mcp.Actor{}, errMissingSessionActorForMCP
+	}
+	actor, ok := internalapi.AdminActorFromContext(request.Context())
+	if !ok {
+		return mcp.Actor{}, errMissingSessionActorForMCP
+	}
+	return mcp.Actor{
+		UserID: actor.UserID,
+		Role:   actor.Role,
+	}, nil
 }
 
 func newLoginAttemptGuard(settings config.Settings, pool *pgxpool.Pool) *auth.LoginAttemptGuard {

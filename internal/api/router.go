@@ -32,6 +32,7 @@ type RouterDependencies struct {
 	AgentWorkflow      AgentWorkflowRouteService
 	ExportService      export.Service
 	MCPService         mcp.Service
+	MCPActorResolver   mcp.HTTPActorResolver
 }
 
 // NewRouterWithDependencies builds the API router and mounts dependency-backed routes.
@@ -141,10 +142,10 @@ func mountExportDependencyRoutes(router chi.Router, dependencies RouterDependenc
 }
 
 func mountMCPDependencyRoutes(router chi.Router, dependencies RouterDependencies) {
-	if dependencies.MCPService == nil {
+	if dependencies.MCPService == nil || dependencies.MCPActorResolver == nil {
 		return
 	}
-	MountMCPRoutes(router, dependencies.MCPService)
+	MountMCPRoutes(router, dependencies.MCPService, dependencies.MCPActorResolver)
 }
 
 func writeJSON(writer http.ResponseWriter, statusCode int, body any) {

@@ -9,6 +9,8 @@ import (
 
 	"engram/internal/config"
 	"engram/internal/mcp"
+
+	"github.com/google/uuid"
 )
 
 func TestMCPRoutesNotMountedWithoutDependencies(t *testing.T) {
@@ -29,7 +31,8 @@ func TestMCPRoutesMountedWithDependencies(t *testing.T) {
 	router := NewRouterWithDependencies(
 		settings,
 		RouterDependencies{
-			MCPService: mcp.NewCompatibilityService(settings.AppSemanticVersion),
+			MCPService:       mcp.NewCompatibilityService(settings.AppSemanticVersion),
+			MCPActorResolver: staticMCPActorResolver{},
 		},
 	)
 
@@ -52,4 +55,15 @@ func TestMCPRoutesMountedWithDependencies(t *testing.T) {
 	if _, ok := body["result"]; !ok {
 		t.Fatalf("expected initialize result")
 	}
+}
+
+type staticMCPActorResolver struct{}
+
+func (staticMCPActorResolver) ResolveActor(_ *http.Request) (mcp.ResolvedActor, error) {
+	return mcp.ResolvedActor{
+		Actor: mcp.Actor{
+			UserID: uuid.MustParse("50000000-0000-0000-0000-000000000005"),
+			Role:   "admin",
+		},
+	}, nil
 }

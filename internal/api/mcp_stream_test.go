@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,11 +12,12 @@ import (
 	"engram/internal/mcp"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 func TestMountMCPRoutesProbeEndpoints(t *testing.T) {
 	router := chi.NewRouter()
-	MountMCPRoutes(router, &fakeMCPRouteService{})
+	MountMCPRoutes(router, &fakeMCPRouteService{}, newTestMCPActorResolver())
 
 	getRequest := httptest.NewRequest(http.MethodGet, "/api/v1/mcp/stream", nil)
 	getResponse := httptest.NewRecorder()
@@ -48,7 +50,7 @@ func TestMountMCPRoutesNotificationAccepted(t *testing.T) {
 			notificationCalled = request.Method == "notifications/initialized"
 			return nil
 		},
-	})
+	}, newTestMCPActorResolver())
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -73,6 +75,9 @@ func TestMountMCPRoutesJSONResponseMode(t *testing.T) {
 			if request.Request.Method != "initialize" {
 				t.Fatalf("expected initialize method")
 			}
+			if request.Actor.UserID == uuid.Nil {
+				t.Fatalf("expected actor id in stream request")
+			}
 			frames := make(chan mcp.Frame, 1)
 			frames <- mcp.Frame{
 				"jsonrpc": "2.0",
@@ -82,7 +87,7 @@ func TestMountMCPRoutesJSONResponseMode(t *testing.T) {
 			close(frames)
 			return frames
 		},
-	})
+	}, newTestMCPActorResolver())
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -126,7 +131,7 @@ func TestMountMCPRoutesSSEResponseMode(t *testing.T) {
 			close(frames)
 			return frames
 		},
-	})
+	}, newTestMCPActorResolver())
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -161,7 +166,7 @@ func TestMountMCPRoutesJSONFallbackFrame(t *testing.T) {
 			close(frames)
 			return frames
 		},
-	})
+	}, newTestMCPActorResolver())
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -185,6 +190,65 @@ func TestMountMCPRoutesJSONFallbackFrame(t *testing.T) {
 	}
 }
 
+func TestMountMCPRoutesWritesAuthErrorFromResolver(t *testing.T) {
+	router := chi.NewRouter()
+	MountMCPRoutes(
+		router,
+		&fakeMCPRouteService{},
+		&fakeMCPActorResolver{
+			resolveFn: func(_ *http.Request) (mcp.ResolvedActor, error) {
+				return mcp.ResolvedActor{}, &mcp.AuthError{
+					StatusCode: http.StatusUnauthorized,
+					Detail:     "Authentication required",
+					Headers: map[string]string{
+						"WWW-Authenticate": `Bearer realm="engram-mcp"`,
+					},
+				}
+			},
+		},
+	)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/mcp/stream",
+		strings.NewReader(`{"jsonrpc":"2.0","id":"init","method":"initialize","params":{}}`),
+	)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", response.Code)
+	}
+	if response.Header().Get("WWW-Authenticate") == "" {
+		t.Fatalf("expected WWW-Authenticate header on auth failure")
+	}
+}
+
+func TestMountMCPRoutesResolverFailureDefaultsToInternalError(t *testing.T) {
+	router := chi.NewRouter()
+	MountMCPRoutes(
+		router,
+		&fakeMCPRouteService{},
+		&fakeMCPActorResolver{
+			resolveFn: func(_ *http.Request) (mcp.ResolvedActor, error) {
+				return mcp.ResolvedActor{}, errors.New("resolver failure")
+			},
+		},
+	)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/mcp/stream",
+		strings.NewReader(`{"jsonrpc":"2.0","id":"init","method":"initialize","params":{}}`),
+	)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", response.Code)
+	}
+}
+
 type fakeMCPRouteService struct {
 	handleNotificationFn func(context.Context, mcp.JSONRPCRequest) error
 	streamCallFn         func(context.Context, mcp.StreamCallRequest) <-chan mcp.Frame
@@ -204,4 +268,28 @@ func (service *fakeMCPRouteService) StreamCall(ctx context.Context, request mcp.
 	frames := make(chan mcp.Frame)
 	close(frames)
 	return frames
+}
+
+type fakeMCPActorResolver struct {
+	resolveFn func(*http.Request) (mcp.ResolvedActor, error)
+}
+
+func (resolver *fakeMCPActorResolver) ResolveActor(request *http.Request) (mcp.ResolvedActor, error) {
+	if resolver.resolveFn != nil {
+		return resolver.resolveFn(request)
+	}
+	return mcp.ResolvedActor{}, nil
+}
+
+func newTestMCPActorResolver() *fakeMCPActorResolver {
+	return &fakeMCPActorResolver{
+		resolveFn: func(_ *http.Request) (mcp.ResolvedActor, error) {
+			return mcp.ResolvedActor{
+				Actor: mcp.Actor{
+					UserID: uuid.MustParse("40000000-0000-0000-0000-000000000004"),
+					Role:   "admin",
+				},
+			}, nil
+		},
+	}
 }

@@ -69,6 +69,7 @@
 | CP99 | 2026-02-26 | Completed | Phase 4 export/import runtime integration baseline (`cmd/api` wiring + router mount tests) with >9.5 code-health gate |
 | CP100 | 2026-02-26 | Completed | Phase 4 export/import API error-mapping hardening (service error -> HTTP status parity) with migrated route tests and >9.5 code-health gate |
 | CP101 | 2026-02-26 | Completed | Phase 4 MCP stream transport baseline (`/api/v1/mcp/stream`) with compatibility service, router/runtime wiring, and >9.5 code-health gate |
+| CP102 | 2026-02-26 | Completed | Phase 4 MCP stream actor-auth baseline (bearer token + session fallback) with router/runtime wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4686,6 +4687,64 @@
   - `internal/api/router.go`: `10.0`
   - `cmd/api/main.go`: `10.0`
   - `internal/mcp/service.go`: `Code Health score: None` (interface-only file; no degradations).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP102 - Phase 4 MCP Stream Actor-Auth Baseline (`internal/mcp/auth.go`)
+
+- Added MCP actor-resolution auth module in Go:
+  - new files:
+    - `internal/mcp/auth.go`
+    - `internal/mcp/auth_errors.go`
+  - behavior includes:
+    - bearer token parsing for `Authorization: Bearer ...`
+    - token record resolution + active-state checks (`expired`/`revoked` handling)
+    - constant-time token secret verification via existing MCP token hashing semantics
+    - owner user active-state validation
+    - token last-used touch on successful bearer auth
+    - session-actor fallback when bearer token is not provided
+    - OAuth-aware `WWW-Authenticate` header on unauthorized responses.
+- Extended MCP request context model:
+  - `internal/mcp/types.go`
+  - stream call requests now carry:
+    - resolved actor identity (`user_id`, `username`, `role`)
+    - optional MCP token auth context claims.
+- Updated MCP stream route auth flow:
+  - `internal/api/mcp_stream.go`
+  - now resolves actor context before notification/request dispatch and maps auth failures to route responses.
+- Updated dependency wiring for auth resolver injection:
+  - `internal/api/router.go`
+    - added `RouterDependencies.MCPActorResolver`
+    - MCP route mount now requires both `MCPService` and `MCPActorResolver`.
+  - `cmd/api/main.go`
+    - runtime now builds `mcp.NewActorResolver(...)` with session-context fallback bridge and injects it into router dependencies.
+- Added/updated migrated tests:
+  - new file: `internal/mcp/auth_test.go`
+  - updated files:
+    - `internal/api/mcp_stream_test.go`
+    - `internal/api/mcp_router_test.go`
+  - coverage includes:
+    - session fallback actor resolution
+    - bearer parsing and unauthorized scheme handling
+    - OAuth `WWW-Authenticate` metadata header behavior
+    - successful bearer token actor/claim propagation and last-used touch
+    - route-level auth error mapping and actor forwarding into stream dispatch.
+- Focused/full verification:
+  - `go test ./internal/mcp ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5 where scored):
+  - `internal/mcp/auth.go`: `9.68`
+  - `internal/mcp/auth_test.go`: `10.0`
+  - `internal/mcp/types.go`: `10.0`
+  - `internal/api/mcp_stream.go`: `10.0`
+  - `internal/api/mcp_stream_test.go`: `10.0`
+  - `internal/api/mcp_router_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`
+  - `internal/mcp/auth_errors.go`: `Code Health score: None` (constants-only helper file).
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
