@@ -48,6 +48,14 @@ type SessionListService interface {
 	) ([]models.ChatSessionRecord, error)
 }
 
+// SessionGetService captures session lookup behavior used by MCP compatibility chat dispatch.
+type SessionGetService interface {
+	GetSession(
+		ctx context.Context,
+		request SessionGetRequest,
+	) (*models.ChatSessionRecord, error)
+}
+
 // SessionListRequest captures compatibility-level session list inputs.
 type SessionListRequest struct {
 	ActorUserID uuid.UUID
@@ -56,10 +64,17 @@ type SessionListRequest struct {
 	Offset      int
 }
 
+// SessionGetRequest captures compatibility-level session lookup inputs.
+type SessionGetRequest struct {
+	ActorUserID uuid.UUID
+	SessionID   uuid.UUID
+}
+
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
 	ProjectService ProjectListService
 	SessionService SessionListService
+	SessionGet     SessionGetService
 }
 
 // CompatibilityService provides baseline MCP interop behavior while the full tool catalog migrates.
@@ -67,6 +82,7 @@ type CompatibilityService struct {
 	serverVersion  string
 	projectService ProjectListService
 	sessionService SessionListService
+	sessionGet     SessionGetService
 }
 
 // NewCompatibilityService builds a compatibility MCP service with stable initialize/tool-list behavior.
@@ -90,6 +106,7 @@ func NewCompatibilityServiceWithDependencies(
 		serverVersion:  trimmed,
 		projectService: dependencies.ProjectService,
 		sessionService: dependencies.SessionService,
+		sessionGet:     dependencies.SessionGet,
 	}
 }
 

@@ -19,6 +19,13 @@ func newMCPSessionListAdapter(db repository.Queryer) mcp.SessionListService {
 	return mcpSessionListAdapter{db: db}
 }
 
+func newMCPSessionGetAdapter(db repository.Queryer) mcp.SessionGetService {
+	if db == nil {
+		return nil
+	}
+	return mcpSessionListAdapter{db: db}
+}
+
 func (adapter mcpSessionListAdapter) ListSessions(
 	ctx context.Context,
 	request mcp.SessionListRequest,
@@ -31,6 +38,20 @@ func (adapter mcpSessionListAdapter) ListSessions(
 			ProjectID:   request.ProjectID,
 			Limit:       request.Limit,
 			Offset:      request.Offset,
+		},
+	)
+}
+
+func (adapter mcpSessionListAdapter) GetSession(
+	ctx context.Context,
+	request mcp.SessionGetRequest,
+) (*models.ChatSessionRecord, error) {
+	return repository.GetChatSession(
+		ctx,
+		adapter.db,
+		repository.ChatSessionGetInput{
+			SessionID:   request.SessionID,
+			ActorUserID: request.ActorUserID,
 		},
 	)
 }

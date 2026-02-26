@@ -30,30 +30,119 @@ type toolDispatchError struct {
 	data    map[string]any
 }
 
+type implementedToolHandler func(
+	service *CompatibilityService,
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError)
+
+var implementedToolHandlers = map[string]implementedToolHandler{
+	"chat.get_session": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchChatGetSessionTool(ctx, actor, params)
+	},
+	"chat.list_sessions": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchChatListSessionsTool(ctx, actor, params)
+	},
+	"user.get_profile": func(
+		_ *CompatibilityService,
+		_ context.Context,
+		actor Actor,
+		_ map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return map[string]any{"profile": actorPayload(actor)}, true, nil
+	},
+	"user.list_projects": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		_ map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchUserListProjectsTool(ctx, actor)
+	},
+	"project.list": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectListTool(ctx, actor, params)
+	},
+	"project.create": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectCreateTool(ctx, actor, params)
+	},
+	"project.get_default": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		_ map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectGetDefaultTool(ctx, actor)
+	},
+	"project.set_default": func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectSetDefaultTool(ctx, actor, params)
+	},
+}
+
 func (service *CompatibilityService) dispatchImplementedTool(
 	ctx context.Context,
 	method string,
 	actor Actor,
 	params map[string]any,
 ) (map[string]any, bool, *toolDispatchError) {
-	switch method {
-	case "chat.list_sessions":
-		return service.dispatchChatListSessionsTool(ctx, actor, params)
-	case "user.get_profile":
-		return map[string]any{"profile": actorPayload(actor)}, true, nil
-	case "user.list_projects":
-		return service.dispatchUserListProjectsTool(ctx, actor)
-	case "project.list":
-		return service.dispatchProjectListTool(ctx, actor, params)
-	case "project.create":
-		return service.dispatchProjectCreateTool(ctx, actor, params)
-	case "project.get_default":
-		return service.dispatchProjectGetDefaultTool(ctx, actor)
-	case "project.set_default":
-		return service.dispatchProjectSetDefaultTool(ctx, actor, params)
-	default:
+	handler, ok := implementedToolHandlers[method]
+	if !ok {
 		return nil, false, nil
 	}
+	return handler(service, ctx, actor, params)
+}
+
+func (service *CompatibilityService) dispatchChatGetSessionTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.sessionGet == nil {
+		return nil, false, nil
+	}
+	sessionID, ok := requiredUUIDParam(params, "session_id")
+	if !ok {
+		return nil, true, invalidParamError("session_id")
+	}
+	session, err := service.sessionGet.GetSession(
+		ctx,
+		SessionGetRequest{
+			ActorUserID: actor.UserID,
+			SessionID:   sessionID,
+		},
+	)
+	if err != nil {
+		return nil, true, internalToolDispatchError()
+	}
+	if session == nil {
+		return nil, true, invalidParamsWithStatus(404, "Chat session not found")
+	}
+	return map[string]any{"session": *session}, true, nil
 }
 
 func (service *CompatibilityService) dispatchUserListProjectsTool(
@@ -300,6 +389,14 @@ func requiredStringParam(params map[string]any, key string) (string, bool) {
 	}
 	value = strings.TrimSpace(value)
 	return value, value != ""
+}
+
+func requiredUUIDParam(params map[string]any, key string) (uuid.UUID, bool) {
+	value, ok := optionalUUIDParam(params, key)
+	if !ok || value == nil {
+		return uuid.Nil, false
+	}
+	return *value, true
 }
 
 func optionalProjectIDParam(params map[string]any, key string) *string {
