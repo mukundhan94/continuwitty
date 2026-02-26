@@ -50,6 +50,10 @@ type fakeChatSessionService struct {
 		ctx context.Context,
 		request chat.SessionTimelineRequest,
 	) ([]models.ChatTimelineEvent, error)
+	listMessagesFn func(
+		ctx context.Context,
+		request chat.SessionMessagesRequest,
+	) ([]models.ChatMessageRecord, error)
 }
 
 func newFakeChatSessionService() fakeChatSessionService {
@@ -102,6 +106,12 @@ func newFakeChatSessionService() fakeChatSessionService {
 			chat.SessionTimelineRequest,
 		) ([]models.ChatTimelineEvent, error) {
 			return []models.ChatTimelineEvent{}, nil
+		},
+		listMessagesFn: func(
+			context.Context,
+			chat.SessionMessagesRequest,
+		) ([]models.ChatMessageRecord, error) {
+			return []models.ChatMessageRecord{}, nil
 		},
 	}
 }
@@ -160,6 +170,13 @@ func (service fakeChatSessionService) ListTimelineEvents(
 	request chat.SessionTimelineRequest,
 ) ([]models.ChatTimelineEvent, error) {
 	return service.listTimelineEventsFn(ctx, request)
+}
+
+func (service fakeChatSessionService) ListMessages(
+	ctx context.Context,
+	request chat.SessionMessagesRequest,
+) ([]models.ChatMessageRecord, error) {
+	return service.listMessagesFn(ctx, request)
 }
 
 func chatSessionFixture(

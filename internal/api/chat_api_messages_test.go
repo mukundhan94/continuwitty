@@ -1,0 +1,157 @@
+package api
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"engram/internal/chat"
+	"engram/internal/models"
+
+	"github.com/google/uuid"
+)
+
+func chatMessageFixture(
+	messageID uuid.UUID,
+	sessionID uuid.UUID,
+	contentText string,
+) models.ChatMessageRecord {
+	return models.ChatMessageRecord{
+		MessageID:      messageID,
+		SessionID:      sessionID,
+		Role:           "user",
+		ContentText:    contentText,
+		TokenUsageJSON: map[string]any{},
+		UsedEngramIDs:  []uuid.UUID{},
+		CreatedAt:      time.Date(2026, 2, 26, 10, 0, 0, 0, time.UTC),
+	}
+}
+
+func TestCreateChatRouterRegistersMessageRoutesWhenServicesConfigured(t *testing.T) {
+	router := CreateChatRouter(
+		newFakeChatSessionService(),
+		fakeChatStreamService{},
+		nil,
+		staticChatActorResolver(uuid.MustParse("00000000-0000-0000-0000-000000000070")),
+	)
+	routes := collectChatRoutes(t, router)
+	requireChatRoute(t, routes, "/api/v1/chat/sessions/{session_id}/messages")
+	requireChatRoute(t, routes, "/api/v1/chat/sessions/{session_id}/messages/stream")
+}
+
+func TestSendMessageHandlerWritesCreatedResponse(t *testing.T) {
+	actorID := uuid.MustParse("00000000-0000-0000-0000-000000000071")
+	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000072")
+	messageID := uuid.MustParse("00000000-0000-0000-0000-000000000073")
+	replyMessageID := uuid.MustParse("00000000-0000-0000-0000-000000000074")
+	expected := chat.ChatSendResponse{
+		SessionID:            sessionID,
+		MessageID:            messageID,
+		ReplyMessageID:       replyMessageID,
+		AssistantText:        "Acknowledged",
+		UsedEngramIDs:        []uuid.UUID{},
+		UsedDocumentChunkIDs: []uuid.UUID{},
+		SourceReferences:     []chat.ChatSourceReference{},
+		DebugTrace:           nil,
+	}
+	capturedText := ""
+	streamService := fakeChatStreamService{
+		sendMessage: func(
+			_ context.Context,
+			receivedActorID uuid.UUID,
+			receivedSessionID uuid.UUID,
+			payload chat.ChatMessageCreateRequest,
+		) (chat.ChatSendResponse, error) {
+			if receivedActorID != actorID || receivedSessionID != sessionID {
+				t.Fatalf("unexpected send identifiers: actor=%s session=%s", receivedActorID, receivedSessionID)
+			}
+			capturedText = payload.ContentText
+			return expected, nil
+		},
+	}
+	router := CreateChatRouter(nil, streamService, nil, staticChatActorResolver(actorID))
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/chat/sessions/"+sessionID.String()+"/messages",
+		strings.NewReader(`{"content_text":"Hello world"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", response.Code)
+	}
+	sent := decodeChatResponseBody[chat.ChatSendResponse](t, response.Body.Bytes())
+	if sent.SessionID != sessionID || sent.MessageID != messageID || sent.ReplyMessageID != replyMessageID {
+		t.Fatalf("unexpected send response: %#v", sent)
+	}
+	if capturedText != "Hello world" {
+		t.Fatalf("expected content_text to be forwarded, got %q", capturedText)
+	}
+}
+
+func TestListMessagesHandlerUsesDefaultPaging(t *testing.T) {
+	actorID := uuid.MustParse("00000000-0000-0000-0000-000000000075")
+	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000076")
+	messageID := uuid.MustParse("00000000-0000-0000-0000-000000000077")
+	capturedRequest := chat.SessionMessagesRequest{}
+	service := newFakeChatSessionService()
+	service.listMessagesFn = func(
+		_ context.Context,
+		request chat.SessionMessagesRequest,
+	) ([]models.ChatMessageRecord, error) {
+		capturedRequest = request
+		return []models.ChatMessageRecord{
+			chatMessageFixture(messageID, sessionID, "Hello"),
+		}, nil
+	}
+	router := CreateChatRouter(service, nil, nil, staticChatActorResolver(actorID))
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/chat/sessions/"+sessionID.String()+"/messages",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.Code)
+	}
+	messages := decodeChatResponseBody[[]models.ChatMessageRecord](t, response.Body.Bytes())
+	if len(messages) != 1 || messages[0].MessageID != messageID {
+		t.Fatalf("unexpected messages response: %#v", messages)
+	}
+	if capturedRequest.ActorUserID != actorID || capturedRequest.SessionID != sessionID {
+		t.Fatalf("unexpected message request identifiers: %#v", capturedRequest)
+	}
+	if capturedRequest.Limit != 200 || capturedRequest.Offset != 0 {
+		t.Fatalf("unexpected message request paging: %#v", capturedRequest)
+	}
+}
+
+func TestListMessagesHandlerRejectsInvalidLimit(t *testing.T) {
+	actorID := uuid.MustParse("00000000-0000-0000-0000-000000000078")
+	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000079")
+	router := CreateChatRouter(
+		newFakeChatSessionService(),
+		nil,
+		nil,
+		staticChatActorResolver(actorID),
+	)
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/chat/sessions/"+sessionID.String()+"/messages?limit=0",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", response.Code)
+	}
+	body := decodeChatResponseBody[map[string]string](t, response.Body.Bytes())
+	if body["detail"] != "Invalid query parameters" {
+		t.Fatalf("unexpected detail: %q", body["detail"])
+	}
+}

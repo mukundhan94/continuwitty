@@ -50,6 +50,7 @@
 | CP80 | 2026-02-26 | Completed | Phase 3 chat API session-derivative route baseline (`save-engram` + `continue`) with migrated unit tests and >9.5 code-health gate |
 | CP81 | 2026-02-26 | Completed | Phase 3 chat API session CRUD route baseline (`create/list/get/update`) with query defaults and >9.5 code-health gate |
 | CP82 | 2026-02-26 | Completed | Phase 3 chat API lifecycle/timeline route baseline (`lifecycle-policy` + `timeline`) with migrated unit tests and >9.5 code-health gate |
+| CP83 | 2026-02-26 | Completed | Phase 3 chat API message route baseline (`messages` list/send + stream mount refactor) with migrated unit tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3782,6 +3783,67 @@
   - `internal/api/chat_api_sessions_test.go`: `10.0`
   - `internal/api/chat_api_lifecycle.go`: `10.0`
   - `internal/api/chat_api_lifecycle_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP83 - Phase 3 Chat API Message Routes Baseline (`internal/api/chat_api_messages.go`)
+
+- Extended `api/app/chat/api.py` route parity to Go for message operations:
+  - `GET /api/v1/chat/sessions/{session_id}/messages`
+  - `POST /api/v1/chat/sessions/{session_id}/messages`
+  - existing `POST /api/v1/chat/sessions/{session_id}/messages/stream` moved under shared message-route registration.
+- Added message route module:
+  - `internal/api/chat_api_messages.go`
+  - non-stream send-message handler (`201`) mapped to `ChatStreamService.SendMessage`
+  - list-messages handler with query defaults:
+    - `limit=200` default with bounds `1..500`
+    - `offset=0` default with non-negative bounds
+  - invalid query handling (`400`, `"Invalid query parameters"`).
+- Updated service contracts and route registration wiring:
+  - `internal/api/chat_api.go`
+  - `internal/api/chat_api_sessions.go`
+  - `internal/api/chat_api_sessions_test.go`
+- Added/updated migrated tests:
+  - `internal/api/chat_api_messages_test.go`
+  - `internal/api/chat_api_test.go` (message-route registration expectations + stream test double update)
+  - existing lifecycle/session tests re-validated.
+- Executed tests one-by-one:
+  - `TestCreateChatRouterRegistersMessageRoutesWhenServicesConfigured`
+  - `TestSendMessageHandlerWritesCreatedResponse`
+  - `TestListMessagesHandlerUsesDefaultPaging`
+  - `TestListMessagesHandlerRejectsInvalidLimit`
+  - `TestCreateChatRouterRegistersLifecycleRoutesWhenSessionServiceConfigured`
+  - `TestGetLifecyclePolicyHandlerWritesResponse`
+  - `TestUpdateLifecyclePolicyHandlerWritesResponse`
+  - `TestListTimelineEventsHandlerUsesDefaultPaging`
+  - `TestListTimelineEventsHandlerRejectsInvalidLimit`
+  - `TestCreateChatRouterRegistersSessionRoutesWhenSessionServiceConfigured`
+  - `TestCreateSessionHandlerWritesCreatedResponse`
+  - `TestListSessionsHandlerUsesDefaultPaging`
+  - `TestListSessionsHandlerRejectsInvalidLimit`
+  - `TestGetSessionHandlerMapsChatServiceError`
+  - `TestUpdateSessionHandlerWritesUpdatedResponse`
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersConfiguredEndpoints`
+  - `TestSaveSessionAsEngramHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerMapsChatServiceError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api.go`: `10.0`
+  - `internal/api/chat_api_test.go`: `10.0`
+  - `internal/api/chat_api_sessions.go`: `10.0`
+  - `internal/api/chat_api_sessions_test.go`: `10.0`
+  - `internal/api/chat_api_lifecycle.go`: `10.0`
+  - `internal/api/chat_api_lifecycle_test.go`: `10.0`
+  - `internal/api/chat_api_messages.go`: `10.0`
+  - `internal/api/chat_api_messages_test.go`: `9.68`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

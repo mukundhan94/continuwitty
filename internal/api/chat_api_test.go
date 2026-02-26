@@ -18,6 +18,12 @@ import (
 )
 
 type fakeChatStreamService struct {
+	sendMessage func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+		payload chat.ChatMessageCreateRequest,
+	) (chat.ChatSendResponse, error)
 	streamMessageEvents func(
 		ctx context.Context,
 		actorUserID uuid.UUID,
@@ -26,16 +32,54 @@ type fakeChatStreamService struct {
 	) ([]chat.StreamEvent, error)
 }
 
+func (service fakeChatStreamService) SendMessage(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	sessionID uuid.UUID,
+	payload chat.ChatMessageCreateRequest,
+) (chat.ChatSendResponse, error) {
+	operation := service.sendMessage
+	if operation == nil {
+		return chat.ChatSendResponse{}, nil
+	}
+	result, err := operation(ctx, actorUserID, sessionID, payload)
+	if err != nil {
+		return chat.ChatSendResponse{}, err
+	}
+	return result, nil
+}
+
+func runOptionalStreamMessageEvents(
+	operation func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+		payload chat.ChatMessageCreateRequest,
+	) ([]chat.StreamEvent, error),
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	sessionID uuid.UUID,
+	payload chat.ChatMessageCreateRequest,
+) ([]chat.StreamEvent, error) {
+	if operation == nil {
+		return []chat.StreamEvent{}, nil
+	}
+	return operation(ctx, actorUserID, sessionID, payload)
+}
+
 func (service fakeChatStreamService) StreamMessageEvents(
 	ctx context.Context,
 	actorUserID uuid.UUID,
 	sessionID uuid.UUID,
 	payload chat.ChatMessageCreateRequest,
 ) ([]chat.StreamEvent, error) {
-	if service.streamMessageEvents == nil {
-		return []chat.StreamEvent{}, nil
-	}
-	return service.streamMessageEvents(ctx, actorUserID, sessionID, payload)
+	return runOptionalStreamMessageEvents(
+		service.streamMessageEvents,
+		ctx,
+		actorUserID,
+		sessionID,
+		payload,
+	)
 }
 
 type fakeChatSessionDerivativeService struct {
@@ -244,10 +288,13 @@ func TestCreateChatRouterRegistersConfiguredEndpoints(t *testing.T) {
 		expectedRoutes []string
 	}{
 		{
-			name:           "stream route",
+			name:           "message routes",
 			streamService:  fakeChatStreamService{},
 			sessionService: nil,
-			expectedRoutes: []string{"/api/v1/chat/sessions/{session_id}/messages/stream"},
+			expectedRoutes: []string{
+				"/api/v1/chat/sessions/{session_id}/messages",
+				"/api/v1/chat/sessions/{session_id}/messages/stream",
+			},
 		},
 		{
 			name:           "session derivative routes",
@@ -263,6 +310,7 @@ func TestCreateChatRouterRegistersConfiguredEndpoints(t *testing.T) {
 			streamService:  fakeChatStreamService{},
 			sessionService: fakeChatSessionDerivativeService{},
 			expectedRoutes: []string{
+				"/api/v1/chat/sessions/{session_id}/messages",
 				"/api/v1/chat/sessions/{session_id}/messages/stream",
 				"/api/v1/chat/sessions/{session_id}/save-engram",
 				"/api/v1/chat/sessions/{session_id}/continue",

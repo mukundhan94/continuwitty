@@ -59,6 +59,10 @@ type ChatSessionService interface {
 		ctx context.Context,
 		request chat.SessionTimelineRequest,
 	) ([]models.ChatTimelineEvent, error)
+	ListMessages(
+		ctx context.Context,
+		request chat.SessionMessagesRequest,
+	) ([]models.ChatMessageRecord, error)
 }
 
 type chatSessionListQuery struct {

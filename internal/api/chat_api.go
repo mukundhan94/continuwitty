@@ -20,6 +20,12 @@ type ChatActorResolver func(request *http.Request) (map[string]any, error)
 
 // ChatStreamService captures stream-message behavior used by chat routes.
 type ChatStreamService interface {
+	SendMessage(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+		payload chat.ChatMessageCreateRequest,
+	) (chat.ChatSendResponse, error)
 	StreamMessageEvents(
 		ctx context.Context,
 		actorUserID uuid.UUID,
@@ -231,12 +237,7 @@ func CreateChatRouter(
 ) chi.Router {
 	router := chi.NewRouter()
 	registerChatSessionRoutes(router, sessionRouteService, requireAPIActor)
-	if streamService != nil {
-		router.Post(
-			"/api/v1/chat/sessions/{session_id}/messages/stream",
-			streamMessageHandler(streamService, requireAPIActor),
-		)
-	}
+	registerChatMessageRoutes(router, sessionRouteService, streamService, requireAPIActor)
 	if sessionDerivativeService != nil {
 		router.Post(
 			"/api/v1/chat/sessions/{session_id}/save-engram",
