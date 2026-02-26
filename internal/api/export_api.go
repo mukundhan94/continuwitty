@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -67,7 +68,7 @@ func handleProjectExport(
 		},
 	)
 	if err != nil {
-		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
+		writeExportServiceError(writer, err)
 		return
 	}
 
@@ -132,10 +133,29 @@ func handleProjectImport(
 		},
 	)
 	if err != nil {
-		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
+		writeExportServiceError(writer, err)
 		return
 	}
 	writeJSON(writer, http.StatusOK, result)
+}
+
+func writeExportServiceError(writer http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, internalexport.ErrProjectNotFound):
+		writeJSON(writer, http.StatusNotFound, map[string]string{"detail": "Project not found"})
+	case errors.Is(err, internalexport.ErrCollectionNotFoundForProject):
+		writeJSON(writer, http.StatusNotFound, map[string]string{"detail": "Collection not found for project"})
+	case errors.Is(err, internalexport.ErrImportFileEmpty):
+		writeJSON(writer, http.StatusUnprocessableEntity, map[string]string{"detail": "Import file is empty"})
+	case errors.Is(err, internalexport.ErrImportZipMissingExportJSON):
+		writeJSON(writer, http.StatusUnprocessableEntity, map[string]string{"detail": "ZIP missing export.json"})
+	case errors.Is(err, internalexport.ErrUnsupportedImportFileFormat):
+		writeJSON(writer, http.StatusUnprocessableEntity, map[string]string{"detail": "Unsupported import file format"})
+	case errors.Is(err, internalexport.ErrInvalidExportBundle):
+		writeJSON(writer, http.StatusUnprocessableEntity, map[string]string{"detail": "Invalid export bundle"})
+	default:
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
+	}
 }
 
 func requireExportActor(writer http.ResponseWriter, request *http.Request) (AdminActor, bool) {

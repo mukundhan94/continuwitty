@@ -67,6 +67,7 @@
 | CP97 | 2026-02-26 | Completed | Phase 3 export/import API baseline (`/api/v1/projects/{project_id}/export|import`) with dependency-aware router mount, migrated route tests, and >9.5 code-health gate |
 | CP98 | 2026-02-26 | Completed | Phase 3 export/import service baseline (`internal/export/service*`) with migrated unit tests and >9.5 code-health gate |
 | CP99 | 2026-02-26 | Completed | Phase 4 export/import runtime integration baseline (`cmd/api` wiring + router mount tests) with >9.5 code-health gate |
+| CP100 | 2026-02-26 | Completed | Phase 4 export/import API error-mapping hardening (service error -> HTTP status parity) with migrated route tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4600,6 +4601,40 @@
 - CodeScene checks:
   - `cmd/api/main.go`: `10.0`
   - `internal/api/export_router_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP100 - Phase 4 Export/Import API Error Mapping Hardening (`internal/api/export_api.go`)
+
+- Updated export/import API route error mapping:
+  - `internal/api/export_api.go`
+  - service errors from `internal/export` now map to expected HTTP statuses:
+    - `ErrProjectNotFound` -> `404`
+    - `ErrCollectionNotFoundForProject` -> `404`
+    - `ErrImportFileEmpty` -> `422`
+    - `ErrImportZipMissingExportJSON` -> `422`
+    - `ErrUnsupportedImportFileFormat` -> `422`
+    - `ErrInvalidExportBundle` -> `422`
+    - fallback remains `500` for unexpected errors.
+- Added route-level tests for service-error mapping:
+  - new file: `internal/api/export_api_errors_test.go`
+  - covers both export (`GET`) and import (`POST`) service-error response mapping.
+- Executed tests one-by-one:
+  - `TestMountExportRoutesJSONResponse`
+  - `TestMountExportRoutesZIPResponse`
+  - `TestMountExportRoutesImportReadsFile`
+  - `TestMountExportRoutesValidationAndAuthErrors`
+  - `TestMountExportRoutesMapsProjectAndCollectionErrors`
+  - `TestMountExportRoutesMapsImportBundleErrors`
+- Focused/full verification:
+  - `go test ./internal/api ./internal/export ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks:
+  - `internal/api/export_api.go`: `9.68`
+  - `internal/api/export_api_errors_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
