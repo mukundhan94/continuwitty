@@ -273,6 +273,7 @@ func TestCreateChatRouterRegistersConfiguredEndpoints(t *testing.T) {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			router := CreateChatRouter(
+				nil,
 				testCase.streamService,
 				testCase.sessionService,
 				staticChatActorResolver(actorID),
@@ -308,6 +309,7 @@ func TestSaveSessionAsEngramHandlerWritesCreatedResponse(t *testing.T) {
 	}
 	capturedCall := saveSessionAsEngramCall{}
 	router := CreateChatRouter(
+		nil,
 		nil,
 		fakeChatSessionDerivativeService{
 			saveSessionAsEngram: func(
@@ -364,6 +366,7 @@ func TestContinueSessionHandlerWritesCreatedResponse(t *testing.T) {
 	capturedCall := continueSessionCall{}
 	router := CreateChatRouter(
 		nil,
+		nil,
 		fakeChatSessionDerivativeService{
 			continueSession: func(
 				_ context.Context,
@@ -409,6 +412,7 @@ func TestContinueSessionHandlerMapsChatServiceError(t *testing.T) {
 	actorID := uuid.MustParse("00000000-0000-0000-0000-000000000030")
 	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000031")
 	router := CreateChatRouter(
+		nil,
 		nil,
 		fakeChatSessionDerivativeService{
 			continueSession: func(

@@ -48,6 +48,7 @@
 | CP33 | 2026-02-22 | Completed | Auth/session continuation (`/api/v1/users` role-aware API parity + session/user route health uplift) |
 | CP34 | 2026-02-22 | In Progress | Auth/session continuation follow-up (incremental non-checkpoint file code-health uplift toward >9.5 baseline) |
 | CP80 | 2026-02-26 | Completed | Phase 3 chat API session-derivative route baseline (`save-engram` + `continue`) with migrated unit tests and >9.5 code-health gate |
+| CP81 | 2026-02-26 | Completed | Phase 3 chat API session CRUD route baseline (`create/list/get/update`) with query defaults and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3680,6 +3681,53 @@
 - CodeScene checks:
   - `internal/api/chat_api.go`: `10.0`
   - `internal/api/chat_api_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP81 - Phase 3 Chat API Session CRUD Routes Baseline (`internal/api/chat_api_sessions.go`)
+
+- Extended `api/app/chat/api.py` route parity to Go for session CRUD routes:
+  - `POST /api/v1/chat/sessions`
+  - `GET /api/v1/chat/sessions`
+  - `GET /api/v1/chat/sessions/{session_id}`
+  - `PATCH /api/v1/chat/sessions/{session_id}`
+- Added chat session API route module:
+  - `internal/api/chat_api_sessions.go`
+  - session list query parsing with defaults:
+    - `limit=50` default with bounds `1..200`
+    - `offset=0` default with non-negative bounds
+  - invalid query handling (`400`, `"Invalid query parameters"`)
+  - shared generic payload-route handler for actor-only and actor+session routes.
+- Updated chat router composition to mount session CRUD routes when session service is configured:
+  - `internal/api/chat_api.go`
+- Added migrated tests:
+  - `internal/api/chat_api_sessions_test.go`
+  - updated chat API baseline tests for router signature:
+    - `internal/api/chat_api_test.go`
+- Executed tests one-by-one:
+  - `TestCreateChatRouterRegistersSessionRoutesWhenSessionServiceConfigured`
+  - `TestCreateSessionHandlerWritesCreatedResponse`
+  - `TestListSessionsHandlerUsesDefaultPaging`
+  - `TestListSessionsHandlerRejectsInvalidLimit`
+  - `TestGetSessionHandlerMapsChatServiceError`
+  - `TestUpdateSessionHandlerWritesUpdatedResponse`
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersConfiguredEndpoints`
+  - `TestSaveSessionAsEngramHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerMapsChatServiceError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api.go`: `10.0`
+  - `internal/api/chat_api_test.go`: `10.0`
+  - `internal/api/chat_api_sessions.go`: `10.0`
+  - `internal/api/chat_api_sessions_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

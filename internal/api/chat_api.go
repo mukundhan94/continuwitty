@@ -224,30 +224,32 @@ func chatCreatedRouteHandler[Payload any, Result any](
 
 // CreateChatRouter mounts chat API routes for migration parity.
 func CreateChatRouter(
+	sessionRouteService ChatSessionService,
 	streamService ChatStreamService,
-	sessionService ChatSessionDerivativeService,
+	sessionDerivativeService ChatSessionDerivativeService,
 	requireAPIActor ChatActorResolver,
 ) chi.Router {
 	router := chi.NewRouter()
+	registerChatSessionRoutes(router, sessionRouteService, requireAPIActor)
 	if streamService != nil {
 		router.Post(
 			"/api/v1/chat/sessions/{session_id}/messages/stream",
 			streamMessageHandler(streamService, requireAPIActor),
 		)
 	}
-	if sessionService != nil {
+	if sessionDerivativeService != nil {
 		router.Post(
 			"/api/v1/chat/sessions/{session_id}/save-engram",
 			chatCreatedRouteHandler(
 				requireAPIActor,
-				sessionService.SaveSessionAsEngram,
+				sessionDerivativeService.SaveSessionAsEngram,
 			),
 		)
 		router.Post(
 			"/api/v1/chat/sessions/{session_id}/continue",
 			chatCreatedRouteHandler(
 				requireAPIActor,
-				sessionService.ContinueSession,
+				sessionDerivativeService.ContinueSession,
 			),
 		)
 	}
