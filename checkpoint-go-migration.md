@@ -95,6 +95,7 @@
 | CP125 | 2026-02-26 | Completed | Phase 4 MCP chat delete-session baseline (`chat.delete_session`) with direct/`tools/call` parity, required session validation, optional delete controls, runtime memory-admin wiring, migrated tests, and >9.5 code-health gate |
 | CP126 | 2026-02-26 | Completed | Phase 4 MCP chat restore-session baseline (`chat.restore_session`) with direct/`tools/call` parity and owner/admin lifecycle access hardening across restore/delete, migrated tests, runtime wiring, and >9.5 code-health gate |
 | CP127 | 2026-02-26 | Completed | Phase 4 MCP chat send-message baseline (`chat.send_message`) with direct/`tools/call` parity, runtime chat-service wiring, migrated tests, and chat/provider error mapping parity under >9.5 code-health gate |
+| CP128 | 2026-02-26 | Completed | Phase 4 MCP chat save-as-engram baseline (`chat.save_as_engram`) with direct/`tools/call` parity, runtime save-session adapter wiring, defaults/validation parity for visibility + metadata fields, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3013,6 +3014,42 @@
   - `internal/mcp/compatibility_dispatch_chat_primary_handlers.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_chat_send_message_support.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_send_message_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP128 - Phase 4 MCP Chat Save-As-Engram Baseline (`chat.save_as_engram`)
+
+- Migrated `chat.save_as_engram` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"saved_engram": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented save-as-engram parameter behavior parity:
+  - required `session_id` UUID
+  - default `title="Session Snapshot"` and `abstract=""` when omitted
+  - default `visibility_scope="private"` when omitted
+  - default `tags=[]` and `keywords=[]` when omitted
+  - invalid `session_id`, `visibility_scope`, `tags`, or `keywords` values return `-32602` invalid params.
+- Implemented save-as-engram result/error parity:
+  - successful saves return `saved_engram` payload
+  - missing/inaccessible sessions return `-32602` with `status_code=404` and `detail="Chat session not found"`
+  - chat service errors map through compatibility chat error mapping (`-32010` / `-32020` / `-32603`).
+- Added runtime save-session adapter wiring in Go API runtime:
+  - `cmd/api/mcp_save_session_as_engram_adapter.go`
+  - `cmd/api/main.go` passes save-as-engram dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_save_session_as_engram_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

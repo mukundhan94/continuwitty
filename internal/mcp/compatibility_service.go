@@ -72,6 +72,14 @@ type SessionContinueService interface {
 	) (*models.ContinueSessionResponse, error)
 }
 
+// SessionSaveAsEngramService captures save-as-engram behavior used by MCP compatibility chat dispatch.
+type SessionSaveAsEngramService interface {
+	SaveSessionAsEngram(
+		ctx context.Context,
+		request SessionSaveAsEngramRequest,
+	) (*models.SaveSessionAsEngramResponse, error)
+}
+
 // SessionDeleteService captures session-delete behavior used by MCP compatibility chat dispatch.
 type SessionDeleteService interface {
 	DeleteSession(
@@ -197,6 +205,13 @@ type SessionContinueRequest struct {
 	Payload     models.ContinueSessionRequest
 }
 
+// SessionSaveAsEngramRequest captures compatibility-level save-session inputs.
+type SessionSaveAsEngramRequest struct {
+	ActorUserID uuid.UUID
+	SessionID   uuid.UUID
+	Payload     models.SaveSessionAsEngramRequest
+}
+
 // SessionDeleteRequest captures compatibility-level delete-session inputs.
 type SessionDeleteRequest struct {
 	ActorUserID         uuid.UUID
@@ -314,6 +329,7 @@ type CompatibilityServiceDependencies struct {
 	SessionGet             SessionGetService
 	SessionCreate          SessionCreateService
 	SessionContinue        SessionContinueService
+	SessionSaveAsEngram    SessionSaveAsEngramService
 	SessionDelete          SessionDeleteService
 	SessionRestore         SessionRestoreService
 	LifecyclePolicyUpdate  LifecyclePolicyUpdateService
@@ -337,6 +353,7 @@ type CompatibilityService struct {
 	sessionGet             SessionGetService
 	sessionCreate          SessionCreateService
 	sessionContinue        SessionContinueService
+	sessionSaveAsEngram    SessionSaveAsEngramService
 	sessionDelete          SessionDeleteService
 	sessionRestore         SessionRestoreService
 	lifecyclePolicyUpdate  LifecyclePolicyUpdateService
@@ -376,6 +393,7 @@ func NewCompatibilityServiceWithDependencies(
 		sessionGet:             dependencies.SessionGet,
 		sessionCreate:          dependencies.SessionCreate,
 		sessionContinue:        dependencies.SessionContinue,
+		sessionSaveAsEngram:    dependencies.SessionSaveAsEngram,
 		sessionDelete:          dependencies.SessionDelete,
 		sessionRestore:         dependencies.SessionRestore,
 		lifecyclePolicyUpdate:  dependencies.LifecyclePolicyUpdate,

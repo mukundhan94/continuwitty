@@ -155,6 +155,7 @@ func newMCPCompatibilityService(
 			SessionGet:             newMCPSessionGetAdapter(pool),
 			SessionCreate:          newMCPSessionCreateAdapter(pool),
 			SessionContinue:        newMCPSessionContinueAdapter(pool),
+			SessionSaveAsEngram:    newMCPSaveSessionAsEngramAdapter(pool),
 			SessionDelete:          newMCPSessionDeleteAdapter(memoryAdminService),
 			SessionRestore:         newMCPSessionRestoreAdapter(memoryAdminService),
 			LifecyclePolicyUpdate:  newMCPLifecyclePolicyUpdateAdapter(pool),
