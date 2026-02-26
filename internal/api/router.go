@@ -20,6 +20,7 @@ type RouterDependencies struct {
 	MemoryAdminService MemoryAdminService
 	RequireAdminActor  RequireAdminActor
 	SessionAuth        SessionAuthDependencies
+	ChatRouter         chi.Router
 }
 
 // NewRouterWithDependencies builds the API router and mounts dependency-backed routes.
@@ -48,6 +49,10 @@ func NewRouterWithDependencies(settings config.Settings, dependencies RouterDepe
 	if dependencies.SessionAuth.SessionManager != nil {
 		MountSessionAuthRoutes(router, dependencies.SessionAuth)
 		MountSessionUIRoutes(router, dependencies.SessionAuth)
+	}
+	if dependencies.ChatRouter != nil {
+		router.Handle("/api/v1/chat", dependencies.ChatRouter)
+		router.Handle("/api/v1/chat/*", dependencies.ChatRouter)
 	}
 
 	return router

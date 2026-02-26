@@ -52,6 +52,7 @@
 | CP82 | 2026-02-26 | Completed | Phase 3 chat API lifecycle/timeline route baseline (`lifecycle-policy` + `timeline`) with migrated unit tests and >9.5 code-health gate |
 | CP83 | 2026-02-26 | Completed | Phase 3 chat API message route baseline (`messages` list/send + stream mount refactor) with migrated unit tests and >9.5 code-health gate |
 | CP84 | 2026-02-26 | Completed | Phase 3 chat API pinned-resource route baseline (`engrams/documents` list/pin/unpin) with migrated unit tests and >9.5 code-health gate |
+| CP85 | 2026-02-26 | Completed | Phase 3 router integration baseline (chat router dependency mounting in top-level API router) with migrated router tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3909,6 +3910,40 @@
   - `internal/api/chat_api_pinned.go`: `10.0`
   - `internal/api/chat_api_pinned_test.go`: `10.0`
   - `internal/models/chat.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP85 - Phase 3 Router Integration Baseline (`internal/api/router.go`)
+
+- Added top-level API router support for mounting chat routes via dependencies:
+  - `RouterDependencies.ChatRouter` (`chi.Router`)
+  - mounted at:
+    - `/api/v1/chat`
+    - `/api/v1/chat/*`
+- Updated router composition:
+  - `internal/api/router.go`
+  - chat routes can now be injected into runtime router assembly without changing existing health/version/admin/session route behavior.
+- Added/updated router tests:
+  - `internal/api/router_test.go`
+  - new mounted-route coverage:
+    - `TestChatRoutesMountedWithDependencies`
+  - not-mounted coverage includes chat route assertion in:
+    - `TestMemoryAdminRoutesNotMountedWithoutDependencies`
+- Executed tests one-by-one:
+  - `TestHealthz`
+  - `TestVersionEndpoint`
+  - `TestMemoryAdminRoutesNotMountedWithoutDependencies`
+  - `TestMemoryAdminRoutesMountedWithDependencies`
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestChatRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

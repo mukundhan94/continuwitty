@@ -78,6 +78,13 @@ func TestMemoryAdminRoutesNotMountedWithoutDependencies(t *testing.T) {
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d", response.Code)
 	}
+
+	chatRequest := httptest.NewRequest(http.MethodGet, "/api/v1/chat/sessions", nil)
+	chatResponse := httptest.NewRecorder()
+	router.ServeHTTP(chatResponse, chatRequest)
+	if chatResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected chat status 404, got %d", chatResponse.Code)
+	}
 }
 
 func TestMemoryAdminRoutesMountedWithDependencies(t *testing.T) {
@@ -223,5 +230,27 @@ func TestSessionAuthRoutesMountedWithDependencies(t *testing.T) {
 	router.ServeHTTP(engramsResponse, engramsRequest)
 	if engramsResponse.Code != http.StatusInternalServerError {
 		t.Fatalf("expected engrams status 500 when engram dependencies are missing, got %d", engramsResponse.Code)
+	}
+}
+
+func TestChatRoutesMountedWithDependencies(t *testing.T) {
+	settings := config.Settings{AppSemanticVersion: "1.2.3", AppCommitSHA: "abc1234"}
+	chatRouter := CreateChatRouter(
+		newFakeChatSessionService(),
+		fakeChatStreamService{},
+		fakeChatSessionDerivativeService{},
+		staticChatActorResolver(uuid.MustParse("00000000-0000-0000-0000-000000000090")),
+	)
+	router := NewRouterWithDependencies(
+		settings,
+		RouterDependencies{ChatRouter: chatRouter},
+	)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/chat/sessions", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.Code)
 	}
 }
