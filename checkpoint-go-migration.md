@@ -65,6 +65,7 @@
 | CP95 | 2026-02-26 | Completed | Phase 3 workflow service baseline (`internal/workflow/agent.go`) with migrated unit tests and >9.5 code-health gate |
 | CP96 | 2026-02-26 | Completed | Phase 4 agent workflow API route baseline (`/api/v1/agent-runs*`) with runtime wiring, migrated route tests, and >9.5 code-health gate |
 | CP97 | 2026-02-26 | Completed | Phase 3 export/import API baseline (`/api/v1/projects/{project_id}/export|import`) with dependency-aware router mount, migrated route tests, and >9.5 code-health gate |
+| CP98 | 2026-02-26 | Completed | Phase 3 export/import service baseline (`internal/export/service*`) with migrated unit tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4508,6 +4509,68 @@
   - `internal/api/export_api_test.go`: `9.53`
   - `internal/api/router.go`: `10.0`
   - `internal/export/types.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP98 - Phase 3 Export/Import Service Baseline (`internal/export/service*`)
+
+- Added export/import service implementation and supporting modules:
+  - `internal/export/service.go`
+  - `internal/export/service_export.go`
+  - `internal/export/service_import.go`
+  - `internal/export/service_import_engrams.go`
+  - `internal/export/service_bundle.go`
+  - `internal/export/service_store_lookup.go`
+  - `internal/export/service_store_list.go`
+  - `internal/export/service_store_sources.go`
+  - `internal/export/service_values.go`
+- Added migrated unit tests for export/import behavior:
+  - `internal/export/service_export_test.go`
+  - `internal/export/service_bundle_test.go`
+  - `internal/export/service_import_skip_test.go`
+  - `internal/export/service_import_rename_test.go`
+  - `internal/export/service_import_fixture_common_test.go`
+  - `internal/export/service_import_skip_fixture_test.go`
+  - `internal/export/service_import_rename_fixture_test.go`
+  - `internal/export/service_test_helpers_test.go`
+- Service behaviors included in this checkpoint:
+  - project visibility resolution with actor-role validation
+  - export bundle assembly for full-project and collection-filtered modes
+  - ZIP/JSON import bundle parsing (`export.json`) with format validation errors
+  - import conflict policies (`skip`, `overwrite`, `rename`) for engrams and collections
+  - source replacement on imported engrams and collection-item remapping.
+- Executed tests one-by-one:
+  - `TestBuildProjectExportBundleCollectionFilter`
+  - `TestBuildProjectExportBundleWithoutCollectionFilterAttachesSources`
+  - `TestBuildProjectExportBundleValidationErrors`
+  - `TestImportProjectBundleSkipPolicyReusesExistingRecords`
+  - `TestImportProjectBundleRenamePolicyCreatesRows`
+  - `TestParseProjectExportBundleValidationErrors`
+  - `TestParseProjectExportBundleFromZIP`
+- Focused/full verification:
+  - `go test ./internal/export ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks:
+  - `internal/export/service.go`: `10.0`
+  - `internal/export/service_export.go`: `10.0`
+  - `internal/export/service_import.go`: `10.0`
+  - `internal/export/service_import_engrams.go`: `10.0`
+  - `internal/export/service_bundle.go`: `10.0`
+  - `internal/export/service_store_lookup.go`: `9.68`
+  - `internal/export/service_store_list.go`: `10.0`
+  - `internal/export/service_store_sources.go`: `10.0`
+  - `internal/export/service_values.go`: `10.0`
+  - `internal/export/service_export_test.go`: `9.53`
+  - `internal/export/service_bundle_test.go`: `10.0`
+  - `internal/export/service_import_skip_test.go`: `10.0`
+  - `internal/export/service_import_rename_test.go`: `10.0`
+  - `internal/export/service_import_fixture_common_test.go`: `10.0`
+  - `internal/export/service_import_skip_fixture_test.go`: `10.0`
+  - `internal/export/service_import_rename_fixture_test.go`: `10.0`
+  - `internal/export/service_test_helpers_test.go`: `9.68`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
