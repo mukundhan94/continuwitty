@@ -54,6 +54,7 @@
 | CP84 | 2026-02-26 | Completed | Phase 3 chat API pinned-resource route baseline (`engrams/documents` list/pin/unpin) with migrated unit tests and >9.5 code-health gate |
 | CP85 | 2026-02-26 | Completed | Phase 3 router integration baseline (chat router dependency mounting in top-level API router) with migrated router tests and >9.5 code-health gate |
 | CP86 | 2026-02-26 | Completed | Phase 4 runtime chat integration baseline (`cmd/api` wires DB-backed chat services/router deps into runtime assembly) with migrated unit tests and >9.5 code-health gate |
+| CP87 | 2026-02-26 | Completed | Phase 4 projects API baseline (`/api/v1/projects` + `/api/v1/projects/default`) with runtime adapter wiring, migrated route tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3984,6 +3985,61 @@
   - `cmd/api/main.go`: `10.0`
   - `cmd/api/chat_runtime.go`: `10.0`
   - `cmd/api/chat_runtime_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP87 - Phase 4 Projects API Baseline (`internal/api/projects_api.go`)
+
+- Added projects API route module for migration parity:
+  - `internal/api/projects_api.go`
+  - mounted endpoints:
+    - `GET /api/v1/projects`
+    - `POST /api/v1/projects`
+    - `GET /api/v1/projects/default`
+    - `PATCH /api/v1/projects/default`
+  - includes:
+    - actor resolution from session context
+    - project query/payload decoding and validation
+    - parity error mapping (`422` for validation, `404` for missing project/user).
+- Added projects route models:
+  - `internal/models/project.go`
+  - `ProjectCreateRequest`
+  - `ProjectDefaultResponse`
+  - `ProjectDefaultUpdateRequest`
+- Added runtime adapter wiring for project routes:
+  - `cmd/api/project_routes_adapter.go`
+  - adapts `projects.Service` to API route contract.
+- Updated runtime/router composition:
+  - `cmd/api/main.go`
+  - `internal/api/router.go`
+  - `internal/api/router_test.go`
+  - `RouterDependencies.ProjectsService` now mounts project routes when configured.
+- Added migrated tests:
+  - `internal/api/projects_api_test.go`
+  - route registration + happy paths + error mapping + actor requirement.
+- Executed tests one-by-one:
+  - `TestMountProjectRoutesRegistersEndpoints`
+  - `TestListProjectsHandlerUsesDefaultPaging`
+  - `TestCreateProjectHandlerWritesCreatedResponse`
+  - `TestGetDefaultProjectHandlerWritesResponse`
+  - `TestSetDefaultProjectHandlerMapsProjectNotFound`
+  - `TestProjectRoutesRequireAuthenticatedActor`
+  - `TestMemoryAdminRoutesNotMountedWithoutDependencies`
+  - `TestProjectRoutesMountedWithDependencies`
+  - `TestChatRoutesMountedWithDependencies`
+  - `TestBuildChatRouterRegistersRuntimeRoutes`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/project_routes_adapter.go`: `10.0`
+  - `internal/api/projects_api.go`: `10.0`
+  - `internal/api/projects_api_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+  - `internal/models/project.go`: `N/A` (no CodeScene score returned).
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

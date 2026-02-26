@@ -85,6 +85,13 @@ func TestMemoryAdminRoutesNotMountedWithoutDependencies(t *testing.T) {
 	if chatResponse.Code != http.StatusNotFound {
 		t.Fatalf("expected chat status 404, got %d", chatResponse.Code)
 	}
+
+	projectsRequest := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	projectsResponse := httptest.NewRecorder()
+	router.ServeHTTP(projectsResponse, projectsRequest)
+	if projectsResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected projects status 404, got %d", projectsResponse.Code)
+	}
 }
 
 func TestMemoryAdminRoutesMountedWithDependencies(t *testing.T) {
@@ -252,5 +259,42 @@ func TestChatRoutesMountedWithDependencies(t *testing.T) {
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", response.Code)
+	}
+}
+
+func TestProjectRoutesMountedWithDependencies(t *testing.T) {
+	settings := config.Settings{AppSemanticVersion: "1.2.3", AppCommitSHA: "abc1234"}
+	serviceCalled := false
+	router := NewRouterWithDependencies(
+		settings,
+		RouterDependencies{
+			ProjectsService: fakeProjectService{
+				listProjectsFn: func(
+					_ context.Context,
+					_ ProjectListRouteRequest,
+				) ([]models.ProjectRecord, error) {
+					serviceCalled = true
+					return []models.ProjectRecord{}, nil
+				},
+			},
+		},
+	)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	request = WithAdminActor(
+		request,
+		AdminActor{
+			UserID: uuid.MustParse("00000000-0000-0000-0000-000000000241"),
+			Role:   "analyst",
+		},
+	)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.Code)
+	}
+	if !serviceCalled {
+		t.Fatalf("expected project service to be called")
 	}
 }
