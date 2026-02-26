@@ -72,6 +72,7 @@
 | CP102 | 2026-02-26 | Completed | Phase 4 MCP stream actor-auth baseline (bearer token + session fallback) with router/runtime wiring, migrated tests, and >9.5 code-health gate |
 | CP103 | 2026-02-26 | Completed | Phase 4 MCP stream transport rate-limit baseline (429 + `Retry-After`) with router/runtime wiring, migrated tests, and >9.5 code-health gate |
 | CP104 | 2026-02-26 | Completed | Phase 4 MCP catalog visibility baseline (`tools/list` + scope/allowlist policy filtering) with migrated tests and >9.5 code-health gate |
+| CP105 | 2026-02-26 | Completed | Phase 4 MCP direct-method compatibility baseline (dotted/underscore tool methods + token policy parity) with migrated tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -4819,6 +4820,37 @@
     - read-scope filtering for write tools
     - error mapping for missing name / unknown method / not-implemented tool
     - scope-based write rejection.
+- Focused/full verification:
+  - `go test ./internal/mcp -count=1`
+  - `go test ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - all passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/catalog.go`: `9.68`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP105 - Phase 4 MCP Direct-Method Compatibility Baseline (`internal/mcp/compatibility_service.go`)
+
+- Extended compatibility MCP dispatch behavior for direct tool methods:
+  - `internal/mcp/compatibility_service.go`
+  - now supports:
+    - dotted direct methods (for example `chat.send_message`)
+    - underscore direct methods (for example `engram_query`)
+  - policy behavior now mirrors `tools/call` path:
+    - unknown direct methods -> `-32601`
+    - known but not yet migrated in Go dispatch -> `-32000` (`Tool not implemented`)
+    - scope/allowlist policy violations -> `-32003`.
+- Hardened MCP compatibility tests with direct-method coverage:
+  - `internal/mcp/compatibility_service_test.go`
+  - added/updated assertions for:
+    - direct method not-implemented path
+    - read-scope write-tool rejection for both direct and `tools/call` paths
+    - consolidated error-mapping table coverage.
 - Focused/full verification:
   - `go test ./internal/mcp -count=1`
   - `go test ./internal/api ./cmd/api -count=1`

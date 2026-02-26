@@ -90,7 +90,7 @@ func TestCompatibilityServiceErrorMappings(t *testing.T) {
 				Request: JSONRPCRequest{
 					JSONRPC: "2.0",
 					ID:      "custom",
-					Method:  "engram.query",
+					Method:  "unknown.method",
 				},
 			},
 			expectedCode: -32601,
@@ -107,6 +107,17 @@ func TestCompatibilityServiceErrorMappings(t *testing.T) {
 			},
 			expectedCode: -32000,
 		},
+		{
+			name: "known direct tool method not implemented",
+			request: StreamCallRequest{
+				Request: JSONRPCRequest{
+					JSONRPC: "2.0",
+					ID:      "direct-call",
+					Method:  "engram_query",
+				},
+			},
+			expectedCode: -32000,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -117,10 +128,19 @@ func TestCompatibilityServiceErrorMappings(t *testing.T) {
 	}
 }
 
-func TestCompatibilityServiceToolsCallRejectsWriteToolForReadToken(t *testing.T) {
-	assertRequestErrorCode(
-		t,
-		StreamCallRequest{
+func TestCompatibilityServiceRejectsWriteToolsForReadToken(t *testing.T) {
+	testCases := []StreamCallRequest{
+		{
+			Request: JSONRPCRequest{
+				JSONRPC: "2.0",
+				ID:      "direct-call",
+				Method:  "chat.send_message",
+			},
+			TokenAuth: &models.MCPTokenAuthContext{
+				Scope: models.MCPTokenScopeRead,
+			},
+		},
+		{
 			Request: JSONRPCRequest{
 				JSONRPC: "2.0",
 				ID:      "tools-call",
@@ -131,8 +151,11 @@ func TestCompatibilityServiceToolsCallRejectsWriteToolForReadToken(t *testing.T)
 				Scope: models.MCPTokenScopeRead,
 			},
 		},
-		-32003,
-	)
+	}
+
+	for _, request := range testCases {
+		assertRequestErrorCode(t, request, -32003)
+	}
 }
 
 func singleFrame(t *testing.T, frames <-chan Frame) Frame {

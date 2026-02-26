@@ -73,7 +73,11 @@ func (service *CompatibilityService) dispatch(
 	case "tools/call":
 		return service.dispatchToolsCall(request.ID, request.Params, tokenAuth)
 	default:
-		return methodNotFoundFrame(request.ID, request.Method)
+		return service.dispatchDirectToolMethod(
+			request.ID,
+			request.Method,
+			tokenAuth,
+		)
 	}
 }
 
@@ -98,6 +102,26 @@ func (service *CompatibilityService) dispatchToolsCall(
 		-32000,
 		"Tool not implemented",
 		map[string]any{"method": canonicalToolName(dottedName)},
+	)
+}
+
+func (service *CompatibilityService) dispatchDirectToolMethod(
+	requestID any,
+	method string,
+	tokenAuth *models.MCPTokenAuthContext,
+) Frame {
+	dottedMethod := toDottedToolName(method)
+	if !toolExists(dottedMethod) {
+		return methodNotFoundFrame(requestID, method)
+	}
+	if policyError := authorizeToolCall(dottedMethod, tokenAuth); policyError != nil {
+		return errorFrame(requestID, policyError.code, policyError.message, policyError.data)
+	}
+	return errorFrame(
+		requestID,
+		-32000,
+		"Tool not implemented",
+		map[string]any{"method": canonicalToolName(dottedMethod)},
 	)
 }
 
