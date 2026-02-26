@@ -198,6 +198,16 @@ type ContinueSessionResponse struct {
 	CarriedEngramIDs []uuid.UUID       `json:"carried_engram_ids"`
 }
 
+// PinEngramRequest models engram pin payloads.
+type PinEngramRequest struct {
+	EngramID uuid.UUID `json:"engram_id"`
+}
+
+// PinDocumentRequest models document pin payloads.
+type PinDocumentRequest struct {
+	DocumentID uuid.UUID `json:"document_id"`
+}
+
 // PinnedEngramRecord models engram pins associated to chat sessions.
 type PinnedEngramRecord struct {
 	SessionID      uuid.UUID `json:"session_id"`

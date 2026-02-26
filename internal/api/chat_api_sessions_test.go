@@ -54,65 +54,107 @@ type fakeChatSessionService struct {
 		ctx context.Context,
 		request chat.SessionMessagesRequest,
 	) ([]models.ChatMessageRecord, error)
+	listPinnedEngramsFn func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+	) ([]models.EngramSummary, error)
+	listPinnedDocumentsFn func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+	) ([]models.PinnedDocumentRecord, error)
+	pinEngramFn func(
+		ctx context.Context,
+		request chat.SessionPinEngramRequest,
+	) (*models.PinnedEngramRecord, error)
+	pinDocumentFn func(
+		ctx context.Context,
+		request chat.SessionPinDocumentRequest,
+	) (*models.PinnedDocumentRecord, error)
+	unpinEngramFn func(
+		ctx context.Context,
+		request chat.SessionPinEngramRequest,
+	) error
+	unpinDocumentFn func(
+		ctx context.Context,
+		request chat.SessionPinDocumentRequest,
+	) error
 }
 
 func newFakeChatSessionService() fakeChatSessionService {
-	return fakeChatSessionService{
-		createSessionFn: func(
-			context.Context,
-			uuid.UUID,
-			models.ChatSessionCreateRequest,
-		) (*models.ChatSessionRecord, error) {
-			return nil, nil
-		},
-		listSessionsFn: func(
-			context.Context,
-			chat.SessionListRequest,
-		) ([]models.ChatSessionRecord, error) {
-			return []models.ChatSessionRecord{}, nil
-		},
-		getSessionFn: func(
-			context.Context,
-			uuid.UUID,
-			uuid.UUID,
-		) (*models.ChatSessionRecord, error) {
-			return nil, nil
-		},
-		updateSessionFn: func(
-			context.Context,
-			uuid.UUID,
-			uuid.UUID,
-			models.ChatSessionUpdateRequest,
-		) (*models.ChatSessionRecord, error) {
-			return nil, nil
-		},
-		getLifecyclePolicyFn: func(
-			context.Context,
-			uuid.UUID,
-			uuid.UUID,
-		) (chat.ChatLifecyclePolicy, error) {
-			return chat.ChatLifecyclePolicy{}, nil
-		},
-		updateLifecyclePolicyFn: func(
-			context.Context,
-			uuid.UUID,
-			uuid.UUID,
-			chat.ChatLifecyclePolicyUpdateRequest,
-		) (chat.ChatLifecyclePolicy, error) {
-			return chat.ChatLifecyclePolicy{}, nil
-		},
-		listTimelineEventsFn: func(
-			context.Context,
-			chat.SessionTimelineRequest,
-		) ([]models.ChatTimelineEvent, error) {
-			return []models.ChatTimelineEvent{}, nil
-		},
-		listMessagesFn: func(
-			context.Context,
-			chat.SessionMessagesRequest,
-		) ([]models.ChatMessageRecord, error) {
-			return []models.ChatMessageRecord{}, nil
-		},
+	service := fakeChatSessionService{}
+	service.applySessionDefaults()
+	service.applyLifecycleDefaults()
+	service.applyMessageDefaults()
+	service.applyPinnedDefaults()
+	return service
+}
+
+func (service *fakeChatSessionService) applySessionDefaults() {
+	service.createSessionFn = func(context.Context, uuid.UUID, models.ChatSessionCreateRequest) (*models.ChatSessionRecord, error) {
+		return nil, nil
+	}
+	service.listSessionsFn = func(context.Context, chat.SessionListRequest) ([]models.ChatSessionRecord, error) {
+		return []models.ChatSessionRecord{}, nil
+	}
+	service.getSessionFn = func(context.Context, uuid.UUID, uuid.UUID) (*models.ChatSessionRecord, error) {
+		return nil, nil
+	}
+	service.updateSessionFn = func(
+		context.Context,
+		uuid.UUID,
+		uuid.UUID,
+		models.ChatSessionUpdateRequest,
+	) (*models.ChatSessionRecord, error) {
+		return nil, nil
+	}
+}
+
+func (service *fakeChatSessionService) applyLifecycleDefaults() {
+	service.getLifecyclePolicyFn = func(context.Context, uuid.UUID, uuid.UUID) (chat.ChatLifecyclePolicy, error) {
+		return chat.ChatLifecyclePolicy{}, nil
+	}
+	service.updateLifecyclePolicyFn = func(
+		context.Context,
+		uuid.UUID,
+		uuid.UUID,
+		chat.ChatLifecyclePolicyUpdateRequest,
+	) (chat.ChatLifecyclePolicy, error) {
+		return chat.ChatLifecyclePolicy{}, nil
+	}
+	service.listTimelineEventsFn = func(
+		context.Context,
+		chat.SessionTimelineRequest,
+	) ([]models.ChatTimelineEvent, error) {
+		return []models.ChatTimelineEvent{}, nil
+	}
+}
+
+func (service *fakeChatSessionService) applyMessageDefaults() {
+	service.listMessagesFn = func(context.Context, chat.SessionMessagesRequest) ([]models.ChatMessageRecord, error) {
+		return []models.ChatMessageRecord{}, nil
+	}
+}
+
+func (service *fakeChatSessionService) applyPinnedDefaults() {
+	service.listPinnedEngramsFn = func(context.Context, uuid.UUID, uuid.UUID) ([]models.EngramSummary, error) {
+		return []models.EngramSummary{}, nil
+	}
+	service.listPinnedDocumentsFn = func(context.Context, uuid.UUID, uuid.UUID) ([]models.PinnedDocumentRecord, error) {
+		return []models.PinnedDocumentRecord{}, nil
+	}
+	service.pinEngramFn = func(context.Context, chat.SessionPinEngramRequest) (*models.PinnedEngramRecord, error) {
+		return nil, nil
+	}
+	service.pinDocumentFn = func(context.Context, chat.SessionPinDocumentRequest) (*models.PinnedDocumentRecord, error) {
+		return nil, nil
+	}
+	service.unpinEngramFn = func(context.Context, chat.SessionPinEngramRequest) error {
+		return nil
+	}
+	service.unpinDocumentFn = func(context.Context, chat.SessionPinDocumentRequest) error {
+		return nil
 	}
 }
 
@@ -177,6 +219,50 @@ func (service fakeChatSessionService) ListMessages(
 	request chat.SessionMessagesRequest,
 ) ([]models.ChatMessageRecord, error) {
 	return service.listMessagesFn(ctx, request)
+}
+
+func (service fakeChatSessionService) ListPinnedEngrams(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	sessionID uuid.UUID,
+) ([]models.EngramSummary, error) {
+	return service.listPinnedEngramsFn(ctx, actorUserID, sessionID)
+}
+
+func (service fakeChatSessionService) ListPinnedDocuments(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	sessionID uuid.UUID,
+) ([]models.PinnedDocumentRecord, error) {
+	return service.listPinnedDocumentsFn(ctx, actorUserID, sessionID)
+}
+
+func (service fakeChatSessionService) PinEngram(
+	ctx context.Context,
+	request chat.SessionPinEngramRequest,
+) (*models.PinnedEngramRecord, error) {
+	return service.pinEngramFn(ctx, request)
+}
+
+func (service fakeChatSessionService) PinDocument(
+	ctx context.Context,
+	request chat.SessionPinDocumentRequest,
+) (*models.PinnedDocumentRecord, error) {
+	return service.pinDocumentFn(ctx, request)
+}
+
+func (service fakeChatSessionService) UnpinEngram(
+	ctx context.Context,
+	request chat.SessionPinEngramRequest,
+) error {
+	return service.unpinEngramFn(ctx, request)
+}
+
+func (service fakeChatSessionService) UnpinDocument(
+	ctx context.Context,
+	request chat.SessionPinDocumentRequest,
+) error {
+	return service.unpinDocumentFn(ctx, request)
 }
 
 func chatSessionFixture(

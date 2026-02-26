@@ -51,6 +51,7 @@
 | CP81 | 2026-02-26 | Completed | Phase 3 chat API session CRUD route baseline (`create/list/get/update`) with query defaults and >9.5 code-health gate |
 | CP82 | 2026-02-26 | Completed | Phase 3 chat API lifecycle/timeline route baseline (`lifecycle-policy` + `timeline`) with migrated unit tests and >9.5 code-health gate |
 | CP83 | 2026-02-26 | Completed | Phase 3 chat API message route baseline (`messages` list/send + stream mount refactor) with migrated unit tests and >9.5 code-health gate |
+| CP84 | 2026-02-26 | Completed | Phase 3 chat API pinned-resource route baseline (`engrams/documents` list/pin/unpin) with migrated unit tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3844,6 +3845,70 @@
   - `internal/api/chat_api_lifecycle_test.go`: `10.0`
   - `internal/api/chat_api_messages.go`: `10.0`
   - `internal/api/chat_api_messages_test.go`: `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP84 - Phase 3 Chat API Pinned Resource Routes Baseline (`internal/api/chat_api_pinned.go`)
+
+- Extended `api/app/chat/api.py` route parity to Go for pinned resource operations:
+  - `GET /api/v1/chat/sessions/{session_id}/engrams`
+  - `POST /api/v1/chat/sessions/{session_id}/engrams/pin`
+  - `DELETE /api/v1/chat/sessions/{session_id}/engrams/{engram_id}`
+  - `GET /api/v1/chat/sessions/{session_id}/documents`
+  - `POST /api/v1/chat/sessions/{session_id}/documents/pin`
+  - `DELETE /api/v1/chat/sessions/{session_id}/documents/{document_id}`
+- Added pinned-route module:
+  - `internal/api/chat_api_pinned.go`
+  - generic pinned resource route registration (`registerPinnedResourceRoutes`)
+  - shared pin/unpin request mapping helper (`buildPinnedSpec`) with typed request factories
+  - consistent unpin behavior (`204 No Content`) and bad resource-id handling (`400`).
+- Extended chat session route service contract:
+  - `internal/api/chat_api_sessions.go`
+- Added pinned payload models:
+  - `internal/models/chat.go`
+  - `PinEngramRequest`
+  - `PinDocumentRequest`
+- Added and updated migrated tests:
+  - `internal/api/chat_api_pinned_test.go`
+  - `internal/api/chat_api_sessions_test.go` (session service double expanded for pin/list/unpin methods).
+- Executed tests one-by-one:
+  - `TestCreateChatRouterRegistersPinnedRoutesWhenSessionServiceConfigured`
+  - `TestPinEngramHandlerWritesPinnedRecord`
+  - `TestListPinnedDocumentsHandlerWritesRecords`
+  - `TestUnpinDocumentHandlerReturnsNoContent`
+  - `TestCreateChatRouterRegistersMessageRoutesWhenServicesConfigured`
+  - `TestSendMessageHandlerWritesCreatedResponse`
+  - `TestListMessagesHandlerUsesDefaultPaging`
+  - `TestListMessagesHandlerRejectsInvalidLimit`
+  - `TestCreateChatRouterRegistersLifecycleRoutesWhenSessionServiceConfigured`
+  - `TestGetLifecyclePolicyHandlerWritesResponse`
+  - `TestUpdateLifecyclePolicyHandlerWritesResponse`
+  - `TestListTimelineEventsHandlerUsesDefaultPaging`
+  - `TestListTimelineEventsHandlerRejectsInvalidLimit`
+  - `TestCreateChatRouterRegistersSessionRoutesWhenSessionServiceConfigured`
+  - `TestCreateSessionHandlerWritesCreatedResponse`
+  - `TestListSessionsHandlerUsesDefaultPaging`
+  - `TestListSessionsHandlerRejectsInvalidLimit`
+  - `TestGetSessionHandlerMapsChatServiceError`
+  - `TestUpdateSessionHandlerWritesUpdatedResponse`
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersConfiguredEndpoints`
+  - `TestSaveSessionAsEngramHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerMapsChatServiceError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api_sessions.go`: `10.0`
+  - `internal/api/chat_api_sessions_test.go`: `10.0`
+  - `internal/api/chat_api_pinned.go`: `10.0`
+  - `internal/api/chat_api_pinned_test.go`: `10.0`
+  - `internal/models/chat.go`: `10.0`
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

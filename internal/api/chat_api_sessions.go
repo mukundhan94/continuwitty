@@ -63,6 +63,32 @@ type ChatSessionService interface {
 		ctx context.Context,
 		request chat.SessionMessagesRequest,
 	) ([]models.ChatMessageRecord, error)
+	ListPinnedEngrams(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+	) ([]models.EngramSummary, error)
+	ListPinnedDocuments(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		sessionID uuid.UUID,
+	) ([]models.PinnedDocumentRecord, error)
+	PinEngram(
+		ctx context.Context,
+		request chat.SessionPinEngramRequest,
+	) (*models.PinnedEngramRecord, error)
+	PinDocument(
+		ctx context.Context,
+		request chat.SessionPinDocumentRequest,
+	) (*models.PinnedDocumentRecord, error)
+	UnpinEngram(
+		ctx context.Context,
+		request chat.SessionPinEngramRequest,
+	) error
+	UnpinDocument(
+		ctx context.Context,
+		request chat.SessionPinDocumentRequest,
+	) error
 }
 
 type chatSessionListQuery struct {
@@ -258,4 +284,5 @@ func registerChatSessionRoutes(
 		),
 	)
 	registerChatLifecycleRoutes(router, sessionService, requireAPIActor)
+	registerChatPinnedRoutes(router, sessionService, requireAPIActor)
 }
