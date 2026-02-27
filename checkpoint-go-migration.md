@@ -119,6 +119,7 @@
 | CP149 | 2026-02-27 | Completed | Phase 4 MCP token-policy parity test hardening for no-session `chat.save_as_engram` (single-project autofill + multi-project explicit-project guard) with >9.5 code-health gate |
 | CP150 | 2026-02-27 | Completed | Phase 4 MCP top-level invalid-request parity test hardening for no-session `chat.save_as_engram` missing `conversation_markdown` with >9.5 code-health gate |
 | CP151 | 2026-02-27 | Completed | Phase 4 MCP stream-route token policy parity tests (`tools/list` allowlist visibility + read-scope write denial) with >9.5 code-health gate |
+| CP152 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback parity tests for `engram.create` (single-project autofill + multi-project explicit-project guard) with >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3865,6 +3866,29 @@
   - passed.
 - CodeScene checks (checkpoint-touched file, >= 9.5):
   - `internal/api/mcp_stream_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP152 - Phase 4 MCP Stream-Route Token Project-Fallback Parity Tests (`engram.create`)
+
+- Added MCP stream-route token project-fallback parity tests for `engram.create` using the real compatibility service:
+  - single-project token allowlist autofills `project_id` on `engram.create` when omitted
+  - multi-project token allowlist requires explicit `project_id` and returns `data.missing="project_id"`.
+- Added dedicated route test module to keep CodeScene health at 10.0:
+  - `internal/api/mcp_stream_token_project_fallback_test.go`.
+- Rebalanced existing stream test module after extraction:
+  - `internal/api/mcp_stream_test.go`.
+- Added lightweight capture fake for create request-shape assertions:
+  - `capturingMCPCreateEngramService`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/api/mcp_stream_test.go`: `10.0`
+  - `internal/api/mcp_stream_token_project_fallback_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
