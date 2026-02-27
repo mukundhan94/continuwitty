@@ -106,6 +106,7 @@
 | CP136 | 2026-02-27 | Completed | Phase 4 MCP engram collection mutation baseline (`engram.collection_create`, `engram.collection_update`, `engram.collection_delete`, `engram.collection_add_items`, `engram.collection_remove_items`) with direct/`tools/call` parity, runtime memory-admin collection mutation wiring, project/duplicate/stale/not-found error mapping parity, migrated tests, and >9.5 code-health gate |
 | CP137 | 2026-02-27 | Completed | Phase 4 MCP project transfer baseline (`project.export_bundle`, `project.import_bundle`) with direct/`tools/call` parity, runtime export/import adapter wiring, bundle/conflict-policy validation parity, export/import error mapping parity (`404`/`422`), migrated tests, and >9.5 code-health gate |
 | CP138 | 2026-02-27 | Completed | Phase 4 MCP chat send-message stream parity (`chat.send_message`) with `mcp.event` frame emission, direct/`tools/call` stream routing parity, non-stream fallback preservation, runtime stream adapter wiring, migrated tests, and >9.5 code-health gate |
+| CP139 | 2026-02-27 | Completed | Phase 4 MCP stream transport multi-frame parity tests (`/api/v1/mcp/stream`) for event+terminal frame handling in JSON and SSE modes with >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3470,6 +3471,30 @@
   - `internal/mcp/compatibility_service.go`: `10.0`
   - `internal/mcp/compatibility_stream_chat_send_message_support.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_send_message_stream_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP139 - Phase 4 MCP Stream Transport Multi-Frame Parity Tests (`/api/v1/mcp/stream`)
+
+- Added MCP transport regression tests for multi-frame stream responses carrying:
+  - one or more `mcp.event` frames
+  - followed by a terminal JSON-RPC `result` frame with matching request `id`.
+- Verified JSON response mode terminal-frame selection parity:
+  - JSON mode ignores intermediate `mcp.event` frames and returns the terminal result payload for the request ID.
+- Verified SSE response mode frame passthrough parity:
+  - SSE mode emits both `mcp.event` and terminal result frames in-order.
+- Refactored test setup helpers to keep transport coverage high while preserving file code health:
+  - shared router/frame/request helpers for multi-frame stream scenarios.
+- Updated file:
+  - `internal/api/mcp_stream_test.go`
+- Full verification:
+  - `go test ./internal/api ./internal/mcp ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/api/mcp_stream_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

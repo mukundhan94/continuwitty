@@ -118,6 +118,27 @@ func TestMountMCPRoutesJSONResponseMode(t *testing.T) {
 	}
 }
 
+func TestMountMCPRoutesJSONResponseModeChoosesTerminalFrameAfterStreamEvents(t *testing.T) {
+	router := newStreamRouterWithFrames(streamFramesWithEventAndResult("chat.send_message")...)
+	response := postMCPStreamRequest(router, "application/json")
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected json mode status 200, got %d", response.Code)
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode json response: %v", err)
+	}
+	result, ok := payload["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected terminal result payload")
+	}
+	message, ok := result["message"].(map[string]any)
+	if !ok || message["message_id"] != "m1" {
+		t.Fatalf("expected json mode to return terminal stream result")
+	}
+}
+
 func TestMountMCPRoutesSSEResponseMode(t *testing.T) {
 	router := chi.NewRouter()
 	MountMCPRoutes(router, &fakeMCPRouteService{
@@ -151,6 +172,71 @@ func TestMountMCPRoutesSSEResponseMode(t *testing.T) {
 	if !strings.Contains(response.Body.String(), "event: jsonrpc") {
 		t.Fatalf("expected jsonrpc event in response body")
 	}
+}
+
+func TestMountMCPRoutesSSEResponseModeWritesEventAndTerminalFrames(t *testing.T) {
+	router := newStreamRouterWithFrames(streamFramesWithEventAndResult("chat_send_message")...)
+	response := postMCPStreamRequest(router, "text/event-stream")
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected sse mode status 200, got %d", response.Code)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, `"method":"mcp.event"`) {
+		t.Fatalf("expected mcp.event frame in sse body")
+	}
+	if !strings.Contains(body, `"result":{"message":{"message_id":"m1"}}`) {
+		t.Fatalf("expected terminal result frame in sse body")
+	}
+}
+
+func newStreamRouterWithFrames(streamFrames ...mcp.Frame) *chi.Mux {
+	router := chi.NewRouter()
+	MountMCPRoutes(router, &fakeMCPRouteService{
+		streamCallFn: func(_ context.Context, _ mcp.StreamCallRequest) <-chan mcp.Frame {
+			frames := make(chan mcp.Frame, len(streamFrames))
+			for _, frame := range streamFrames {
+				frames <- frame
+			}
+			close(frames)
+			return frames
+		},
+	}, newTestMCPActorResolver(), nil)
+	return router
+}
+
+func streamFramesWithEventAndResult(toolName string) []mcp.Frame {
+	return []mcp.Frame{
+		{
+			"jsonrpc": "2.0",
+			"method":  "mcp.event",
+			"params": map[string]any{
+				"id":    "msg-1",
+				"tool":  toolName,
+				"event": "chunk",
+				"data":  map[string]any{"text": "hello"},
+			},
+		},
+		{
+			"jsonrpc": "2.0",
+			"id":      "msg-1",
+			"result": map[string]any{
+				"message": map[string]any{"message_id": "m1"},
+			},
+		},
+	}
+}
+
+func postMCPStreamRequest(router http.Handler, acceptHeader string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/mcp/stream",
+		strings.NewReader(`{"jsonrpc":"2.0","id":"msg-1","method":"chat.send_message","params":{"session_id":"s1"}}`),
+	)
+	request.Header.Set("Accept", acceptHeader)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	return response
 }
 
 func TestMountMCPRoutesJSONFallbackFrame(t *testing.T) {
