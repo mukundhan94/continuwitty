@@ -6,4 +6,5 @@ func registerEngramPrimaryToolHandlers(handlers map[string]implementedToolHandle
 		(*CompatibilityService).dispatchEngramCreateFromConversationTool,
 	)
 	handlers["engram.update"] = bindEngramDispatch((*CompatibilityService).dispatchEngramUpdateTool)
+	handlers["engram.move_project"] = bindEngramDispatch((*CompatibilityService).dispatchEngramMoveProjectTool)
 }

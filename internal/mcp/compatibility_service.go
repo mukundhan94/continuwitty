@@ -209,6 +209,14 @@ type EngramUpdateService interface {
 	) (*models.AdminEngramRecord, error)
 }
 
+// EngramMoveService captures engram move-project behavior used by MCP compatibility engram dispatch.
+type EngramMoveService interface {
+	MoveEngram(
+		ctx context.Context,
+		request EngramMoveRequest,
+	) (*models.AdminEngramRecord, error)
+}
+
 // EngramDeleteService captures engram delete behavior used by MCP compatibility engram dispatch.
 type EngramDeleteService interface {
 	DeleteEngram(
@@ -479,6 +487,16 @@ type EngramUpdateRequest struct {
 	Sources                 *[]models.AdminEngramSourceInput
 }
 
+// EngramMoveRequest captures compatibility-level engram move inputs.
+type EngramMoveRequest struct {
+	ActorUserID       uuid.UUID
+	ActorRole         models.UserRole
+	EngramID          uuid.UUID
+	TargetProjectID   string
+	Reason            *string
+	ExpectedUpdatedAt *time.Time
+}
+
 // EngramDeleteRequest captures compatibility-level engram delete inputs.
 type EngramDeleteRequest struct {
 	ActorUserID uuid.UUID
@@ -540,6 +558,7 @@ type CompatibilityServiceDependencies struct {
 	EngramCreate             EngramCreateService
 	EngramCreateConversation EngramCreateFromConversationService
 	EngramUpdate             EngramUpdateService
+	EngramMove               EngramMoveService
 	EngramDelete             EngramDeleteService
 	EngramRestore            EngramRestoreService
 	EngramCollectionList     EngramCollectionListService
@@ -574,6 +593,7 @@ type CompatibilityService struct {
 	engramCreate             EngramCreateService
 	engramCreateConversation EngramCreateFromConversationService
 	engramUpdate             EngramUpdateService
+	engramMove               EngramMoveService
 	engramDelete             EngramDeleteService
 	engramRestore            EngramRestoreService
 	engramCollectionList     EngramCollectionListService
@@ -624,6 +644,7 @@ func NewCompatibilityServiceWithDependencies(
 		engramCreate:             dependencies.EngramCreate,
 		engramCreateConversation: dependencies.EngramCreateConversation,
 		engramUpdate:             dependencies.EngramUpdate,
+		engramMove:               dependencies.EngramMove,
 		engramDelete:             dependencies.EngramDelete,
 		engramRestore:            dependencies.EngramRestore,
 		engramCollectionList:     dependencies.EngramCollectionList,
