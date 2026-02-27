@@ -109,6 +109,59 @@ func TestCompatibilityServiceChatCreateSessionUsesDefaults(t *testing.T) {
 	}
 }
 
+func TestCompatibilityServiceChatCreateSessionTokenProjectAutofill(t *testing.T) {
+	actorUserID := uuid.MustParse("38110000-0000-0000-0000-000000000381")
+	service := &fakeSessionCreateService{
+		session: &models.ChatSessionRecord{
+			SessionID:   uuid.MustParse("38110000-0000-0000-0000-000000000382"),
+			OwnerUserID: actorUserID,
+			ProjectID:   "proj-token",
+			Title:       "Token fallback",
+		},
+	}
+	frame := runCompatibilityRequestWithService(
+		t,
+		newSessionCreateCompatibilityService(service),
+		tokenScopedDirectRequest(tokenScopedRequest{
+			actorID:  actorUserID.String(),
+			toolName: "chat.create_session",
+			params: map[string]any{
+				"title": "Token fallback",
+			},
+			scope:             models.MCPTokenScopeWrite,
+			allowedProjectIDs: []string{"proj-token"},
+		}),
+	)
+	_ = chatSessionFromFrame(t, frame, false)
+
+	expected := defaultSessionCreatePayload("proj-token", "Token fallback")
+	if !reflect.DeepEqual(expected, service.call.Payload) {
+		t.Fatalf("expected token project autofill payload for create session")
+	}
+}
+
+func TestCompatibilityServiceChatCreateSessionRequiresProjectForMultiProjectToken(t *testing.T) {
+	frame := runCompatibilityRequestWithService(
+		t,
+		newSessionCreateCompatibilityService(&fakeSessionCreateService{}),
+		tokenScopedDirectRequest(tokenScopedRequest{
+			actorID:  "38120000-0000-0000-0000-000000000381",
+			toolName: "chat.create_session",
+			params: map[string]any{
+				"title": "Denied",
+			},
+			scope:             models.MCPTokenScopeWrite,
+			allowedProjectIDs: []string{"proj-a", "proj-b"},
+		}),
+	)
+	errorPayload := errorPayloadFromFrame(t, frame)
+	requireErrorCode(t, errorPayload, -32602)
+	data := mapFromMap(t, errorPayload, "data")
+	if data["missing"] != "project_id" || data["reason"] != "token_has_multiple_allowed_projects" {
+		t.Fatalf("expected multi-project token validation payload")
+	}
+}
+
 func TestCompatibilityServiceChatCreateSessionValidationErrors(t *testing.T) {
 	service := newSessionCreateCompatibilityService(&fakeSessionCreateService{})
 

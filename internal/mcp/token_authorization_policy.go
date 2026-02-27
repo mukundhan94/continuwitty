@@ -16,6 +16,7 @@ var optionalProjectTools = map[string]struct{}{
 }
 
 var projectFallbackTools = map[string]struct{}{
+	"chat.create_session":             {},
 	"chat.save_as_engram":             {},
 	"engram.create":                   {},
 	"engram.create_from_conversation": {},
