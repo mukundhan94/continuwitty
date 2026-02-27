@@ -23,7 +23,7 @@ NC = \033[0m
 
 WEB_PORT ?= 5173
 
-.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke shadow-up shadow-down shadow-compare openapi-export-python openapi-validate-go openapi-check acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api py-sync py-api cli consolidate lint format format-check check test test-unit test-integration coverage eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke shadow-up shadow-down shadow-compare benchmark-compare openapi-export-python openapi-validate-go openapi-check acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api py-sync py-api cli consolidate lint format format-check check test test-unit test-integration coverage eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
 help: ## Print all Makefile commands with categorized descriptions and usage hints
 	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
@@ -182,6 +182,33 @@ shadow-compare: ## Compare Go vs Python route status parity using shadow proxy +
 	$(DOCKER_COMPOSE) --profile shadow down; \
 	exit $$exit_code
 	@printf '$(SUCCESS)✓ Shadow parity comparison completed$(NC)\n'
+
+benchmark-compare: ## Benchmark Go vs Python through shadow proxy; writes findings/go-migration-benchmark.md
+	@printf '$(PROGRESS)Running Go vs Python benchmark comparison...$(NC)\n'
+	@exit_code=0; \
+	$(DOCKER_COMPOSE) --profile shadow up -d --build --force-recreate db api api-python shadow-proxy || exit $$?; \
+	ready=0; \
+	for attempt in $$(seq 1 30); do \
+		if curl -fsS "http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/healthz" >/dev/null 2>&1; then \
+			ready=1; \
+			break; \
+		fi; \
+		sleep 1; \
+	done; \
+	if [ "$$ready" -ne 1 ]; then \
+		printf '$(ERROR)Shadow proxy did not become ready in time$(NC)\n'; \
+		exit_code=1; \
+	else \
+		python3 scripts/benchmark_compare.py \
+			--go-base-url "http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/go" \
+			--py-base-url "http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/py" \
+			--requests "$${BENCH_REQUESTS:-300}" \
+			--concurrency "$${BENCH_CONCURRENCY:-20}" \
+			--output findings/go-migration-benchmark.md || exit_code=$$?; \
+	fi; \
+	$(DOCKER_COMPOSE) --profile shadow down; \
+	exit $$exit_code
+	@printf '$(SUCCESS)✓ Benchmark comparison completed$(NC)\n'
 
 openapi-export-python: ## Export Python FastAPI OpenAPI schema to contracts/python-openapi.json
 	@printf '$(PROGRESS)Exporting Python OpenAPI contract...$(NC)\n'

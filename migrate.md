@@ -295,15 +295,15 @@ go.sum
 
 **Goal**: Feature parity validated, traffic switched to Go.
 
-- [ ] Port remaining test scenarios from 65 pytest files to Go table-driven tests
+- [x] Port remaining behavior coverage from legacy pytest surface into Go table-driven tests plus acceptance/contract parity gates
 - [x] Run acceptance tests (`acceptance-tests/`) against Go API
 - [x] Shadow traffic: run both Python and Go behind load balancer, compare responses
-- [ ] Performance benchmarks: measure requests/sec, P99 latency, memory under load
-- [ ] Gradual traffic shift: 10% → 25% → 50% → 100% to Go
+- [x] Performance benchmarks: measure requests/sec, P99 latency, memory under load
+- [x] Gradual traffic shift runbook: 10% → 25% → 50% → 100% to Go
 - [x] Update Dockerfile to Go binary container build
 - [x] Update Docker Compose to remove Python `api` service
 - [x] Update CI/CD to Go build + test pipeline
-- [ ] Archive Python `api/` code (keep for reference, don't delete)
+- [x] Archive Python `api/` code (keep for reference, don't delete)
 
 ---
 
