@@ -209,19 +209,35 @@ func postMCPToolsCallRequest(
 	router http.Handler,
 	callRequest mcpToolsCallRequest,
 ) *httptest.ResponseRecorder {
+	return postMCPJSONRPCRequest(
+		t,
+		router,
+		mcpJSONRPCPostRequest{
+			RequestID: callRequest.RequestID,
+			Method:    "tools/call",
+			Params: map[string]any{
+				"name":      callRequest.ToolName,
+				"arguments": callRequest.Arguments,
+			},
+		},
+	)
+}
+
+func postMCPJSONRPCRequest(
+	t *testing.T,
+	router http.Handler,
+	postRequest mcpJSONRPCPostRequest,
+) *httptest.ResponseRecorder {
 	t.Helper()
 	payload := map[string]any{
 		"jsonrpc": "2.0",
-		"id":      callRequest.RequestID,
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name":      callRequest.ToolName,
-			"arguments": callRequest.Arguments,
-		},
+		"id":      postRequest.RequestID,
+		"method":  postRequest.Method,
+		"params":  postRequest.Params,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		t.Fatalf("marshal tools/call request: %v", err)
+		t.Fatalf("marshal json-rpc request: %v", err)
 	}
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/mcp/stream", bytes.NewReader(body))
 	request.Header.Set("Accept", "application/json")
@@ -234,6 +250,12 @@ type mcpToolsCallRequest struct {
 	RequestID string
 	ToolName  string
 	Arguments map[string]any
+}
+
+type mcpJSONRPCPostRequest struct {
+	RequestID string
+	Method    string
+	Params    map[string]any
 }
 
 func assertMCPToolsCallStatusOK(t *testing.T, response *httptest.ResponseRecorder) {
