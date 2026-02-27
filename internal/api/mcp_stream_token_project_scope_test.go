@@ -102,6 +102,22 @@ func tokenProjectDeniedToolsCallScenarios() []tokenProjectDeniedToolsCallScenari
 				"description": "Details",
 			},
 		},
+		{
+			name:      "project.export_bundle",
+			requestID: "project-export-denied",
+			toolName:  "project_export_bundle",
+			arguments: map[string]any{
+				"project_id": "project-other",
+			},
+		},
+		{
+			name:      "project.import_bundle",
+			requestID: "project-import-denied",
+			toolName:  "project_import_bundle",
+			arguments: map[string]any{
+				"project_id": "project-other",
+			},
+		},
 	}
 }
 
@@ -145,6 +161,22 @@ func tokenProjectDeniedDirectScenarios() []tokenProjectDeniedDirectScenario {
 				"project_id":  "project-other",
 				"name":        "Denied",
 				"description": "Details",
+			},
+		},
+		{
+			name:      "project.export_bundle",
+			requestID: "project-export-direct-denied",
+			method:    "project.export_bundle",
+			params: map[string]any{
+				"project_id": "project-other",
+			},
+		},
+		{
+			name:      "project.import_bundle",
+			requestID: "project-import-direct-denied",
+			method:    "project.import_bundle",
+			params: map[string]any{
+				"project_id": "project-other",
 			},
 		},
 	}
