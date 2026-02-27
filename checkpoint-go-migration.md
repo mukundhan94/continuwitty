@@ -112,6 +112,7 @@
 | CP142 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity hardening for `chat.save_as_engram` session precedence plus `engram.move_project` dual source/target allowlist enforcement with migrated edge-policy tests and >9.5 code-health gate |
 | CP143 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity extension for collection-scoped mutation tools (`engram.collection_update/delete/add_items/remove_items`) via `collection_id`-derived project resolution with runtime collection-lookup adapter wiring, migrated policy tests, and >9.5 code-health gate |
 | CP144 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity hardening for `engram.rehydrate` by resolving allowlist project scope from rehydration-bundle project metadata (instead of engram-admin lookup), with migrated policy tests and >9.5 code-health gate |
+| CP145 | 2026-02-27 | Completed | Phase 4 MCP `chat.save_as_engram` no-session conversation fallback parity (conversation create path + enrichment payload) with migrated parity/error/default tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3660,6 +3661,39 @@
 - CodeScene checks (checkpoint-touched files, all >= 9.5):
   - `internal/mcp/token_project_scope_policy.go`: `10.0`
   - `internal/mcp/compatibility_service_token_project_scope_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP145 - Phase 4 MCP Chat Save-As-Engram No-Session Conversation Fallback Parity (`chat.save_as_engram`)
+
+- Extended `chat.save_as_engram` dispatch to match Python dual-mode behavior:
+  - when `session_id` is present/non-empty: preserve existing session snapshot save flow
+  - when `session_id` is absent: route to conversation create flow requiring `conversation_markdown`.
+- Added no-session fallback payload parity:
+  - default fallback title is `"Conversation Snapshot"` when title is missing/blank
+  - response now returns:
+    - `saved_engram` (conversation-created engram payload)
+    - `enrichment_report` (conversation enrichment metadata payload).
+- Preserved session mode behavior and mappings:
+  - existing `session_id` path keeps `SaveSessionAsEngram` payload defaults and `mapChatSendError` mappings.
+- Added migrated test coverage for chat-save dual-mode parity:
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`
+  - coverage includes:
+    - direct + `tools/call` parity for conversation fallback
+    - fallback default-title behavior
+    - fallback project-resolution/internal error mappings
+    - validation matrix updates for no-session conversation path.
+- Updated:
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

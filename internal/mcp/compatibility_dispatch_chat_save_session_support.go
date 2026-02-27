@@ -2,11 +2,31 @@ package mcp
 
 import (
 	"context"
+	"strings"
 
 	"engram/internal/models"
 )
 
 func (service *CompatibilityService) dispatchChatSaveSessionAsEngramTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if saveAsEngramSessionRequested(params) {
+		return service.dispatchChatSaveSessionAsEngramFromSession(ctx, actor, params)
+	}
+	return service.dispatchChatSaveSessionAsEngramFromConversation(ctx, actor, params)
+}
+
+func saveAsEngramSessionRequested(params map[string]any) bool {
+	sessionID, found := optionalParamValue(params, "session_id")
+	if !found {
+		return false
+	}
+	return strings.TrimSpace(stringParam(sessionID)) != ""
+}
+
+func (service *CompatibilityService) dispatchChatSaveSessionAsEngramFromSession(
 	ctx context.Context,
 	actor Actor,
 	params map[string]any,
@@ -51,6 +71,45 @@ func (service *CompatibilityService) dispatchChatSaveSessionAsEngramTool(
 		return nil, true, invalidParamsWithStatus(404, "Chat session not found")
 	}
 	return map[string]any{"saved_engram": *saved}, true, nil
+}
+
+func (service *CompatibilityService) dispatchChatSaveSessionAsEngramFromConversation(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.engramCreateConversation == nil {
+		return nil, false, nil
+	}
+	request, dispatchErr := parseChatSaveAsEngramConversationRequest(actor, params)
+	if dispatchErr != nil {
+		return nil, true, dispatchErr
+	}
+	created, err := service.engramCreateConversation.CreateEngramFromConversation(ctx, request)
+	if err != nil {
+		return nil, true, mapEngramCreateError(err)
+	}
+	if created == nil {
+		return nil, true, internalToolDispatchError()
+	}
+	return map[string]any{
+		"saved_engram":      created.Engram,
+		"enrichment_report": created.EnrichmentReport,
+	}, true, nil
+}
+
+func parseChatSaveAsEngramConversationRequest(
+	actor Actor,
+	params map[string]any,
+) (EngramCreateFromConversationRequest, *toolDispatchError) {
+	if strings.TrimSpace(stringParamWithDefault(params, "conversation_markdown", "")) == "" {
+		return EngramCreateFromConversationRequest{}, invalidParamError("conversation_markdown")
+	}
+	fallbackParams := cloneToolParams(params)
+	if strings.TrimSpace(stringParamWithDefault(fallbackParams, "title", "")) == "" {
+		fallbackParams["title"] = "Conversation Snapshot"
+	}
+	return parseEngramCreateFromConversationRequest(actor, fallbackParams)
 }
 
 func parseSaveSessionVisibilityScopeParam(params map[string]any) (models.VisibilityScope, bool) {
