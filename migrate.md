@@ -185,7 +185,7 @@ go.sum
 - [x] Port `db.py` → `internal/db/db.go` (pgxpool + schema version check)
 - [x] Docker Compose Go API cutover completed (initial side-by-side migration path superseded by final Go-only `api` service)
 - [ ] Reverse proxy (nginx/traefik) for path-based routing during migration
-- [ ] Generate OpenAPI spec from Python FastAPI (`/api/v1/openapi.json`) — this is the compatibility contract
+- [x] Generate OpenAPI spec from Python FastAPI (`/api/v1/openapi.json`) — this is the compatibility contract
 - [x] CI: Go backend checks pipeline (`gofmt` + `go vet` + `go test`) via GitHub Actions
 
 **Key files to reference**:
@@ -275,7 +275,7 @@ go.sum
 - [x] Port session middleware + CSRF protection
 - [x] Port OAuth routes from `oauth/router.py`
 - [x] Port Jinja2 templates → Go `html/template`
-- [ ] Validate against OpenAPI spec from Phase 0
+- [x] Validate against OpenAPI spec from Phase 0
 
 **MCP Server** (Weeks 11-12):
 - [x] Set up mcp-go `StreamableHTTPServer` in `internal/mcp/server.go`
