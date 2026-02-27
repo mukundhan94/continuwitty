@@ -142,6 +142,7 @@
 | CP172 | 2026-02-27 | Completed | Phase 5 developer workflow cutover baseline: switched Makefile backend defaults (`sync`, `dev`, `api`, `lint`, `format`, `format-check`, `test`, `check`) to Go commands and retained Python runtime commands under explicit legacy targets (`py-*`) under >9.5 code-health gate |
 | CP173 | 2026-02-27 | Completed | Phase 5 docs cutover baseline: updated top-level runbook docs (`README.md`, `docs/user-workflows.md`) for Go-first API/runtime commands and health endpoints while preserving explicit legacy Python notes under >9.5 code-health gate |
 | CP174 | 2026-02-27 | Completed | Phase 5 runtime verification baseline: added `make stack-smoke` target for Go API container smoke validation (`db+api` build/start + `/healthz` + `/api/v1/version` checks) and validated success locally under >9.5 code-health gate |
+| CP175 | 2026-02-27 | Completed | Phase 5 CI cutover baseline: added GitHub Actions Go backend pipeline (`gofmt` + `go vet` + `go test`) and updated migration checklist completion markers for Docker/compose/CI cutover items under >9.5 code-health gate |
 
 ## Checkpoint Details
 

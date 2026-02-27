@@ -186,7 +186,7 @@ go.sum
 - [ ] Docker Compose: add `go-api` service alongside `api`, both share `db`
 - [ ] Reverse proxy (nginx/traefik) for path-based routing during migration
 - [ ] Generate OpenAPI spec from Python FastAPI (`/api/v1/openapi.json`) — this is the compatibility contract
-- [ ] CI: Go `go test` + `go vet` + `golangci-lint` pipeline
+- [x] CI: Go backend checks pipeline (`gofmt` + `go vet` + `go test`) via GitHub Actions
 
 **Key files to reference**:
 - `api/app/config.py` (208 LOC)
@@ -300,9 +300,9 @@ go.sum
 - [ ] Shadow traffic: run both Python and Go behind load balancer, compare responses
 - [ ] Performance benchmarks: measure requests/sec, P99 latency, memory under load
 - [ ] Gradual traffic shift: 10% → 25% → 50% → 100% to Go
-- [ ] Update Dockerfile to single-stage Go binary build (~20 MB image)
-- [ ] Update Docker Compose to remove Python `api` service
-- [ ] Update CI/CD to Go build + test pipeline
+- [x] Update Dockerfile to Go binary container build
+- [x] Update Docker Compose to remove Python `api` service
+- [x] Update CI/CD to Go build + test pipeline
 - [ ] Archive Python `api/` code (keep for reference, don't delete)
 
 ---
