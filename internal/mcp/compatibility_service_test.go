@@ -182,6 +182,29 @@ func TestCompatibilityServiceErrorMappings(t *testing.T) {
 	}
 }
 
+func TestCompatibilityServiceErrorMappingsChatSaveMissingConversationMarkdown(t *testing.T) {
+	frame := runCompatibilityRequestWithService(
+		t,
+		NewCompatibilityServiceWithDependencies(
+			"1.2.3",
+			CompatibilityServiceDependencies{
+				EngramCreateConversation: &fakeEngramCreateConversationService{},
+			},
+		),
+		directToolRequest(
+			"39135000-0000-0000-0000-000000000390",
+			"chat.save_as_engram",
+			map[string]any{},
+		),
+	)
+	errorPayload := errorPayloadFromFrame(t, frame)
+	requireErrorCode(t, errorPayload, -32602)
+	data := mapFromMap(t, errorPayload, "data")
+	if data["missing"] != "conversation_markdown" {
+		t.Fatalf("expected missing conversation_markdown error data")
+	}
+}
+
 func TestCompatibilityServiceRejectsWriteToolsForReadToken(t *testing.T) {
 	testCases := []StreamCallRequest{
 		{

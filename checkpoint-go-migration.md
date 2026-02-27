@@ -117,6 +117,7 @@
 | CP147 | 2026-02-27 | Completed | Phase 4 MCP conversation-create enrichment-origin parity (`mcp.chat.save_as_engram` fallback origin + explicit `engram.create_from_conversation` origin wiring) with migrated request-shape tests and >9.5 code-health gate |
 | CP148 | 2026-02-27 | Completed | Phase 4 MCP chat-save no-session error-payload parity (`data.missing=conversation_markdown`) with migrated validation-data tests and >9.5 code-health gate |
 | CP149 | 2026-02-27 | Completed | Phase 4 MCP token-policy parity test hardening for no-session `chat.save_as_engram` (single-project autofill + multi-project explicit-project guard) with >9.5 code-health gate |
+| CP150 | 2026-02-27 | Completed | Phase 4 MCP top-level invalid-request parity test hardening for no-session `chat.save_as_engram` missing `conversation_markdown` with >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3818,6 +3819,27 @@
   - `go test ./... -count=1`
   - passed.
 - CodeScene checks (checkpoint-touched file, >= 9.5):
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP150 - Phase 4 MCP Top-Level Invalid-Request Parity Test Hardening (`chat.save_as_engram`)
+
+- Added parity coverage at the compatibility-service dispatch layer for Python-equivalent invalid-request behavior:
+  - direct method `chat.save_as_engram` with no params now explicitly validated in top-level error mapping tests
+  - asserts `-32602` and `data.missing="conversation_markdown"` payload semantics.
+- Added test coverage:
+  - `internal/mcp/compatibility_service_test.go`
+  - new test:
+    - `TestCompatibilityServiceErrorMappingsChatSaveMissingConversationMarkdown`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
