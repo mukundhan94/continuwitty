@@ -180,6 +180,58 @@ func TestOAuthRegisterClientWritesCreatedResponse(t *testing.T) {
 	}
 }
 
+func TestOAuthRegisterClientAllowsUnknownMetadataFields(t *testing.T) {
+	capturedPayload := internaloauth.RegistrationRequest{}
+	service := fakeOAuthRegistrationRouteService{
+		handleRegisterFn: func(
+			_ context.Context,
+			_ config.Settings,
+			payload internaloauth.RegistrationRequest,
+			_ *internaloauth.SessionUser,
+		) (internaloauth.RegistrationResponse, error) {
+			capturedPayload = payload
+			return internaloauth.RegistrationResponse{
+				ClientID:                "engram_client_unknown_fields",
+				ClientName:              payload.ClientName,
+				RedirectURIs:            payload.RedirectURIs,
+				GrantTypes:              payload.GrantTypes,
+				ResponseTypes:           payload.ResponseTypes,
+				TokenEndpointAuthMethod: payload.TokenEndpointAuthMethod,
+				ClientIDIssuedAt:        1767225600,
+			}, nil
+		},
+	}
+	router := chi.NewRouter()
+	MountOAuthRoutes(router, config.Settings{OAuthEnabled: true}, service)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/oauth/register",
+		strings.NewReader(`{
+			"client_name":"VS Code MCP",
+			"redirect_uris":["http://127.0.0.1:33418","https://vscode.dev/redirect"],
+			"grant_types":["authorization_code"],
+			"response_types":["code"],
+			"token_endpoint_auth_method":"none",
+			"software_id":"vscode-copilot",
+			"software_version":"1.0.0",
+			"client_uri":"https://example.com/client"
+		}`),
+	)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", response.Code)
+	}
+	if capturedPayload.ClientName != "VS Code MCP" {
+		t.Fatalf("expected client_name to decode, got %q", capturedPayload.ClientName)
+	}
+	if len(capturedPayload.RedirectURIs) != 2 {
+		t.Fatalf("expected redirect_uris to decode, got %#v", capturedPayload.RedirectURIs)
+	}
+}
+
 func TestOAuthRegisterClientMapsRegistrationErrors(t *testing.T) {
 	router := chi.NewRouter()
 	MountOAuthRoutes(

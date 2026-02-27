@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -125,7 +127,7 @@ func decodeOAuthRegistrationPayload(
 	request *http.Request,
 ) (internaloauth.RegistrationRequest, bool) {
 	payload := oauthRegistrationRoutePayload{}
-	if !decodeJSONAllowEmpty(writer, request, &payload) {
+	if !decodeOAuthRegistrationJSONAllowUnknown(writer, request, &payload) {
 		return internaloauth.RegistrationRequest{}, false
 	}
 	return internaloauth.RegistrationRequest{
@@ -135,6 +137,27 @@ func decodeOAuthRegistrationPayload(
 		ResponseTypes:           payload.ResponseTypes,
 		TokenEndpointAuthMethod: strings.TrimSpace(payload.TokenEndpointAuthMethod),
 	}, true
+}
+
+func decodeOAuthRegistrationJSONAllowUnknown(
+	writer http.ResponseWriter,
+	request *http.Request,
+	destination any,
+) bool {
+	if request.Body == nil {
+		return true
+	}
+	defer request.Body.Close()
+
+	decoder := json.NewDecoder(request.Body)
+	if err := decoder.Decode(destination); err != nil {
+		if errors.Is(err, io.EOF) {
+			return true
+		}
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid json body"})
+		return false
+	}
+	return true
 }
 
 func resolveOAuthClientName(clientName string) string {
