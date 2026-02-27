@@ -113,6 +113,7 @@
 | CP143 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity extension for collection-scoped mutation tools (`engram.collection_update/delete/add_items/remove_items`) via `collection_id`-derived project resolution with runtime collection-lookup adapter wiring, migrated policy tests, and >9.5 code-health gate |
 | CP144 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity hardening for `engram.rehydrate` by resolving allowlist project scope from rehydration-bundle project metadata (instead of engram-admin lookup), with migrated policy tests and >9.5 code-health gate |
 | CP145 | 2026-02-27 | Completed | Phase 4 MCP `chat.save_as_engram` no-session conversation fallback parity (conversation create path + enrichment payload) with migrated parity/error/default tests and >9.5 code-health gate |
+| CP146 | 2026-02-27 | Completed | Phase 4 MCP catalog metadata parity (`tools/list` descriptions + input schemas) ported from Python catalog with schema-clone safety and migrated parity tests under >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3694,6 +3695,40 @@
 - CodeScene checks (checkpoint-touched files, all >= 9.5):
   - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP146 - Phase 4 MCP Catalog Metadata Parity (`tools/list`)
+
+- Ported Python MCP tool catalog metadata into Go `tools/list` responses:
+  - descriptions now match Python catalog tool descriptions
+  - `inputSchema` now includes full per-tool JSON schema parity (required fields, nested properties, enums, formats, min/max constraints).
+- Added metadata indirection layer to preserve code health while supporting full catalog payloads:
+  - new cloned-entry resolver to prevent cross-request schema mutation side effects
+  - default fallback metadata retained for unknown/unmapped tools.
+- Added generated catalog metadata data module from Python source:
+  - `internal/mcp/catalog_metadata_data.go`
+  - includes all 44 tool definitions from `api/app/mcp/catalog.py`.
+- Updated tools-list build flow to use resolved catalog metadata:
+  - `internal/mcp/catalog.go`.
+- Added parity + safety tests:
+  - `internal/mcp/compatibility_service_test.go`
+  - validates:
+    - `chat_save_as_engram` tools-list metadata parity for description/schema keys
+    - defensive schema cloning across repeated `tools/list` calls.
+- Added helper module:
+  - `internal/mcp/catalog_metadata.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/catalog.go`: `9.68`
+  - `internal/mcp/catalog_metadata.go`: `10.0`
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
+  - `internal/mcp/catalog_metadata_data.go`: `Code Health score: None` (data-only generated catalog table).
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

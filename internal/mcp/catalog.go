@@ -152,13 +152,11 @@ func buildVisiblePublicToolCatalog(tokenAuth *models.MCPTokenAuthContext) []map[
 		if !toolVisibleForToken(toolName, tokenAuth, allowedTools) {
 			continue
 		}
+		entry := resolvedCatalogEntry(toolName)
 		tools = append(tools, map[string]any{
 			"name":        toPublicToolName(toolName),
-			"description": "MCP tool: " + toolName,
-			"inputSchema": map[string]any{
-				"type":       "object",
-				"properties": map[string]any{},
-			},
+			"description": entry.description,
+			"inputSchema": entry.inputSchema,
 		})
 	}
 	return tools

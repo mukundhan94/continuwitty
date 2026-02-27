@@ -66,6 +66,45 @@ func TestCompatibilityServiceToolsListRespectsReadScope(t *testing.T) {
 	}
 }
 
+func TestCompatibilityServiceToolsListIncludesCatalogMetadataForConversationSave(t *testing.T) {
+	frame := runCompatibilityRequest(
+		t,
+		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "tools-list", Method: "tools/list"}},
+	)
+	tool := findPublicToolByName(t, frame, "chat_save_as_engram")
+	description, _ := tool["description"].(string)
+	expectedDescription := "Save as engram. Supports either a chat session snapshot or direct conversation markdown when no session_id exists."
+	if description != expectedDescription {
+		t.Fatalf("expected chat_save_as_engram description parity")
+	}
+	inputSchema := mapFromMap(t, tool, "inputSchema")
+	properties := mapFromMap(t, inputSchema, "properties")
+	if _, exists := properties["session_id"]; !exists {
+		t.Fatalf("expected session_id property in chat_save_as_engram schema")
+	}
+	if _, exists := properties["conversation_markdown"]; !exists {
+		t.Fatalf("expected conversation_markdown property in chat_save_as_engram schema")
+	}
+}
+
+func TestBuildVisiblePublicToolCatalogClonesInputSchemas(t *testing.T) {
+	tools := buildVisiblePublicToolCatalog(nil)
+	first := findToolByPublicName(tools, "chat_save_as_engram")
+	firstSchema := mapFromMap(t, first, "inputSchema")
+	firstProperties := mapFromMap(t, firstSchema, "properties")
+	sessionField := mapFromMap(t, firstProperties, "session_id")
+	sessionField["format"] = "mutated"
+
+	tools = buildVisiblePublicToolCatalog(nil)
+	second := findToolByPublicName(tools, "chat_save_as_engram")
+	secondSchema := mapFromMap(t, second, "inputSchema")
+	secondProperties := mapFromMap(t, secondSchema, "properties")
+	secondSessionField := mapFromMap(t, secondProperties, "session_id")
+	if secondSessionField["format"] != "uuid" {
+		t.Fatalf("expected catalog input schemas to be cloned per request")
+	}
+}
+
 func TestCompatibilityServiceErrorMappings(t *testing.T) {
 	testCases := []struct {
 		name         string
@@ -200,6 +239,17 @@ func assertRequestErrorCode(t *testing.T, request StreamCallRequest, expectedCod
 
 func toolNamesFromFrame(t *testing.T, frame Frame) []string {
 	t.Helper()
+	rawTools := rawToolsFromFrame(t, frame)
+	toolNames := make([]string, 0, len(rawTools))
+	for _, tool := range rawTools {
+		name, _ := tool["name"].(string)
+		toolNames = append(toolNames, name)
+	}
+	return toolNames
+}
+
+func rawToolsFromFrame(t *testing.T, frame Frame) []map[string]any {
+	t.Helper()
 	result, ok := frame["result"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected result payload in frame")
@@ -208,12 +258,22 @@ func toolNamesFromFrame(t *testing.T, frame Frame) []string {
 	if !ok {
 		t.Fatalf("expected tools payload")
 	}
-	toolNames := make([]string, 0, len(rawTools))
-	for _, tool := range rawTools {
+	return rawTools
+}
+
+func findPublicToolByName(t *testing.T, frame Frame, publicName string) map[string]any {
+	t.Helper()
+	return findToolByPublicName(rawToolsFromFrame(t, frame), publicName)
+}
+
+func findToolByPublicName(tools []map[string]any, publicName string) map[string]any {
+	for _, tool := range tools {
 		name, _ := tool["name"].(string)
-		toolNames = append(toolNames, name)
+		if name == publicName {
+			return tool
+		}
 	}
-	return toolNames
+	return map[string]any{}
 }
 
 func errorPayloadFromFrame(t *testing.T, frame Frame) map[string]any {
