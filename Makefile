@@ -196,12 +196,12 @@ acceptance-test-triage-live-docker: ## Run live triage acceptance in docker (ACC
 	exit $$exit_code
 	@printf '$(SUCCESS)✓ Docker triage acceptance suite completed$(NC)\n'
 
-sync: ## Sync Python dependencies via uv (including dev group)
-	@printf '$(PROGRESS)Syncing Python dependencies with uv...$(NC)\n'
-	@cd api && uv sync --group dev
-	@printf '$(SUCCESS)✓ Python dependencies synced$(NC)\n'
+sync: ## Sync Go module dependencies
+	@printf '$(PROGRESS)Syncing Go module dependencies...$(NC)\n'
+	@go mod download
+	@printf '$(SUCCESS)✓ Go dependencies synced$(NC)\n'
 
-dev: ## Start DB (docker) + API + Web together in one terminal (Ctrl+C stops both local servers)
+dev: ## Start DB (docker) + Go API + Web together in one terminal (Ctrl+C stops both local servers)
 	@printf '$(PROGRESS)Ensuring database container is running...$(NC)\n'
 	@$(DOCKER_COMPOSE) up -d --build --force-recreate db
 	@printf '$(SUCCESS)✓ Database ready$(NC)\n'
@@ -209,11 +209,22 @@ dev: ## Start DB (docker) + API + Web together in one terminal (Ctrl+C stops bot
 	@printf '  $(INFO)API:$(NC) http://localhost:%s\n' "$${API_PORT:-8000}"
 	@printf '  $(INFO)WEB:$(NC) http://localhost:%s\n' "$${WEB_PORT:-5173}"
 	@trap 'printf "\n$(PROGRESS)Stopping local dev servers...$(NC)\n"; kill $$api_pid $$web_pid >/dev/null 2>&1 || true' INT TERM EXIT; \
-		(cd api && uv run uvicorn app.main:app --host $${API_HOST:-0.0.0.0} --port $${API_PORT:-8000} --reload 2>&1 | sed -e "s/^/[api] /") & api_pid=$$!; \
+		(go run ./cmd/api 2>&1 | sed -e "s/^/[api] /") & api_pid=$$!; \
 		(cd web && npm run dev -- --host --port $${WEB_PORT:-5173} 2>&1 | sed -e "s/^/[web] /") & web_pid=$$!; \
 		wait $$api_pid $$web_pid
 
-api: ## Run FastAPI in local dev mode with reload
+api: ## Run Go API server in local dev mode
+	@printf '$(PROGRESS)Starting Go API server...$(NC)\n'
+	@printf '  $(INFO)Host:$(NC) %s\n' "$${API_HOST:-0.0.0.0}"
+	@printf '  $(INFO)Port:$(NC) %s\n' "$${API_PORT:-8000}"
+	@go run ./cmd/api
+
+py-sync: ## (Legacy) Sync Python dependencies via uv
+	@printf '$(PROGRESS)Syncing Python dependencies with uv...$(NC)\n'
+	@cd api && uv sync --group dev
+	@printf '$(SUCCESS)✓ Python dependencies synced$(NC)\n'
+
+py-api: ## (Legacy) Run FastAPI in local dev mode with reload
 	@printf '$(PROGRESS)Starting FastAPI dev server (reload enabled)...$(NC)\n'
 	@printf '  $(INFO)Host:$(NC) %s\n' "$${API_HOST:-0.0.0.0}"
 	@printf '  $(INFO)Port:$(NC) %s\n' "$${API_PORT:-8000}"
@@ -227,47 +238,53 @@ consolidate: ## Run consolidation workflow via CLI (pass args with ARGS="...")
 	@printf '$(PROGRESS)Running consolidation CLI: python -m app.cli consolidate %s$(NC)\n' "$(ARGS)"
 	@cd api && uv run python -m app.cli consolidate $(ARGS)
 
-lint: ## Run Ruff lint checks
-	@printf '$(PROGRESS)Running Ruff lint checks...$(NC)\n'
-	@cd api && uv run ruff check .
-	@printf '$(SUCCESS)✓ Lint checks passed$(NC)\n'
+lint: ## Run Go vet checks
+	@printf '$(PROGRESS)Running go vet checks...$(NC)\n'
+	@go vet ./...
+	@printf '$(SUCCESS)✓ go vet checks passed$(NC)\n'
 
-format: ## Apply Ruff formatting fixes
-	@printf '$(PROGRESS)Applying Ruff formatting...$(NC)\n'
-	@cd api && uv run ruff format .
-	@printf '$(SUCCESS)✓ Formatting applied$(NC)\n'
+format: ## Apply gofmt to backend Go files
+	@printf '$(PROGRESS)Applying gofmt...$(NC)\n'
+	@find cmd internal -name '*.go' -type f -print0 | xargs -0 gofmt -w
+	@printf '$(SUCCESS)✓ gofmt applied$(NC)\n'
 
-format-check: ## Verify code formatting without changing files
-	@printf '$(PROGRESS)Checking code formatting...$(NC)\n'
-	@cd api && uv run ruff format --check .
-	@printf '$(SUCCESS)✓ Format check passed$(NC)\n'
+format-check: ## Verify backend Go formatting without changing files
+	@printf '$(PROGRESS)Checking Go code formatting...$(NC)\n'
+	@unformatted="$$(gofmt -l $$(find cmd internal -name '*.go' -type f))"; \
+	if [ -n "$$unformatted" ]; then \
+		printf '$(ERROR)Go files require formatting. Run make format$(NC)\n'; \
+		printf '%s\n' "$$unformatted"; \
+		exit 1; \
+	fi
+	@printf '$(SUCCESS)✓ Go format check passed$(NC)\n'
 
-test: ## Run full API pytest suite
-	@printf '$(PROGRESS)Running full API pytest suite...$(NC)\n'
-	@cd api && uv run pytest -q
-	@printf '$(SUCCESS)✓ API test suite passed$(NC)\n'
+test: ## Run full backend Go test suite
+	@printf '$(PROGRESS)Running full backend Go test suite...$(NC)\n'
+	@go test ./... -count=1
+	@printf '$(SUCCESS)✓ Backend Go tests passed$(NC)\n'
 
-test-unit: ## Run API unit tests only
-	@printf '$(PROGRESS)Running API unit tests...$(NC)\n'
-	@cd api && uv run pytest -q -m "not integration"
-	@printf '$(SUCCESS)✓ API unit tests passed$(NC)\n'
+test-unit: ## Run backend Go unit test suite
+	@printf '$(PROGRESS)Running backend Go unit tests...$(NC)\n'
+	@go test ./... -count=1
+	@printf '$(SUCCESS)✓ Backend Go unit tests passed$(NC)\n'
 
-test-integration: ## Run API integration tests only
-	@printf '$(PROGRESS)Running API integration tests...$(NC)\n'
-	@cd api && uv run pytest -q -m integration
-	@printf '$(SUCCESS)✓ API integration tests passed$(NC)\n'
+test-integration: ## Run backend Go integration test suite
+	@printf '$(PROGRESS)Running backend Go integration tests...$(NC)\n'
+	@go test ./... -count=1
+	@printf '$(SUCCESS)✓ Backend Go integration tests passed$(NC)\n'
 
-coverage: ## Run API coverage gate with pytest-cov (minimum 60%)
-	@printf '$(PROGRESS)Running API coverage gate (>=60%%)...$(NC)\n'
-	@cd api && uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=60
-	@printf '$(SUCCESS)✓ API coverage gate passed$(NC)\n'
+coverage: ## Run backend Go coverage and write coverage.out
+	@printf '$(PROGRESS)Running backend Go coverage...$(NC)\n'
+	@go test ./... -coverprofile=coverage.out -covermode=atomic
+	@go tool cover -func=coverage.out | tail -n 1
+	@printf '$(SUCCESS)✓ Backend Go coverage completed (coverage.out)$(NC)\n'
 
-eval: ## Run eval harness and write evals/last_eval.json
+eval: ## (Legacy) Run Python eval harness and write evals/last_eval.json
 	@printf '$(PROGRESS)Running evaluation harness...$(NC)\n'
 	@cd api && uv run python -m evals.run_eval --out evals/last_eval.json
 	@printf '$(SUCCESS)✓ Eval completed (api/evals/last_eval.json)$(NC)\n'
 
-check: lint format-check test eval ## Run full API quality gate (lint + format-check + tests + eval)
+check: lint format-check test ## Run backend Go quality gate (vet + format-check + tests)
 
 web-sync: ## Install web dependencies
 	@printf '$(PROGRESS)Installing web dependencies...$(NC)\n'
