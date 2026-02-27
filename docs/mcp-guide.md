@@ -83,9 +83,11 @@ Some MCP clients preflight with `GET`/`HEAD`; these return `200` to avoid noisy 
 
 For MCP clients that support dynamic registration (e.g., VS Code Copilot):
 - `/.well-known/oauth-authorization-server` discovery
-- `POST /oauth/register` protected dynamic client registration (requires an authenticated admin session)
+- `POST /oauth/register` dynamic client registration (local default allows automatic registration)
 - `GET /oauth/authorize` + `POST /oauth/token` PKCE authorization code flow (`S256` only)
 - Token exchange issues short-lived MCP bearer tokens
+
+When `OAUTH_REQUIRE_PROTECTED_REGISTRATION=true`, registration requires an authenticated admin session.
 
 ---
 

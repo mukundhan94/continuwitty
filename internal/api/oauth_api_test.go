@@ -165,6 +165,13 @@ func TestOAuthRegisterClientWritesCreatedResponse(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("expected status 201, got %d", response.Code)
 	}
+	responsePayload := decodeOAuthJSONMap(t, response)
+	if responsePayload["client_id"] != "engram_client_123" {
+		t.Fatalf("expected RFC client_id field, got %#v", responsePayload["client_id"])
+	}
+	if _, present := responsePayload["ClientID"]; present {
+		t.Fatalf("expected no legacy ClientID field in oauth registration response")
+	}
 	if capturedPayload.ClientName != defaultOAuthClientName {
 		t.Fatalf("expected default client name %q, got %q", defaultOAuthClientName, capturedPayload.ClientName)
 	}

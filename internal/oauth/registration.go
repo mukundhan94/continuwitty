@@ -35,15 +35,15 @@ type RegistrationRequest struct {
 
 // RegistrationResponse captures successful OAuth dynamic registration output.
 type RegistrationResponse struct {
-	ClientID                string
-	ClientName              string
-	RedirectURIs            []string
-	GrantTypes              []string
-	ResponseTypes           []string
-	TokenEndpointAuthMethod string
-	ClientIDIssuedAt        int64
-	ClientSecret            *string
-	ClientSecretExpiresAt   *int
+	ClientID                string   `json:"client_id"`
+	ClientName              string   `json:"client_name"`
+	RedirectURIs            []string `json:"redirect_uris"`
+	GrantTypes              []string `json:"grant_types"`
+	ResponseTypes           []string `json:"response_types"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
+	ClientIDIssuedAt        int64    `json:"client_id_issued_at"`
+	ClientSecret            *string  `json:"client_secret,omitempty"`
+	ClientSecretExpiresAt   *int     `json:"client_secret_expires_at,omitempty"`
 }
 
 // RegistrationError captures oauth-style registration errors.

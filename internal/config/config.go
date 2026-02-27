@@ -119,7 +119,7 @@ type Settings struct {
 	MCPTokenPepper                     string  `envconfig:"MCP_TOKEN_PEPPER" default:"engram-local-dev-mcp-token-pepper"`
 	OAuthEnabled                       bool    `envconfig:"OAUTH_ENABLED" default:"true"`
 	OAuthIssuerURL                     string  `envconfig:"OAUTH_ISSUER_URL"`
-	OAuthRequireProtectedRegistration  bool    `envconfig:"OAUTH_REQUIRE_PROTECTED_REGISTRATION" default:"true"`
+	OAuthRequireProtectedRegistration  bool    `envconfig:"OAUTH_REQUIRE_PROTECTED_REGISTRATION" default:"false"`
 	OAuthAccessTokenTTLSeconds         int     `envconfig:"OAUTH_ACCESS_TOKEN_TTL_SECONDS" default:"3600"`
 	OAuthAuthorizationCodeTTLSeconds   int     `envconfig:"OAUTH_AUTHORIZATION_CODE_TTL_SECONDS" default:"300"`
 	OAuthClientSecretPepper            string  `envconfig:"OAUTH_CLIENT_SECRET_PEPPER" default:"engram-local-dev-oauth-client-pepper"`

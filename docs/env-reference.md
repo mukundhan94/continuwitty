@@ -114,7 +114,7 @@
 |----------|---------|-------------|
 | `OAUTH_ENABLED` | `true` | Enable OAuth authorization server |
 | `OAUTH_ISSUER_URL` | - | OAuth issuer URL |
-| `OAUTH_REQUIRE_PROTECTED_REGISTRATION` | `true` | Require authenticated admin session for dynamic client registration |
+| `OAUTH_REQUIRE_PROTECTED_REGISTRATION` | `false` | Require authenticated admin session for dynamic client registration (must be `true` in production) |
 | `OAUTH_ACCESS_TOKEN_TTL_SECONDS` | - | OAuth access token lifetime |
 | `OAUTH_AUTHORIZATION_CODE_TTL_SECONDS` | - | OAuth authorization code lifetime |
 | `OAUTH_CLIENT_SECRET_PEPPER` | - | Pepper for OAuth client secret hashing |
