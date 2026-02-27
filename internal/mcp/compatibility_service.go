@@ -241,6 +241,46 @@ type EngramCollectionListService interface {
 	) ([]models.EngramCollectionRecord, error)
 }
 
+// EngramCollectionCreateService captures collection-create behavior used by MCP compatibility engram dispatch.
+type EngramCollectionCreateService interface {
+	CreateCollection(
+		ctx context.Context,
+		request EngramCollectionCreateRequest,
+	) (*EngramCollectionCreateResponse, error)
+}
+
+// EngramCollectionUpdateService captures collection-update behavior used by MCP compatibility engram dispatch.
+type EngramCollectionUpdateService interface {
+	UpdateCollection(
+		ctx context.Context,
+		request EngramCollectionUpdateRequest,
+	) (*models.EngramCollectionRecord, error)
+}
+
+// EngramCollectionDeleteService captures collection-delete behavior used by MCP compatibility engram dispatch.
+type EngramCollectionDeleteService interface {
+	DeleteCollection(
+		ctx context.Context,
+		request EngramCollectionDeleteRequest,
+	) (*EngramCollectionDeleteResponse, error)
+}
+
+// EngramCollectionAddItemsService captures collection item-add behavior used by MCP compatibility engram dispatch.
+type EngramCollectionAddItemsService interface {
+	AddCollectionItems(
+		ctx context.Context,
+		request EngramCollectionAddItemsRequest,
+	) (*EngramCollectionAddItemsResponse, error)
+}
+
+// EngramCollectionRemoveItemService captures collection item-remove behavior used by MCP compatibility engram dispatch.
+type EngramCollectionRemoveItemService interface {
+	RemoveCollectionItem(
+		ctx context.Context,
+		request EngramCollectionRemoveItemRequest,
+	) (*EngramCollectionRemoveItemResponse, error)
+}
+
 // PinEngramService captures engram pinning behavior used by MCP compatibility chat dispatch.
 type PinEngramService interface {
 	PinEngram(
@@ -534,6 +574,71 @@ type EngramCollectionListRequest struct {
 	Offset         int
 }
 
+// EngramCollectionCreateRequest captures compatibility-level collection create inputs.
+type EngramCollectionCreateRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	ProjectID   string
+	Name        string
+	Description string
+}
+
+// EngramCollectionCreateResponse captures compatibility-level collection create outputs.
+type EngramCollectionCreateResponse struct {
+	Collection         models.EngramCollectionRecord `json:"collection"`
+	ResolvedProjectID  string                        `json:"resolved_project_id"`
+	UsedDefaultProject bool                          `json:"used_default_project"`
+}
+
+// EngramCollectionUpdateRequest captures compatibility-level collection update inputs.
+type EngramCollectionUpdateRequest struct {
+	ActorUserID       uuid.UUID
+	ActorRole         models.UserRole
+	CollectionID      uuid.UUID
+	ExpectedUpdatedAt *time.Time
+	Name              *string
+	Description       *string
+}
+
+// EngramCollectionDeleteRequest captures compatibility-level collection delete inputs.
+type EngramCollectionDeleteRequest struct {
+	ActorUserID  uuid.UUID
+	ActorRole    models.UserRole
+	CollectionID uuid.UUID
+	Reason       *string
+}
+
+// EngramCollectionDeleteResponse captures compatibility-level collection delete outputs.
+type EngramCollectionDeleteResponse struct {
+	Deleted bool `json:"deleted"`
+}
+
+// EngramCollectionAddItemsRequest captures compatibility-level collection item-add inputs.
+type EngramCollectionAddItemsRequest struct {
+	ActorUserID  uuid.UUID
+	ActorRole    models.UserRole
+	CollectionID uuid.UUID
+	EngramIDs    []uuid.UUID
+}
+
+// EngramCollectionAddItemsResponse captures compatibility-level collection item-add outputs.
+type EngramCollectionAddItemsResponse struct {
+	Added int `json:"added"`
+}
+
+// EngramCollectionRemoveItemRequest captures compatibility-level collection item-remove inputs.
+type EngramCollectionRemoveItemRequest struct {
+	ActorUserID  uuid.UUID
+	ActorRole    models.UserRole
+	CollectionID uuid.UUID
+	EngramID     uuid.UUID
+}
+
+// EngramCollectionRemoveItemResponse captures compatibility-level collection item-remove outputs.
+type EngramCollectionRemoveItemResponse struct {
+	Removed bool `json:"removed"`
+}
+
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
 	ProjectService           ProjectListService
@@ -562,6 +667,11 @@ type CompatibilityServiceDependencies struct {
 	EngramDelete             EngramDeleteService
 	EngramRestore            EngramRestoreService
 	EngramCollectionList     EngramCollectionListService
+	EngramCollectionCreate   EngramCollectionCreateService
+	EngramCollectionUpdate   EngramCollectionUpdateService
+	EngramCollectionDelete   EngramCollectionDeleteService
+	EngramCollectionAddItems EngramCollectionAddItemsService
+	EngramCollectionRemove   EngramCollectionRemoveItemService
 	PinEngramService         PinEngramService
 	UnpinEngramService       UnpinEngramService
 	PinDocumentService       PinDocumentService
@@ -597,6 +707,11 @@ type CompatibilityService struct {
 	engramDelete             EngramDeleteService
 	engramRestore            EngramRestoreService
 	engramCollectionList     EngramCollectionListService
+	engramCollectionCreate   EngramCollectionCreateService
+	engramCollectionUpdate   EngramCollectionUpdateService
+	engramCollectionDelete   EngramCollectionDeleteService
+	engramCollectionAddItems EngramCollectionAddItemsService
+	engramCollectionRemove   EngramCollectionRemoveItemService
 	pinEngramService         PinEngramService
 	unpinEngramService       UnpinEngramService
 	pinDocumentService       PinDocumentService
@@ -648,6 +763,11 @@ func NewCompatibilityServiceWithDependencies(
 		engramDelete:             dependencies.EngramDelete,
 		engramRestore:            dependencies.EngramRestore,
 		engramCollectionList:     dependencies.EngramCollectionList,
+		engramCollectionCreate:   dependencies.EngramCollectionCreate,
+		engramCollectionUpdate:   dependencies.EngramCollectionUpdate,
+		engramCollectionDelete:   dependencies.EngramCollectionDelete,
+		engramCollectionAddItems: dependencies.EngramCollectionAddItems,
+		engramCollectionRemove:   dependencies.EngramCollectionRemove,
 		pinEngramService:         dependencies.PinEngramService,
 		unpinEngramService:       dependencies.UnpinEngramService,
 		pinDocumentService:       dependencies.PinDocumentService,

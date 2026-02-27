@@ -180,10 +180,18 @@ func newMCPCompatibilityService(
 			EngramDelete:         newMCPEngramDeleteAdapter(memoryAdminService),
 			EngramRestore:        newMCPEngramRestoreAdapter(memoryAdminService),
 			EngramCollectionList: newMCPEngramCollectionListAdapter(memoryAdminService),
-			PinEngramService:     newMCPPinEngramAdapter(pool),
-			UnpinEngramService:   newMCPUnpinEngramAdapter(pool),
-			PinDocumentService:   newMCPPinDocumentAdapter(pool),
-			UnpinDocumentService: newMCPUnpinDocumentAdapter(pool),
+			EngramCollectionCreate: newMCPEngramCollectionCreateAdapter(
+				memoryAdminService,
+				projectService,
+			),
+			EngramCollectionUpdate:   newMCPEngramCollectionUpdateAdapter(memoryAdminService),
+			EngramCollectionDelete:   newMCPEngramCollectionDeleteAdapter(memoryAdminService),
+			EngramCollectionAddItems: newMCPEngramCollectionAddItemsAdapter(memoryAdminService),
+			EngramCollectionRemove:   newMCPEngramCollectionRemoveItemAdapter(memoryAdminService),
+			PinEngramService:         newMCPPinEngramAdapter(pool),
+			UnpinEngramService:       newMCPUnpinEngramAdapter(pool),
+			PinDocumentService:       newMCPPinDocumentAdapter(pool),
+			UnpinDocumentService:     newMCPUnpinDocumentAdapter(pool),
 		},
 	)
 }

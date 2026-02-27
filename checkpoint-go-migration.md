@@ -103,6 +103,7 @@
 | CP133 | 2026-02-26 | Completed | Phase 4 MCP engram mutation baseline (`engram.delete`, `engram.restore`) with direct/`tools/call` parity, runtime memory-admin mutation wiring, `-32004` not-found mapping with `engram_id`, migrated tests, and >9.5 code-health gate |
 | CP134 | 2026-02-26 | Completed | Phase 4 MCP engram update baseline (`engram.update`) with direct/`tools/call` parity, runtime memory-admin update wiring, stale-write (`409`) error mapping, migrated tests, and >9.5 code-health gate |
 | CP135 | 2026-02-26 | Completed | Phase 4 MCP engram move-project baseline (`engram.move_project`) with direct/`tools/call` parity, runtime memory-admin move wiring, stale/project-resolution error mapping parity, migrated tests, and >9.5 code-health gate |
+| CP136 | 2026-02-27 | Completed | Phase 4 MCP engram collection mutation baseline (`engram.collection_create`, `engram.collection_update`, `engram.collection_delete`, `engram.collection_add_items`, `engram.collection_remove_items`) with direct/`tools/call` parity, runtime memory-admin collection mutation wiring, project/duplicate/stale/not-found error mapping parity, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3345,6 +3346,43 @@
   - `internal/mcp/compatibility_dispatch_engram_primary_handlers.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_engram_move_support.go`: `10.0`
   - `internal/mcp/compatibility_service_engram_move_project_test.go`: `9.51`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP136 - Phase 4 MCP Engram Collection Mutation Baseline (`engram.collection_*`)
+
+- Migrated MCP engram collection mutation dispatch into Go compatibility mode for:
+  - `engram.collection_create`
+  - `engram.collection_update`
+  - `engram.collection_delete`
+  - `engram.collection_add_items`
+  - `engram.collection_remove_items`
+- Added direct and `tools/call` parity for all five collection mutation tools.
+- Implemented collection create parity:
+  - optional project resolution/default-project fallback semantics
+  - create response payload parity with `collection`, `resolved_project_id`, and `used_default_project`.
+- Implemented collection mutation parity for update/delete/add/remove:
+  - required `collection_id` validation
+  - mutation-specific parameter validation (`engram_ids`, `engram_id`, `reason`, `expected_updated_at`)
+  - owner/admin visibility checks via runtime adapters before applying mutations.
+- Implemented collection error mapping parity:
+  - missing/inaccessible collection -> `-32004` with `data.collection_id`
+  - stale/duplicate updates -> `-32602` with `status_code=409`
+  - collection-create project resolution failures mapped to MCP validation status payloads (`404`/`422`).
+- Added runtime adapter wiring and focused support files in `cmd/api` for collection create/update/delete/add/remove mutation flows.
+- Added MCP compatibility test coverage:
+  - `internal/mcp/compatibility_service_engram_collection_create_test.go`
+  - `internal/mcp/compatibility_service_engram_collection_update_test.go`
+  - `internal/mcp/compatibility_service_engram_collection_delete_test.go`
+  - `internal/mcp/compatibility_service_engram_collection_add_items_test.go`
+  - `internal/mcp/compatibility_service_engram_collection_remove_item_test.go`
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - all touched Go files scored `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
