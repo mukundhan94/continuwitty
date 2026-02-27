@@ -138,6 +138,7 @@
 | CP168 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback parity extension for `chat.create_session` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
 | CP169 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope denial parity extension for `chat.create_session` and `project.set_default` across `tools/call` and direct methods with denied `project_id` payload checks under >9.5 code-health gate |
 | CP170 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope denial parity extension for optional-project read tools (`chat.list_sessions`, `engram.query`, `engram.list`, `chat.list_project_documents`, `engram.collection_list`) across `tools/call` and direct methods with denied `project_id` payload checks under >9.5 code-health gate |
+| CP171 | 2026-02-27 | Completed | Phase 5 runtime cutover baseline: added root Go API `Dockerfile`, switched compose `api` service build from Python to Go, and replaced Python healthcheck with HTTP probe while preserving existing service contracts under >9.5 code-health gate |
 
 ## Checkpoint Details
 
