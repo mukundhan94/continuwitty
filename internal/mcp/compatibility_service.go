@@ -932,30 +932,18 @@ func (service *CompatibilityService) dispatchToolsCall(input toolsCallInput) Fra
 	if !toolExists(dottedName) {
 		return methodNotFoundFrame(input.requestID, name)
 	}
-	if policyError := authorizeToolCall(dottedName, input.tokenAuth); policyError != nil {
-		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
-	}
-	normalizedArguments, policyError := normalizeTokenToolParams(name, arguments, input.tokenAuth)
-	if policyError != nil {
-		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
-	}
-	payload, handled, dispatchError := service.dispatchImplementedTool(
-		input.ctx,
-		canonicalToolName(dottedName),
-		input.actor,
-		normalizedArguments,
-	)
-	if dispatchError != nil {
-		return errorFrame(input.requestID, dispatchError.code, dispatchError.message, dispatchError.data)
-	}
-	if handled {
-		return successFrame(input.requestID, buildToolCallSuccessResult(name, payload))
-	}
-	return errorFrame(
-		input.requestID,
-		-32000,
-		"Tool not implemented",
-		map[string]any{"method": canonicalToolName(dottedName)},
+	return service.dispatchAuthorizedToolCall(
+		authorizedToolDispatchInput{
+			ctx:              input.ctx,
+			requestID:        input.requestID,
+			policyToolName:   dottedName,
+			responseToolName: name,
+			canonicalMethod:  canonicalToolName(dottedName),
+			actor:            input.actor,
+			params:           arguments,
+			tokenAuth:        input.tokenAuth,
+			asToolsCall:      true,
+		},
 	)
 }
 
@@ -973,16 +961,58 @@ func (service *CompatibilityService) dispatchDirectToolMethod(input directToolCa
 	if !toolExists(dottedMethod) {
 		return methodNotFoundFrame(input.requestID, input.method)
 	}
-	if policyError := authorizeToolCall(dottedMethod, input.tokenAuth); policyError != nil {
+	return service.dispatchAuthorizedToolCall(
+		authorizedToolDispatchInput{
+			ctx:             input.ctx,
+			requestID:       input.requestID,
+			policyToolName:  dottedMethod,
+			canonicalMethod: canonicalToolName(dottedMethod),
+			actor:           input.actor,
+			params:          input.params,
+			tokenAuth:       input.tokenAuth,
+			asToolsCall:     false,
+		},
+	)
+}
+
+type authorizedToolDispatchInput struct {
+	ctx              context.Context
+	requestID        any
+	policyToolName   string
+	responseToolName string
+	canonicalMethod  string
+	actor            Actor
+	params           map[string]any
+	tokenAuth        *models.MCPTokenAuthContext
+	asToolsCall      bool
+}
+
+func (service *CompatibilityService) dispatchAuthorizedToolCall(
+	input authorizedToolDispatchInput,
+) Frame {
+	if policyError := authorizeToolCall(input.policyToolName, input.tokenAuth); policyError != nil {
 		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
 	}
-	normalizedParams, policyError := normalizeTokenToolParams(input.method, input.params, input.tokenAuth)
+	normalizedParams, policyError := normalizeTokenToolParams(
+		input.policyToolName,
+		input.params,
+		input.tokenAuth,
+	)
 	if policyError != nil {
+		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
+	}
+	if policyError := service.enforceTokenProjectPolicy(
+		input.ctx,
+		input.actor,
+		input.policyToolName,
+		normalizedParams,
+		input.tokenAuth,
+	); policyError != nil {
 		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
 	}
 	payload, handled, dispatchError := service.dispatchImplementedTool(
 		input.ctx,
-		canonicalToolName(dottedMethod),
+		input.canonicalMethod,
 		input.actor,
 		normalizedParams,
 	)
@@ -990,13 +1020,26 @@ func (service *CompatibilityService) dispatchDirectToolMethod(input directToolCa
 		return errorFrame(input.requestID, dispatchError.code, dispatchError.message, dispatchError.data)
 	}
 	if handled {
-		return successFrame(input.requestID, payload)
+		return buildAuthorizedToolSuccessFrame(input, payload)
 	}
 	return errorFrame(
 		input.requestID,
 		-32000,
 		"Tool not implemented",
-		map[string]any{"method": canonicalToolName(dottedMethod)},
+		map[string]any{"method": input.canonicalMethod},
+	)
+}
+
+func buildAuthorizedToolSuccessFrame(
+	input authorizedToolDispatchInput,
+	payload map[string]any,
+) Frame {
+	if !input.asToolsCall {
+		return successFrame(input.requestID, payload)
+	}
+	return successFrame(
+		input.requestID,
+		buildToolCallSuccessResult(input.responseToolName, payload),
 	)
 }
 
