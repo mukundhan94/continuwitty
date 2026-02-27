@@ -116,6 +116,7 @@
 | CP146 | 2026-02-27 | Completed | Phase 4 MCP catalog metadata parity (`tools/list` descriptions + input schemas) ported from Python catalog with schema-clone safety and migrated parity tests under >9.5 code-health gate |
 | CP147 | 2026-02-27 | Completed | Phase 4 MCP conversation-create enrichment-origin parity (`mcp.chat.save_as_engram` fallback origin + explicit `engram.create_from_conversation` origin wiring) with migrated request-shape tests and >9.5 code-health gate |
 | CP148 | 2026-02-27 | Completed | Phase 4 MCP chat-save no-session error-payload parity (`data.missing=conversation_markdown`) with migrated validation-data tests and >9.5 code-health gate |
+| CP149 | 2026-02-27 | Completed | Phase 4 MCP token-policy parity test hardening for no-session `chat.save_as_engram` (single-project autofill + multi-project explicit-project guard) with >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3792,6 +3793,31 @@
 - CodeScene checks (checkpoint-touched files, all >= 9.5):
   - `internal/mcp/compatibility_dispatch_support.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP149 - Phase 4 MCP Token-Policy Parity Test Hardening (`chat.save_as_engram` No-Session Path)
+
+- Added targeted token-policy parity coverage for no-session `chat.save_as_engram` conversation fallback:
+  - single-project token allowlist autofills `project_id` and forwards it into conversation-create request shape
+  - multi-project token allowlist without explicit `project_id` returns parity validation payload:
+    - `data.missing="project_id"`
+    - `data.reason="token_has_multiple_allowed_projects"`.
+- Extended chat-save compatibility tests:
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`
+  - added:
+    - `TestCompatibilityServiceChatSaveSessionAsEngramConversationFallbackTokenProjectAutofill`
+    - `TestCompatibilityServiceChatSaveSessionAsEngramConversationFallbackRequiresProjectForMultiProjectToken`.
+- Refactored shared conversation-fallback test setup helpers to keep CodeScene safeguard at 10.0:
+  - extracted reusable fake service builder and request runner helpers.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched file, >= 9.5):
   - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`

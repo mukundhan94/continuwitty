@@ -260,19 +260,59 @@ func TestCompatibilityServiceChatSaveSessionAsEngramConversationFallbackParity(t
 	}
 }
 
-func TestCompatibilityServiceChatSaveSessionAsEngramConversationFallbackUsesDefaultTitle(t *testing.T) {
-	conversationService := &fakeEngramCreateConversationService{
-		response: &EngramCreateFromConversationResponse{
-			Engram: models.EngramCreateResponse{
-				EngramID:  uuid.MustParse("39131000-0000-0000-0000-000000000392"),
-				CreatedAt: time.Unix(1700003914, 0).UTC(),
+func TestCompatibilityServiceChatSaveSessionAsEngramConversationFallbackTokenProjectAutofill(t *testing.T) {
+	conversationService := newConversationSaveService(
+		uuid.MustParse("39133000-0000-0000-0000-000000000391"),
+		time.Unix(1700003916, 0).UTC(),
+	)
+	runChatSaveConversationFallbackRequest(
+		t,
+		conversationService,
+		tokenScopedDirectRequest(tokenScopedRequest{
+			actorID:  "39133000-0000-0000-0000-000000000390",
+			toolName: "chat.save_as_engram",
+			params: map[string]any{
+				"conversation_markdown": "Details",
 			},
-			EnrichmentReport: map[string]any{},
-		},
+			scope:             models.MCPTokenScopeWrite,
+			allowedProjectIDs: []string{"project-token"},
+		}),
+	)
+	if conversationService.call.ProjectID != "project-token" {
+		t.Fatalf("expected token project autofill for no-session save_as_engram")
 	}
+}
+
+func TestCompatibilityServiceChatSaveSessionAsEngramConversationFallbackRequiresProjectForMultiProjectToken(t *testing.T) {
 	frame := runCompatibilityRequestWithService(
 		t,
-		newChatSaveAsEngramCompatibilityService(nil, conversationService),
+		newChatSaveAsEngramCompatibilityService(nil, &fakeEngramCreateConversationService{}),
+		tokenScopedDirectRequest(tokenScopedRequest{
+			actorID:  "39134000-0000-0000-0000-000000000390",
+			toolName: "chat.save_as_engram",
+			params: map[string]any{
+				"conversation_markdown": "Details",
+			},
+			scope:             models.MCPTokenScopeWrite,
+			allowedProjectIDs: []string{"project-a", "project-b"},
+		}),
+	)
+	errorPayload := errorPayloadFromFrame(t, frame)
+	requireErrorCode(t, errorPayload, -32602)
+	data := mapFromMap(t, errorPayload, "data")
+	if data["missing"] != "project_id" || data["reason"] != "token_has_multiple_allowed_projects" {
+		t.Fatalf("expected multi-project token validation payload")
+	}
+}
+
+func TestCompatibilityServiceChatSaveSessionAsEngramConversationFallbackUsesDefaultTitle(t *testing.T) {
+	conversationService := newConversationSaveService(
+		uuid.MustParse("39131000-0000-0000-0000-000000000392"),
+		time.Unix(1700003914, 0).UTC(),
+	)
+	runChatSaveConversationFallbackRequest(
+		t,
+		conversationService,
 		directToolRequest(
 			"39131000-0000-0000-0000-000000000390",
 			"chat.save_as_engram",
@@ -282,7 +322,6 @@ func TestCompatibilityServiceChatSaveSessionAsEngramConversationFallbackUsesDefa
 			},
 		),
 	)
-	_, _ = conversationSaveEngramFromFrame(t, frame, false)
 	if conversationService.call.Title != "Conversation Snapshot" {
 		t.Fatalf("expected fallback title default")
 	}
@@ -461,6 +500,35 @@ func chatSaveFallbackExpectedRequest(
 		SourceSessionID:      &sourceSessionID,
 		EnrichmentOrigin:     "mcp.chat.save_as_engram",
 	}
+}
+
+func newConversationSaveService(
+	engramID uuid.UUID,
+	createdAt time.Time,
+) *fakeEngramCreateConversationService {
+	return &fakeEngramCreateConversationService{
+		response: &EngramCreateFromConversationResponse{
+			Engram: models.EngramCreateResponse{
+				EngramID:  engramID,
+				CreatedAt: createdAt,
+			},
+			EnrichmentReport: map[string]any{},
+		},
+	}
+}
+
+func runChatSaveConversationFallbackRequest(
+	t *testing.T,
+	conversationService *fakeEngramCreateConversationService,
+	request StreamCallRequest,
+) {
+	t.Helper()
+	frame := runCompatibilityRequestWithService(
+		t,
+		newChatSaveAsEngramCompatibilityService(nil, conversationService),
+		request,
+	)
+	_, _ = conversationSaveEngramFromFrame(t, frame, false)
 }
 
 type fakeSessionSaveAsEngramService struct {
