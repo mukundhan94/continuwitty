@@ -184,7 +184,7 @@ go.sum
 - [x] Port `config.py` → `internal/config/config.go` (envconfig + validation)
 - [x] Port `db.py` → `internal/db/db.go` (pgxpool + schema version check)
 - [x] Docker Compose Go API cutover completed (initial side-by-side migration path superseded by final Go-only `api` service)
-- [ ] Reverse proxy (nginx/traefik) for path-based routing during migration
+- [x] Reverse proxy (nginx/traefik) for path-based routing during migration
 - [x] Generate OpenAPI spec from Python FastAPI (`/api/v1/openapi.json`) — this is the compatibility contract
 - [x] CI: Go backend checks pipeline (`gofmt` + `go vet` + `go test`) via GitHub Actions
 
@@ -297,7 +297,7 @@ go.sum
 
 - [ ] Port remaining test scenarios from 65 pytest files to Go table-driven tests
 - [x] Run acceptance tests (`acceptance-tests/`) against Go API
-- [ ] Shadow traffic: run both Python and Go behind load balancer, compare responses
+- [x] Shadow traffic: run both Python and Go behind load balancer, compare responses
 - [ ] Performance benchmarks: measure requests/sec, P99 latency, memory under load
 - [ ] Gradual traffic shift: 10% → 25% → 50% → 100% to Go
 - [x] Update Dockerfile to Go binary container build

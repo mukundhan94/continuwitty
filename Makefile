@@ -23,7 +23,7 @@ NC = \033[0m
 
 WEB_PORT ?= 5173
 
-.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke openapi-export-python openapi-validate-go openapi-check acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api py-sync py-api cli consolidate lint format format-check check test test-unit test-integration coverage eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke shadow-up shadow-down shadow-compare openapi-export-python openapi-validate-go openapi-check acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api py-sync py-api cli consolidate lint format format-check check test test-unit test-integration coverage eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
 help: ## Print all Makefile commands with categorized descriptions and usage hints
 	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
@@ -40,7 +40,7 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 		function group_name(target) { \
 			if (target == "help" || target == "print-config") return "Help"; \
 			if (target ~ /^db-/) return "Database"; \
-			if (target ~ /^stack-/) return "Stack"; \
+			if (target ~ /^stack-/ || target ~ /^shadow-/) return "Stack"; \
 			if (target == "dev") return "Local Dev"; \
 			if (target ~ /^acceptance-/) return "Acceptance"; \
 			if (target ~ /^web-/ || target == "web") return "Web"; \
@@ -147,6 +147,41 @@ stack-smoke: ## Build/start db + api and verify Go API health/version endpoints
 	fi
 	@curl -fsS "http://127.0.0.1:$${API_PORT:-8000}/api/v1/version" >/dev/null
 	@printf '$(SUCCESS)✓ Go API container smoke checks passed$(NC)\n'
+
+shadow-up: ## Start db + go api + python api + shadow proxy for side-by-side comparison
+	@printf '$(PROGRESS)Starting shadow-comparison stack (db, api, api-python, shadow-proxy)...$(NC)\n'
+	@$(DOCKER_COMPOSE) --profile shadow up -d --build --force-recreate db api api-python shadow-proxy
+	@printf '$(SUCCESS)✓ Shadow stack started$(NC)\n'
+	@printf '  $(INFO)Go API via proxy:$(NC)      http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/go/\n'
+	@printf '  $(INFO)Python API via proxy:$(NC)  http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/py/\n'
+
+shadow-down: ## Stop shadow comparison stack and remove containers/network
+	@printf '$(PROGRESS)Stopping shadow-comparison stack...$(NC)\n'
+	@$(DOCKER_COMPOSE) --profile shadow down
+	@printf '$(SUCCESS)✓ Shadow stack stopped$(NC)\n'
+
+shadow-compare: ## Compare Go vs Python route status parity using shadow proxy + OpenAPI contract
+	@printf '$(PROGRESS)Running Go vs Python shadow parity comparison...$(NC)\n'
+	@exit_code=0; \
+	$(MAKE) --no-print-directory openapi-export-python || exit $$?; \
+	$(DOCKER_COMPOSE) --profile shadow up -d --build --force-recreate db api api-python shadow-proxy || exit $$?; \
+	ready=0; \
+	for attempt in $$(seq 1 30); do \
+		if curl -fsS "http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/healthz" >/dev/null 2>&1; then \
+			ready=1; \
+			break; \
+		fi; \
+		sleep 1; \
+	done; \
+	if [ "$$ready" -ne 1 ]; then \
+		printf '$(ERROR)Shadow proxy did not become ready in time$(NC)\n'; \
+		exit_code=1; \
+	else \
+		python3 scripts/shadow_compare.py --spec contracts/python-openapi.json --proxy-base-url "http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}" || exit_code=$$?; \
+	fi; \
+	$(DOCKER_COMPOSE) --profile shadow down; \
+	exit $$exit_code
+	@printf '$(SUCCESS)✓ Shadow parity comparison completed$(NC)\n'
 
 openapi-export-python: ## Export Python FastAPI OpenAPI schema to contracts/python-openapi.json
 	@printf '$(PROGRESS)Exporting Python OpenAPI contract...$(NC)\n'
