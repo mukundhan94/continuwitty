@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"engram/internal/auth"
@@ -119,6 +120,8 @@ func MountSessionUIRoutes(router chi.Router, dependencies SessionAuthDependencie
 	router.Post("/logout", deps.handleLogoutSubmit)
 	router.Get("/ui", deps.handleUIDashboard)
 	router.Get("/ui/admin", deps.handleUIAdmin)
+	router.Post("/ui/admin/mcp-tokens/create", deps.handleUIAdminCreateMCPToken)
+	router.Post("/ui/admin/mcp-tokens/{token_id}/revoke", deps.handleUIAdminRevokeMCPToken)
 }
 
 func (dependencies sessionAuthDependencies) handleHomeRedirect(writer http.ResponseWriter, request *http.Request) {
@@ -397,6 +400,165 @@ func (dependencies sessionAuthDependencies) handleUIAdmin(writer http.ResponseWr
 			CSRFToken: state.CSRFToken,
 		},
 	)
+}
+
+func (dependencies sessionAuthDependencies) handleUIAdminCreateMCPToken(writer http.ResponseWriter, request *http.Request) {
+	record, _, ok := dependencies.resolveSessionUserAndState(writer, request)
+	if !ok {
+		return
+	}
+	if !isAdminRole(record.Role) {
+		writeJSON(writer, http.StatusForbidden, map[string]string{"detail": "Admin role required"})
+		return
+	}
+	if !dependencies.hasMCPTokenCreateDependencies() {
+		writeSessionUserDependenciesError(writer)
+		return
+	}
+	if err := request.ParseForm(); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid form body"})
+		return
+	}
+	if !dependencies.validateLogoutCSRF(writer, request, request.FormValue("csrf_token")) {
+		return
+	}
+	createRequest, ok := decodeMCPTokenCreateFormRequest(writer, request)
+	if !ok {
+		return
+	}
+	created, err := dependencies.createTokenForOwner(
+		request.Context(),
+		record.UserID,
+		createRequest,
+		dependencies.mcpTokenPepper,
+	)
+	if err != nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
+		return
+	}
+	dependencies.logAuditEventRequest(
+		request,
+		sessionAuditEvent{
+			eventType: "mcp_token_created",
+			success:   true,
+			username:  record.Username,
+			metadata: map[string]any{
+				"token_id":            created.TokenID.String(),
+				"scope":               string(created.Scope),
+				"name":                created.Name,
+				"allowed_tools":       created.AllowedTools,
+				"allowed_project_ids": created.AllowedProjectIDs,
+				"expires_at":          created.ExpiresAt,
+			},
+		},
+	)
+	http.Redirect(writer, request, "/ui/admin", http.StatusSeeOther)
+}
+
+func (dependencies sessionAuthDependencies) handleUIAdminRevokeMCPToken(writer http.ResponseWriter, request *http.Request) {
+	record, _, ok := dependencies.resolveSessionUserAndState(writer, request)
+	if !ok {
+		return
+	}
+	if !isAdminRole(record.Role) {
+		writeJSON(writer, http.StatusForbidden, map[string]string{"detail": "Admin role required"})
+		return
+	}
+	if dependencies.revokeTokenForOwner == nil {
+		writeSessionUserDependenciesError(writer)
+		return
+	}
+	if err := request.ParseForm(); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid form body"})
+		return
+	}
+	if !dependencies.validateLogoutCSRF(writer, request, request.FormValue("csrf_token")) {
+		return
+	}
+	tokenID, ok := parsePathUUID(writer, request, "token_id")
+	if !ok {
+		return
+	}
+	revoked, err := dependencies.revokeTokenForOwner(request.Context(), tokenID, record.UserID)
+	if err != nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
+		return
+	}
+	if revoked == nil {
+		writeJSON(writer, http.StatusNotFound, map[string]string{"detail": "Token not found"})
+		return
+	}
+	reason := optionalTrimmedString(request.FormValue("reason"))
+	dependencies.logAuditEventRequest(
+		request,
+		sessionAuditEvent{
+			eventType: "mcp_token_revoked",
+			success:   true,
+			username:  record.Username,
+			metadata: map[string]any{
+				"token_id": tokenID.String(),
+				"reason":   optionalTrimmedReason(reason),
+			},
+		},
+	)
+	http.Redirect(writer, request, "/ui/admin", http.StatusSeeOther)
+}
+
+func decodeMCPTokenCreateFormRequest(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (models.MCPTokenCreateRequest, bool) {
+	name := strings.TrimSpace(request.FormValue("name"))
+	if !isValidMCPTokenName(name) {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid token name"})
+		return models.MCPTokenCreateRequest{}, false
+	}
+	scope := resolveMCPTokenScope(request.FormValue("scope"))
+	if _, err := models.ParseMCPTokenScope(scope); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid scope"})
+		return models.MCPTokenCreateRequest{}, false
+	}
+	expiresInDays := defaultMCPTokenExpiryDays
+	if rawValue := strings.TrimSpace(request.FormValue("expires_in_days")); rawValue != "" {
+		parsed, err := strconv.Atoi(rawValue)
+		if err != nil {
+			writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid expires_in_days"})
+			return models.MCPTokenCreateRequest{}, false
+		}
+		expiresInDays = parsed
+	}
+	if expiresInDays < 1 || expiresInDays > maxMCPTokenExpiryDays {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid expires_in_days"})
+		return models.MCPTokenCreateRequest{}, false
+	}
+	return models.MCPTokenCreateRequest{
+		Name:              name,
+		Scope:             scope,
+		AllowedTools:      splitAndNormalizeCSVValues(request.FormValue("allowed_tools")),
+		AllowedProjectIDs: splitAndNormalizeCSVValues(request.FormValue("allowed_project_ids")),
+		ExpiresInDays:     expiresInDays,
+	}, true
+}
+
+func splitAndNormalizeCSVValues(raw string) []string {
+	parts := strings.Split(raw, ",")
+	if len(parts) == 0 {
+		return []string{}
+	}
+	normalized := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		normalized = append(normalized, value)
+	}
+	return normalized
 }
 
 func (dependencies sessionAuthDependencies) resolveSessionUserAndState(

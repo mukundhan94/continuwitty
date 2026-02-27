@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"engram/internal/audit"
 	"engram/internal/auth"
@@ -290,6 +291,207 @@ func TestMountSessionUIRoutesAdminAllowsAdminRole(t *testing.T) {
 	}
 }
 
+func TestMountSessionUIRoutesAdminCreateMCPTokenRedirectsOnSuccess(t *testing.T) {
+	var (
+		capturedOwnerUserID uuid.UUID
+		capturedPayload     models.MCPTokenCreateRequest
+	)
+	handler, manager, record := buildSessionUITestHandler(
+		t,
+		sessionUITestHandlerOptions{
+			mcpTokenPepper: "ui-admin-test-pepper",
+			createTokenForOwner: func(
+				_ context.Context,
+				ownerUserID uuid.UUID,
+				payload models.MCPTokenCreateRequest,
+				pepper string,
+			) (*models.MCPTokenCreateResponse, error) {
+				capturedOwnerUserID = ownerUserID
+				capturedPayload = payload
+				if pepper != "ui-admin-test-pepper" {
+					t.Fatalf("expected configured pepper, got %q", pepper)
+				}
+				return &models.MCPTokenCreateResponse{
+					TokenID:           uuid.MustParse("00000000-0000-0000-0000-000000000990"),
+					Name:              payload.Name,
+					Scope:             models.MCPTokenScopeWrite,
+					AllowedTools:      payload.AllowedTools,
+					AllowedProjectIDs: payload.AllowedProjectIDs,
+					TokenSecretHint:   "abc123...xyz9",
+					Token:             "engram_mcp_token",
+					ExpiresAt:         time.Unix(1_800_000_000, 0).UTC(),
+					CreatedAt:         time.Unix(1_700_000_000, 0).UTC(),
+				}, nil
+			},
+		},
+	)
+	authenticatedCookie := loginSessionUIUser(t, handler, manager, sessionUILoginCredentials{
+		Username: record.Username,
+		Password: sessionUITestPassword,
+	})
+	adminCSRFToken, authenticatedCookie := fetchAdminCSRFTokenAndCookie(t, handler, manager, authenticatedCookie)
+
+	createValues := url.Values{}
+	createValues.Set("csrf_token", adminCSRFToken)
+	createValues.Set("name", "UI Token")
+	createValues.Set("scope", "write")
+	createValues.Set("allowed_tools", "chat_send_message, chat_send_message, project_list")
+	createValues.Set("allowed_project_ids", "project-1, project-2")
+	createValues.Set("expires_in_days", "30")
+
+	createRequest := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/ui/admin/mcp-tokens/create",
+		Values: createValues,
+		Cookie: authenticatedCookie,
+	})
+	createResponse := httptest.NewRecorder()
+	handler.ServeHTTP(createResponse, createRequest)
+	assertRedirect(t, createResponse, "/ui/admin")
+
+	if capturedOwnerUserID != record.UserID {
+		t.Fatalf("expected owner_user_id %s, got %s", record.UserID, capturedOwnerUserID)
+	}
+	if capturedPayload.Name != "UI Token" {
+		t.Fatalf("expected token name to be forwarded, got %q", capturedPayload.Name)
+	}
+	if capturedPayload.Scope != "write" {
+		t.Fatalf("expected write scope, got %q", capturedPayload.Scope)
+	}
+	if capturedPayload.ExpiresInDays != 30 {
+		t.Fatalf("expected expires_in_days 30, got %d", capturedPayload.ExpiresInDays)
+	}
+	if len(capturedPayload.AllowedTools) != 2 {
+		t.Fatalf("expected deduplicated allowed_tools, got %#v", capturedPayload.AllowedTools)
+	}
+}
+
+func TestMountSessionUIRoutesAdminCreateMCPTokenRejectsInvalidCSRF(t *testing.T) {
+	handler, manager, record := buildSessionUITestHandler(
+		t,
+		sessionUITestHandlerOptions{
+			mcpTokenPepper: "ui-admin-test-pepper",
+			createTokenForOwner: func(
+				_ context.Context,
+				_ uuid.UUID,
+				_ models.MCPTokenCreateRequest,
+				_ string,
+			) (*models.MCPTokenCreateResponse, error) {
+				t.Fatalf("createTokenForOwner should not be called when csrf is invalid")
+				return nil, nil
+			},
+		},
+	)
+	authenticatedCookie := loginSessionUIUser(t, handler, manager, sessionUILoginCredentials{
+		Username: record.Username,
+		Password: sessionUITestPassword,
+	})
+
+	createValues := url.Values{}
+	createValues.Set("csrf_token", "bad-token")
+	createValues.Set("name", "UI Token")
+	createValues.Set("scope", "read")
+
+	createRequest := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/ui/admin/mcp-tokens/create",
+		Values: createValues,
+		Cookie: authenticatedCookie,
+	})
+	createResponse := httptest.NewRecorder()
+	handler.ServeHTTP(createResponse, createRequest)
+
+	if createResponse.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", createResponse.Code)
+	}
+}
+
+func TestMountSessionUIRoutesAdminRevokeMCPTokenRedirectsOnSuccess(t *testing.T) {
+	var (
+		capturedTokenID     uuid.UUID
+		capturedOwnerUserID uuid.UUID
+	)
+	handler, manager, record := buildSessionUITestHandler(
+		t,
+		sessionUITestHandlerOptions{
+			revokeTokenForOwner: func(
+				_ context.Context,
+				tokenID uuid.UUID,
+				ownerUserID uuid.UUID,
+			) (*models.MCPTokenSummary, error) {
+				capturedTokenID = tokenID
+				capturedOwnerUserID = ownerUserID
+				return &models.MCPTokenSummary{
+					TokenID: tokenID,
+					Name:    "UI Token",
+					Scope:   models.MCPTokenScopeRead,
+				}, nil
+			},
+		},
+	)
+	authenticatedCookie := loginSessionUIUser(t, handler, manager, sessionUILoginCredentials{
+		Username: record.Username,
+		Password: sessionUITestPassword,
+	})
+	adminCSRFToken, authenticatedCookie := fetchAdminCSRFTokenAndCookie(t, handler, manager, authenticatedCookie)
+
+	tokenID := uuid.MustParse("00000000-0000-0000-0000-000000000991")
+	revokeValues := url.Values{}
+	revokeValues.Set("csrf_token", adminCSRFToken)
+	revokeValues.Set("reason", "cleanup")
+	revokeRequest := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/ui/admin/mcp-tokens/" + tokenID.String() + "/revoke",
+		Values: revokeValues,
+		Cookie: authenticatedCookie,
+	})
+	revokeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(revokeResponse, revokeRequest)
+	assertRedirect(t, revokeResponse, "/ui/admin")
+
+	if capturedTokenID != tokenID {
+		t.Fatalf("expected token id %s, got %s", tokenID, capturedTokenID)
+	}
+	if capturedOwnerUserID != record.UserID {
+		t.Fatalf("expected owner_user_id %s, got %s", record.UserID, capturedOwnerUserID)
+	}
+}
+
+func TestMountSessionUIRoutesAdminRevokeMCPTokenReturnsNotFoundWhenMissing(t *testing.T) {
+	handler, manager, record := buildSessionUITestHandler(
+		t,
+		sessionUITestHandlerOptions{
+			revokeTokenForOwner: func(
+				_ context.Context,
+				_ uuid.UUID,
+				_ uuid.UUID,
+			) (*models.MCPTokenSummary, error) {
+				return nil, nil
+			},
+		},
+	)
+	authenticatedCookie := loginSessionUIUser(t, handler, manager, sessionUILoginCredentials{
+		Username: record.Username,
+		Password: sessionUITestPassword,
+	})
+	adminCSRFToken, authenticatedCookie := fetchAdminCSRFTokenAndCookie(t, handler, manager, authenticatedCookie)
+
+	revokeValues := url.Values{}
+	revokeValues.Set("csrf_token", adminCSRFToken)
+	revokeRequest := newSessionUIFormRequest(t, sessionUIFormRequestSpec{
+		Method: http.MethodPost,
+		Path:   "/ui/admin/mcp-tokens/00000000-0000-0000-0000-000000000992/revoke",
+		Values: revokeValues,
+		Cookie: authenticatedCookie,
+	})
+	revokeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(revokeResponse, revokeRequest)
+
+	if revokeResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", revokeResponse.Code)
+	}
+}
+
 func TestMountSessionUIRoutesLoginRedirectPathSanitization(t *testing.T) {
 	testCases := []struct {
 		name             string
@@ -388,9 +590,21 @@ func TestMountSessionUIRoutesLoginFailureWritesAuditLog(t *testing.T) {
 }
 
 type sessionUITestHandlerOptions struct {
-	auditLogPath      string
-	loginAttemptGuard SessionLoginAttemptGuard
-	userRole          models.UserRole
+	auditLogPath        string
+	loginAttemptGuard   SessionLoginAttemptGuard
+	userRole            models.UserRole
+	createTokenForOwner func(
+		ctx context.Context,
+		ownerUserID uuid.UUID,
+		payload models.MCPTokenCreateRequest,
+		pepper string,
+	) (*models.MCPTokenCreateResponse, error)
+	revokeTokenForOwner func(
+		ctx context.Context,
+		tokenID uuid.UUID,
+		ownerUserID uuid.UUID,
+	) (*models.MCPTokenSummary, error)
+	mcpTokenPepper string
 }
 
 func buildSessionUITestHandler(
@@ -411,6 +625,9 @@ func buildSessionUITestHandler(
 		GenerateCSRFToken:    auth.GenerateCSRFToken,
 		LoginAttemptGuard:    resolveSessionUITestLoginAttemptGuard(handlerOptions.loginAttemptGuard),
 		LogAuditEvent:        newSessionUITestAuditLogger(handlerOptions.auditLogPath),
+		CreateTokenForOwner:  handlerOptions.createTokenForOwner,
+		RevokeTokenForOwner:  handlerOptions.revokeTokenForOwner,
+		MCPTokenPepper:       handlerOptions.mcpTokenPepper,
 	}
 	MountSessionAuthRoutes(router, dependencies)
 	MountSessionUIRoutes(router, dependencies)
@@ -530,6 +747,30 @@ func extractCSRFTokenFromHTML(t *testing.T, html string) string {
 		t.Fatalf("expected csrf token input in html response")
 	}
 	return matches[1]
+}
+
+func fetchAdminCSRFTokenAndCookie(
+	t *testing.T,
+	handler http.Handler,
+	manager *auth.SessionManager,
+	cookie *http.Cookie,
+) (string, *http.Cookie) {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, "/ui/admin", nil)
+	if cookie != nil {
+		request.AddCookie(cookie)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.Code)
+	}
+	csrfToken := extractCSRFTokenFromHTML(t, response.Body.String())
+	nextCookie := findResponseCookie(response, manager.CookieName())
+	if nextCookie == nil {
+		nextCookie = cookie
+	}
+	return csrfToken, nextCookie
 }
 
 func newSessionUIFormRequest(
