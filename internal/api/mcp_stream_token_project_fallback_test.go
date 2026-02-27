@@ -1,11 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"engram/internal/mcp"
@@ -15,74 +15,189 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestMountMCPRoutesTokenProjectAutofillForEngramCreate(t *testing.T) {
-	createService := &capturingMCPCreateEngramService{
-		response: &models.EngramCreateResponse{
-			EngramID: uuid.MustParse("40100000-0000-0000-0000-000000000001"),
+func TestMountMCPRoutesTokenProjectAutofillForCreateTools(t *testing.T) {
+	tests := []struct {
+		name      string
+		requestID string
+		toolName  string
+		arguments map[string]any
+		setup     func() (mcp.CompatibilityServiceDependencies, func() string)
+	}{
+		{
+			name:      "engram.create",
+			requestID: "create",
+			toolName:  "engram_create",
+			arguments: map[string]any{
+				"title":                     "Token fallback",
+				"detailed_summary_markdown": "Details",
+			},
+			setup: func() (mcp.CompatibilityServiceDependencies, func() string) {
+				service := &capturingMCPCreateEngramService{
+					response: &models.EngramCreateResponse{
+						EngramID: uuid.MustParse("40100000-0000-0000-0000-000000000001"),
+					},
+				}
+				return mcp.CompatibilityServiceDependencies{EngramCreate: service}, func() string {
+					return service.call.Payload.ProjectID
+				}
+			},
+		},
+		{
+			name:      "engram.create_from_conversation",
+			requestID: "create-conv",
+			toolName:  "engram_create_from_conversation",
+			arguments: map[string]any{
+				"title":                 "Token fallback conversation",
+				"conversation_markdown": "Details",
+			},
+			setup: func() (mcp.CompatibilityServiceDependencies, func() string) {
+				service := &capturingMCPCreateFromConversationService{
+					response: &mcp.EngramCreateFromConversationResponse{
+						Engram: models.EngramCreateResponse{
+							EngramID: uuid.MustParse("40120000-0000-0000-0000-000000000001"),
+						},
+						EnrichmentReport: map[string]any{},
+					},
+				}
+				return mcp.CompatibilityServiceDependencies{EngramCreateConversation: service}, func() string {
+					return service.call.ProjectID
+				}
+			},
 		},
 	}
-	router := chi.NewRouter()
-	MountMCPRoutes(
-		router,
-		mcp.NewCompatibilityServiceWithDependencies(
-			"1.2.3",
-			mcp.CompatibilityServiceDependencies{EngramCreate: createService},
-		),
-		newTokenScopedMCPActorResolver(&models.MCPTokenAuthContext{
-			Scope:             models.MCPTokenScopeWrite,
-			AllowedProjectIDs: []string{"project-token"},
-		}),
-		nil,
-	)
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/api/v1/mcp/stream",
-		strings.NewReader(`{"jsonrpc":"2.0","id":"create","method":"tools/call","params":{"name":"engram_create","arguments":{"title":"Token fallback","detailed_summary_markdown":"Details"}}}`),
-	)
-	request.Header.Set("Accept", "application/json")
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("expected tools/call status 200, got %d", response.Code)
-	}
-	if createService.call.Payload.ProjectID != "project-token" {
-		t.Fatalf("expected token project autofill for engram.create")
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			deps, projectFor := tc.setup()
+			router := newMCPTokenProjectFallbackRouter(deps, []string{"project-token"})
+			response := postMCPToolsCallRequest(t, router, mcpToolsCallRequest{
+				RequestID: tc.requestID,
+				ToolName:  tc.toolName,
+				Arguments: tc.arguments,
+			})
+			assertMCPToolsCallStatusOK(t, response)
+			if projectFor() != "project-token" {
+				t.Fatalf("expected token project autofill for %s", tc.toolName)
+			}
+		})
 	}
 }
 
 func TestMountMCPRoutesTokenProjectAutofillRequiresExplicitProjectForMultiProjectToken(t *testing.T) {
-	router := chi.NewRouter()
-	MountMCPRoutes(
-		router,
-		mcp.NewCompatibilityServiceWithDependencies(
-			"1.2.3",
-			mcp.CompatibilityServiceDependencies{
+	tests := []struct {
+		name      string
+		requestID string
+		toolName  string
+		arguments map[string]any
+		deps      mcp.CompatibilityServiceDependencies
+	}{
+		{
+			name:      "engram.create",
+			requestID: "create",
+			toolName:  "engram_create",
+			arguments: map[string]any{
+				"title":                     "Denied",
+				"detailed_summary_markdown": "Details",
+			},
+			deps: mcp.CompatibilityServiceDependencies{
 				EngramCreate: &capturingMCPCreateEngramService{
-					response: &models.EngramCreateResponse{
-						EngramID: uuid.MustParse("40110000-0000-0000-0000-000000000001"),
+					response: &models.EngramCreateResponse{EngramID: uuid.MustParse("40110000-0000-0000-0000-000000000001")},
+				},
+			},
+		},
+		{
+			name:      "engram.create_from_conversation",
+			requestID: "create-conv",
+			toolName:  "engram_create_from_conversation",
+			arguments: map[string]any{
+				"title":                 "Denied",
+				"conversation_markdown": "Details",
+			},
+			deps: mcp.CompatibilityServiceDependencies{
+				EngramCreateConversation: &capturingMCPCreateFromConversationService{
+					response: &mcp.EngramCreateFromConversationResponse{
+						Engram:           models.EngramCreateResponse{EngramID: uuid.MustParse("40130000-0000-0000-0000-000000000001")},
+						EnrichmentReport: map[string]any{},
 					},
 				},
 			},
-		),
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			router := newMCPTokenProjectFallbackRouter(tc.deps, []string{"project-a", "project-b"})
+			response := postMCPToolsCallRequest(t, router, mcpToolsCallRequest{
+				RequestID: tc.requestID,
+				ToolName:  tc.toolName,
+				Arguments: tc.arguments,
+			})
+			assertMCPToolsCallStatusOK(t, response)
+			assertMCPMissingProjectIDError(t, response)
+		})
+	}
+}
+
+func newMCPTokenProjectFallbackRouter(
+	deps mcp.CompatibilityServiceDependencies,
+	allowedProjectIDs []string,
+) *chi.Mux {
+	router := chi.NewRouter()
+	MountMCPRoutes(
+		router,
+		mcp.NewCompatibilityServiceWithDependencies("1.2.3", deps),
 		newTokenScopedMCPActorResolver(&models.MCPTokenAuthContext{
 			Scope:             models.MCPTokenScopeWrite,
-			AllowedProjectIDs: []string{"project-a", "project-b"},
+			AllowedProjectIDs: append([]string(nil), allowedProjectIDs...),
 		}),
 		nil,
 	)
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/api/v1/mcp/stream",
-		strings.NewReader(`{"jsonrpc":"2.0","id":"create","method":"tools/call","params":{"name":"engram_create","arguments":{"title":"Denied","detailed_summary_markdown":"Details"}}}`),
-	)
+	return router
+}
+
+func postMCPToolsCallRequest(
+	t *testing.T,
+	router http.Handler,
+	callRequest mcpToolsCallRequest,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	payload := map[string]any{
+		"jsonrpc": "2.0",
+		"id":      callRequest.RequestID,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      callRequest.ToolName,
+			"arguments": callRequest.Arguments,
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal tools/call request: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/mcp/stream", bytes.NewReader(body))
 	request.Header.Set("Accept", "application/json")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
+	return response
+}
 
+type mcpToolsCallRequest struct {
+	RequestID string
+	ToolName  string
+	Arguments map[string]any
+}
+
+func assertMCPToolsCallStatusOK(t *testing.T, response *httptest.ResponseRecorder) {
+	t.Helper()
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected tools/call status 200, got %d", response.Code)
 	}
+}
+
+func assertMCPMissingProjectIDError(t *testing.T, response *httptest.ResponseRecorder) {
+	t.Helper()
 	payload := map[string]any{}
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode json response: %v", err)
@@ -113,9 +228,26 @@ func (service *capturingMCPCreateEngramService) CreateEngram(
 	request mcp.EngramCreateRequest,
 ) (*models.EngramCreateResponse, error) {
 	service.call = request
-	if service.response == nil {
-		return nil, nil
+	return clonePointer(service.response), nil
+}
+
+type capturingMCPCreateFromConversationService struct {
+	response *mcp.EngramCreateFromConversationResponse
+	call     mcp.EngramCreateFromConversationRequest
+}
+
+func (service *capturingMCPCreateFromConversationService) CreateEngramFromConversation(
+	_ context.Context,
+	request mcp.EngramCreateFromConversationRequest,
+) (*mcp.EngramCreateFromConversationResponse, error) {
+	service.call = request
+	return clonePointer(service.response), nil
+}
+
+func clonePointer[T any](value *T) *T {
+	if value == nil {
+		return nil
 	}
-	response := *service.response
-	return &response, nil
+	cloned := *value
+	return &cloned
 }
