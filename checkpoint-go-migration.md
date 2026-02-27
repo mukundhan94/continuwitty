@@ -130,6 +130,7 @@
 | CP160 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `chat.list_sessions` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
 | CP161 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `engram.query` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
 | CP162 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `engram.list` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
+| CP163 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `chat.list_project_documents` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
 
 ## Checkpoint Details
 
