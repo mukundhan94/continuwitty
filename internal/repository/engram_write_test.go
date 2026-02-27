@@ -65,25 +65,8 @@ func TestCreateEngramWithReportReturnsEmbedErrorAndSkipsWrites(t *testing.T) {
 func TestCreateEngramReturnsCreatedResponse(t *testing.T) {
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000451")
 	createdAt := time.Date(2026, 2, 20, 12, 30, 0, 0, time.UTC)
-	db := &fakeQueryer{
-		queryRowResults: []*fakeRow{
-			{values: []any{engramID}},
-		},
-	}
-
-	originalNowUTC := nowUTC
-	nowUTC = func() time.Time { return createdAt }
-	t.Cleanup(func() { nowUTC = originalNowUTC })
-
-	originalEngramUUID := newEngramUUID
-	newEngramUUID = func() uuid.UUID { return engramID }
-	t.Cleanup(func() { newEngramUUID = originalEngramUUID })
-
-	originalEmbed := embedEngramText
-	embedEngramText = func(_ string, _ int) (embeddings.Result, error) {
-		return embeddings.Result{Vector: []float64{0.0, 0.0}, ProviderID: "local-deterministic-v1"}, nil
-	}
-	t.Cleanup(func() { embedEngramText = originalEmbed })
+	db := buildCreateEngramSingleInsertFakeQueryer(engramID)
+	setupCreateEngramSingleInsertStubs(t, engramID, createdAt)
 
 	response, err := CreateEngram(
 		context.Background(),
@@ -101,6 +84,62 @@ func TestCreateEngramReturnsCreatedResponse(t *testing.T) {
 	requireNotNil(t, response)
 	requireEqual(t, engramID, response.EngramID)
 	requireEqual(t, createdAt, response.CreatedAt)
+}
+
+func TestCreateEngramWithReportNormalizesNilTagsAndKeywords(t *testing.T) {
+	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000499")
+	createdAt := time.Date(2026, 2, 27, 9, 35, 0, 0, time.UTC)
+	db := buildCreateEngramSingleInsertFakeQueryer(engramID)
+	setupCreateEngramSingleInsertStubs(t, engramID, createdAt)
+
+	_, _, err := CreateEngramWithReport(
+		context.Background(),
+		db,
+		CreateEngramInput{
+			Payload: models.MemoryEngramCreate{
+				ProjectID:               "engram-vault",
+				Title:                   "Nil metadata normalization",
+				DetailedSummaryMarkdown: "Body",
+				VisibilityScope:         "project",
+			},
+			EmbeddingDim: 2,
+		},
+	)
+	requireNoError(t, err)
+	firstArgs := db.queryRowArgs[0]
+	tags, ok := firstArgs[8].([]string)
+	if !ok || tags == nil {
+		t.Fatalf("expected normalized tags slice, got %#v", firstArgs[8])
+	}
+	keywords, ok := firstArgs[9].([]string)
+	if !ok || keywords == nil {
+		t.Fatalf("expected normalized keywords slice, got %#v", firstArgs[9])
+	}
+}
+
+func buildCreateEngramSingleInsertFakeQueryer(engramID uuid.UUID) *fakeQueryer {
+	return &fakeQueryer{
+		queryRowResults: []*fakeRow{
+			{values: []any{engramID}},
+		},
+	}
+}
+
+func setupCreateEngramSingleInsertStubs(t *testing.T, engramID uuid.UUID, createdAt time.Time) {
+	t.Helper()
+	originalNowUTC := nowUTC
+	nowUTC = func() time.Time { return createdAt }
+	t.Cleanup(func() { nowUTC = originalNowUTC })
+
+	originalEngramUUID := newEngramUUID
+	newEngramUUID = func() uuid.UUID { return engramID }
+	t.Cleanup(func() { newEngramUUID = originalEngramUUID })
+
+	originalEmbed := embedEngramText
+	embedEngramText = func(_ string, _ int) (embeddings.Result, error) {
+		return embeddings.Result{Vector: []float64{0.0, 0.0}, ProviderID: "local-deterministic-v1"}, nil
+	}
+	t.Cleanup(func() { embedEngramText = originalEmbed })
 }
 
 type createEngramWithReportFixture struct {

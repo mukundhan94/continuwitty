@@ -47,7 +47,7 @@ var (
 		payload models.MemoryEngramCreate,
 		enrichmentOrigin string,
 	) (models.MemoryEngramCreate, map[string]any) {
-		return payload, defaultEnrichmentReport(enrichmentOrigin)
+		return enrichEngramPayloadIfMissing(payload, enrichmentOrigin)
 	}
 )
 
@@ -58,6 +58,8 @@ func CreateEngramWithReport(
 	input CreateEngramInput,
 ) (*models.EngramCreateResponse, map[string]any, error) {
 	resolvedPayload, enrichmentReport := resolveEnrichedPayload(input.Payload, input.EnrichmentOrigin)
+	resolvedPayload.Tags = normalizeEngramStringSlice(resolvedPayload.Tags)
+	resolvedPayload.Keywords = normalizeEngramStringSlice(resolvedPayload.Keywords)
 	engramID := newEngramUUID()
 	createdAt := nowUTC()
 	retrievalText := buildRetrievalText(resolvedPayload)
@@ -232,6 +234,13 @@ func defaultEnrichmentReport(enrichmentOrigin string) map[string]any {
 		"auto_keywords":      []string{},
 		"abstract_source":    nil,
 	}
+}
+
+func normalizeEngramStringSlice(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }
 
 func marshalJSON(value any) (string, error) {

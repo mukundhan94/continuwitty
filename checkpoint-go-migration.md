@@ -143,6 +143,7 @@
 | CP173 | 2026-02-27 | Completed | Phase 5 docs cutover baseline: updated top-level runbook docs (`README.md`, `docs/user-workflows.md`) for Go-first API/runtime commands and health endpoints while preserving explicit legacy Python notes under >9.5 code-health gate |
 | CP174 | 2026-02-27 | Completed | Phase 5 runtime verification baseline: added `make stack-smoke` target for Go API container smoke validation (`db+api` build/start + `/healthz` + `/api/v1/version` checks) and validated success locally under >9.5 code-health gate |
 | CP175 | 2026-02-27 | Completed | Phase 5 CI cutover baseline: added GitHub Actions Go backend pipeline (`gofmt` + `go vet` + `go test`) and updated migration checklist completion markers for Docker/compose/CI cutover items under >9.5 code-health gate |
+| CP176 | 2026-02-27 | Completed | Phase 5 acceptance-parity hardening baseline: fixed `engram.create_from_conversation` empty-metadata failures by normalizing nil `tags`/`keywords` at repository write-time and restoring deterministic fill-empty metadata enrichment (`abstract`/`tags`/`keywords`) with migrated repository regression tests under >9.5 code-health gate |
 
 ## Checkpoint Details
 
