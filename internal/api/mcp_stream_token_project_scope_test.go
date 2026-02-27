@@ -93,6 +93,15 @@ func tokenProjectDeniedToolsCallScenarios() []tokenProjectDeniedToolsCallScenari
 			},
 		},
 		{
+			name:      "chat.create_session",
+			requestID: "chat-create-denied",
+			toolName:  "chat_create_session",
+			arguments: map[string]any{
+				"project_id": "project-other",
+				"title":      "Denied",
+			},
+		},
+		{
 			name:      "engram.collection_create",
 			requestID: "collection-create-denied",
 			toolName:  "engram_collection_create",
@@ -114,6 +123,14 @@ func tokenProjectDeniedToolsCallScenarios() []tokenProjectDeniedToolsCallScenari
 			name:      "project.import_bundle",
 			requestID: "project-import-denied",
 			toolName:  "project_import_bundle",
+			arguments: map[string]any{
+				"project_id": "project-other",
+			},
+		},
+		{
+			name:      "project.set_default",
+			requestID: "project-set-default-denied",
+			toolName:  "project_set_default",
 			arguments: map[string]any{
 				"project_id": "project-other",
 			},
@@ -154,6 +171,15 @@ func tokenProjectDeniedDirectScenarios() []tokenProjectDeniedDirectScenario {
 			},
 		},
 		{
+			name:      "chat.create_session",
+			requestID: "chat-create-direct-denied",
+			method:    "chat.create_session",
+			params: map[string]any{
+				"project_id": "project-other",
+				"title":      "Denied",
+			},
+		},
+		{
 			name:      "engram.collection_create",
 			requestID: "collection-create-direct-denied",
 			method:    "engram.collection_create",
@@ -175,6 +201,14 @@ func tokenProjectDeniedDirectScenarios() []tokenProjectDeniedDirectScenario {
 			name:      "project.import_bundle",
 			requestID: "project-import-direct-denied",
 			method:    "project.import_bundle",
+			params: map[string]any{
+				"project_id": "project-other",
+			},
+		},
+		{
+			name:      "project.set_default",
+			requestID: "project-set-default-direct-denied",
+			method:    "project.set_default",
 			params: map[string]any{
 				"project_id": "project-other",
 			},
