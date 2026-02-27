@@ -8,7 +8,7 @@ This file is the canonical roadmap for the project.
 - Chat/MCP/multi-provider roadmap phases are folded into the same timeline.
 - Upcoming work is defined below as the next implementation phases.
 
-> See [checkpoint.md](checkpoint.md) for milestone tracking and [todo.md](todo.md) for pending work.
+> See [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) for milestone tracking and [todo.md](todo.md) for pending work.
 
 ---
 
@@ -781,7 +781,7 @@ Build a local-first memory system where agents and humans can:
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
-2. Update `docs/implementation-log.md` and `checkpoint.md` in every completed phase.
+2. Update `docs/implementation-log.md` and `migration/checkpoints/checkpoint.md` in every completed phase.
 3. Add/extend tests for every non-trivial behavior change.
 4. Keep schema migrations forward-only and idempotent.
 5. Preserve stable API contracts or version intentionally.

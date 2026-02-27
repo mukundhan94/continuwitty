@@ -29,26 +29,26 @@ package "Client Layer" {
   [SSE Frame Parser\nweb/src/utils/sse.ts] as BrowserSSE
 }
 
-package "Transport Layer (FastAPI)" {
+package "Transport Layer (Go API)" {
   [Auth/UI Routes\n/login, /ui] as AuthRoutes
-  [Chat REST Router\napi/app/chat/api.py] as ChatRouter
-  [Engram REST Routes\napi/app/main.py] as EngramRouter
-  [MCP SSE Router\napi/app/mcp/api.py] as McpRouter
+  [Chat REST Router\ninternal/api/chat_api.go] as ChatRouter
+  [Engram REST Routes\ninternal/api/router.go] as EngramRouter
+  [MCP SSE Router\ninternal/api/mcp_stream.go] as McpRouter
 }
 
 package "Domain Layer" {
-  [Chat Service\napi/app/chat/service.py] as ChatService
-  [Context Assembler\napi/app/chat/context.py] as ContextAssembler
-  [MCP Dispatcher\napi/app/mcp/service.py] as McpService
-  [Provider Registry\napi/app/providers/registry.py] as ProviderRegistry
+  [Chat Service\ninternal/chat/service.go] as ChatService
+  [Context Assembler\ninternal/chat/context.go] as ContextAssembler
+  [MCP Dispatcher\ninternal/mcp/compatibility_service.go] as McpService
+  [Provider Registry\ninternal/providers/registry.go] as ProviderRegistry
   [OpenAI Adapter] as OpenAIAdapter
   [Anthropic Adapter] as AnthropicAdapter
   [Bedrock Adapter] as BedrockAdapter
 }
 
 package "Persistence Layer" {
-  [Chat Repository\napi/app/chat_repository.py] as ChatRepository
-  [Engram Repository\napi/app/repository.py] as EngramRepository
+  [Chat Repository\ninternal/repository/chat.go] as ChatRepository
+  [Engram Repository\ninternal/repository/engram_write.go] as EngramRepository
   database "Postgres + pgvector" as Postgres
   collections "Core Tables\nchat_sessions\nchat_messages\nsession_pinned_engrams\nengrams\nsources\nartifacts" as CoreTables
 }

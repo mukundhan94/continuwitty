@@ -8,7 +8,7 @@
 
 ## Dockerized Stack (API + Web + DB)
 
-Use this when you want one-command local infrastructure with no host-level Python/Node runtimes.
+Use this when you want one-command local infrastructure with no host-level Go/Node toolchains.
 
 1. Copy env:
 ```bash
@@ -64,12 +64,7 @@ make format-check
 make test
 ```
 
-5. (Optional legacy) Run memory evaluation harness:
-```bash
-make eval
-```
-
-6. Manual API smoke test:
+5. Manual API smoke test:
 ```bash
 make api
 ```
@@ -119,54 +114,15 @@ curl -X POST http://localhost:8000/api/v1/agent-runs \
   }'
 ```
 
-7. CLI smoke test:
+6. Container smoke test:
 ```bash
-make cli ARGS="search --query 'local-first memory' --project-id engram-vault --top-k 3"
+make stack-smoke
 ```
 
-8. Consolidation dry-run:
-```bash
-make consolidate ARGS="--project-id engram-vault --dry-run"
-```
-
-9. Inspect recent audit events:
+7. Inspect recent audit events:
 ```bash
 tail -n 10 data/audit_events.jsonl
 ```
-
-If you want to use a hashed local UI password instead of plaintext, generate one with:
-```bash
-cd api
-uv run python -c "from app.auth import hash_password; print(hash_password('admin123'))"
-```
-
----
-
-## Go Migration Parity + Rollout Checks
-
-Use this sequence for migration closeout verification between Go and legacy Python runtimes.
-
-1. Contract route parity:
-```bash
-make openapi-check
-```
-
-2. Shadow comparison (Go vs Python via proxy):
-```bash
-make shadow-compare
-```
-
-3. Performance benchmark comparison report:
-```bash
-make benchmark-compare
-```
-Report output: `findings/go-migration-benchmark.md`
-
-4. Review rollout gating criteria:
-- `docs/go-rollout-playbook.md`
-
-5. Review migration test matrix:
-- `docs/go-migration-test-matrix.md`
 
 ---
 
@@ -205,60 +161,3 @@ Use this sequence to validate the latest multi-document continuity path end-to-e
 8. MCP parity check:
    - Use `tools/list` and confirm document-pin tools are exposed
    - Call `chat.list_pinned_documents` and verify both document IDs are returned
-
----
-
-## CLI Workflows
-
-Use CLI mode when you want a terminal-only path (no browser).
-
-### Upload Engram
-
-```bash
-cat > /tmp/engram.json <<'JSON'
-{
-  "project_id": "engram-vault",
-  "thread_id": "cli-run-001",
-  "title": "CLI upload sample",
-  "abstract": "Uploaded from local CLI.",
-  "detailed_summary_markdown": "Sample summary for CLI upload testing.",
-  "tags": ["cli"],
-  "keywords": ["upload", "local"]
-}
-JSON
-```
-
-```bash
-make cli ARGS="upload --file /tmp/engram.json"
-```
-
-### Search Engrams
-
-```bash
-make cli ARGS="search --query 'uploaded from local cli' --project-id engram-vault --top-k 5"
-```
-
-### Rehydrate Engram
-
-```bash
-make cli ARGS="rehydrate --engram-id <engram_uuid>"
-```
-
-### Consolidation Maintenance
-
-```bash
-make consolidate ARGS="--project-id engram-vault --dry-run"
-make consolidate ARGS="--project-id engram-vault"
-```
-
-### MCP Smoke Call
-
-Use the CLI to smoke-test MCP JSON-RPC calls against `/api/v1/mcp/stream`.
-
-```bash
-make cli ARGS="mcp-call --method tools/list --username admin --password admin123"
-```
-
-```bash
-make cli ARGS="mcp-call --method project.get_default --params-json '{}' --bearer-token engram_mcp_<token_id_hex>_<secret>"
-```

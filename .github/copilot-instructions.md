@@ -3,7 +3,7 @@
 ## Project Identity
 
 Engram Vault is a local-first memory system that turns long LLM research runs
-into durable, queryable "memory engrams." Stack: FastAPI + PostgreSQL/pgvector
+into durable, queryable "memory engrams." Stack: Go + PostgreSQL/pgvector
 backend, React frontend, MCP server for agent integration.
 
 ## Operational Contract
@@ -44,7 +44,7 @@ Skills are reusable agent workflow definitions in `skills/<name>/SKILL.md`:
 
 ## Key Directories
 
-- `api/app/` - FastAPI backend (routes, services, repositories, providers, MCP)
+- `cmd/api/` + `internal/` - Go backend (routes, services, repositories, providers, MCP)
 - `web/` - React frontend (chat UI, session management, styled-components + Tailwind)
 - `db/init/` - SQL schema and migrations
 - `acceptance-tests/` - Playwright-BDD end-to-end tests

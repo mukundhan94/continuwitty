@@ -1,7 +1,7 @@
 # Engram Vault - Todo Tracker
 
 > Forward-looking work items.
-> See [Plan.md](Plan.md) for full roadmap. See [checkpoint.md](checkpoint.md) for completed milestones.
+> See [Plan.md](Plan.md) for full roadmap. See [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) for completed milestones.
 
 ---
 
@@ -33,7 +33,7 @@
 
 ## Documentation Debt
 
-- [ ] Keep `checkpoint.md` updated after each phase completion
+- [ ] Keep `migration/checkpoints/checkpoint.md` updated after each phase completion
 - [ ] Keep `AGENT.md` aligned with architecture changes
 - [ ] Update skills docs when domain behavior changes
 - [ ] Keep `docs/api-reference.md` current when API surface changes

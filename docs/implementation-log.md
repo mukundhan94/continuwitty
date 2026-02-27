@@ -1,7 +1,7 @@
 # Engram Vault - Implementation Log
 
 > Chronological log of implementation changes by date and pass.
-> See [README](../README.md) for project overview. See [checkpoint.md](../checkpoint.md) for milestone summary.
+> See [README](../README.md) for project overview. See [migration/checkpoints/checkpoint.md](../migration/checkpoints/checkpoint.md) for milestone summary.
 
 ---
 
@@ -9,7 +9,7 @@
 
 ### 2026-02-22 (Go migration CP1: module scaffold + config parity)
 
-1. Started phased Go migration per `migrate.md` with a dedicated checkpoint tracker:
+1. Started phased Go migration per `migration/migrate.md` with a dedicated checkpoint tracker:
    - `checkpoint-go-migration.md`
 2. Added Go module scaffold and first internal package:
    - `go.mod`
@@ -2771,7 +2771,7 @@
    - authorization policy locked to project owner + admin.
 2. Added new roadmap phase definition in `Plan.md`:
    - **Phase 34**: security audit remediation program for prioritized hardening.
-3. Updated `checkpoint.md` current summary and phase timeline to include:
+3. Updated `migration/checkpoints/checkpoint.md` current summary and phase timeline to include:
    - Phase 33 (In Progress)
    - Phase 34 (Planned)
 4. Updated `todo.md` near-term queue with explicit Phase 33/34 execution items to ensure follow-up pickup in later passes.

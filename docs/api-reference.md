@@ -242,7 +242,7 @@ Key fields:
 
 ### Auto Metadata Enrichment (Phase 29)
 
-- Scope: applies to all engram create paths through centralized repository logic (`api/app/repository.py`).
+- Scope: applies to all engram create paths through centralized repository logic (`internal/repository/engram_write.go`).
 - Behavior: fill-empty-only for `abstract`, `tags`, and `keywords`; non-empty caller values are never overwritten.
 - Strategy: deterministic local parsing in v1 (no provider call required).
 - Traceability: enrichment details are stored in `engram_json.auto_metadata` with schema version and origin.

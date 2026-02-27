@@ -23,7 +23,7 @@ NC = \033[0m
 
 WEB_PORT ?= 5173
 
-.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke shadow-up shadow-down shadow-compare benchmark-compare openapi-export-python openapi-validate-go openapi-check acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api py-sync py-api cli consolidate lint format format-check check test test-unit test-integration coverage eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api lint format format-check check test test-unit test-integration coverage web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
 help: ## Print all Makefile commands with categorized descriptions and usage hints
 	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
@@ -40,12 +40,12 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 		function group_name(target) { \
 			if (target == "help" || target == "print-config") return "Help"; \
 			if (target ~ /^db-/) return "Database"; \
-			if (target ~ /^stack-/ || target ~ /^shadow-/) return "Stack"; \
+			if (target ~ /^stack-/) return "Stack"; \
 			if (target == "dev") return "Local Dev"; \
 			if (target ~ /^acceptance-/) return "Acceptance"; \
 			if (target ~ /^web-/ || target == "web") return "Web"; \
 			if (target ~ /^diagram-/) return "Diagrams"; \
-			if (target == "sync" || target == "api" || target == "cli" || target == "consolidate" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "coverage" || target == "eval" || target == "check") return "API/Backend"; \
+			if (target == "sync" || target == "api" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "coverage" || target == "check") return "API/Backend"; \
 			return "Other"; \
 		} \
 		/^[a-zA-Z0-9_.-]+:.*## / { \
@@ -148,81 +148,6 @@ stack-smoke: ## Build/start db + api and verify Go API health/version endpoints
 	@curl -fsS "http://127.0.0.1:$${API_PORT:-8000}/api/v1/version" >/dev/null
 	@printf '$(SUCCESS)✓ Go API container smoke checks passed$(NC)\n'
 
-shadow-up: ## Start db + go api + python api + shadow proxy for side-by-side comparison
-	@printf '$(PROGRESS)Starting shadow-comparison stack (db, api, api-python, shadow-proxy)...$(NC)\n'
-	@$(DOCKER_COMPOSE) --profile shadow up -d --build --force-recreate db api api-python shadow-proxy
-	@printf '$(SUCCESS)✓ Shadow stack started$(NC)\n'
-	@printf '  $(INFO)Go API via proxy:$(NC)      http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/go/\n'
-	@printf '  $(INFO)Python API via proxy:$(NC)  http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/py/\n'
-
-shadow-down: ## Stop shadow comparison stack and remove containers/network
-	@printf '$(PROGRESS)Stopping shadow-comparison stack...$(NC)\n'
-	@$(DOCKER_COMPOSE) --profile shadow down
-	@printf '$(SUCCESS)✓ Shadow stack stopped$(NC)\n'
-
-shadow-compare: ## Compare Go vs Python route status parity using shadow proxy + OpenAPI contract
-	@printf '$(PROGRESS)Running Go vs Python shadow parity comparison...$(NC)\n'
-	@exit_code=0; \
-	$(MAKE) --no-print-directory openapi-export-python || exit $$?; \
-	$(DOCKER_COMPOSE) --profile shadow up -d --build --force-recreate db api api-python shadow-proxy || exit $$?; \
-	ready=0; \
-	for attempt in $$(seq 1 30); do \
-		if curl -fsS "http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/healthz" >/dev/null 2>&1; then \
-			ready=1; \
-			break; \
-		fi; \
-		sleep 1; \
-	done; \
-	if [ "$$ready" -ne 1 ]; then \
-		printf '$(ERROR)Shadow proxy did not become ready in time$(NC)\n'; \
-		exit_code=1; \
-	else \
-		python3 scripts/shadow_compare.py --spec contracts/python-openapi.json --proxy-base-url "http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}" || exit_code=$$?; \
-	fi; \
-	$(DOCKER_COMPOSE) --profile shadow down; \
-	exit $$exit_code
-	@printf '$(SUCCESS)✓ Shadow parity comparison completed$(NC)\n'
-
-benchmark-compare: ## Benchmark Go vs Python through shadow proxy; writes findings/go-migration-benchmark.md
-	@printf '$(PROGRESS)Running Go vs Python benchmark comparison...$(NC)\n'
-	@exit_code=0; \
-	$(DOCKER_COMPOSE) --profile shadow up -d --build --force-recreate db api api-python shadow-proxy || exit $$?; \
-	ready=0; \
-	for attempt in $$(seq 1 30); do \
-		if curl -fsS "http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/healthz" >/dev/null 2>&1; then \
-			ready=1; \
-			break; \
-		fi; \
-		sleep 1; \
-	done; \
-	if [ "$$ready" -ne 1 ]; then \
-		printf '$(ERROR)Shadow proxy did not become ready in time$(NC)\n'; \
-		exit_code=1; \
-	else \
-		python3 scripts/benchmark_compare.py \
-			--go-base-url "http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/go" \
-			--py-base-url "http://127.0.0.1:$${SHADOW_PROXY_PORT:-8080}/py" \
-			--requests "$${BENCH_REQUESTS:-300}" \
-			--concurrency "$${BENCH_CONCURRENCY:-20}" \
-			--output findings/go-migration-benchmark.md || exit_code=$$?; \
-	fi; \
-	$(DOCKER_COMPOSE) --profile shadow down; \
-	exit $$exit_code
-	@printf '$(SUCCESS)✓ Benchmark comparison completed$(NC)\n'
-
-openapi-export-python: ## Export Python FastAPI OpenAPI schema to contracts/python-openapi.json
-	@printf '$(PROGRESS)Exporting Python OpenAPI contract...$(NC)\n'
-	@cd api && uv run python ../scripts/export_python_openapi.py
-	@printf '$(SUCCESS)✓ Python OpenAPI contract exported$(NC)\n'
-
-openapi-validate-go: ## Validate running Go API routes against contracts/python-openapi.json
-	@printf '$(PROGRESS)Validating Go API routes against OpenAPI contract...$(NC)\n'
-	@python3 scripts/validate_go_openapi_routes.py --spec contracts/python-openapi.json --base-url "http://127.0.0.1:$${API_PORT:-8000}"
-	@printf '$(SUCCESS)✓ Go API route validation passed$(NC)\n'
-
-openapi-check: openapi-export-python stack-smoke openapi-validate-go ## Export Python contract, start Go API stack, and validate route coverage
-	@printf '$(SUCCESS)✓ OpenAPI contract check completed$(NC)\n'
-
 acceptance-sync: ## Install acceptance test dependencies
 	@printf '$(PROGRESS)Installing acceptance test dependencies...$(NC)\n'
 	@cd $(ACCEPTANCE_DIR) && npm install
@@ -313,25 +238,6 @@ api: ## Run Go API server in local dev mode
 	@printf '  $(INFO)Port:$(NC) %s\n' "$${API_PORT:-8000}"
 	@go run ./cmd/api
 
-py-sync: ## (Legacy) Sync Python dependencies via uv
-	@printf '$(PROGRESS)Syncing Python dependencies with uv...$(NC)\n'
-	@cd api && uv sync --group dev
-	@printf '$(SUCCESS)✓ Python dependencies synced$(NC)\n'
-
-py-api: ## (Legacy) Run FastAPI in local dev mode with reload
-	@printf '$(PROGRESS)Starting FastAPI dev server (reload enabled)...$(NC)\n'
-	@printf '  $(INFO)Host:$(NC) %s\n' "$${API_HOST:-0.0.0.0}"
-	@printf '  $(INFO)Port:$(NC) %s\n' "$${API_PORT:-8000}"
-	@cd api && uv run uvicorn app.main:app --host $${API_HOST:-0.0.0.0} --port $${API_PORT:-8000} --reload
-
-cli: ## Run API CLI entrypoint (pass args with ARGS="...")
-	@printf '$(PROGRESS)Running CLI: python -m app.cli %s$(NC)\n' "$(ARGS)"
-	@cd api && uv run python -m app.cli $(ARGS)
-
-consolidate: ## Run consolidation workflow via CLI (pass args with ARGS="...")
-	@printf '$(PROGRESS)Running consolidation CLI: python -m app.cli consolidate %s$(NC)\n' "$(ARGS)"
-	@cd api && uv run python -m app.cli consolidate $(ARGS)
-
 lint: ## Run Go vet checks
 	@printf '$(PROGRESS)Running go vet checks...$(NC)\n'
 	@go vet ./...
@@ -372,11 +278,6 @@ coverage: ## Run backend Go coverage and write coverage.out
 	@go test ./... -coverprofile=coverage.out -covermode=atomic
 	@go tool cover -func=coverage.out | tail -n 1
 	@printf '$(SUCCESS)✓ Backend Go coverage completed (coverage.out)$(NC)\n'
-
-eval: ## (Legacy) Run Python eval harness and write evals/last_eval.json
-	@printf '$(PROGRESS)Running evaluation harness...$(NC)\n'
-	@cd api && uv run python -m evals.run_eval --out evals/last_eval.json
-	@printf '$(SUCCESS)✓ Eval completed (api/evals/last_eval.json)$(NC)\n'
 
 check: lint format-check test ## Run backend Go quality gate (vet + format-check + tests)
 

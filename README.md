@@ -24,7 +24,7 @@ Open [localhost:5173](http://localhost:5173) (React chat) or [localhost:8000/hea
 
 Default credentials: `admin` / `admin123`
 
-Prerequisites: Docker, Go 1.25+, Node 18+ (`uv` is optional for legacy Python-only flows like `make py-api` and `make eval`). See [docs/env-reference.md](docs/env-reference.md) for all env vars.
+Prerequisites: Docker, Go 1.25+, Node 18+. See [docs/env-reference.md](docs/env-reference.md) for all env vars.
 
 ## Documentation
 
@@ -32,7 +32,8 @@ Prerequisites: Docker, Go 1.25+, Node 18+ (`uv` is optional for legacy Python-on
 |-------|--------|
 | [Plan.md](Plan.md) | Canonical roadmap and phase status |
 | [AGENT.md](AGENT.md) | Contribution and maintenance contract |
-| [checkpoint.md](checkpoint.md) | Milestone tracking and phase progress |
+| [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) | Milestone tracking and phase progress |
+| [migration/migrate.md](migration/migrate.md) | Go migration plan and completion checklist |
 | [todo.md](todo.md) | Forward-looking work items |
 | [docs/api-reference.md](docs/api-reference.md) | REST endpoints, request/response schemas |
 | [docs/mcp-guide.md](docs/mcp-guide.md) | MCP transport, auth, tools, and typed clients |
@@ -80,7 +81,7 @@ Prerequisites: Docker, Go 1.25+, Node 18+ (`uv` is optional for legacy Python-on
 
 ## Current Status
 
-Phases 0-18, 29-34 implemented. Go migration cutover checklist completed through CP181. See [checkpoint.md](checkpoint.md) for details.
+Phases 0-18, 29-34 implemented. Go migration cutover checklist completed through CP183. See [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) for details.
 
 **Completed:** foundation, schema, retrieval, durability, chat continuity, providers (OpenAI/Anthropic/Bedrock), MCP stream, React UI, acceptance testing, theme/UX, MCP developer experience, document ingestion (RAG), memory lifecycle, auto-metadata enrichment, MCP tokens, enterprise memory management.
 
@@ -93,7 +94,7 @@ engram/
   README.md          # this file
   AGENT.md           # contribution contract
   Plan.md            # roadmap
-  checkpoint.md      # milestone tracking
+  migration/         # migration plan + checkpoints
   todo.md            # work items
   Makefile           # dev commands (make help)
   docker-compose.yml # local stack
@@ -104,10 +105,6 @@ engram/
   cmd/api/           # Go API entrypoint
   internal/          # Go backend packages
   db/init/           # schema SQL
-  api/               # legacy Python backend artifacts
-    app/             # domain modules
-    evals/           # eval harness
-    tests/           # backend tests
   web/               # React frontend (Vite/TS)
     src/             # components, API clients, styles
   acceptance-tests/  # Playwright-BDD features
@@ -129,13 +126,10 @@ make dev           # DB + API + web (single terminal)
 make test          # backend tests
 make lint          # go vet
 make web-check     # frontend tests
-make eval          # legacy Python eval harness
 make acceptance-test-mock   # acceptance tests (dockerized)
 make stack-up      # full containerized stack
 make stack-down    # tear down
-make openapi-check # Python OpenAPI export + Go route contract validation
-make shadow-compare # Go/Python shadow status-family parity
-make benchmark-compare # Go/Python benchmark report (findings/)
+make stack-smoke   # db + api container smoke check
 ```
 
 ## Success Checklist

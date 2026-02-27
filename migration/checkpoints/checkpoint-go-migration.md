@@ -1,11 +1,11 @@
 # Go Migration Checkpoints
 
-> Track incremental migration from Python/FastAPI to Go using `migrate.md`.
+> Track incremental migration from Python/FastAPI to Go using `../migrate.md`.
 > This file is intentionally phase-specific and complements `checkpoint.md`.
 
 ## Scope
 
-- Source plan: `migrate.md`
+- Source plan: `../migrate.md`
 - Migration style: side-by-side runtime with parity-first tests.
 - Commit policy: one focused checkpoint commit per migration slice.
 
@@ -150,6 +150,7 @@
 | CP180 | 2026-02-27 | Completed | Shadow-routing parity baseline: added `shadow` compose profile with side-by-side Go/Python services plus nginx path proxy (`/go/*`, `/py/*`) and shadow status-family comparator (`scripts/shadow_compare.py`, `make shadow-compare`), then reconciled migration checklist reverse-proxy and shadow-traffic items with executable passing workflow under >9.5 code-health gate |
 | CP181 | 2026-02-27 | Completed | Migration closeout baseline: added repeatable Go-vs-Python benchmark workflow (`scripts/benchmark_compare.py`, `make benchmark-compare`) with recorded report output, published staged rollout playbook (`docs/go-rollout-playbook.md`), added migration test matrix (`docs/go-migration-test-matrix.md`), marked legacy Python API archive status (`api/ARCHIVE.md`), and reconciled remaining Phase 5 checklist items to complete `migrate.md` under >9.5 code-health gate |
 | CP182 | 2026-02-27 | Completed | Migration runbook/doc alignment baseline: updated primary developer docs (`README.md`, `docs/user-workflows.md`) to reflect completed Go migration status and added first-class command references for contract, shadow, and benchmark workflows (`make openapi-check`, `make shadow-compare`, `make benchmark-compare`) under >9.5 code-health gate |
+| CP183 | 2026-02-27 | Completed | Go-only runtime cleanup baseline: removed legacy Python runtime artifacts (`api/`, Python migration parity scripts, shadow proxy config, Python contract/benchmark outputs), simplified `docker-compose.yml` and `Makefile` to Go-only flows, and updated docs/checkpoint links to `migration/` paths under >9.5 code-health gate |
 
 ## Checkpoint Details
 

@@ -55,7 +55,7 @@ graph LR
     U["User"] --> UI["Web UI"]
     A["Agent Client"] --> MCP["MCP SSE Endpoint\nPOST /api/v1/mcp/stream"]
 
-    UI -->|"REST"| API["FastAPI Routes"]
+    UI -->|"REST"| API["Go API Routes"]
     API --> CHAT["Chat Service"]
     MCP --> CHAT
 

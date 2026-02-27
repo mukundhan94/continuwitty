@@ -1,44 +1,43 @@
 # Go Rollout Playbook
 
-This runbook defines the staged production rollout from Python to Go after parity gates are green.
+This runbook defines the staged production rollout for the Go API after release gates are green.
 
 ## Prerequisites
 
-- `go test ./...` passes on the target branch.
+- `go test ./... -count=1` passes on the target branch.
 - `make acceptance-test-mock-docker` passes.
-- `make openapi-check` passes.
-- `make shadow-compare` passes (status-family parity).
-- `make benchmark-compare` produces `findings/go-migration-benchmark.md`.
+- `make stack-smoke` passes.
+- Observability dashboards for API error rate, latency, and DB saturation are live.
 
 ## Traffic Shift Stages
 
-| Stage | Go Traffic | Hold Time | Promotion Criteria |
+| Stage | Traffic | Hold Time | Promotion Criteria |
 |---|---:|---|---|
-| 1 | 10% | 30 min | Error rate and p95 latency stay within ±10% of Python baseline |
-| 2 | 25% | 30 min | No sustained 5xx increase, auth/MCP health checks remain green |
-| 3 | 50% | 60 min | No critical incidents, acceptance smoke and canary probes green |
-| 4 | 100% | 24h observation | Stable metrics; Python remains on standby during observation window |
+| 1 | 10% | 30 min | Error rate and p95 latency remain within SLO guardrails |
+| 2 | 25% | 30 min | No sustained 5xx increase; auth and MCP health checks remain green |
+| 3 | 50% | 60 min | No critical incidents; acceptance smoke and canary probes green |
+| 4 | 100% | 24h observation | Stable metrics across all key routes and background jobs |
 
 ## Gating Metrics
 
-- HTTP 5xx rate (`go` vs `python`)
+- HTTP 5xx rate
 - p95 / p99 latency on key read and write endpoints
 - Login success/failure ratios and lockout behavior
-- MCP stream error rate and timeout rate
-- Database saturation (connections, lock waits, slow query rate)
+- MCP stream error and timeout rates
+- Database saturation (connections, lock waits, slow queries)
 
 ## Rollback Criteria
 
-Rollback to previous stage (or full Python) if any are true for more than 5 minutes:
+Rollback to the previous stage if any condition persists for more than 5 minutes:
 
-- 5xx rate exceeds baseline by >20%
-- p95 latency regresses by >25% on key endpoints
-- Auth or MCP critical workflows fail acceptance smoke checks
+- 5xx rate exceeds the agreed SLO threshold
+- p95 latency regresses beyond the agreed stage threshold
+- Auth or MCP critical workflows fail smoke checks
 - Data integrity issues are detected in write paths
 
 ## Rollback Procedure
 
-1. Set traffic weight back to the previous known-good stage.
+1. Shift traffic back to the last known-good stage.
 2. Confirm health checks recover and error budget stabilizes.
-3. Capture incident notes and exact failing routes.
-4. Create a fix checkpoint commit, re-run parity gates, and retry rollout from the prior stage.
+3. Capture incident notes with failing routes and timestamps.
+4. Ship a fix, re-run release gates, then retry rollout from the previous stage.
