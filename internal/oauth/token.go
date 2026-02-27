@@ -2,15 +2,13 @@ package oauth
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"strings"
 	"time"
 
 	"engram/internal/config"
+	"engram/internal/mcptokens"
 	"engram/internal/models"
 	"engram/internal/repository"
 
@@ -402,13 +400,9 @@ func issueOAuthAccessToken(
 		return issuedToken{}, err
 	}
 	tokenSecret := base64.RawURLEncoding.EncodeToString(secretBytes)
-	payload := tokenID.String() + ":" + tokenSecret
-	mac := hmac.New(sha256.New, []byte(pepper))
-	_, _ = mac.Write([]byte(payload))
-	hash := hex.EncodeToString(mac.Sum(nil))
 	return issuedToken{
 		plaintext: buildOAuthPlaintextToken(tokenID, tokenSecret),
-		hash:      hash,
+		hash:      mcptokens.TokenHash(tokenID, tokenSecret, pepper),
 		hint:      buildOAuthTokenSecretHint(tokenSecret),
 		expiresAt: expiresAt,
 	}, nil

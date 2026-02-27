@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"engram/internal/config"
+	"engram/internal/mcptokens"
 	"engram/internal/models"
 	"engram/internal/repository"
 
@@ -121,6 +122,21 @@ func TestBuildOAuthTokenSecretHintFormatsLongSecret(t *testing.T) {
 	hint := buildOAuthTokenSecretHint("abcdefghijklmnopqrstuvwxyz")
 	if !strings.HasPrefix(hint, "abcdef") || !strings.HasSuffix(hint, "wxyz") {
 		t.Fatalf("unexpected hint %q", hint)
+	}
+}
+
+func TestIssueOAuthAccessTokenProducesHashVerifiedByMCPTokenVerifier(t *testing.T) {
+	tokenID := uuid.MustParse("00000000-0000-0000-0000-0000000009a1")
+	issued, err := issueOAuthAccessToken(tokenID, time.Now().UTC().Add(time.Hour), "pepper")
+	requireOAuthTokenNoError(t, err)
+
+	parsedTokenID, tokenSecret, err := mcptokens.ParsePlaintextToken(issued.plaintext)
+	requireOAuthTokenNoError(t, err)
+	if parsedTokenID != tokenID {
+		t.Fatalf("expected parsed token id %s, got %s", tokenID, parsedTokenID)
+	}
+	if !mcptokens.VerifyTokenSecret(tokenID, tokenSecret, "pepper", issued.hash) {
+		t.Fatalf("expected issued hash to validate against parsed token secret")
 	}
 }
 
