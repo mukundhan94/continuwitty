@@ -180,10 +180,10 @@ go.sum
 
 **Goal**: Go project compiles, connects to the same PostgreSQL, runs alongside Python.
 
-- [ ] `go mod init`, install all dependencies
-- [ ] Port `config.py` → `internal/config/config.go` (envconfig + validation)
-- [ ] Port `db.py` → `internal/db/db.go` (pgxpool + schema version check)
-- [ ] Docker Compose: add `go-api` service alongside `api`, both share `db`
+- [x] `go mod init`, install all dependencies
+- [x] Port `config.py` → `internal/config/config.go` (envconfig + validation)
+- [x] Port `db.py` → `internal/db/db.go` (pgxpool + schema version check)
+- [x] Docker Compose Go API cutover completed (initial side-by-side migration path superseded by final Go-only `api` service)
 - [ ] Reverse proxy (nginx/traefik) for path-based routing during migration
 - [ ] Generate OpenAPI spec from Python FastAPI (`/api/v1/openapi.json`) — this is the compatibility contract
 - [x] CI: Go backend checks pipeline (`gofmt` + `go vet` + `go test`) via GitHub Actions
@@ -197,13 +197,13 @@ go.sum
 
 **Goal**: Core types, authentication, and embedding generation working.
 
-- [ ] Port `models.py` (611 LOC) → `internal/models/` — Go structs with `json` tags and `validate` tags
-- [ ] Port `auth.py` (50 LOC) → `internal/auth/password.go` — PBKDF2 with 390K iterations
-- [ ] Port `login_guard.py` → `internal/auth/ratelimit.go` — sliding window rate limiter
-- [ ] Port `audit.py` → `internal/audit/audit.go` — JSONL file writer
-- [ ] Port `embeddings/` → `internal/embeddings/` — local SHA256 provider + OpenAI provider + service with fallback
-- [ ] Port `user_repository.py` → `internal/repository/user.go`
-- [ ] Tests: config loading, password hashing round-trip, embedding dimension validation, rate limit behavior
+- [x] Port `models.py` (611 LOC) → `internal/models/` — Go structs with `json` tags and `validate` tags
+- [x] Port `auth.py` (50 LOC) → `internal/auth/password.go` — PBKDF2 with 390K iterations
+- [x] Port `login_guard.py` → `internal/auth/ratelimit.go` — sliding window rate limiter
+- [x] Port `audit.py` → `internal/audit/audit.go` — JSONL file writer
+- [x] Port `embeddings/` → `internal/embeddings/` — local SHA256 provider + OpenAI provider + service with fallback
+- [x] Port `user_repository.py` → `internal/repository/user.go`
+- [x] Tests: config loading, password hashing round-trip, embedding dimension validation, rate limit behavior
 
 **Key files to reference**:
 - `api/app/models.py` (611 LOC)
@@ -215,19 +215,19 @@ go.sum
 
 **Goal**: All database operations working — the foundation for everything above.
 
-- [ ] Port `repository.py` (743 LOC) → `internal/repository/engram.go` — **most critical file**
+- [x] Port `repository.py` (743 LOC) → `internal/repository/engram.go` — **most critical file**
   - `create_engram()` with vector embedding INSERT
   - `list_engrams()` with pagination + visibility filtering
   - `query_engrams()` with `embed <=> $1::vector` + lexical reranking
   - `get_rehydration_bundle()` with source assembly
   - `_rerank_by_combined_score()` — CPU-intensive, benefits most from Go
-- [ ] Port `chat_repository.py` + `chat_repository_pinning.py` → `internal/repository/chat.go`
-- [ ] Port `ingestion/repository.py` → `internal/repository/document.go`
-- [ ] Port `projects/repository.py` → `internal/repository/project.go`
-- [ ] Port `memory_admin/repository_*.py` → `internal/repository/collection.go`
-- [ ] Port `mcp_tokens/repository.py` → `internal/repository/mcp_token.go`
-- [ ] Port `oauth/repository.py` → `internal/repository/oauth.go`
-- [ ] Integration tests against shared PostgreSQL (same data as Python)
+- [x] Port `chat_repository.py` + `chat_repository_pinning.py` → `internal/repository/chat.go`
+- [x] Port `ingestion/repository.py` → `internal/repository/document.go`
+- [x] Port `projects/repository.py` → `internal/repository/project.go`
+- [x] Port `memory_admin/repository_*.py` → `internal/repository/collection.go`
+- [x] Port `mcp_tokens/repository.py` → `internal/repository/mcp_token.go`
+- [x] Port `oauth/repository.py` → `internal/repository/oauth.go`
+- [x] Integration tests against shared PostgreSQL (same data as Python)
 
 **Key files to reference**:
 - `api/app/repository.py` (743 LOC) — vector search + reranking logic
@@ -239,25 +239,25 @@ go.sum
 
 **Goal**: Business logic layer complete — chat, ingestion, providers, admin.
 
-- [ ] Port `providers/base.py` → `internal/providers/provider.go` — Go interface:
+- [x] Port `providers/base.py` → `internal/providers/provider.go` — Go interface:
   ```go
   type ChatProvider interface {
       Generate(ctx context.Context, req ChatRequest) (ChatResponse, error)
       StreamGenerate(ctx context.Context, req ChatRequest) (<-chan ChatChunk, error)
   }
   ```
-- [ ] Port `providers/openai_provider.py` (105 LOC) → `internal/providers/openai.go` (official openai-go SDK)
-- [ ] Port `providers/anthropic_provider.py` (104 LOC) → `internal/providers/anthropic.go` (official anthropic-sdk-go)
-- [ ] Port `providers/bedrock_provider.py` (197 LOC) → `internal/providers/bedrock.go` (aws-sdk-go-v2)
-- [ ] Port `chat/service.py` → `internal/chat/service.go` — message prep, provider calls, streaming
-- [ ] Port `chat/context.py` → `internal/chat/context.go` — pinned engram/document assembly
-- [ ] Port `chat/session_lifecycle.py` → `internal/chat/lifecycle.go` — autosave + retention
-- [ ] Port `ingestion/service.py` + `chunking.py` → `internal/ingestion/` — document processing
-- [ ] Port `projects/service.py` → `internal/projects/service.go`
-- [ ] Port `memory_admin/service.py` → `internal/admin/service.go`
-- [ ] Port `export/service.py` → `internal/export/service.go` — JSON/ZIP
-- [ ] Port `oauth/service.py` + `registration.py` → `internal/oauth/`
-- [ ] Port `agent_workflow.py` (319 LOC) → `internal/workflow/agent.go` — replace LangGraph with simple state machine; store checkpoints in PostgreSQL instead of SQLite
+- [x] Port `providers/openai_provider.py` (105 LOC) → `internal/providers/openai.go` (official openai-go SDK)
+- [x] Port `providers/anthropic_provider.py` (104 LOC) → `internal/providers/anthropic.go` (official anthropic-sdk-go)
+- [x] Port `providers/bedrock_provider.py` (197 LOC) → `internal/providers/bedrock.go` (aws-sdk-go-v2)
+- [x] Port `chat/service.py` → `internal/chat/service.go` — message prep, provider calls, streaming
+- [x] Port `chat/context.py` → `internal/chat/context.go` — pinned engram/document assembly
+- [x] Port `chat/session_lifecycle.py` → `internal/chat/lifecycle.go` — autosave + retention
+- [x] Port `ingestion/service.py` + `chunking.py` → `internal/ingestion/` — document processing
+- [x] Port `projects/service.py` → `internal/projects/service.go`
+- [x] Port `memory_admin/service.py` → `internal/admin/service.go`
+- [x] Port `export/service.py` → `internal/export/service.go` — JSON/ZIP
+- [x] Port `oauth/service.py` + `registration.py` → `internal/oauth/`
+- [x] Port `agent_workflow.py` (319 LOC) → `internal/workflow/agent.go` — replace LangGraph with simple state machine; store checkpoints in PostgreSQL instead of SQLite
 
 **Key files to reference**:
 - `api/app/chat/service.py` — most complex service (streaming, context, lifecycle)
@@ -270,21 +270,21 @@ go.sum
 **Goal**: Full API surface ported, MCP server operational.
 
 **REST API** (Weeks 9-10):
-- [ ] Port `main.py` (686 LOC) → `cmd/api/main.go` + `internal/api/router.go` — Chi router, middleware chain
-- [ ] Port all route handlers from `main_api_router.py`, `chat/api.py`, `ingestion/api.py`, `projects/api.py`, `memory_admin/api.py`
-- [ ] Port session middleware + CSRF protection
-- [ ] Port OAuth routes from `oauth/router.py`
-- [ ] Port Jinja2 templates → Go `html/template`
+- [x] Port `main.py` (686 LOC) → `cmd/api/main.go` + `internal/api/router.go` — Chi router, middleware chain
+- [x] Port all route handlers from `main_api_router.py`, `chat/api.py`, `ingestion/api.py`, `projects/api.py`, `memory_admin/api.py`
+- [x] Port session middleware + CSRF protection
+- [x] Port OAuth routes from `oauth/router.py`
+- [x] Port Jinja2 templates → Go `html/template`
 - [ ] Validate against OpenAPI spec from Phase 0
 
 **MCP Server** (Weeks 11-12):
-- [ ] Set up mcp-go `StreamableHTTPServer` in `internal/mcp/server.go`
-- [ ] Port `mcp/catalog.py` (750 LOC) → `internal/mcp/catalog.go` — register 40+ tools using mcp-go tool registration API
-- [ ] Port `mcp/service.py` (752 LOC) → `internal/mcp/` dispatch modules — route tool calls to service layer
-- [ ] Port `mcp/auth.py` + `token_authorization.py` → `internal/mcp/auth.go` — token resolution + scope enforcement
-- [ ] Port `mcp/streaming.py` → `internal/mcp/streaming.go` — SSE for chat streaming tools
-- [ ] Port `mcp_tokens/service.py` → included in service layer
-- [ ] MCP integration tests: tool discovery, read/write tool execution, token auth, rate limiting
+- [x] Set up mcp-go `StreamableHTTPServer` in `internal/mcp/server.go`
+- [x] Port `mcp/catalog.py` (750 LOC) → `internal/mcp/catalog.go` — register 40+ tools using mcp-go tool registration API
+- [x] Port `mcp/service.py` (752 LOC) → `internal/mcp/` dispatch modules — route tool calls to service layer
+- [x] Port `mcp/auth.py` + `token_authorization.py` → `internal/mcp/auth.go` — token resolution + scope enforcement
+- [x] Port `mcp/streaming.py` → `internal/mcp/streaming.go` — SSE for chat streaming tools
+- [x] Port `mcp_tokens/service.py` → included in service layer
+- [x] MCP integration tests: tool discovery, read/write tool execution, token auth, rate limiting
 
 **Key files to reference**:
 - `api/app/mcp/catalog.py` (750 LOC) — 40+ tool definitions
