@@ -124,6 +124,7 @@
 | CP154 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback parity extension for no-session `chat.save_as_engram` (single-project autofill + multi-project explicit-project guard) with table-driven route tests and >9.5 code-health gate |
 | CP155 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback direct-method parity for `engram.create_from_conversation` and no-session `chat.save_as_engram` (single-project autofill + multi-project explicit-project guard) with >9.5 code-health gate |
 | CP156 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope denial parity for create tools (`engram.create`, `engram.create_from_conversation`, no-session `chat.save_as_engram`) across `tools/call` and direct methods with `project_id` denial payload checks and >9.5 code-health gate |
+| CP157 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope session-precedence parity for `chat.save_as_engram` with `session_id` (out-of-scope `project_id` tolerated when session project is allowlisted) across `tools/call` and direct methods under >9.5 code-health gate |
 
 ## Checkpoint Details
 
