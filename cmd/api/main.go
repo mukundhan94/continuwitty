@@ -160,6 +160,14 @@ func newMCPCompatibilityService(
 	settings config.Settings,
 	dependencies mcpCompatibilityRuntimeDependencies,
 ) *mcp.CompatibilityService {
+	messageAdapter := newMCPMessageAdapter(settings, dependencies.pool)
+	var messageSend mcp.MessageSendService
+	var messageStream mcp.MessageStreamService
+	if messageAdapter != nil {
+		messageSend = messageAdapter
+		messageStream = messageAdapter
+	}
+
 	return mcp.NewCompatibilityServiceWithDependencies(
 		settings.AppSemanticVersion,
 		mcp.CompatibilityServiceDependencies{
@@ -175,7 +183,8 @@ func newMCPCompatibilityService(
 			SessionRestore:         newMCPSessionRestoreAdapter(dependencies.memoryAdminService),
 			LifecyclePolicyUpdate:  newMCPLifecyclePolicyUpdateAdapter(dependencies.pool),
 			MessageService:         newMCPMessageListAdapter(dependencies.pool),
-			MessageSend:            newMCPMessageSendAdapter(settings, dependencies.pool),
+			MessageSend:            messageSend,
+			MessageStream:          messageStream,
 			TimelineService:        newMCPTimelineListAdapter(dependencies.pool),
 			PinnedEngramService:    newMCPPinnedEngramListAdapter(dependencies.pool),
 			PinnedDocumentService:  newMCPPinnedDocumentListAdapter(dependencies.pool),

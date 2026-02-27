@@ -15,10 +15,10 @@ type mcpMessageSendAdapter struct {
 	service *chat.ChatService
 }
 
-func newMCPMessageSendAdapter(
+func newMCPMessageAdapter(
 	settings config.Settings,
 	pool *pgxpool.Pool,
-) mcp.MessageSendService {
+) *mcpMessageSendAdapter {
 	if pool == nil {
 		return nil
 	}
@@ -27,14 +27,14 @@ func newMCPMessageSendAdapter(
 		ResolveProvider:                resolveChatProviderDependency(settings),
 		RunSessionLifecycleMaintenance: runSessionLifecycleMaintenanceDependency(settings, pool),
 	})
-	return mcpMessageSendAdapter{service: service}
+	return &mcpMessageSendAdapter{service: service}
 }
 
-func (adapter mcpMessageSendAdapter) SendMessage(
+func (adapter *mcpMessageSendAdapter) SendMessage(
 	ctx context.Context,
 	request mcp.SessionMessageSendRequest,
 ) (*mcp.MessageSendResponse, error) {
-	if adapter.service == nil {
+	if adapter == nil || adapter.service == nil {
 		return nil, nil
 	}
 	result, err := adapter.service.SendMessage(
@@ -56,6 +56,35 @@ func (adapter mcpMessageSendAdapter) SendMessage(
 		SourceReferences:     result.SourceReferences,
 		DebugTrace:           mapStringAnyCopy(result.DebugTrace),
 	}, nil
+}
+
+func (adapter *mcpMessageSendAdapter) StreamMessageEvents(
+	ctx context.Context,
+	request mcp.SessionMessageSendRequest,
+) ([]mcp.MessageStreamEvent, error) {
+	if adapter == nil || adapter.service == nil {
+		return nil, nil
+	}
+	events, err := adapter.service.StreamMessageEvents(
+		ctx,
+		request.ActorUserID,
+		request.SessionID,
+		chat.ChatMessageCreateRequest{ContentText: request.ContentText},
+	)
+	if err != nil {
+		return nil, err
+	}
+	converted := make([]mcp.MessageStreamEvent, 0, len(events))
+	for _, event := range events {
+		converted = append(
+			converted,
+			mcp.MessageStreamEvent{
+				Type:    event.Type,
+				Payload: mapStringAnyCopy(event.Payload),
+			},
+		)
+	}
+	return converted, nil
 }
 
 func mapStringAnyCopy(input map[string]any) map[string]any {

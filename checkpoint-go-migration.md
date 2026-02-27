@@ -105,6 +105,7 @@
 | CP135 | 2026-02-26 | Completed | Phase 4 MCP engram move-project baseline (`engram.move_project`) with direct/`tools/call` parity, runtime memory-admin move wiring, stale/project-resolution error mapping parity, migrated tests, and >9.5 code-health gate |
 | CP136 | 2026-02-27 | Completed | Phase 4 MCP engram collection mutation baseline (`engram.collection_create`, `engram.collection_update`, `engram.collection_delete`, `engram.collection_add_items`, `engram.collection_remove_items`) with direct/`tools/call` parity, runtime memory-admin collection mutation wiring, project/duplicate/stale/not-found error mapping parity, migrated tests, and >9.5 code-health gate |
 | CP137 | 2026-02-27 | Completed | Phase 4 MCP project transfer baseline (`project.export_bundle`, `project.import_bundle`) with direct/`tools/call` parity, runtime export/import adapter wiring, bundle/conflict-policy validation parity, export/import error mapping parity (`404`/`422`), migrated tests, and >9.5 code-health gate |
+| CP138 | 2026-02-27 | Completed | Phase 4 MCP chat send-message stream parity (`chat.send_message`) with `mcp.event` frame emission, direct/`tools/call` stream routing parity, non-stream fallback preservation, runtime stream adapter wiring, migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3433,6 +3434,42 @@
   - `internal/mcp/compatibility_service_project_export_bundle_test.go`: `10.0`
   - `internal/mcp/compatibility_service_project_import_bundle_test.go`: `10.0`
   - `internal/mcp/compatibility_dispatch_catalog_coverage_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP138 - Phase 4 MCP Chat Send-Message Stream Parity (`chat.send_message`)
+
+- Migrated MCP `chat.send_message` stream behavior into Go compatibility mode with parity for:
+  - direct tool method calls (`chat.send_message` / underscore alias)
+  - `tools/call` requests for `chat_send_message` when `stream` is truthy.
+- Implemented stream transport parity:
+  - emits `mcp.event` frames with `{id, tool, event, data}` payloads for stream progress (`meta`/`chunk`/`done`/`error`)
+  - emits a terminal JSON-RPC success/error frame after stream completion.
+- Implemented terminal stream parity semantics:
+  - `error` stream events map to `-32020` with provider detail payload
+  - stream completion without `done` maps to `-32021`
+  - direct and `tools/call` stream result payloads include `{"message": ...}` from the `done` event data.
+- Preserved non-stream compatibility behavior:
+  - direct calls with `stream=false` use non-stream send flow
+  - `tools/call` with `stream=false` remains on non-stream dispatch path.
+- Added runtime stream adapter wiring:
+  - `cmd/api/mcp_message_send_adapter.go` now exposes both non-stream send and stream event adapter behavior
+  - `cmd/api/main.go` wires both `MessageSend` and `MessageStream` dependencies to compatibility service.
+- Added MCP compatibility stream tests:
+  - `internal/mcp/compatibility_service_chat_send_message_stream_test.go`
+  - validates direct and `tools/call` stream paths, non-stream fallback, stream error mapping, and missing-`done` guard.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_message_send_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_stream_chat_send_message_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_send_message_stream_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

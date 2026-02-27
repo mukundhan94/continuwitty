@@ -137,6 +137,14 @@ type MessageSendService interface {
 	) (*MessageSendResponse, error)
 }
 
+// MessageStreamService captures send-message stream behavior used by MCP compatibility transport.
+type MessageStreamService interface {
+	StreamMessageEvents(
+		ctx context.Context,
+		request SessionMessageSendRequest,
+	) ([]MessageStreamEvent, error)
+}
+
 // TimelineListService captures timeline listing behavior used by MCP compatibility chat dispatch.
 type TimelineListService interface {
 	ListTimeline(
@@ -459,6 +467,12 @@ type MessageSendResponse struct {
 	DebugTrace           map[string]any `json:"debug_trace,omitempty"`
 }
 
+// MessageStreamEvent captures compatibility-level stream event payload emitted by chat.send_message.
+type MessageStreamEvent struct {
+	Type    string         `json:"type"`
+	Payload map[string]any `json:"payload"`
+}
+
 // TimelineListRequest captures compatibility-level timeline list inputs.
 type TimelineListRequest struct {
 	ActorUserID uuid.UUID
@@ -698,6 +712,7 @@ type CompatibilityServiceDependencies struct {
 	LifecyclePolicyUpdate    LifecyclePolicyUpdateService
 	MessageService           MessageListService
 	MessageSend              MessageSendService
+	MessageStream            MessageStreamService
 	TimelineService          TimelineListService
 	PinnedEngramService      PinnedEngramListService
 	PinnedDocumentService    PinnedDocumentListService
@@ -740,6 +755,7 @@ type CompatibilityService struct {
 	lifecyclePolicyUpdate    LifecyclePolicyUpdateService
 	messageService           MessageListService
 	messageSend              MessageSendService
+	messageStream            MessageStreamService
 	timelineService          TimelineListService
 	pinnedEngramService      PinnedEngramListService
 	pinnedDocumentService    PinnedDocumentListService
@@ -798,6 +814,7 @@ func NewCompatibilityServiceWithDependencies(
 		lifecyclePolicyUpdate:    dependencies.LifecyclePolicyUpdate,
 		messageService:           dependencies.MessageService,
 		messageSend:              dependencies.MessageSend,
+		messageStream:            dependencies.MessageStream,
 		timelineService:          dependencies.TimelineService,
 		pinnedEngramService:      dependencies.PinnedEngramService,
 		pinnedDocumentService:    dependencies.PinnedDocumentService,
@@ -830,11 +847,14 @@ func (service *CompatibilityService) HandleNotification(_ context.Context, _ JSO
 	return nil
 }
 
-// StreamCall emits a single terminal response frame for the request.
+// StreamCall emits MCP event frames plus a terminal response frame for the request.
 func (service *CompatibilityService) StreamCall(ctx context.Context, request StreamCallRequest) <-chan Frame {
 	frames := make(chan Frame, 1)
 	go func() {
 		defer close(frames)
+		if service.emitStreamCallFrames(ctx, request, frames) {
+			return
+		}
 		response := service.dispatch(ctx, request.Request, request.Actor, request.TokenAuth)
 		select {
 		case <-ctx.Done():
