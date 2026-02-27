@@ -10,20 +10,14 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestCompatibilityServiceTokenProjectScopeRejectsResolvedProjectOutsideAllowlist(t *testing.T) {
+func TestCompatibilityServiceTokenProjectScopeRejectsSessionEngramCollectionScopedProjectOutsideAllowlist(t *testing.T) {
 	sessionID := uuid.MustParse("40010000-0000-0000-0000-000000000400")
 	engramID := uuid.MustParse("40030000-0000-0000-0000-000000000400")
 	collectionID := uuid.MustParse("40035000-0000-0000-0000-000000000400")
-	moveEngramID := uuid.MustParse("40050000-0000-0000-0000-000000000400")
 	ownerUserID := uuid.MustParse("40030000-0000-0000-0000-000000000401")
 	collectionOwnerUserID := uuid.MustParse("40035000-0000-0000-0000-000000000401")
-	moveOwnerUserID := uuid.MustParse("40050000-0000-0000-0000-000000000401")
-	testCases := []struct {
-		name              string
-		service           Service
-		request           StreamCallRequest
-		expectedProjectID string
-	}{
+
+	runTokenScopeDeniedCases(t, []tokenScopeDeniedCase{
 		{
 			name:    "session scoped tool",
 			service: newSessionTokenScopeService(sessionID, "project-session", nil),
@@ -64,6 +58,37 @@ func TestCompatibilityServiceTokenProjectScopeRejectsResolvedProjectOutsideAllow
 			}),
 			expectedProjectID: "project-collection",
 		},
+	})
+}
+
+func TestCompatibilityServiceTokenProjectScopeRejectsRehydrateAndMoveTargetProjectOutsideAllowlist(t *testing.T) {
+	rehydrateEngramID := uuid.MustParse("40032000-0000-0000-0000-000000000400")
+	moveEngramID := uuid.MustParse("40050000-0000-0000-0000-000000000400")
+	moveOwnerUserID := uuid.MustParse("40050000-0000-0000-0000-000000000401")
+
+	runTokenScopeDeniedCases(t, []tokenScopeDeniedCase{
+		{
+			name: "rehydrate scoped tool",
+			service: NewCompatibilityServiceWithDependencies(
+				"1.2.3",
+				CompatibilityServiceDependencies{
+					EngramRehydrate: &fakeEngramRehydrateService{
+						bundle: &models.RehydrationBundle{
+							EngramID:  rehydrateEngramID,
+							ProjectID: "project-rehydrate",
+						},
+					},
+				},
+			),
+			request: tokenScopedDirectRequest(tokenScopedRequest{
+				actorID:           "40032000-0000-0000-0000-000000000402",
+				toolName:          "engram.rehydrate",
+				params:            map[string]any{"engram_id": rehydrateEngramID.String()},
+				scope:             models.MCPTokenScopeRead,
+				allowedProjectIDs: []string{"project-allowed"},
+			}),
+			expectedProjectID: "project-rehydrate",
+		},
 		{
 			name:    "move project target scope",
 			service: newEngramTokenScopeService(moveEngramID, moveOwnerUserID, "project-source", nil),
@@ -79,14 +104,7 @@ func TestCompatibilityServiceTokenProjectScopeRejectsResolvedProjectOutsideAllow
 			}),
 			expectedProjectID: "project-target",
 		},
-	}
-
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			assertTokenScopeDeniedProject(t, testCase.service, testCase.request, testCase.expectedProjectID)
-		})
-	}
+	})
 }
 
 func TestCompatibilityServiceTokenProjectScopeAllowsSessionScopedToolWhenProjectMatches(t *testing.T) {
@@ -217,6 +235,23 @@ func newCollectionTokenScopeService(
 			},
 		},
 	)
+}
+
+type tokenScopeDeniedCase struct {
+	name              string
+	service           Service
+	request           StreamCallRequest
+	expectedProjectID string
+}
+
+func runTokenScopeDeniedCases(t *testing.T, testCases []tokenScopeDeniedCase) {
+	t.Helper()
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			assertTokenScopeDeniedProject(t, testCase.service, testCase.request, testCase.expectedProjectID)
+		})
+	}
 }
 
 type tokenScopedRequest struct {

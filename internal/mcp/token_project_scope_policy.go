@@ -106,6 +106,13 @@ type scopedProjectResolveRequest struct {
 	resource scopedProjectResource
 }
 
+type scopedProjectLookupKind string
+
+const (
+	scopedProjectLookupSession   scopedProjectLookupKind = "session"
+	scopedProjectLookupRehydrate scopedProjectLookupKind = "rehydrate"
+)
+
 func (service *CompatibilityService) enforceResolvedTokenProjectPolicy(
 	input tokenProjectPolicyRequest,
 	canonicalTool string,
@@ -153,7 +160,7 @@ func (service *CompatibilityService) resolveProjectIDForTokenPolicy(
 		return normalizeProjectIDParam(params), nil
 	}
 	if _, sessionScoped := sessionScopedProjectTools[canonicalTool]; sessionScoped {
-		return service.resolveSessionProjectID(ctx, actor.UserID, params)
+		return service.resolveProjectByLookup(ctx, actor.UserID, params, scopedProjectLookupSession)
 	}
 	if canonicalTool == "chat.save_as_engram" {
 		return service.resolveSaveAsEngramProjectID(ctx, actor.UserID, params)
@@ -162,7 +169,7 @@ func (service *CompatibilityService) resolveProjectIDForTokenPolicy(
 		return service.resolveEngramProjectID(ctx, actor, canonicalTool, params)
 	}
 	if canonicalTool == "engram.rehydrate" {
-		return service.resolveEngramProjectID(ctx, actor, canonicalTool, params)
+		return service.resolveProjectByLookup(ctx, actor.UserID, params, scopedProjectLookupRehydrate)
 	}
 	if _, collectionScoped := collectionScopedProjectTools[canonicalTool]; collectionScoped {
 		return service.resolveScopedProjectByResource(
@@ -202,31 +209,6 @@ func (service *CompatibilityService) resolveSecondaryProjectIDForTokenPolicy(
 			resource: scopedProjectResourceEngram,
 		},
 	)
-}
-
-func (service *CompatibilityService) resolveSessionProjectID(
-	ctx context.Context,
-	actorUserID uuid.UUID,
-	params map[string]any,
-) (string, *toolPolicyError) {
-	sessionID, ok := requiredUUIDParam(params, "session_id")
-	if !ok {
-		return "", invalidParamPolicyError("session_id")
-	}
-	if service.sessionGet == nil {
-		return "", nil
-	}
-	session, err := service.sessionGet.GetSession(
-		ctx,
-		SessionGetRequest{
-			ActorUserID: actorUserID,
-			SessionID:   sessionID,
-		},
-	)
-	if err != nil || session == nil {
-		return "", nil
-	}
-	return strings.TrimSpace(session.ProjectID), nil
 }
 
 func (service *CompatibilityService) resolveEngramProjectID(
@@ -273,10 +255,79 @@ func (service *CompatibilityService) resolveSaveAsEngramProjectID(
 ) (string, *toolPolicyError) {
 	if sessionIDValue, hasSessionID := optionalParamValue(params, "session_id"); hasSessionID {
 		if strings.TrimSpace(stringParam(sessionIDValue)) != "" {
-			return service.resolveSessionProjectID(ctx, actorUserID, params)
+			return service.resolveProjectByLookup(ctx, actorUserID, params, scopedProjectLookupSession)
 		}
 	}
 	return normalizeProjectIDParam(params), nil
+}
+
+func (service *CompatibilityService) resolveProjectByLookup(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	params map[string]any,
+	lookupKind scopedProjectLookupKind,
+) (string, *toolPolicyError) {
+	idField, lookup := service.resolveProjectLookupResolver(ctx, actorUserID, lookupKind)
+	if idField == "" || lookup == nil {
+		return "", nil
+	}
+	return resolveScopedProjectID(params, idField, lookup)
+}
+
+func (service *CompatibilityService) resolveProjectLookupResolver(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	lookupKind scopedProjectLookupKind,
+) (string, func(uuid.UUID) (string, error)) {
+	switch lookupKind {
+	case scopedProjectLookupSession:
+		return "session_id", service.buildActorProjectLookup(ctx, actorUserID, scopedProjectLookupSession)
+	case scopedProjectLookupRehydrate:
+		return "engram_id", service.buildActorProjectLookup(ctx, actorUserID, scopedProjectLookupRehydrate)
+	default:
+		return "", nil
+	}
+}
+
+func (service *CompatibilityService) buildActorProjectLookup(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	lookupKind scopedProjectLookupKind,
+) func(uuid.UUID) (string, error) {
+	return func(resourceID uuid.UUID) (string, error) {
+		switch lookupKind {
+		case scopedProjectLookupSession:
+			return runScopedProjectLookup(service.sessionGet != nil, func() (string, bool, error) {
+				session, err := service.sessionGet.GetSession(
+					ctx,
+					SessionGetRequest{
+						ActorUserID: actorUserID,
+						SessionID:   resourceID,
+					},
+				)
+				if err != nil || session == nil {
+					return "", false, err
+				}
+				return session.ProjectID, true, nil
+			})
+		case scopedProjectLookupRehydrate:
+			return runScopedProjectLookup(service.engramRehydrate != nil, func() (string, bool, error) {
+				bundle, err := service.engramRehydrate.RehydrateEngram(
+					ctx,
+					EngramRehydrateRequest{
+						ActorUserID: actorUserID,
+						EngramID:    resourceID,
+					},
+				)
+				if err != nil || bundle == nil {
+					return "", false, err
+				}
+				return bundle.ProjectID, true, nil
+			})
+		default:
+			return "", nil
+		}
+	}
 }
 
 func (service *CompatibilityService) lookupScopedProjectID(

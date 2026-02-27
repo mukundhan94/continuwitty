@@ -111,6 +111,7 @@
 | CP141 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity extension for session-scoped and engram-scoped tools via dispatch-time project resolution checks with migrated scope-enforcement tests and >9.5 code-health gate |
 | CP142 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity hardening for `chat.save_as_engram` session precedence plus `engram.move_project` dual source/target allowlist enforcement with migrated edge-policy tests and >9.5 code-health gate |
 | CP143 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity extension for collection-scoped mutation tools (`engram.collection_update/delete/add_items/remove_items`) via `collection_id`-derived project resolution with runtime collection-lookup adapter wiring, migrated policy tests, and >9.5 code-health gate |
+| CP144 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity hardening for `engram.rehydrate` by resolving allowlist project scope from rehydration-bundle project metadata (instead of engram-admin lookup), with migrated policy tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3634,6 +3635,31 @@
   - `internal/mcp/compatibility_service.go`: `10.0`
   - `cmd/api/mcp_engram_admin_adapter.go`: `10.0`
   - `cmd/api/main.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP144 - Phase 4 MCP Token Project-Scope Parity Hardening (`engram.rehydrate` Bundle-Scoped Policy Resolution)
+
+- Hardened token project-scope resolution for `engram.rehydrate` to match Python parity:
+  - allowlist project scope is now resolved from rehydration bundle metadata (`bundle.project_id`) via `engramRehydrate` dependency
+  - replaced prior admin-engram scoped resolution path for this tool.
+- Expanded token scope policy test coverage to assert rehydrate-scoped denial based on bundle project resolution:
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`
+  - new deny case for `engram.rehydrate` with disallowed bundle project.
+- Refactored token project-lookup internals to keep code health above gate while extending parity:
+  - shared lookup resolver routing for session and rehydrate project resolution
+  - shared scoped project lookup execution helper reuse across scoped policy paths.
+- Updated:
+  - `internal/mcp/token_project_scope_policy.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/token_project_scope_policy.go`: `10.0`
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
