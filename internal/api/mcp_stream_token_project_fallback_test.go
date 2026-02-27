@@ -15,14 +15,59 @@ import (
 	"github.com/google/uuid"
 )
 
+type tokenProjectAutofillScenario struct {
+	name      string
+	requestID string
+	toolName  string
+	arguments map[string]any
+	setup     func() (mcp.CompatibilityServiceDependencies, func() string)
+}
+
+type tokenProjectRequiredScenario struct {
+	name      string
+	requestID string
+	toolName  string
+	arguments map[string]any
+	deps      mcp.CompatibilityServiceDependencies
+}
+
 func TestMountMCPRoutesTokenProjectAutofillForCreateTools(t *testing.T) {
-	tests := []struct {
-		name      string
-		requestID string
-		toolName  string
-		arguments map[string]any
-		setup     func() (mcp.CompatibilityServiceDependencies, func() string)
-	}{
+	for _, tc := range tokenProjectAutofillScenarios() {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			deps, projectFor := tc.setup()
+			router := newMCPTokenProjectFallbackRouter(deps, []string{"project-token"})
+			response := postMCPToolsCallRequest(t, router, mcpToolsCallRequest{
+				RequestID: tc.requestID,
+				ToolName:  tc.toolName,
+				Arguments: tc.arguments,
+			})
+			assertMCPToolsCallStatusOK(t, response)
+			if projectFor() != "project-token" {
+				t.Fatalf("expected token project autofill for %s", tc.toolName)
+			}
+		})
+	}
+}
+
+func TestMountMCPRoutesTokenProjectAutofillRequiresExplicitProjectForMultiProjectToken(t *testing.T) {
+	for _, tc := range tokenProjectRequiredScenarios() {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			router := newMCPTokenProjectFallbackRouter(tc.deps, []string{"project-a", "project-b"})
+			response := postMCPToolsCallRequest(t, router, mcpToolsCallRequest{
+				RequestID: tc.requestID,
+				ToolName:  tc.toolName,
+				Arguments: tc.arguments,
+			})
+			assertMCPToolsCallStatusOK(t, response)
+			assertMCPMissingProjectIDError(t, response)
+		})
+	}
+}
+
+func tokenProjectAutofillScenarios() []tokenProjectAutofillScenario {
+	return []tokenProjectAutofillScenario{
 		{
 			name:      "engram.create",
 			requestID: "create",
@@ -64,34 +109,33 @@ func TestMountMCPRoutesTokenProjectAutofillForCreateTools(t *testing.T) {
 				}
 			},
 		},
-	}
-
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			deps, projectFor := tc.setup()
-			router := newMCPTokenProjectFallbackRouter(deps, []string{"project-token"})
-			response := postMCPToolsCallRequest(t, router, mcpToolsCallRequest{
-				RequestID: tc.requestID,
-				ToolName:  tc.toolName,
-				Arguments: tc.arguments,
-			})
-			assertMCPToolsCallStatusOK(t, response)
-			if projectFor() != "project-token" {
-				t.Fatalf("expected token project autofill for %s", tc.toolName)
-			}
-		})
+		{
+			name:      "chat.save_as_engram without session",
+			requestID: "chat-save",
+			toolName:  "chat_save_as_engram",
+			arguments: map[string]any{
+				"title":                 "Token fallback save",
+				"conversation_markdown": "Details",
+			},
+			setup: func() (mcp.CompatibilityServiceDependencies, func() string) {
+				service := &capturingMCPCreateFromConversationService{
+					response: &mcp.EngramCreateFromConversationResponse{
+						Engram: models.EngramCreateResponse{
+							EngramID: uuid.MustParse("40140000-0000-0000-0000-000000000001"),
+						},
+						EnrichmentReport: map[string]any{},
+					},
+				}
+				return mcp.CompatibilityServiceDependencies{EngramCreateConversation: service}, func() string {
+					return service.call.ProjectID
+				}
+			},
+		},
 	}
 }
 
-func TestMountMCPRoutesTokenProjectAutofillRequiresExplicitProjectForMultiProjectToken(t *testing.T) {
-	tests := []struct {
-		name      string
-		requestID string
-		toolName  string
-		arguments map[string]any
-		deps      mcp.CompatibilityServiceDependencies
-	}{
+func tokenProjectRequiredScenarios() []tokenProjectRequiredScenario {
+	return []tokenProjectRequiredScenario{
 		{
 			name:      "engram.create",
 			requestID: "create",
@@ -123,20 +167,23 @@ func TestMountMCPRoutesTokenProjectAutofillRequiresExplicitProjectForMultiProjec
 				},
 			},
 		},
-	}
-
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			router := newMCPTokenProjectFallbackRouter(tc.deps, []string{"project-a", "project-b"})
-			response := postMCPToolsCallRequest(t, router, mcpToolsCallRequest{
-				RequestID: tc.requestID,
-				ToolName:  tc.toolName,
-				Arguments: tc.arguments,
-			})
-			assertMCPToolsCallStatusOK(t, response)
-			assertMCPMissingProjectIDError(t, response)
-		})
+		{
+			name:      "chat.save_as_engram without session",
+			requestID: "chat-save",
+			toolName:  "chat_save_as_engram",
+			arguments: map[string]any{
+				"title":                 "Denied",
+				"conversation_markdown": "Details",
+			},
+			deps: mcp.CompatibilityServiceDependencies{
+				EngramCreateConversation: &capturingMCPCreateFromConversationService{
+					response: &mcp.EngramCreateFromConversationResponse{
+						Engram:           models.EngramCreateResponse{EngramID: uuid.MustParse("40150000-0000-0000-0000-000000000001")},
+						EnrichmentReport: map[string]any{},
+					},
+				},
+			},
+		},
 	}
 }
 
