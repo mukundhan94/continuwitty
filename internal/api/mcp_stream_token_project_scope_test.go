@@ -92,6 +92,16 @@ func tokenProjectDeniedToolsCallScenarios() []tokenProjectDeniedToolsCallScenari
 				"conversation_markdown": "Details",
 			},
 		},
+		{
+			name:      "engram.collection_create",
+			requestID: "collection-create-denied",
+			toolName:  "engram_collection_create",
+			arguments: map[string]any{
+				"project_id":  "project-other",
+				"name":        "Denied",
+				"description": "Details",
+			},
+		},
 	}
 }
 
@@ -125,6 +135,16 @@ func tokenProjectDeniedDirectScenarios() []tokenProjectDeniedDirectScenario {
 				"project_id":            "project-other",
 				"title":                 "Denied",
 				"conversation_markdown": "Details",
+			},
+		},
+		{
+			name:      "engram.collection_create",
+			requestID: "collection-create-direct-denied",
+			method:    "engram.collection_create",
+			params: map[string]any{
+				"project_id":  "project-other",
+				"name":        "Denied",
+				"description": "Details",
 			},
 		},
 	}

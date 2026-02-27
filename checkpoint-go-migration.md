@@ -133,6 +133,7 @@
 | CP163 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `chat.list_project_documents` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
 | CP164 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `engram.collection_list` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
 | CP165 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback parity extension for `engram.collection_create` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
+| CP166 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope denial parity extension for `engram.collection_create` across `tools/call` and direct methods with denied `project_id` payload checks under >9.5 code-health gate |
 
 ## Checkpoint Details
 
