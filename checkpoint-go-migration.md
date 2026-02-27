@@ -109,6 +109,7 @@
 | CP139 | 2026-02-27 | Completed | Phase 4 MCP stream transport multi-frame parity tests (`/api/v1/mcp/stream`) for event+terminal frame handling in JSON and SSE modes with >9.5 code-health gate |
 | CP140 | 2026-02-27 | Completed | Phase 4 MCP token project-scope dispatch parity for project-scoped tools (single-project autofill, multi-project explicit-selection guard, allowlist rejection) with migrated chat-session token policy tests and >9.5 code-health gate |
 | CP141 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity extension for session-scoped and engram-scoped tools via dispatch-time project resolution checks with migrated scope-enforcement tests and >9.5 code-health gate |
+| CP142 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity hardening for `chat.save_as_engram` session precedence plus `engram.move_project` dual source/target allowlist enforcement with migrated edge-policy tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3563,6 +3564,40 @@
   - `internal/mcp/compatibility_service.go`: `10.0`
   - `internal/mcp/token_project_scope_policy.go`: `9.68`
   - `internal/mcp/compatibility_service_token_project_scope_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP142 - Phase 4 MCP Token Project-Scope Parity Hardening (Save-As-Engram + Move-Project Edge Policy)
+
+- Hardened token project-scope normalization and enforcement to match Python edge-policy behavior:
+  - `chat.save_as_engram` now treats `session_id` presence as non-empty semantics for token project autofill/precedence decisions.
+  - `engram.move_project` now enforces target-project allowlist checks while also enforcing source-project allowlist checks when `target_project_id` is supplied (parity with Python dispatch guard behavior).
+  - `engram_id` validation is now enforced before move-project token project resolution to preserve invalid-param precedence.
+- Refactored token project-scope policy flow to maintain >9.5 code health:
+  - replaced duplicated primary/secondary enforcement methods with shared resolver-driven project-policy validation.
+  - reduced argument-heavy policy entrypoint via `tokenProjectPolicyRequest`.
+- Refactored token project-scope tests into shared/table-driven helpers to remove duplication and keep health at 10.0.
+- Added/updated migrated edge-policy tests:
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`
+  - validates:
+    - `chat.save_as_engram` prefers session-scoped project over conflicting `project_id`
+    - `engram.move_project` target-project denial (`project_id=target_project_id`)
+    - `engram.move_project` source-project denial when target is allowed.
+- Updated:
+  - `internal/mcp/token_authorization_policy.go`
+  - `internal/mcp/token_project_scope_policy.go`
+  - `internal/mcp/compatibility_service.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/token_authorization_policy.go`: `9.68`
+  - `internal/mcp/token_project_scope_policy.go`: `10.0`
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

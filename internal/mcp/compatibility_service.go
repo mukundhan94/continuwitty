@@ -1002,11 +1002,13 @@ func (service *CompatibilityService) dispatchAuthorizedToolCall(
 		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
 	}
 	if policyError := service.enforceTokenProjectPolicy(
-		input.ctx,
-		input.actor,
-		input.policyToolName,
-		normalizedParams,
-		input.tokenAuth,
+		tokenProjectPolicyRequest{
+			ctx:       input.ctx,
+			actor:     input.actor,
+			toolName:  input.policyToolName,
+			params:    normalizedParams,
+			tokenAuth: input.tokenAuth,
+		},
 	); policyError != nil {
 		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
 	}

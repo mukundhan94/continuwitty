@@ -59,7 +59,13 @@ func resolveTokenProjectIDForTool(
 	allowedProjectIDs []string,
 ) (string, *toolPolicyError) {
 	projectID := normalizeProjectIDParam(params)
-	if projectID != "" || !needsProjectAutofillForToken(canonicalTool, params) {
+	if projectID != "" {
+		if toolUsesInputProjectIDForTokenPolicy(canonicalTool, params) {
+			return projectID, nil
+		}
+		return "", nil
+	}
+	if !needsProjectAutofillForToken(canonicalTool, params) {
 		return projectID, nil
 	}
 	autofilledProjectID, policyError := resolveProjectAutofillForToken(allowedProjectIDs)
@@ -88,8 +94,31 @@ func needsProjectAutofillForToken(canonicalTool string, params map[string]any) b
 	if canonicalTool != "chat.save_as_engram" {
 		return true
 	}
-	_, hasSessionID := params["session_id"]
-	return !hasSessionID
+	return !hasNonEmptySessionID(params)
+}
+
+func toolUsesInputProjectIDForTokenPolicy(canonicalTool string, params map[string]any) bool {
+	if _, projectInputTool := projectInputTools[canonicalTool]; projectInputTool {
+		return true
+	}
+	if _, optionalTool := optionalProjectTools[canonicalTool]; optionalTool {
+		return true
+	}
+	if _, fallbackTool := projectFallbackTools[canonicalTool]; !fallbackTool {
+		return false
+	}
+	if canonicalTool != "chat.save_as_engram" {
+		return true
+	}
+	return !hasNonEmptySessionID(params)
+}
+
+func hasNonEmptySessionID(params map[string]any) bool {
+	sessionID, hasSessionID := optionalParamValue(params, "session_id")
+	if !hasSessionID {
+		return false
+	}
+	return strings.TrimSpace(fmt.Sprint(sessionID)) != ""
 }
 
 func resolveProjectAutofillForToken(allowedProjectIDs []string) (string, *toolPolicyError) {

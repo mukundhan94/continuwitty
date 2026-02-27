@@ -25,7 +25,6 @@ var sessionScopedProjectTools = map[string]struct{}{
 	"chat.continue_session":        {},
 	"chat.delete_session":          {},
 	"chat.restore_session":         {},
-	"chat.save_as_engram":          {},
 }
 
 var engramScopedProjectTools = map[string]struct{}{
@@ -36,25 +35,90 @@ var engramScopedProjectTools = map[string]struct{}{
 	"engram.restore":      {},
 }
 
-func (service *CompatibilityService) enforceTokenProjectPolicy(
-	ctx context.Context,
-	actor Actor,
-	toolName string,
-	params map[string]any,
-	tokenAuth *models.MCPTokenAuthContext,
-) *toolPolicyError {
-	if tokenAuth == nil || len(tokenAuth.AllowedProjectIDs) == 0 {
+var projectInputTools = map[string]struct{}{
+	"chat.create_session":             {},
+	"engram.create":                   {},
+	"engram.create_from_conversation": {},
+	"project.create":                  {},
+	"project.export_bundle":           {},
+	"project.import_bundle":           {},
+	"project.set_default":             {},
+	"engram.collection_create":        {},
+}
+
+type tokenProjectPolicyRequest struct {
+	ctx       context.Context
+	actor     Actor
+	toolName  string
+	params    map[string]any
+	tokenAuth *models.MCPTokenAuthContext
+}
+
+func (service *CompatibilityService) enforceTokenProjectPolicy(input tokenProjectPolicyRequest) *toolPolicyError {
+	if !hasTokenProjectAllowlist(input.tokenAuth) {
 		return nil
 	}
-	canonicalTool := canonicalToolName(toolName)
-	projectID, policyError := service.resolveProjectIDForTokenPolicy(ctx, actor, canonicalTool, params)
-	if policyError != nil || projectID == "" {
+	canonicalTool := canonicalToolName(input.toolName)
+	if policyError := service.enforceResolvedTokenProjectPolicy(
+		input,
+		canonicalTool,
+		service.resolveProjectIDForTokenPolicy,
+	); policyError != nil {
 		return policyError
 	}
-	if projectAllowedByToken(projectID, tokenAuth.AllowedProjectIDs) {
+	return service.enforceResolvedTokenProjectPolicy(
+		input,
+		canonicalTool,
+		service.resolveSecondaryProjectIDForTokenPolicy,
+	)
+}
+
+func hasTokenProjectAllowlist(tokenAuth *models.MCPTokenAuthContext) bool {
+	return tokenAuth != nil && len(tokenAuth.AllowedProjectIDs) > 0
+}
+
+type tokenProjectResolver func(
+	ctx context.Context,
+	actor Actor,
+	canonicalTool string,
+	params map[string]any,
+) (string, *toolPolicyError)
+
+func (service *CompatibilityService) enforceResolvedTokenProjectPolicy(
+	input tokenProjectPolicyRequest,
+	canonicalTool string,
+	resolver tokenProjectResolver,
+) *toolPolicyError {
+	projectID, policyError := resolver(
+		input.ctx,
+		input.actor,
+		canonicalTool,
+		input.params,
+	)
+	if policyError != nil {
+		return policyError
+	}
+	if projectID == "" {
 		return nil
 	}
-	return disallowedProjectPolicyError(toolName, canonicalTool, tokenAuth.Scope, projectID)
+	return validateTokenProjectPolicy(
+		input.toolName,
+		canonicalTool,
+		input.tokenAuth,
+		projectID,
+	)
+}
+
+func validateTokenProjectPolicy(
+	toolName string,
+	canonicalTool string,
+	tokenAuth *models.MCPTokenAuthContext,
+	resolvedValue string,
+) *toolPolicyError {
+	if projectAllowedByToken(resolvedValue, tokenAuth.AllowedProjectIDs) {
+		return nil
+	}
+	return disallowedProjectPolicyError(toolName, canonicalTool, tokenAuth.Scope, resolvedValue)
 }
 
 func (service *CompatibilityService) resolveProjectIDForTokenPolicy(
@@ -63,16 +127,40 @@ func (service *CompatibilityService) resolveProjectIDForTokenPolicy(
 	canonicalTool string,
 	params map[string]any,
 ) (string, *toolPolicyError) {
-	if projectID := normalizeProjectIDParam(params); projectID != "" {
-		return projectID, nil
+	if _, projectInputTool := projectInputTools[canonicalTool]; projectInputTool {
+		return normalizeProjectIDParam(params), nil
 	}
 	if _, sessionScoped := sessionScopedProjectTools[canonicalTool]; sessionScoped {
 		return service.resolveSessionProjectID(ctx, actor.UserID, params)
 	}
+	if canonicalTool == "chat.save_as_engram" {
+		return service.resolveSaveAsEngramProjectID(ctx, actor.UserID, params)
+	}
 	if _, engramScoped := engramScopedProjectTools[canonicalTool]; engramScoped {
-		return service.resolveEngramProjectID(ctx, actor, params)
+		return service.resolveEngramProjectID(ctx, actor, canonicalTool, params)
+	}
+	if canonicalTool == "engram.rehydrate" {
+		return service.resolveEngramProjectID(ctx, actor, canonicalTool, params)
+	}
+	if _, optionalProjectTool := optionalProjectTools[canonicalTool]; optionalProjectTool {
+		return normalizeProjectIDParam(params), nil
 	}
 	return "", nil
+}
+
+func (service *CompatibilityService) resolveSecondaryProjectIDForTokenPolicy(
+	ctx context.Context,
+	actor Actor,
+	canonicalTool string,
+	params map[string]any,
+) (string, *toolPolicyError) {
+	if canonicalTool != "engram.move_project" {
+		return "", nil
+	}
+	if normalizeTargetProjectIDParam(params) == "" {
+		return "", nil
+	}
+	return service.resolveEngramSourceProjectID(ctx, actor, params)
 }
 
 func (service *CompatibilityService) resolveSessionProjectID(
@@ -103,6 +191,23 @@ func (service *CompatibilityService) resolveSessionProjectID(
 func (service *CompatibilityService) resolveEngramProjectID(
 	ctx context.Context,
 	actor Actor,
+	canonicalTool string,
+	params map[string]any,
+) (string, *toolPolicyError) {
+	if _, ok := requiredUUIDParam(params, "engram_id"); !ok {
+		return "", invalidParamPolicyError("engram_id")
+	}
+	if canonicalTool == "engram.move_project" {
+		if targetProjectID := normalizeTargetProjectIDParam(params); targetProjectID != "" {
+			return targetProjectID, nil
+		}
+	}
+	return service.resolveEngramSourceProjectID(ctx, actor, params)
+}
+
+func (service *CompatibilityService) resolveEngramSourceProjectID(
+	ctx context.Context,
+	actor Actor,
 	params map[string]any,
 ) (string, *toolPolicyError) {
 	engramID, ok := requiredUUIDParam(params, "engram_id")
@@ -127,6 +232,19 @@ func (service *CompatibilityService) resolveEngramProjectID(
 	return strings.TrimSpace(engram.ProjectID), nil
 }
 
+func (service *CompatibilityService) resolveSaveAsEngramProjectID(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	params map[string]any,
+) (string, *toolPolicyError) {
+	if sessionIDValue, hasSessionID := optionalParamValue(params, "session_id"); hasSessionID {
+		if strings.TrimSpace(stringParam(sessionIDValue)) != "" {
+			return service.resolveSessionProjectID(ctx, actorUserID, params)
+		}
+	}
+	return normalizeProjectIDParam(params), nil
+}
+
 func invalidParamPolicyError(field string) *toolPolicyError {
 	return &toolPolicyError{
 		code:    -32602,
@@ -134,5 +252,22 @@ func invalidParamPolicyError(field string) *toolPolicyError {
 		data: map[string]any{
 			"invalid": field,
 		},
+	}
+}
+
+func normalizeTargetProjectIDParam(params map[string]any) string {
+	value, found := optionalParamValue(params, "target_project_id")
+	if !found {
+		return ""
+	}
+	return strings.TrimSpace(stringParam(value))
+}
+
+func stringParam(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	default:
+		return ""
 	}
 }
