@@ -265,6 +265,14 @@ type EngramCollectionListService interface {
 	) ([]models.EngramCollectionRecord, error)
 }
 
+// EngramCollectionGetService captures collection lookup behavior used by MCP compatibility policies.
+type EngramCollectionGetService interface {
+	GetCollection(
+		ctx context.Context,
+		request EngramCollectionGetRequest,
+	) (*models.EngramCollectionRecord, error)
+}
+
 // EngramCollectionCreateService captures collection-create behavior used by MCP compatibility engram dispatch.
 type EngramCollectionCreateService interface {
 	CreateCollection(
@@ -632,6 +640,14 @@ type EngramCollectionListRequest struct {
 	Offset         int
 }
 
+// EngramCollectionGetRequest captures compatibility-level collection lookup inputs.
+type EngramCollectionGetRequest struct {
+	ActorUserID    uuid.UUID
+	ActorRole      models.UserRole
+	CollectionID   uuid.UUID
+	IncludeDeleted bool
+}
+
 // EngramCollectionCreateRequest captures compatibility-level collection create inputs.
 type EngramCollectionCreateRequest struct {
 	ActorUserID uuid.UUID
@@ -728,6 +744,7 @@ type CompatibilityServiceDependencies struct {
 	EngramDelete             EngramDeleteService
 	EngramRestore            EngramRestoreService
 	EngramCollectionList     EngramCollectionListService
+	EngramCollectionGet      EngramCollectionGetService
 	EngramCollectionCreate   EngramCollectionCreateService
 	EngramCollectionUpdate   EngramCollectionUpdateService
 	EngramCollectionDelete   EngramCollectionDeleteService
@@ -771,6 +788,7 @@ type CompatibilityService struct {
 	engramDelete             EngramDeleteService
 	engramRestore            EngramRestoreService
 	engramCollectionList     EngramCollectionListService
+	engramCollectionGet      EngramCollectionGetService
 	engramCollectionCreate   EngramCollectionCreateService
 	engramCollectionUpdate   EngramCollectionUpdateService
 	engramCollectionDelete   EngramCollectionDeleteService
@@ -830,6 +848,7 @@ func NewCompatibilityServiceWithDependencies(
 		engramDelete:             dependencies.EngramDelete,
 		engramRestore:            dependencies.EngramRestore,
 		engramCollectionList:     dependencies.EngramCollectionList,
+		engramCollectionGet:      dependencies.EngramCollectionGet,
 		engramCollectionCreate:   dependencies.EngramCollectionCreate,
 		engramCollectionUpdate:   dependencies.EngramCollectionUpdate,
 		engramCollectionDelete:   dependencies.EngramCollectionDelete,

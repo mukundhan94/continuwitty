@@ -35,6 +35,13 @@ var engramScopedProjectTools = map[string]struct{}{
 	"engram.restore":      {},
 }
 
+var collectionScopedProjectTools = map[string]struct{}{
+	"engram.collection_update":       {},
+	"engram.collection_delete":       {},
+	"engram.collection_add_items":    {},
+	"engram.collection_remove_items": {},
+}
+
 var projectInputTools = map[string]struct{}{
 	"chat.create_session":             {},
 	"engram.create":                   {},
@@ -83,6 +90,21 @@ type tokenProjectResolver func(
 	canonicalTool string,
 	params map[string]any,
 ) (string, *toolPolicyError)
+
+type scopedProjectResource string
+
+const (
+	scopedProjectResourceEngram     scopedProjectResource = "engram"
+	scopedProjectResourceCollection scopedProjectResource = "collection"
+)
+
+type scopedProjectResolveRequest struct {
+	ctx      context.Context
+	actor    Actor
+	params   map[string]any
+	idField  string
+	resource scopedProjectResource
+}
 
 func (service *CompatibilityService) enforceResolvedTokenProjectPolicy(
 	input tokenProjectPolicyRequest,
@@ -142,6 +164,17 @@ func (service *CompatibilityService) resolveProjectIDForTokenPolicy(
 	if canonicalTool == "engram.rehydrate" {
 		return service.resolveEngramProjectID(ctx, actor, canonicalTool, params)
 	}
+	if _, collectionScoped := collectionScopedProjectTools[canonicalTool]; collectionScoped {
+		return service.resolveScopedProjectByResource(
+			scopedProjectResolveRequest{
+				ctx:      ctx,
+				actor:    actor,
+				params:   params,
+				idField:  "collection_id",
+				resource: scopedProjectResourceCollection,
+			},
+		)
+	}
 	if _, optionalProjectTool := optionalProjectTools[canonicalTool]; optionalProjectTool {
 		return normalizeProjectIDParam(params), nil
 	}
@@ -160,7 +193,15 @@ func (service *CompatibilityService) resolveSecondaryProjectIDForTokenPolicy(
 	if normalizeTargetProjectIDParam(params) == "" {
 		return "", nil
 	}
-	return service.resolveEngramSourceProjectID(ctx, actor, params)
+	return service.resolveScopedProjectByResource(
+		scopedProjectResolveRequest{
+			ctx:      ctx,
+			actor:    actor,
+			params:   params,
+			idField:  "engram_id",
+			resource: scopedProjectResourceEngram,
+		},
+	)
 }
 
 func (service *CompatibilityService) resolveSessionProjectID(
@@ -202,34 +243,27 @@ func (service *CompatibilityService) resolveEngramProjectID(
 			return targetProjectID, nil
 		}
 	}
-	return service.resolveEngramSourceProjectID(ctx, actor, params)
-}
-
-func (service *CompatibilityService) resolveEngramSourceProjectID(
-	ctx context.Context,
-	actor Actor,
-	params map[string]any,
-) (string, *toolPolicyError) {
-	engramID, ok := requiredUUIDParam(params, "engram_id")
-	if !ok {
-		return "", invalidParamPolicyError("engram_id")
-	}
-	if service.engramGet == nil {
-		return "", nil
-	}
-	engram, err := service.engramGet.GetEngram(
-		ctx,
-		EngramGetRequest{
-			ActorUserID:    actor.UserID,
-			ActorRole:      normalizedActorRole(actor),
-			EngramID:       engramID,
-			IncludeDeleted: true,
+	return service.resolveScopedProjectByResource(
+		scopedProjectResolveRequest{
+			ctx:      ctx,
+			actor:    actor,
+			params:   params,
+			idField:  "engram_id",
+			resource: scopedProjectResourceEngram,
 		},
 	)
-	if err != nil || engram == nil {
-		return "", nil
-	}
-	return strings.TrimSpace(engram.ProjectID), nil
+}
+
+func (service *CompatibilityService) resolveScopedProjectByResource(
+	input scopedProjectResolveRequest,
+) (string, *toolPolicyError) {
+	return resolveScopedProjectID(
+		input.params,
+		input.idField,
+		func(resourceID uuid.UUID) (string, error) {
+			return service.lookupScopedProjectID(input.ctx, input.actor, input.resource, resourceID)
+		},
+	)
 }
 
 func (service *CompatibilityService) resolveSaveAsEngramProjectID(
@@ -243,6 +277,80 @@ func (service *CompatibilityService) resolveSaveAsEngramProjectID(
 		}
 	}
 	return normalizeProjectIDParam(params), nil
+}
+
+func (service *CompatibilityService) lookupScopedProjectID(
+	ctx context.Context,
+	actor Actor,
+	resource scopedProjectResource,
+	resourceID uuid.UUID,
+) (string, error) {
+	switch resource {
+	case scopedProjectResourceEngram:
+		return runScopedProjectLookup(service.engramGet != nil, func() (string, bool, error) {
+			engram, err := service.engramGet.GetEngram(
+				ctx,
+				EngramGetRequest{
+					ActorUserID:    actor.UserID,
+					ActorRole:      normalizedActorRole(actor),
+					EngramID:       resourceID,
+					IncludeDeleted: true,
+				},
+			)
+			if err != nil || engram == nil {
+				return "", false, err
+			}
+			return engram.ProjectID, true, nil
+		})
+	case scopedProjectResourceCollection:
+		return runScopedProjectLookup(service.engramCollectionGet != nil, func() (string, bool, error) {
+			collection, err := service.engramCollectionGet.GetCollection(
+				ctx,
+				EngramCollectionGetRequest{
+					ActorUserID:    actor.UserID,
+					ActorRole:      normalizedActorRole(actor),
+					CollectionID:   resourceID,
+					IncludeDeleted: true,
+				},
+			)
+			if err != nil || collection == nil {
+				return "", false, err
+			}
+			return collection.ProjectID, true, nil
+		})
+	default:
+		return "", nil
+	}
+}
+
+func runScopedProjectLookup(
+	enabled bool,
+	lookup func() (string, bool, error),
+) (string, error) {
+	if !enabled {
+		return "", nil
+	}
+	projectID, found, err := lookup()
+	if err != nil || !found {
+		return "", err
+	}
+	return projectID, nil
+}
+
+func resolveScopedProjectID(
+	params map[string]any,
+	idField string,
+	lookupProjectID func(uuid.UUID) (string, error),
+) (string, *toolPolicyError) {
+	resourceID, ok := requiredUUIDParam(params, idField)
+	if !ok {
+		return "", invalidParamPolicyError(idField)
+	}
+	projectID, err := lookupProjectID(resourceID)
+	if err != nil {
+		return "", nil
+	}
+	return strings.TrimSpace(projectID), nil
 }
 
 func invalidParamPolicyError(field string) *toolPolicyError {

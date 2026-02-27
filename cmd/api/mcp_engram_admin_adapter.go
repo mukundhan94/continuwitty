@@ -37,6 +37,13 @@ func newMCPEngramCollectionListAdapter(service *admin.Service) mcp.EngramCollect
 	return mcpEngramAdminAdapter{service: service}
 }
 
+func newMCPEngramCollectionGetAdapter(service *admin.Service) mcp.EngramCollectionGetService {
+	if service == nil {
+		return nil
+	}
+	return mcpEngramAdminAdapter{service: service}
+}
+
 func newMCPEngramDeleteAdapter(service *admin.Service) mcp.EngramDeleteService {
 	if service == nil {
 		return nil
@@ -105,6 +112,23 @@ func (adapter mcpEngramAdminAdapter) ListCollections(
 			Offset:         request.Offset,
 		},
 	)
+}
+
+func (adapter mcpEngramAdminAdapter) GetCollection(
+	ctx context.Context,
+	request mcp.EngramCollectionGetRequest,
+) (*models.EngramCollectionRecord, error) {
+	collection, err := adapter.service.FindCollection(ctx, request.CollectionID, request.IncludeDeleted)
+	if err != nil || collection == nil {
+		return nil, err
+	}
+	if requestAllowsOwnerBypass(request.ActorRole) {
+		return collection, nil
+	}
+	if collection.OwnerUserID != request.ActorUserID {
+		return nil, nil
+	}
+	return collection, nil
 }
 
 func (adapter mcpEngramAdminAdapter) executeVisibleEngramMutation(

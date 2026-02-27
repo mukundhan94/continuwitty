@@ -208,6 +208,7 @@ func newMCPCompatibilityService(
 			EngramDelete:         newMCPEngramDeleteAdapter(dependencies.memoryAdminService),
 			EngramRestore:        newMCPEngramRestoreAdapter(dependencies.memoryAdminService),
 			EngramCollectionList: newMCPEngramCollectionListAdapter(dependencies.memoryAdminService),
+			EngramCollectionGet:  newMCPEngramCollectionGetAdapter(dependencies.memoryAdminService),
 			EngramCollectionCreate: newMCPEngramCollectionCreateAdapter(
 				dependencies.memoryAdminService,
 				dependencies.projectService,

@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -12,8 +13,10 @@ import (
 func TestCompatibilityServiceTokenProjectScopeRejectsResolvedProjectOutsideAllowlist(t *testing.T) {
 	sessionID := uuid.MustParse("40010000-0000-0000-0000-000000000400")
 	engramID := uuid.MustParse("40030000-0000-0000-0000-000000000400")
+	collectionID := uuid.MustParse("40035000-0000-0000-0000-000000000400")
 	moveEngramID := uuid.MustParse("40050000-0000-0000-0000-000000000400")
 	ownerUserID := uuid.MustParse("40030000-0000-0000-0000-000000000401")
+	collectionOwnerUserID := uuid.MustParse("40035000-0000-0000-0000-000000000401")
 	moveOwnerUserID := uuid.MustParse("40050000-0000-0000-0000-000000000401")
 	testCases := []struct {
 		name              string
@@ -44,6 +47,22 @@ func TestCompatibilityServiceTokenProjectScopeRejectsResolvedProjectOutsideAllow
 				allowedProjectIDs: []string{"project-allowed"},
 			}),
 			expectedProjectID: "project-engram",
+		},
+		{
+			name: "collection scoped tool",
+			service: newCollectionTokenScopeService(
+				collectionID,
+				collectionOwnerUserID,
+				"project-collection",
+			),
+			request: tokenScopedDirectRequest(tokenScopedRequest{
+				actorID:           "40035000-0000-0000-0000-000000000402",
+				toolName:          "engram.collection_update",
+				params:            map[string]any{"collection_id": collectionID.String()},
+				scope:             models.MCPTokenScopeWrite,
+				allowedProjectIDs: []string{"project-allowed"},
+			}),
+			expectedProjectID: "project-collection",
 		},
 		{
 			name:    "move project target scope",
@@ -181,6 +200,25 @@ func newEngramTokenScopeService(
 	)
 }
 
+func newCollectionTokenScopeService(
+	collectionID uuid.UUID,
+	ownerUserID uuid.UUID,
+	projectID string,
+) Service {
+	return NewCompatibilityServiceWithDependencies(
+		"1.2.3",
+		CompatibilityServiceDependencies{
+			EngramCollectionGet: &fakeEngramCollectionGetService{
+				collection: &models.EngramCollectionRecord{
+					CollectionID: collectionID,
+					ProjectID:    projectID,
+					OwnerUserID:  ownerUserID,
+				},
+			},
+		},
+	)
+}
+
 type tokenScopedRequest struct {
 	actorID           string
 	toolName          string
@@ -212,4 +250,23 @@ func assertTokenScopeDeniedProject(
 	if data["project_id"] != expectedProjectID {
 		t.Fatalf("expected denied project_id %q in error payload", expectedProjectID)
 	}
+}
+
+type fakeEngramCollectionGetService struct {
+	collection *models.EngramCollectionRecord
+	err        error
+}
+
+func (service *fakeEngramCollectionGetService) GetCollection(
+	_ context.Context,
+	_ EngramCollectionGetRequest,
+) (*models.EngramCollectionRecord, error) {
+	if service.err != nil {
+		return nil, service.err
+	}
+	if service.collection == nil {
+		return nil, nil
+	}
+	collection := *service.collection
+	return &collection, nil
 }
