@@ -118,6 +118,7 @@
 | CP148 | 2026-02-27 | Completed | Phase 4 MCP chat-save no-session error-payload parity (`data.missing=conversation_markdown`) with migrated validation-data tests and >9.5 code-health gate |
 | CP149 | 2026-02-27 | Completed | Phase 4 MCP token-policy parity test hardening for no-session `chat.save_as_engram` (single-project autofill + multi-project explicit-project guard) with >9.5 code-health gate |
 | CP150 | 2026-02-27 | Completed | Phase 4 MCP top-level invalid-request parity test hardening for no-session `chat.save_as_engram` missing `conversation_markdown` with >9.5 code-health gate |
+| CP151 | 2026-02-27 | Completed | Phase 4 MCP stream-route token policy parity tests (`tools/list` allowlist visibility + read-scope write denial) with >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3841,6 +3842,29 @@
 - CodeScene checks (checkpoint-touched files, all >= 9.5):
   - `internal/mcp/compatibility_service_test.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP151 - Phase 4 MCP Stream-Route Token Policy Parity Tests (`/api/v1/mcp/stream`)
+
+- Added MCP transport-level token policy parity tests using the real compatibility service behind `/api/v1/mcp/stream`:
+  - `tools/list` honors token `allowed_tools` visibility at route level
+  - read-scope tokens are denied on write `tools/call` with expected scope details.
+- Added tests:
+  - `internal/api/mcp_stream_test.go`
+  - `TestMountMCPRoutesTokenAllowedToolsFiltersToolsList`
+  - `TestMountMCPRoutesTokenReadScopeRejectsWriteTool`.
+- Added token-scoped actor resolver helper for route tests:
+  - `newTokenScopedMCPActorResolver(...)`.
+- Refactored assertion conditionals to keep CodeScene guardrail at 10.0.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched file, >= 9.5):
+  - `internal/api/mcp_stream_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

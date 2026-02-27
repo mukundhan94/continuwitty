@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"engram/internal/mcp"
+	"engram/internal/models"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -115,6 +116,92 @@ func TestMountMCPRoutesJSONResponseMode(t *testing.T) {
 	}
 	if result["protocolVersion"] != "2024-11-05" {
 		t.Fatalf("expected protocol version in response")
+	}
+}
+
+func TestMountMCPRoutesTokenAllowedToolsFiltersToolsList(t *testing.T) {
+	router := chi.NewRouter()
+	MountMCPRoutes(
+		router,
+		mcp.NewCompatibilityService("1.2.3"),
+		newTokenScopedMCPActorResolver(&models.MCPTokenAuthContext{
+			Scope:        models.MCPTokenScopeWrite,
+			AllowedTools: []string{"engram.query"},
+		}),
+		nil,
+	)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/mcp/stream",
+		strings.NewReader(`{"jsonrpc":"2.0","id":"tools-list","method":"tools/list","params":{}}`),
+	)
+	request.Header.Set("Accept", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected tools/list status 200, got %d", response.Code)
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode json response: %v", err)
+	}
+	result, ok := payload["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected result payload")
+	}
+	rawTools, ok := result["tools"].([]any)
+	if !ok || len(rawTools) != 1 {
+		t.Fatalf("expected exactly one visible tool")
+	}
+	tool, ok := rawTools[0].(map[string]any)
+	if !ok || tool["name"] != "engram_query" {
+		t.Fatalf("expected only engram_query visible for allowed-tools token")
+	}
+}
+
+func TestMountMCPRoutesTokenReadScopeRejectsWriteTool(t *testing.T) {
+	router := chi.NewRouter()
+	MountMCPRoutes(
+		router,
+		mcp.NewCompatibilityService("1.2.3"),
+		newTokenScopedMCPActorResolver(&models.MCPTokenAuthContext{
+			Scope: models.MCPTokenScopeRead,
+		}),
+		nil,
+	)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/mcp/stream",
+		strings.NewReader(`{"jsonrpc":"2.0","id":"tools-call","method":"tools/call","params":{"name":"chat_create_session","arguments":{"project_id":"p1","title":"Denied"}}}`),
+	)
+	request.Header.Set("Accept", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected tools/call status 200, got %d", response.Code)
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode json response: %v", err)
+	}
+	errorPayload, ok := payload["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected json-rpc error payload")
+	}
+	if errorPayload["code"] != float64(-32003) {
+		t.Fatalf("expected insufficient-scope code -32003")
+	}
+	data, ok := errorPayload["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected scope detail payload for write-denied read token")
+	}
+	if data["required_scope"] != "write" {
+		t.Fatalf("expected required_scope write")
+	}
+	if data["token_scope"] != "read" {
+		t.Fatalf("expected token_scope read")
 	}
 }
 
@@ -438,6 +525,20 @@ func newTestMCPActorResolver() *fakeMCPActorResolver {
 					UserID: uuid.MustParse("40000000-0000-0000-0000-000000000004"),
 					Role:   "admin",
 				},
+			}, nil
+		},
+	}
+}
+
+func newTokenScopedMCPActorResolver(tokenAuth *models.MCPTokenAuthContext) *fakeMCPActorResolver {
+	return &fakeMCPActorResolver{
+		resolveFn: func(_ *http.Request) (mcp.ResolvedActor, error) {
+			return mcp.ResolvedActor{
+				Actor: mcp.Actor{
+					UserID: uuid.MustParse("40000000-0000-0000-0000-000000000004"),
+					Role:   "admin",
+				},
+				TokenAuth: tokenAuth,
 			}, nil
 		},
 	}
