@@ -107,6 +107,7 @@
 | CP137 | 2026-02-27 | Completed | Phase 4 MCP project transfer baseline (`project.export_bundle`, `project.import_bundle`) with direct/`tools/call` parity, runtime export/import adapter wiring, bundle/conflict-policy validation parity, export/import error mapping parity (`404`/`422`), migrated tests, and >9.5 code-health gate |
 | CP138 | 2026-02-27 | Completed | Phase 4 MCP chat send-message stream parity (`chat.send_message`) with `mcp.event` frame emission, direct/`tools/call` stream routing parity, non-stream fallback preservation, runtime stream adapter wiring, migrated tests, and >9.5 code-health gate |
 | CP139 | 2026-02-27 | Completed | Phase 4 MCP stream transport multi-frame parity tests (`/api/v1/mcp/stream`) for event+terminal frame handling in JSON and SSE modes with >9.5 code-health gate |
+| CP140 | 2026-02-27 | Completed | Phase 4 MCP token project-scope dispatch parity for project-scoped tools (single-project autofill, multi-project explicit-selection guard, allowlist rejection) with migrated chat-session token policy tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3495,6 +3496,39 @@
   - passed.
 - CodeScene checks (checkpoint-touched files, all >= 9.5):
   - `internal/api/mcp_stream_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP140 - Phase 4 MCP Token Project-Scope Dispatch Parity
+
+- Added token project-scope parameter normalization/enforcement to Go MCP dispatch paths (`direct` and `tools/call`):
+  - single allowed token project now autofills `project_id` for project-scoped optional/fallback tools
+  - multi-project token scope now returns `-32602` with
+    - `data.missing = "project_id"`
+    - `data.reason = "token_has_multiple_allowed_projects"`
+    when explicit project selection is required
+  - explicit project values outside the token allowlist now return `-32003` with `data.project_id`.
+- Applied dispatch-level normalization before tool handlers run so project-scoped handlers receive token-compliant params.
+- Added migrated chat session token-policy coverage:
+  - `internal/mcp/compatibility_service_chat_sessions_test.go`
+  - validates single-project autofill, multi-project explicit-selection validation, and allowlist rejection behavior.
+- Added dedicated token policy helper module to keep catalog/dispatch code health above threshold:
+  - `internal/mcp/token_authorization_policy.go`
+  - `internal/mcp/catalog.go` retains core catalog/scope policy responsibilities.
+- Updated:
+  - `internal/mcp/compatibility_service.go`
+  - `internal/mcp/catalog.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/catalog.go`: `9.68`
+  - `internal/mcp/token_authorization_policy.go`: `9.68`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_sessions_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

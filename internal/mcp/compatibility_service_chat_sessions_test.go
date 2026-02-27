@@ -97,6 +97,87 @@ func TestCompatibilityServiceChatListSessionsRejectsInvalidLimit(t *testing.T) {
 	requireErrorCode(t, errorPayload, -32602)
 }
 
+func TestCompatibilityServiceChatListSessionsTokenProjectAutofill(t *testing.T) {
+	actorUserID := uuid.MustParse("26210000-0000-0000-0000-000000000262")
+	service := &fakeSessionListService{sessions: []models.ChatSessionRecord{}}
+	request := toolsCallRequest(
+		actorUserID.String(),
+		"chat_list_sessions",
+		map[string]any{},
+	)
+	request.TokenAuth = &models.MCPTokenAuthContext{
+		Scope:             models.MCPTokenScopeRead,
+		AllowedProjectIDs: []string{"proj-token"},
+	}
+
+	frame := runCompatibilityRequestWithService(t, newUserProjectsCompatibilityService(service), request)
+	_ = chatSessionsFromFrame(t, frame, true)
+	assertSessionListCall(
+		t,
+		service.call,
+		sessionListExpectation{
+			actorUserID: actorUserID,
+			projectID:   stringPtr("proj-token"),
+			limit:       defaultChatSessionsLimit,
+			offset:      defaultChatSessionsOffset,
+		},
+	)
+}
+
+func TestCompatibilityServiceChatListSessionsTokenRequiresExplicitProjectForMultiProjectPolicy(t *testing.T) {
+	request := toolsCallRequest(
+		"26220000-0000-0000-0000-000000000262",
+		"chat_list_sessions",
+		map[string]any{},
+	)
+	request.TokenAuth = &models.MCPTokenAuthContext{
+		Scope:             models.MCPTokenScopeRead,
+		AllowedProjectIDs: []string{"proj-a", "proj-b"},
+	}
+
+	data := tokenPolicyErrorDataForChatListSessionsRequest(
+		t,
+		request,
+		-32602,
+	)
+	if data["missing"] != "project_id" || data["reason"] != "token_has_multiple_allowed_projects" {
+		t.Fatalf("expected token multi-project validation data")
+	}
+}
+
+func TestCompatibilityServiceChatListSessionsRejectsProjectOutsideTokenAllowlist(t *testing.T) {
+	request := directToolRequest(
+		"26230000-0000-0000-0000-000000000262",
+		"chat.list_sessions",
+		map[string]any{"project_id": "proj-other"},
+	)
+	request.TokenAuth = &models.MCPTokenAuthContext{
+		Scope:             models.MCPTokenScopeRead,
+		AllowedProjectIDs: []string{"proj-allowed"},
+	}
+
+	data := tokenPolicyErrorDataForChatListSessionsRequest(
+		t,
+		request,
+		-32003,
+	)
+	if data["project_id"] != "proj-other" {
+		t.Fatalf("expected denied project id in policy error payload")
+	}
+}
+
+func tokenPolicyErrorDataForChatListSessionsRequest(
+	t *testing.T,
+	request StreamCallRequest,
+	expectedCode int,
+) map[string]any {
+	t.Helper()
+	frame := runCompatibilityRequestWithService(t, newUserProjectsCompatibilityService(&fakeSessionListService{}), request)
+	errorPayload := errorPayloadFromFrame(t, frame)
+	requireErrorCode(t, errorPayload, expectedCode)
+	return mapFromMap(t, errorPayload, "data")
+}
+
 func chatSessionsFromFrame(t *testing.T, frame Frame, asToolsCallPath bool) []models.ChatSessionRecord {
 	t.Helper()
 	result := resultPayloadFromFrame(t, frame)

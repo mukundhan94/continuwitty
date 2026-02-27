@@ -935,11 +935,15 @@ func (service *CompatibilityService) dispatchToolsCall(input toolsCallInput) Fra
 	if policyError := authorizeToolCall(dottedName, input.tokenAuth); policyError != nil {
 		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
 	}
+	normalizedArguments, policyError := normalizeTokenToolParams(name, arguments, input.tokenAuth)
+	if policyError != nil {
+		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
+	}
 	payload, handled, dispatchError := service.dispatchImplementedTool(
 		input.ctx,
 		canonicalToolName(dottedName),
 		input.actor,
-		arguments,
+		normalizedArguments,
 	)
 	if dispatchError != nil {
 		return errorFrame(input.requestID, dispatchError.code, dispatchError.message, dispatchError.data)
@@ -972,11 +976,15 @@ func (service *CompatibilityService) dispatchDirectToolMethod(input directToolCa
 	if policyError := authorizeToolCall(dottedMethod, input.tokenAuth); policyError != nil {
 		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
 	}
+	normalizedParams, policyError := normalizeTokenToolParams(input.method, input.params, input.tokenAuth)
+	if policyError != nil {
+		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
+	}
 	payload, handled, dispatchError := service.dispatchImplementedTool(
 		input.ctx,
 		canonicalToolName(dottedMethod),
 		input.actor,
-		input.params,
+		normalizedParams,
 	)
 	if dispatchError != nil {
 		return errorFrame(input.requestID, dispatchError.code, dispatchError.message, dispatchError.data)
