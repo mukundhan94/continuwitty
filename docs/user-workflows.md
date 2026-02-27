@@ -142,6 +142,34 @@ uv run python -c "from app.auth import hash_password; print(hash_password('admin
 
 ---
 
+## Go Migration Parity + Rollout Checks
+
+Use this sequence for migration closeout verification between Go and legacy Python runtimes.
+
+1. Contract route parity:
+```bash
+make openapi-check
+```
+
+2. Shadow comparison (Go vs Python via proxy):
+```bash
+make shadow-compare
+```
+
+3. Performance benchmark comparison report:
+```bash
+make benchmark-compare
+```
+Report output: `findings/go-migration-benchmark.md`
+
+4. Review rollout gating criteria:
+- `docs/go-rollout-playbook.md`
+
+5. Review migration test matrix:
+- `docs/go-migration-test-matrix.md`
+
+---
+
 ## Admin Console Test Runbook (Multi-Document Pin + MCP)
 
 Use this sequence to validate the latest multi-document continuity path end-to-end with admin credentials.

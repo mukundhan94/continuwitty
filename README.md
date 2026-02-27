@@ -42,6 +42,8 @@ Prerequisites: Docker, Go 1.25+, Node 18+ (`uv` is optional for legacy Python-on
 | [docs/implementation-log.md](docs/implementation-log.md) | Detailed per-phase implementation history |
 | [docs/architecture-playbook.md](docs/architecture-playbook.md) | Architecture diagrams and multi-model runbooks |
 | [docs/mcp-client-integrations.md](docs/mcp-client-integrations.md) | LibreChat, Copilot, and Codex MCP config |
+| [docs/go-migration-test-matrix.md](docs/go-migration-test-matrix.md) | Go migration parity gate mapping |
+| [docs/go-rollout-playbook.md](docs/go-rollout-playbook.md) | Staged Go traffic rollout + rollback criteria |
 
 ## Architecture
 
@@ -78,11 +80,11 @@ Prerequisites: Docker, Go 1.25+, Node 18+ (`uv` is optional for legacy Python-on
 
 ## Current Status
 
-Phases 0-18, 29-31 implemented. See [checkpoint.md](checkpoint.md) for details.
+Phases 0-18, 29-34 implemented. Go migration cutover checklist completed through CP181. See [checkpoint.md](checkpoint.md) for details.
 
 **Completed:** foundation, schema, retrieval, durability, chat continuity, providers (OpenAI/Anthropic/Bedrock), MCP stream, React UI, acceptance testing, theme/UX, MCP developer experience, document ingestion (RAG), memory lifecycle, auto-metadata enrichment, MCP tokens, enterprise memory management.
 
-**In progress:** Phase 31 docs closeout. **Next:** collaboration (19), production security (20), observability (21).
+**Current focus:** post-migration operational hardening and forward roadmap phases (19+).
 
 ## Repository Layout
 
@@ -131,6 +133,9 @@ make eval          # legacy Python eval harness
 make acceptance-test-mock   # acceptance tests (dockerized)
 make stack-up      # full containerized stack
 make stack-down    # tear down
+make openapi-check # Python OpenAPI export + Go route contract validation
+make shadow-compare # Go/Python shadow status-family parity
+make benchmark-compare # Go/Python benchmark report (findings/)
 ```
 
 ## Success Checklist
