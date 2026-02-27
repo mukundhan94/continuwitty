@@ -233,6 +233,50 @@ func TestMountMemoryAdminRoutesListEngramsUsesRequestObject(t *testing.T) {
 	requireEqual(t, 5, captured.Offset)
 }
 
+func TestMountMemoryAdminRoutesListEngramsIncludesDeletedAtNullForActiveRecords(t *testing.T) {
+	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000133")
+	now := time.Date(2026, 2, 27, 18, 30, 0, 0, time.UTC)
+	service := &fakeMemoryAdminService{
+		listEngramsFn: func(_ context.Context, _ admin.MemoryAdminEngramListRequest) ([]models.AdminEngramRecord, error) {
+			return []models.AdminEngramRecord{
+				{
+					EngramID:                engramID,
+					ProjectID:               "engram-vault",
+					Title:                   "Linked engram",
+					Abstract:                "Linked abstract",
+					DetailedSummaryMarkdown: "Linked markdown",
+					VisibilityScope:         models.VisibilityScopeProject,
+					CreatedAt:               now,
+					UpdatedAt:               now,
+				},
+			}, nil
+		},
+	}
+	router := chi.NewRouter()
+	MountMemoryAdminRoutes(router, service, func(_ *http.Request) (AdminActor, error) {
+		return AdminActor{UserID: uuid.MustParse("00000000-0000-0000-0000-000000000134"), Role: "admin"}, nil
+	})
+
+	response := executeRequest(
+		router,
+		http.MethodGet,
+		"/api/v1/admin/memory/engrams",
+		nil,
+	)
+	requireEqual(t, http.StatusOK, response.Code)
+
+	var payload []map[string]any
+	requireNoError(t, json.Unmarshal(response.Body.Bytes(), &payload))
+	requireEqual(t, 1, len(payload))
+	deletedAt, exists := payload[0]["deleted_at"]
+	if !exists {
+		t.Fatalf("expected deleted_at field in admin engram payload")
+	}
+	if deletedAt != nil {
+		t.Fatalf("expected deleted_at to be null, got %#v", deletedAt)
+	}
+}
+
 func TestMountMemoryAdminRoutesUpdateEngramMapsStaleTo409(t *testing.T) {
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000141")
 	service := &fakeMemoryAdminService{

@@ -168,7 +168,7 @@ type AdminEngramRecord struct {
 	SourceSessionID         *uuid.UUID                `json:"source_session_id,omitempty"`
 	CreatedAt               time.Time                 `json:"created_at"`
 	UpdatedAt               time.Time                 `json:"updated_at"`
-	DeletedAt               *time.Time                `json:"deleted_at,omitempty"`
+	DeletedAt               *time.Time                `json:"deleted_at"`
 	DeletedByUserID         *uuid.UUID                `json:"deleted_by_user_id,omitempty"`
 	DeleteReason            *string                   `json:"delete_reason,omitempty"`
 	Sources                 []AdminEngramSourceRecord `json:"sources,omitempty"`

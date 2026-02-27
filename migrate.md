@@ -296,7 +296,7 @@ go.sum
 **Goal**: Feature parity validated, traffic switched to Go.
 
 - [ ] Port remaining test scenarios from 65 pytest files to Go table-driven tests
-- [ ] Run acceptance tests (`acceptance-tests/`) against Go API
+- [x] Run acceptance tests (`acceptance-tests/`) against Go API
 - [ ] Shadow traffic: run both Python and Go behind load balancer, compare responses
 - [ ] Performance benchmarks: measure requests/sec, P99 latency, memory under load
 - [ ] Gradual traffic shift: 10% → 25% → 50% → 100% to Go
