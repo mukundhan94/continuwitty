@@ -180,6 +180,14 @@ func invalidParamError(field string) *toolDispatchError {
 	}
 }
 
+func missingParamError(field string) *toolDispatchError {
+	return &toolDispatchError{
+		code:    -32602,
+		message: "Invalid params",
+		data:    map[string]any{"missing": field},
+	}
+}
+
 func internalToolDispatchError() *toolDispatchError {
 	return &toolDispatchError{
 		code:    -32603,

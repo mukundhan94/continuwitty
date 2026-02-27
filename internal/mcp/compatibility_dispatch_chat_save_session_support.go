@@ -103,7 +103,7 @@ func parseChatSaveAsEngramConversationRequest(
 	params map[string]any,
 ) (EngramCreateFromConversationRequest, *toolDispatchError) {
 	if strings.TrimSpace(stringParamWithDefault(params, "conversation_markdown", "")) == "" {
-		return EngramCreateFromConversationRequest{}, invalidParamError("conversation_markdown")
+		return EngramCreateFromConversationRequest{}, missingParamError("conversation_markdown")
 	}
 	fallbackParams := cloneToolParams(params)
 	if strings.TrimSpace(stringParamWithDefault(fallbackParams, "title", "")) == "" {

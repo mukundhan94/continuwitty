@@ -115,6 +115,7 @@
 | CP145 | 2026-02-27 | Completed | Phase 4 MCP `chat.save_as_engram` no-session conversation fallback parity (conversation create path + enrichment payload) with migrated parity/error/default tests and >9.5 code-health gate |
 | CP146 | 2026-02-27 | Completed | Phase 4 MCP catalog metadata parity (`tools/list` descriptions + input schemas) ported from Python catalog with schema-clone safety and migrated parity tests under >9.5 code-health gate |
 | CP147 | 2026-02-27 | Completed | Phase 4 MCP conversation-create enrichment-origin parity (`mcp.chat.save_as_engram` fallback origin + explicit `engram.create_from_conversation` origin wiring) with migrated request-shape tests and >9.5 code-health gate |
+| CP148 | 2026-02-27 | Completed | Phase 4 MCP chat-save no-session error-payload parity (`data.missing=conversation_markdown`) with migrated validation-data tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3763,6 +3764,35 @@
   - `cmd/api/mcp_engram_create_adapter.go`: `10.0`
   - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`
   - `internal/mcp/compatibility_service_engram_create_conversation_test.go`: `9.68`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP148 - Phase 4 MCP Chat-Save Missing-Field Error Payload Parity (`chat.save_as_engram`)
+
+- Aligned no-session `chat.save_as_engram` validation payload with Python behavior:
+  - when `conversation_markdown` is missing, MCP now returns:
+    - `code=-32602`
+    - `data.missing="conversation_markdown"`
+  - instead of generic `data.invalid`.
+- Added dedicated missing-parameter helper for parity-preserving dispatch payloads:
+  - `internal/mcp/compatibility_dispatch_support.go`
+  - `missingParamError(field)` produces MCP invalid-params payload with `missing` key.
+- Updated chat-save conversation fallback parser:
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`
+  - missing conversation markdown now uses `missingParamError("conversation_markdown")`.
+- Added validation-data coverage:
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`
+  - explicit assertion for `data.missing == "conversation_markdown"`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_dispatch_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

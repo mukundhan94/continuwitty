@@ -147,6 +147,30 @@ func TestCompatibilityServiceChatSaveSessionAsEngramValidationErrors(t *testing.
 	}
 }
 
+func TestCompatibilityServiceChatSaveSessionAsEngramMissingConversationMarkdownUsesMissingData(t *testing.T) {
+	frame := runCompatibilityRequestWithService(
+		t,
+		newChatSaveAsEngramCompatibilityService(
+			&fakeSessionSaveAsEngramService{},
+			&fakeEngramCreateConversationService{},
+		),
+		toolsCallRequest(
+			"39111500-0000-0000-0000-000000000390",
+			"chat_save_as_engram",
+			map[string]any{},
+		),
+	)
+	errorPayload := errorPayloadFromFrame(t, frame)
+	requireErrorCode(t, errorPayload, -32602)
+	data, ok := errorPayload["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error data payload")
+	}
+	if data["missing"] != "conversation_markdown" {
+		t.Fatalf("expected missing conversation_markdown error data")
+	}
+}
+
 func TestCompatibilityServiceChatSaveSessionAsEngramNotFoundAndErrorMappings(t *testing.T) {
 	sessionID := uuid.MustParse("39120000-0000-0000-0000-000000000390")
 
