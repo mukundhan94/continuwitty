@@ -23,7 +23,7 @@ NC = \033[0m
 
 WEB_PORT ?= 5173
 
-.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api cli consolidate lint format format-check check test test-unit test-integration coverage eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api py-sync py-api cli consolidate lint format format-check check test test-unit test-integration coverage eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
 help: ## Print all Makefile commands with categorized descriptions and usage hints
 	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
@@ -128,6 +128,25 @@ stack-reset: ## Recreate full stack and wipe local checkpoints/artifacts
 stack-logs: ## Tail combined logs for db, api, and web
 	@printf '$(PROGRESS)Tailing stack logs (db, api, web). Press Ctrl+C to exit.$(NC)\n'
 	@$(DOCKER_COMPOSE) logs -f db api web
+
+stack-smoke: ## Build/start db + api and verify Go API health/version endpoints
+	@printf '$(PROGRESS)Starting db + api for smoke verification...$(NC)\n'
+	@$(DOCKER_COMPOSE) up -d --build --force-recreate db api
+	@printf '$(PROGRESS)Waiting for API health endpoint...$(NC)\n'
+	@ready=0; \
+	for attempt in $$(seq 1 30); do \
+		if curl -fsS "http://127.0.0.1:$${API_PORT:-8000}/healthz" >/dev/null 2>&1; then \
+			ready=1; \
+			break; \
+		fi; \
+		sleep 1; \
+	done; \
+	if [ "$$ready" -ne 1 ]; then \
+		printf '$(ERROR)API healthcheck did not become ready in time$(NC)\n'; \
+		exit 1; \
+	fi
+	@curl -fsS "http://127.0.0.1:$${API_PORT:-8000}/api/v1/version" >/dev/null
+	@printf '$(SUCCESS)✓ Go API container smoke checks passed$(NC)\n'
 
 acceptance-sync: ## Install acceptance test dependencies
 	@printf '$(PROGRESS)Installing acceptance test dependencies...$(NC)\n'
