@@ -104,6 +104,7 @@
 | CP134 | 2026-02-26 | Completed | Phase 4 MCP engram update baseline (`engram.update`) with direct/`tools/call` parity, runtime memory-admin update wiring, stale-write (`409`) error mapping, migrated tests, and >9.5 code-health gate |
 | CP135 | 2026-02-26 | Completed | Phase 4 MCP engram move-project baseline (`engram.move_project`) with direct/`tools/call` parity, runtime memory-admin move wiring, stale/project-resolution error mapping parity, migrated tests, and >9.5 code-health gate |
 | CP136 | 2026-02-27 | Completed | Phase 4 MCP engram collection mutation baseline (`engram.collection_create`, `engram.collection_update`, `engram.collection_delete`, `engram.collection_add_items`, `engram.collection_remove_items`) with direct/`tools/call` parity, runtime memory-admin collection mutation wiring, project/duplicate/stale/not-found error mapping parity, migrated tests, and >9.5 code-health gate |
+| CP137 | 2026-02-27 | Completed | Phase 4 MCP project transfer baseline (`project.export_bundle`, `project.import_bundle`) with direct/`tools/call` parity, runtime export/import adapter wiring, bundle/conflict-policy validation parity, export/import error mapping parity (`404`/`422`), migrated tests, and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3383,6 +3384,55 @@
   - passed.
 - CodeScene checks (checkpoint-touched files, all >= 9.5):
   - all touched Go files scored `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP137 - Phase 4 MCP Project Transfer Baseline (`project.export_bundle`, `project.import_bundle`)
+
+- Migrated MCP project transfer dispatch into Go compatibility mode for:
+  - `project.export_bundle`
+  - `project.import_bundle`
+- Added direct and `tools/call` parity for both project transfer tools.
+- Implemented project export parity:
+  - required `project_id`
+  - optional `collection_ids` UUID list
+  - optional `include_embeddings` boolean
+  - success payload shape: `{"bundle": {...}}`.
+- Implemented project import parity:
+  - required `project_id`
+  - optional `conflict_policy` (`skip`, `overwrite`, `rename`, default=`skip`)
+  - bundle payload parsing parity (`bundle` object or `bundle_json` string)
+  - success payload shape: `{"summary": {...}}`.
+- Implemented transfer error mapping parity:
+  - project/collection missing -> `-32602` with `status_code=404`
+  - import decode/validation failures -> `-32602` with `status_code=422`
+  - unexpected failures -> `-32603`.
+- Added runtime export/import adapter wiring:
+  - `cmd/api/mcp_project_transfer_adapter.go`
+  - dependency wiring in `cmd/api/main.go`.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_project_export_bundle_test.go`
+  - `internal/mcp/compatibility_service_project_import_bundle_test.go`.
+- Added catalog coverage guard test:
+  - `internal/mcp/compatibility_dispatch_catalog_coverage_test.go`
+  - verifies all tools in `toolCatalogOrder` have implemented handlers.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_project_transfer_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_project_transfer_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_project_transfer_export_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_project_transfer_import_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_project_transfer_error_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_project_export_bundle_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_project_import_bundle_test.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_catalog_coverage_test.go`: `10.0`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

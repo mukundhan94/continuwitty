@@ -41,6 +41,22 @@ type ProjectListService interface {
 	) (string, error)
 }
 
+// ProjectExportService captures project export-bundle behavior used by MCP compatibility dispatch.
+type ProjectExportService interface {
+	ExportProjectBundle(
+		ctx context.Context,
+		request ProjectExportRequest,
+	) (*ProjectExportResponse, error)
+}
+
+// ProjectImportService captures project import-bundle behavior used by MCP compatibility dispatch.
+type ProjectImportService interface {
+	ImportProjectBundle(
+		ctx context.Context,
+		request ProjectImportRequest,
+	) (*ProjectImportResponse, error)
+}
+
 // SessionListService captures session listing behavior used by MCP compatibility user dispatch.
 type SessionListService interface {
 	ListSessions(
@@ -319,6 +335,34 @@ type SessionListRequest struct {
 	ProjectID   *string
 	Limit       int
 	Offset      int
+}
+
+// ProjectExportRequest captures compatibility-level project export inputs.
+type ProjectExportRequest struct {
+	ActorUserID       uuid.UUID
+	ActorRole         models.UserRole
+	ProjectID         string
+	CollectionIDs     []uuid.UUID
+	IncludeEmbeddings bool
+}
+
+// ProjectExportResponse captures compatibility-level project export outputs.
+type ProjectExportResponse struct {
+	Bundle map[string]any `json:"bundle"`
+}
+
+// ProjectImportRequest captures compatibility-level project import inputs.
+type ProjectImportRequest struct {
+	ActorUserID     uuid.UUID
+	ActorRole       models.UserRole
+	TargetProjectID string
+	BundleBytes     []byte
+	ConflictPolicy  string
+}
+
+// ProjectImportResponse captures compatibility-level project import outputs.
+type ProjectImportResponse struct {
+	Summary map[string]any `json:"summary"`
 }
 
 // SessionCreateRequest captures compatibility-level session create inputs.
@@ -642,6 +686,8 @@ type EngramCollectionRemoveItemResponse struct {
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
 	ProjectService           ProjectListService
+	ProjectExport            ProjectExportService
+	ProjectImport            ProjectImportService
 	SessionService           SessionListService
 	SessionGet               SessionGetService
 	SessionCreate            SessionCreateService
@@ -682,6 +728,8 @@ type CompatibilityServiceDependencies struct {
 type CompatibilityService struct {
 	serverVersion            string
 	projectService           ProjectListService
+	projectExport            ProjectExportService
+	projectImport            ProjectImportService
 	sessionService           SessionListService
 	sessionGet               SessionGetService
 	sessionCreate            SessionCreateService
@@ -738,6 +786,8 @@ func NewCompatibilityServiceWithDependencies(
 	return &CompatibilityService{
 		serverVersion:            trimmed,
 		projectService:           dependencies.ProjectService,
+		projectExport:            dependencies.ProjectExport,
+		projectImport:            dependencies.ProjectImport,
 		sessionService:           dependencies.SessionService,
 		sessionGet:               dependencies.SessionGet,
 		sessionCreate:            dependencies.SessionCreate,

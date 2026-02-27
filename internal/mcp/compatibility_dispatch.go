@@ -89,6 +89,7 @@ func buildImplementedToolHandlers() map[string]implementedToolHandler {
 			return service.dispatchProjectSetDefaultTool(ctx, actor, params)
 		},
 	}
+	registerProjectTransferToolHandlers(handlers)
 	registerChatToolHandlers(handlers)
 	registerEngramToolHandlers(handlers)
 	return handlers
