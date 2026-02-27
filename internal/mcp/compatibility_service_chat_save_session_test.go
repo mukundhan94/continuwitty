@@ -435,6 +435,7 @@ func chatSaveFallbackExpectedRequest(
 		VisibilityScope:      string(models.VisibilityScopeProject),
 		RetrievalText:        stringPtr("retrieval text"),
 		SourceSessionID:      &sourceSessionID,
+		EnrichmentOrigin:     "mcp.chat.save_as_engram",
 	}
 }
 

@@ -109,7 +109,12 @@ func parseChatSaveAsEngramConversationRequest(
 	if strings.TrimSpace(stringParamWithDefault(fallbackParams, "title", "")) == "" {
 		fallbackParams["title"] = "Conversation Snapshot"
 	}
-	return parseEngramCreateFromConversationRequest(actor, fallbackParams)
+	request, dispatchErr := parseEngramCreateFromConversationRequest(actor, fallbackParams)
+	if dispatchErr != nil {
+		return EngramCreateFromConversationRequest{}, dispatchErr
+	}
+	request.EnrichmentOrigin = "mcp.chat.save_as_engram"
+	return request, nil
 }
 
 func parseSaveSessionVisibilityScopeParam(params map[string]any) (models.VisibilityScope, bool) {

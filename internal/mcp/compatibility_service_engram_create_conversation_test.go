@@ -209,6 +209,7 @@ func expectedCreateConversationCall(
 			VisibilityScope:      string(models.VisibilityScopeProject),
 			RetrievalText:        stringPtr("retrieval text"),
 			SourceSessionID:      &sourceSessionID,
+			EnrichmentOrigin:     "mcp.engram.create_from_conversation",
 		},
 	}
 }

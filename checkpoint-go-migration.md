@@ -114,6 +114,7 @@
 | CP144 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity hardening for `engram.rehydrate` by resolving allowlist project scope from rehydration-bundle project metadata (instead of engram-admin lookup), with migrated policy tests and >9.5 code-health gate |
 | CP145 | 2026-02-27 | Completed | Phase 4 MCP `chat.save_as_engram` no-session conversation fallback parity (conversation create path + enrichment payload) with migrated parity/error/default tests and >9.5 code-health gate |
 | CP146 | 2026-02-27 | Completed | Phase 4 MCP catalog metadata parity (`tools/list` descriptions + input schemas) ported from Python catalog with schema-clone safety and migrated parity tests under >9.5 code-health gate |
+| CP147 | 2026-02-27 | Completed | Phase 4 MCP conversation-create enrichment-origin parity (`mcp.chat.save_as_engram` fallback origin + explicit `engram.create_from_conversation` origin wiring) with migrated request-shape tests and >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -3729,6 +3730,39 @@
   - `internal/mcp/catalog_metadata.go`: `10.0`
   - `internal/mcp/compatibility_service_test.go`: `10.0`
   - `internal/mcp/catalog_metadata_data.go`: `Code Health score: None` (data-only generated catalog table).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP147 - Phase 4 MCP Conversation-Create Enrichment-Origin Parity
+
+- Aligned MCP conversation-create enrichment origin semantics with Python behavior:
+  - `chat.save_as_engram` no-session fallback now forwards `EnrichmentOrigin="mcp.chat.save_as_engram"`
+  - direct `engram.create_from_conversation` dispatch now explicitly forwards `EnrichmentOrigin="mcp.engram.create_from_conversation"`.
+- Extended compatibility request contract to carry origin metadata:
+  - `internal/mcp/compatibility_service.go`
+  - added `EnrichmentOrigin` on `EngramCreateFromConversationRequest`.
+- Updated runtime adapter to honor forwarded origin while preserving backward compatibility:
+  - `cmd/api/mcp_engram_create_adapter.go`
+  - uses forwarded origin when set, with default fallback to `mcp.engram.create_from_conversation`.
+- Updated dispatch logic:
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`
+  - `internal/mcp/compatibility_dispatch_engram_create_conversation_support.go`.
+- Migrated request-shape parity tests to assert origin forwarding:
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`
+  - `internal/mcp/compatibility_service_engram_create_conversation_test.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_create_conversation_support.go`: `10.0`
+  - `cmd/api/mcp_engram_create_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_create_conversation_test.go`: `9.68`.
 - Pre-commit safeguard:
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`

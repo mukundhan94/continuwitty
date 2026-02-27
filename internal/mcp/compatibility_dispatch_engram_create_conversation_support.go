@@ -34,6 +34,7 @@ func (service *CompatibilityService) dispatchEngramCreateFromConversationTool(
 	if dispatchErr != nil {
 		return nil, true, dispatchErr
 	}
+	request.EnrichmentOrigin = "mcp.engram.create_from_conversation"
 	created, err := service.engramCreateConversation.CreateEngramFromConversation(ctx, request)
 	if err != nil {
 		return nil, true, mapEngramCreateError(err)

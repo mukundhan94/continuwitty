@@ -570,6 +570,7 @@ type EngramCreateFromConversationRequest struct {
 	VisibilityScope      string
 	RetrievalText        *string
 	SourceSessionID      *uuid.UUID
+	EnrichmentOrigin     string
 }
 
 // EngramCreateFromConversationResponse captures compatibility-level conversation create outputs.

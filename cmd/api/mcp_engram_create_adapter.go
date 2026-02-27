@@ -71,6 +71,10 @@ func (adapter mcpEngramCreateAdapter) CreateEngramFromConversation(
 	ctx context.Context,
 	request mcp.EngramCreateFromConversationRequest,
 ) (*mcp.EngramCreateFromConversationResponse, error) {
+	enrichmentOrigin := request.EnrichmentOrigin
+	if enrichmentOrigin == "" {
+		enrichmentOrigin = "mcp.engram.create_from_conversation"
+	}
 	payload := models.MemoryEngramCreate{
 		ProjectID:               request.ProjectID,
 		ThreadID:                request.ThreadID,
@@ -94,7 +98,7 @@ func (adapter mcpEngramCreateAdapter) CreateEngramFromConversation(
 			ActorUserID:      request.ActorUserID,
 			ActorRole:        request.ActorRole,
 			Payload:          payload,
-			EnrichmentOrigin: "mcp.engram.create_from_conversation",
+			EnrichmentOrigin: enrichmentOrigin,
 		},
 	)
 	if err != nil {
