@@ -20,11 +20,11 @@ make web
 
 Use `make stack-up` as an occasional debugging mode when you specifically need the full containerized stack.
 
-Open [localhost:5173](http://localhost:5173) (React chat) or [localhost:8000/docs](http://localhost:8000/docs) (API).
+Open [localhost:5173](http://localhost:5173) (React chat) or [localhost:8000/healthz](http://localhost:8000/healthz) (API health).
 
 Default credentials: `admin` / `admin123`
 
-Prerequisites: Docker, `uv`, Node 18+. See [docs/env-reference.md](docs/env-reference.md) for all env vars.
+Prerequisites: Docker, Go 1.25+, Node 18+ (`uv` is optional for legacy Python-only flows like `make py-api` and `make eval`). See [docs/env-reference.md](docs/env-reference.md) for all env vars.
 
 ## Documentation
 
@@ -54,7 +54,7 @@ Prerequisites: Docker, `uv`, Node 18+. See [docs/env-reference.md](docs/env-refe
               | REST API + MCP (JSON-RPC/SSE)           |
               v                                         v
        +-------------------------------------------------------+
-       | FastAPI Engram Vault API                              |
+       | Go Engram Vault API                                   |
        | - Provider adapters (OpenAI, Anthropic, Bedrock)      |
        | - Context assembly (engrams + document chunks)        |
        | - Embedding, retrieval, reranking                     |
@@ -99,8 +99,10 @@ engram/
   docs/              # guides (see table above)
   agents/            # agent definitions (sentinel)
   skills/            # workflow skills for AI agents
+  cmd/api/           # Go API entrypoint
+  internal/          # Go backend packages
   db/init/           # schema SQL
-  api/               # FastAPI backend (Python/uv)
+  api/               # legacy Python backend artifacts
     app/             # domain modules
     evals/           # eval harness
     tests/           # backend tests
@@ -123,9 +125,9 @@ Skills are accessible to Claude Code (`.claude/` symlinks), OpenAI Codex (`AGENT
 make help          # list all targets
 make dev           # DB + API + web (single terminal)
 make test          # backend tests
-make lint          # ruff check
+make lint          # go vet
 make web-check     # frontend tests
-make eval          # eval harness
+make eval          # legacy Python eval harness
 make acceptance-test-mock   # acceptance tests (dockerized)
 make stack-up      # full containerized stack
 make stack-down    # tear down

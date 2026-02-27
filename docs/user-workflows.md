@@ -22,7 +22,7 @@ docker compose ps
 ```
 
 3. Open:
-- [http://localhost:8000/docs](http://localhost:8000/docs)
+- [http://localhost:8000/healthz](http://localhost:8000/healthz)
 - [http://localhost:5173](http://localhost:5173) (React chat workbench)
 
 4. Stop stack:
@@ -64,7 +64,7 @@ make format-check
 make test
 ```
 
-5. Run memory evaluation harness:
+5. (Optional legacy) Run memory evaluation harness:
 ```bash
 make eval
 ```
