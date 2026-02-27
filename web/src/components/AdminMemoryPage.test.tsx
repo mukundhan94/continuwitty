@@ -4,15 +4,15 @@ import { useState } from 'react'
 import { ThemeProvider } from 'styled-components'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AdminEngramRecord } from '../api/types'
+import type { AdminChatSessionRecord, AdminEngramRecord, EngramCollectionRecord } from '../api/types'
 import { lightTheme } from '../styles/theme'
 import { AdminMemoryPage } from './AdminMemoryPage'
 
 const memoryAdminMocks = vi.hoisted(() => ({
-  listAdminSessions: vi.fn(async () => []),
-  listAdminEngrams: vi.fn(async () => []),
-  listCollections: vi.fn(async () => []),
-  getAdminEngram: vi.fn(async () => null),
+  listAdminSessions: vi.fn<() => Promise<AdminChatSessionRecord[]>>(async () => []),
+  listAdminEngrams: vi.fn<() => Promise<AdminEngramRecord[]>>(async () => []),
+  listCollections: vi.fn<() => Promise<EngramCollectionRecord[]>>(async () => []),
+  getAdminEngram: vi.fn<() => Promise<AdminEngramRecord>>(async () => buildAdminEngram()),
 }))
 
 const projectApiMocks = vi.hoisted(() => ({
