@@ -80,6 +80,18 @@ func initDBPoolOrExit(ctx context.Context, logger *slog.Logger, settings config.
 		logger.Error("failed to ping database", "error", err)
 		os.Exit(1)
 	}
+	if err := db.EnsureSchemaInitialized(
+		ctx,
+		db.PgxPoolBeginner{Pool: pool},
+		db.SchemaInitializationOptions{
+			Settings:     settings,
+			SchemaPath:   db.DefaultSchemaPath(),
+			HashPassword: hashPasswordWithRandomSalt,
+		},
+	); err != nil {
+		logger.Error("failed to initialize database schema", "error", err)
+		os.Exit(1)
+	}
 	return pool
 }
 
