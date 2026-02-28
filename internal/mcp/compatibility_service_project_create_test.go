@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"engram/internal/projects"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestCompatibilityServiceProjectCreateToolsCall(t *testing.T) {
@@ -79,6 +81,8 @@ func TestCompatibilityServiceProjectCreateErrors(t *testing.T) {
 		service      *fakeProjectCreateService
 		request      StreamCallRequest
 		expectedCode int
+		expectedMsg  *string
+		expectedData *string
 	}{
 		{
 			name:    "invalid owner user id",
@@ -103,6 +107,61 @@ func TestCompatibilityServiceProjectCreateErrors(t *testing.T) {
 			),
 			expectedCode: -32602,
 		},
+		{
+			name: "missing collaboration schema",
+			service: &fakeProjectCreateService{
+				err: &pgconn.PgError{
+					Code:    "42P01",
+					Message: "relation \"project_members\" does not exist",
+				},
+			},
+			request: toolsCallRequest(
+				"24400000-0000-0000-0000-000000000244",
+				"project_create",
+				map[string]any{
+					"project_id": "engram-docs",
+					"name":       "Docs",
+				},
+			),
+			expectedCode: -32603,
+			expectedMsg:  stringPtr("Project collaboration schema is not initialized"),
+			expectedData: stringPtr("run database schema initialization/migrations and restart the API"),
+		},
+		{
+			name: "owner user foreign key violation",
+			service: &fakeProjectCreateService{
+				err: &pgconn.PgError{
+					Code:    "23503",
+					Message: "insert or update on table \"projects\" violates foreign key constraint",
+				},
+			},
+			request: toolsCallRequest(
+				"24500000-0000-0000-0000-000000000245",
+				"project_create",
+				map[string]any{
+					"project_id":    "engram-docs",
+					"name":          "Docs",
+					"owner_user_id": "24600000-0000-0000-0000-000000000246",
+				},
+			),
+			expectedCode: -32602,
+			expectedData: stringPtr("owner_user_id does not reference an existing user"),
+		},
+		{
+			name: "unknown internal error remains internal",
+			service: &fakeProjectCreateService{
+				err: errors.New("boom"),
+			},
+			request: toolsCallRequest(
+				"24700000-0000-0000-0000-000000000247",
+				"project_create",
+				map[string]any{
+					"project_id": "engram-docs",
+					"name":       "Docs",
+				},
+			),
+			expectedCode: -32603,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -115,6 +174,14 @@ func TestCompatibilityServiceProjectCreateErrors(t *testing.T) {
 			)
 			errorPayload := errorPayloadFromFrame(t, frame)
 			requireErrorCode(t, errorPayload, testCase.expectedCode)
+			if testCase.expectedMsg != nil {
+				if message, ok := errorPayload["message"].(string); !ok || message != *testCase.expectedMsg {
+					t.Fatalf("expected error message %q, got %#v", *testCase.expectedMsg, errorPayload["message"])
+				}
+			}
+			if testCase.expectedData != nil {
+				assertErrorDetail(t, errorPayload, *testCase.expectedData)
+			}
 		})
 	}
 }

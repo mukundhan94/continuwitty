@@ -13,6 +13,7 @@ import (
 	"engram/internal/projects"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func (service *CompatibilityService) dispatchUserListProjectsTool(
@@ -414,7 +415,31 @@ func mapProjectCreateError(err error) *toolDispatchError {
 		return invalidParamError("project_id")
 	case errors.Is(err, projects.ErrProjectWriteForbidden):
 		return invalidParamsWithStatus(403, err.Error())
+	case errors.Is(err, projects.ErrProjectNotFound):
+		return invalidParamsWithStatus(404, "Project not found")
+	case errors.Is(err, projects.ErrUserNotFound):
+		return invalidParamsWithStatus(404, "User not found")
+	case errors.Is(err, projects.ErrProjectIDRequiredWhenNoDefaultProject),
+		errors.Is(err, projects.ErrDefaultProjectNotAccessible):
+		return invalidParamsWithStatus(422, err.Error())
 	default:
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case "42P01":
+				return &toolDispatchError{
+					code:    -32603,
+					message: "Project collaboration schema is not initialized",
+					data: map[string]any{
+						"detail": "run database schema initialization/migrations and restart the API",
+					},
+				}
+			case "23503":
+				return invalidParamsWithStatus(422, "owner_user_id does not reference an existing user")
+			case "23514":
+				return invalidParamsWithStatus(422, "project payload violates database constraints")
+			}
+		}
 		return internalToolDispatchError()
 	}
 }
