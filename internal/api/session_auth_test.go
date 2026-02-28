@@ -232,10 +232,11 @@ func fetchCSRFTokenAndCookie(t *testing.T, handler http.Handler, manager *auth.S
 }
 
 func findResponseCookie(response *httptest.ResponseRecorder, name string) *http.Cookie {
+	var matched *http.Cookie
 	for _, cookie := range response.Result().Cookies() {
 		if cookie.Name == name {
-			return cookie
+			matched = cookie
 		}
 	}
-	return nil
+	return matched
 }

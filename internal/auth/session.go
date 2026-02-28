@@ -33,6 +33,9 @@ type SessionUser struct {
 type SessionState struct {
 	User      *SessionUser `json:"user,omitempty"`
 	CSRFToken string       `json:"csrf_token,omitempty"`
+	OIDCState string       `json:"oidc_state,omitempty"`
+	OIDCNonce string       `json:"oidc_nonce,omitempty"`
+	OIDCNext  string       `json:"oidc_next,omitempty"`
 	IssuedAt  int64        `json:"issued_at,omitempty"`
 }
 

@@ -28,6 +28,8 @@ type loginPageViewModel struct {
 	ErrorMessage string
 	CSRFToken    string
 	NextPath     string
+	OIDCLoginURL string
+	OIDCEnabled  bool
 }
 
 type dashboardPageViewModel struct {
@@ -71,6 +73,9 @@ var sessionLoginPageTemplate = template.Must(template.New("session-login-page").
     <input type="hidden" name="next_path" value="{{.NextPath}}" />
     <button type="submit">Sign in</button>
   </form>
+  {{if .OIDCEnabled}}
+  <p><a href="{{.OIDCLoginURL}}">Sign in with OIDC</a></p>
+  {{end}}
 </body>
 </html>`))
 
@@ -116,6 +121,8 @@ func MountSessionUIRoutes(router chi.Router, dependencies SessionAuthDependencie
 	deps := newSessionAuthDependencies(dependencies)
 	router.Get("/", deps.handleHomeRedirect)
 	router.Get("/login", deps.handleLoginPage)
+	router.Get("/login/oidc", deps.handleOIDCStart)
+	router.Get("/login/oidc/callback", deps.handleOIDCCallback)
 	router.Post("/login", deps.handleLoginSubmit)
 	router.Post("/logout", deps.handleLogoutSubmit)
 	router.Get("/ui", deps.handleUIDashboard)
@@ -638,8 +645,18 @@ func (dependencies sessionAuthDependencies) renderLoginPage(
 			ErrorMessage: renderRequest.ErrorMessage,
 			CSRFToken:    state.CSRFToken,
 			NextPath:     safeNextPath(renderRequest.NextPath),
+			OIDCLoginURL: buildOIDCLoginURL(renderRequest.NextPath),
+			OIDCEnabled:  dependencies.hasOIDCProvider(),
 		},
 	)
+}
+
+func buildOIDCLoginURL(nextPath string) string {
+	sanitizedPath := safeNextPath(nextPath)
+	if sanitizedPath == "" {
+		return "/login/oidc"
+	}
+	return "/login/oidc?next=" + url.QueryEscape(sanitizedPath)
 }
 
 func renderTemplate(writer http.ResponseWriter, statusCode int, tmpl *template.Template, data any) {

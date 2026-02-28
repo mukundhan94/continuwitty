@@ -34,6 +34,7 @@ type sessionAuthRuntimeDependencies struct {
 	settings          config.Settings
 	pool              *pgxpool.Pool
 	sessionManager    *auth.SessionManager
+	oidcProvider      auth.OIDCLoginProvider
 	loginAttemptGuard *auth.LoginAttemptGuard
 	auditLogger       *audit.Logger
 	projectService    projectResolutionService
@@ -47,6 +48,23 @@ type mcpCompatibilityRuntimeDependencies struct {
 	exportService      internalexport.Service
 }
 
+type runtimeServices struct {
+	projectService           *projects.Service
+	oauthRegistrationService *oauth.RegistrationService
+	oauthAuthorization       *oauth.AuthorizationService
+	oauthTokenService        *oauth.TokenService
+	memoryAdminService       *admin.Service
+	mcpTokenService          *mcptokens.Service
+	exportService            internalexport.Service
+	mcpService               *mcp.CompatibilityService
+	mcpTransportLimiter      *auth.RequestRateLimiter
+	mcpActorResolver         *mcp.ActorResolver
+	agentWorkflowService     *workflow.Service
+	ingestionService         *ingestion.Service
+	loginAttemptGuard        *auth.LoginAttemptGuard
+	auditLogger              *audit.Logger
+}
+
 var errMissingSessionActorForMCP = errors.New("session actor missing for mcp")
 
 func main() {
@@ -56,7 +74,7 @@ func main() {
 	pool := initDBPoolOrExit(startupCtx, logger, settings)
 	defer pool.Close()
 
-	handler := buildHandlerOrExit(logger, settings, pool)
+	handler := buildHandlerOrExit(startupCtx, logger, settings, pool)
 	server := buildServer(settings, handler)
 	runServerOrExit(logger, server)
 }
@@ -95,77 +113,97 @@ func initDBPoolOrExit(ctx context.Context, logger *slog.Logger, settings config.
 	return pool
 }
 
-func buildHandlerOrExit(logger *slog.Logger, settings config.Settings, pool *pgxpool.Pool) http.Handler {
+func buildHandlerOrExit(
+	ctx context.Context,
+	logger *slog.Logger,
+	settings config.Settings,
+	pool *pgxpool.Pool,
+) http.Handler {
 	sessionManager, err := auth.NewSessionManager(settings.AppSessionSecret, auth.DefaultSessionCookieName)
 	if err != nil {
 		logger.Error("failed to initialize session manager", "error", err)
 		os.Exit(1)
 	}
-	projectService := projects.NewService(pool)
-	oauthRegistrationService := oauth.NewRegistrationService(pool)
-	oauthAuthorizationService := oauth.NewAuthorizationService(pool)
-	oauthTokenService := oauth.NewTokenService(pool)
-	memoryAdminService := admin.NewService(pool, settings.EmbeddingDim, newAdminProjectResolver(projectService))
-	mcpTokenService := mcptokens.NewService(pool)
-	exportService := internalexport.NewService(pool, projectService, memoryAdminService, settings.EmbeddingDim)
-	mcpService := newMCPCompatibilityService(
-		settings,
-		mcpCompatibilityRuntimeDependencies{
-			pool:               pool,
-			projectService:     projectService,
-			memoryAdminService: memoryAdminService,
-			exportService:      exportService,
-		},
-	)
-	mcpTransportLimiter := newMCPTransportRateLimiter(settings, pool)
-	mcpActorResolver := mcp.NewActorResolver(
-		settings,
-		pool,
-		resolveMCPActorFromSessionContext,
-	)
-	agentWorkflowService := workflow.NewService(newWorkflowEngramCreator(pool, settings.EmbeddingDim))
-	ingestionService := ingestion.NewService(
-		pool,
-		settings.EmbeddingDim,
-		settings.IngestionMaxFileBytes,
-		settings.IngestionMaxTextChars,
-	)
-	loginAttemptGuard := newLoginAttemptGuard(settings, pool)
-	auditLogger := newSessionAuditLogger(settings)
+	oidcProvider, err := auth.NewOIDCLoginProvider(ctx, settings)
+	if err != nil {
+		logger.Error("failed to initialize oidc login provider", "error", err)
+		os.Exit(1)
+	}
+	services := initializeRuntimeServices(settings, pool)
 
 	routerDependencies := internalapi.RouterDependencies{
-		MemoryAdminService: memoryAdminService,
+		MemoryAdminService: services.memoryAdminService,
 		RequireAdminActor:  internalapi.RequireAdminActorFromContext,
 		SessionAuth: buildSessionAuthDependencies(
 			sessionAuthRuntimeDependencies{
 				settings:          settings,
 				pool:              pool,
 				sessionManager:    sessionManager,
-				loginAttemptGuard: loginAttemptGuard,
-				auditLogger:       auditLogger,
-				projectService:    projectService,
-				mcpTokenService:   mcpTokenService,
+				oidcProvider:      oidcProvider,
+				loginAttemptGuard: services.loginAttemptGuard,
+				auditLogger:       services.auditLogger,
+				projectService:    services.projectService,
+				mcpTokenService:   services.mcpTokenService,
 			},
 		),
-		ProjectsService:  newProjectRouteServiceAdapter(projectService),
-		IngestionService: newIngestionRouteServiceAdapter(ingestionService),
+		ProjectsService:  newProjectRouteServiceAdapter(services.projectService),
+		IngestionService: newIngestionRouteServiceAdapter(services.ingestionService),
 		IngestionOptions: internalapi.IngestionRouteOptions{
 			MaxMetadataJSONBytes: settings.IngestionMaxMetadataJSONBytes,
 		},
-		OAuthRegistration:   oauthRegistrationService,
-		OAuthAuthorization:  oauthAuthorizationService,
-		OAuthToken:          oauthTokenService,
+		OAuthRegistration:   services.oauthRegistrationService,
+		OAuthAuthorization:  services.oauthAuthorization,
+		OAuthToken:          services.oauthTokenService,
 		ChatRouter:          buildChatRouter(settings, pool),
-		AgentWorkflow:       agentWorkflowService,
-		ExportService:       exportService,
-		MCPService:          mcpService,
-		MCPActorResolver:    mcpActorResolver,
-		MCPTransportLimiter: mcpTransportLimiter,
+		AgentWorkflow:       services.agentWorkflowService,
+		ExportService:       services.exportService,
+		MCPService:          services.mcpService,
+		MCPActorResolver:    services.mcpActorResolver,
+		MCPTransportLimiter: services.mcpTransportLimiter,
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
 	logger.Info("session-authenticated actor context enabled")
 	return handler
+}
+
+func initializeRuntimeServices(settings config.Settings, pool *pgxpool.Pool) runtimeServices {
+	projectService := projects.NewService(pool)
+	memoryAdminService := admin.NewService(pool, settings.EmbeddingDim, newAdminProjectResolver(projectService))
+	exportService := internalexport.NewService(pool, projectService, memoryAdminService, settings.EmbeddingDim)
+	return runtimeServices{
+		projectService:           projectService,
+		oauthRegistrationService: oauth.NewRegistrationService(pool),
+		oauthAuthorization:       oauth.NewAuthorizationService(pool),
+		oauthTokenService:        oauth.NewTokenService(pool),
+		memoryAdminService:       memoryAdminService,
+		mcpTokenService:          mcptokens.NewService(pool),
+		exportService:            exportService,
+		mcpService: newMCPCompatibilityService(
+			settings,
+			mcpCompatibilityRuntimeDependencies{
+				pool:               pool,
+				projectService:     projectService,
+				memoryAdminService: memoryAdminService,
+				exportService:      exportService,
+			},
+		),
+		mcpTransportLimiter: newMCPTransportRateLimiter(settings, pool),
+		mcpActorResolver: mcp.NewActorResolver(
+			settings,
+			pool,
+			resolveMCPActorFromSessionContext,
+		),
+		agentWorkflowService: workflow.NewService(newWorkflowEngramCreator(pool, settings.EmbeddingDim)),
+		ingestionService: ingestion.NewService(
+			pool,
+			settings.EmbeddingDim,
+			settings.IngestionMaxFileBytes,
+			settings.IngestionMaxTextChars,
+		),
+		loginAttemptGuard: newLoginAttemptGuard(settings, pool),
+		auditLogger:       newSessionAuditLogger(settings),
+	}
 }
 
 func newMCPCompatibilityService(
@@ -284,6 +322,7 @@ func newSessionAuditLogger(settings config.Settings) *audit.Logger {
 func buildSessionAuthDependencies(runtimeDependencies sessionAuthRuntimeDependencies) internalapi.SessionAuthDependencies {
 	return internalapi.SessionAuthDependencies{
 		SessionManager:           runtimeDependencies.sessionManager,
+		OIDCProvider:             runtimeDependencies.oidcProvider,
 		LookupUserByUsername:     lookupSessionUserByUsername(runtimeDependencies.pool),
 		LookupUserByID:           lookupSessionUser(runtimeDependencies.pool),
 		VerifyPassword:           auth.VerifyPassword,

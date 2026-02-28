@@ -26,6 +26,7 @@ func TestBuildDebugSettingsSnapshotRedactsSecrets(t *testing.T) {
 	settings.AppSessionSecret = "session-secret"
 	settings.UIDemoPassword = "admin123"
 	settings.UIDemoPasswordHash = "hash-value"
+	settings.OIDCClientSecret = "oidc-secret"
 	settings.OpenAIAPIKey = "openai-key"
 	settings.AnthropicAPIKey = "anthropic-key"
 	settings.AWSAccessKeyID = "aws-access"
@@ -40,6 +41,7 @@ func TestBuildDebugSettingsSnapshotRedactsSecrets(t *testing.T) {
 	assertEqualString(t, snapshot["app_session_secret"], "<redacted>")
 	assertEqualString(t, snapshot["ui_demo_password"], "<redacted>")
 	assertEqualString(t, snapshot["ui_demo_password_hash"], "<redacted>")
+	assertEqualString(t, snapshot["oidc_client_secret"], "<redacted>")
 	assertEqualString(t, snapshot["openai_api_key"], "<redacted>")
 	assertEqualString(t, snapshot["anthropic_api_key"], "<redacted>")
 	assertEqualString(t, snapshot["aws_access_key_id"], "<redacted>")
@@ -113,6 +115,51 @@ func TestProductionSettingsAcceptHardenedValues(t *testing.T) {
 	err := ValidateProductionSecurity(settings)
 	if err != nil {
 		t.Fatalf("expected hardened production settings to pass validation: %v", err)
+	}
+}
+
+func TestOIDCSettingsDisabledAllowsMissingValues(t *testing.T) {
+	settings := baseSettings()
+	settings.OIDCEnabled = false
+
+	if err := ValidateOIDCSettings(settings); err != nil {
+		t.Fatalf("expected oidc validation to pass when disabled: %v", err)
+	}
+}
+
+func TestOIDCSettingsRequireMandatoryFieldsWhenEnabled(t *testing.T) {
+	settings := baseSettings()
+	settings.OIDCEnabled = true
+
+	err := ValidateOIDCSettings(settings)
+	if err == nil {
+		t.Fatalf("expected oidc validation failure")
+	}
+	message := err.Error()
+	if !strings.Contains(message, "OIDC_ISSUER_URL") {
+		t.Fatalf("expected issuer setting in error, got %q", message)
+	}
+	if !strings.Contains(message, "OIDC_CLIENT_ID") {
+		t.Fatalf("expected client id setting in error, got %q", message)
+	}
+	if !strings.Contains(message, "OIDC_CLIENT_SECRET") {
+		t.Fatalf("expected client secret setting in error, got %q", message)
+	}
+	if !strings.Contains(message, "OIDC_REDIRECT_URL") {
+		t.Fatalf("expected redirect setting in error, got %q", message)
+	}
+}
+
+func TestOIDCSettingsAcceptConfiguredValuesWhenEnabled(t *testing.T) {
+	settings := baseSettings()
+	settings.OIDCEnabled = true
+	settings.OIDCIssuerURL = "https://accounts.example.com"
+	settings.OIDCClientID = "engram-web"
+	settings.OIDCClientSecret = "test-secret"
+	settings.OIDCRedirectURL = "http://localhost:8000/login/oidc/callback"
+
+	if err := ValidateOIDCSettings(settings); err != nil {
+		t.Fatalf("expected oidc validation success, got %v", err)
 	}
 }
 

@@ -36,6 +36,7 @@ type SessionAuditLogger func(
 // SessionAuthDependencies captures required collaborators for session auth routes.
 type SessionAuthDependencies struct {
 	SessionManager           *auth.SessionManager
+	OIDCProvider             auth.OIDCLoginProvider
 	LookupUserByUsername     SessionUserByUsernameLookup
 	LookupUserByID           SessionUserLookup
 	VerifyPassword           func(password, encodedHash string) bool
@@ -115,6 +116,7 @@ type SessionAuthDependencies struct {
 
 type sessionAuthDependencies struct {
 	manager                  *auth.SessionManager
+	oidcProvider             auth.OIDCLoginProvider
 	lookupUserByUsername     SessionUserByUsernameLookup
 	lookupUserByID           SessionUserLookup
 	verifyPassword           func(password, encodedHash string) bool
@@ -213,6 +215,7 @@ type sessionAuditEvent struct {
 func newSessionAuthDependencies(dependencies SessionAuthDependencies) sessionAuthDependencies {
 	return sessionAuthDependencies{
 		manager:                  dependencies.SessionManager,
+		oidcProvider:             dependencies.OIDCProvider,
 		lookupUserByUsername:     dependencies.LookupUserByUsername,
 		lookupUserByID:           dependencies.LookupUserByID,
 		verifyPassword:           dependencies.VerifyPassword,
@@ -246,6 +249,8 @@ func MountSessionAuthRoutes(router chi.Router, dependencies SessionAuthDependenc
 		session.Get("/csrf", deps.handleCSRF)
 		session.Post("/login", deps.handleLogin)
 		session.Post("/logout", deps.handleLogout)
+		session.Get("/oidc/start", deps.handleOIDCStart)
+		session.Get("/oidc/callback", deps.handleOIDCCallback)
 	})
 
 	router.Get("/api/v1/me", deps.handleCurrentUser)
@@ -290,6 +295,146 @@ func (dependencies sessionAuthDependencies) handleLogin(writer http.ResponseWrit
 	dependencies.writeLoginSuccess(writer, record)
 }
 
+func (dependencies sessionAuthDependencies) handleOIDCStart(writer http.ResponseWriter, request *http.Request) {
+	if !dependencies.validateCoreDependencies(writer) {
+		return
+	}
+	if !dependencies.requireOIDCProvider(writer) {
+		return
+	}
+	state, ok := dependencies.ensureCSRFSessionState(writer, request)
+	if !ok {
+		return
+	}
+	oidcState, oidcNonce, ok := dependencies.issueOIDCPendingState(writer)
+	if !ok {
+		return
+	}
+	nextPath := safeNextPath(request.URL.Query().Get("next"))
+	if nextPath == "" {
+		nextPath = "/ui"
+	}
+	state.OIDCState = oidcState
+	state.OIDCNonce = oidcNonce
+	state.OIDCNext = nextPath
+	if !dependencies.writeSessionCookie(writer, state) {
+		return
+	}
+	redirectURL, err := dependencies.oidcProvider.AuthCodeURL(oidcState, oidcNonce)
+	if err != nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "failed to start oidc login"})
+		return
+	}
+	dependencies.logAuditEventRequest(
+		request,
+		sessionAuditEvent{
+			eventType: "oidc_login_start",
+			success:   true,
+			detail:    nextPath,
+		},
+	)
+	http.Redirect(writer, request, redirectURL, http.StatusSeeOther)
+}
+
+func (dependencies sessionAuthDependencies) handleOIDCCallback(writer http.ResponseWriter, request *http.Request) {
+	if !dependencies.validateCoreDependencies(writer) {
+		return
+	}
+	if !dependencies.requireOIDCProvider(writer) {
+		return
+	}
+	decodedState, code, ok := dependencies.resolveOIDCCallbackRequest(writer, request)
+	if !ok {
+		return
+	}
+	identity, err := dependencies.oidcProvider.AuthenticateCode(request.Context(), code, decodedState.OIDCNonce)
+	if err != nil {
+		dependencies.logOIDCFailure(
+			request,
+			"token_exchange_or_verification_failed",
+			func() {
+				http.Redirect(writer, request, "/login", http.StatusSeeOther)
+			},
+		)
+		return
+	}
+	record, ok := dependencies.lookupAuthenticatedOIDCUser(writer, request, identity.Username)
+	if !ok {
+		return
+	}
+	dependencies.logAuditEventRequest(
+		request,
+		sessionAuditEvent{
+			eventType: "oidc_login_success",
+			success:   true,
+			username:  record.Username,
+			metadata: map[string]any{
+				"subject": identity.Subject,
+				"email":   identity.Email,
+			},
+		},
+	)
+	dependencies.writeUILoginSuccess(writer, request, record, decodedState.OIDCNext)
+}
+
+func (dependencies sessionAuthDependencies) requireOIDCProvider(writer http.ResponseWriter) bool {
+	if dependencies.hasOIDCProvider() {
+		return true
+	}
+	writeJSON(writer, http.StatusNotFound, map[string]string{"detail": "oidc login is not enabled"})
+	return false
+}
+
+func (dependencies sessionAuthDependencies) resolveOIDCCallbackRequest(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (auth.SessionState, string, bool) {
+	decodedState, err := dependencies.manager.DecodeRequest(request)
+	if err != nil {
+		http.Redirect(writer, request, "/login", http.StatusSeeOther)
+		return auth.SessionState{}, "", false
+	}
+	providerState := strings.TrimSpace(request.URL.Query().Get("state"))
+	if providerState == "" || providerState != strings.TrimSpace(decodedState.OIDCState) {
+		dependencies.logOIDCFailure(
+			request,
+			"state_mismatch",
+			func() {
+				writeJSON(writer, http.StatusForbidden, map[string]string{"detail": "invalid oidc state"})
+			},
+		)
+		return auth.SessionState{}, "", false
+	}
+	code := strings.TrimSpace(request.URL.Query().Get("code"))
+	if code == "" {
+		dependencies.logOIDCFailure(
+			request,
+			"missing_code",
+			func() {
+				writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "missing oidc authorization code"})
+			},
+		)
+		return auth.SessionState{}, "", false
+	}
+	return decodedState, code, true
+}
+
+func (dependencies sessionAuthDependencies) logOIDCFailure(
+	request *http.Request,
+	detail string,
+	onFailure func(),
+) {
+	dependencies.logAuditEventRequest(
+		request,
+		sessionAuditEvent{
+			eventType: "oidc_login_failed",
+			success:   false,
+			detail:    detail,
+		},
+	)
+	onFailure()
+}
+
 func (dependencies sessionAuthDependencies) ensureCSRFSessionState(
 	writer http.ResponseWriter,
 	request *http.Request,
@@ -322,6 +467,26 @@ func (dependencies sessionAuthDependencies) validateLoginDependencies(writer htt
 
 func (dependencies sessionAuthDependencies) hasLoginAuthenticator() bool {
 	return dependencies.lookupUserByUsername != nil && dependencies.verifyPassword != nil
+}
+
+func (dependencies sessionAuthDependencies) hasOIDCProvider() bool {
+	return dependencies.oidcProvider != nil && dependencies.oidcProvider.Enabled()
+}
+
+func (dependencies sessionAuthDependencies) issueOIDCPendingState(
+	writer http.ResponseWriter,
+) (string, string, bool) {
+	oidcState, err := dependencies.generateCSRFToken()
+	if err != nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "failed to generate oidc state"})
+		return "", "", false
+	}
+	oidcNonce, err := dependencies.generateCSRFToken()
+	if err != nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "failed to generate oidc nonce"})
+		return "", "", false
+	}
+	return oidcState, oidcNonce, true
 }
 
 func (dependencies sessionAuthDependencies) decodeLoginRequest(writer http.ResponseWriter, request *http.Request) (sessionLoginRequest, bool) {
@@ -358,6 +523,32 @@ func (dependencies sessionAuthDependencies) authenticateLogin(
 	}
 	if !isAuthenticatedLoginRecord(record, password, dependencies.verifyPassword) {
 		writeJSON(writer, http.StatusUnauthorized, map[string]string{"detail": "invalid credentials"})
+		return nil, false
+	}
+	return record, true
+}
+
+func (dependencies sessionAuthDependencies) lookupAuthenticatedOIDCUser(
+	writer http.ResponseWriter,
+	request *http.Request,
+	username string,
+) (*models.UserAuthRecord, bool) {
+	if dependencies.lookupUserByUsername == nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "oidc user lookup is not configured"})
+		return nil, false
+	}
+	normalizedUsername := strings.TrimSpace(username)
+	if normalizedUsername == "" {
+		writeJSON(writer, http.StatusUnauthorized, map[string]string{"detail": "oidc identity missing username"})
+		return nil, false
+	}
+	record, err := dependencies.lookupUserByUsername(request.Context(), normalizedUsername)
+	if err != nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
+		return nil, false
+	}
+	if record == nil || !record.IsActive {
+		writeJSON(writer, http.StatusForbidden, map[string]string{"detail": "oidc user is not authorized"})
 		return nil, false
 	}
 	return record, true

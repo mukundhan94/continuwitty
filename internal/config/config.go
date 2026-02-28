@@ -15,6 +15,7 @@ var (
 		"app_session_secret":         {},
 		"ui_demo_password":           {},
 		"ui_demo_password_hash":      {},
+		"oidc_client_secret":         {},
 		"openai_api_key":             {},
 		"anthropic_api_key":          {},
 		"aws_access_key_id":          {},
@@ -117,6 +118,13 @@ type Settings struct {
 	AWSSecretAccessKey                 string  `envconfig:"AWS_SECRET_ACCESS_KEY"`
 	AWSSessionToken                    string  `envconfig:"AWS_SESSION_TOKEN"`
 	MCPTokenPepper                     string  `envconfig:"MCP_TOKEN_PEPPER" default:"engram-local-dev-mcp-token-pepper"`
+	OIDCEnabled                        bool    `envconfig:"OIDC_ENABLED" default:"false"`
+	OIDCIssuerURL                      string  `envconfig:"OIDC_ISSUER_URL"`
+	OIDCClientID                       string  `envconfig:"OIDC_CLIENT_ID"`
+	OIDCClientSecret                   string  `envconfig:"OIDC_CLIENT_SECRET"`
+	OIDCRedirectURL                    string  `envconfig:"OIDC_REDIRECT_URL"`
+	OIDCScopes                         string  `envconfig:"OIDC_SCOPES" default:"openid profile email"`
+	OIDCUsernameClaim                  string  `envconfig:"OIDC_USERNAME_CLAIM" default:"email"`
 	OAuthEnabled                       bool    `envconfig:"OAUTH_ENABLED" default:"true"`
 	OAuthIssuerURL                     string  `envconfig:"OAUTH_ISSUER_URL"`
 	OAuthRequireProtectedRegistration  bool    `envconfig:"OAUTH_REQUIRE_PROTECTED_REGISTRATION" default:"false"`
@@ -160,10 +168,37 @@ func LoadSettings() (Settings, error) {
 		return Settings{}, fmt.Errorf("load settings: %w", err)
 	}
 	applyDefaults(&settings)
+	if err := ValidateOIDCSettings(settings); err != nil {
+		return Settings{}, err
+	}
 	if err := ValidateProductionSecurity(settings); err != nil {
 		return Settings{}, err
 	}
 	return settings, nil
+}
+
+// ValidateOIDCSettings enforces required OIDC fields when oidc login is enabled.
+func ValidateOIDCSettings(settings Settings) error {
+	if !settings.OIDCEnabled {
+		return nil
+	}
+	missing := make([]string, 0, 4)
+	if strings.TrimSpace(settings.OIDCIssuerURL) == "" {
+		missing = append(missing, "OIDC_ISSUER_URL")
+	}
+	if strings.TrimSpace(settings.OIDCClientID) == "" {
+		missing = append(missing, "OIDC_CLIENT_ID")
+	}
+	if strings.TrimSpace(settings.OIDCClientSecret) == "" {
+		missing = append(missing, "OIDC_CLIENT_SECRET")
+	}
+	if strings.TrimSpace(settings.OIDCRedirectURL) == "" {
+		missing = append(missing, "OIDC_REDIRECT_URL")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("oidc is enabled but missing required settings: %s", strings.Join(missing, ", "))
 }
 
 func appendSecretViolations(violations []string, name, value, insecureDefault string) []string {
@@ -285,6 +320,13 @@ func settingsMap(settings Settings) map[string]any {
 		"aws_secret_access_key":                   settings.AWSSecretAccessKey,
 		"aws_session_token":                       settings.AWSSessionToken,
 		"mcp_token_pepper":                        settings.MCPTokenPepper,
+		"oidc_enabled":                            settings.OIDCEnabled,
+		"oidc_issuer_url":                         settings.OIDCIssuerURL,
+		"oidc_client_id":                          settings.OIDCClientID,
+		"oidc_client_secret":                      settings.OIDCClientSecret,
+		"oidc_redirect_url":                       settings.OIDCRedirectURL,
+		"oidc_scopes":                             settings.OIDCScopes,
+		"oidc_username_claim":                     settings.OIDCUsernameClaim,
 		"oauth_enabled":                           settings.OAuthEnabled,
 		"oauth_issuer_url":                        settings.OAuthIssuerURL,
 		"oauth_require_protected_registration":    settings.OAuthRequireProtectedRegistration,

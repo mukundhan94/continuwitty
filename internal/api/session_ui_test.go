@@ -593,6 +593,7 @@ type sessionUITestHandlerOptions struct {
 	auditLogPath        string
 	loginAttemptGuard   SessionLoginAttemptGuard
 	userRole            models.UserRole
+	oidcProvider        auth.OIDCLoginProvider
 	createTokenForOwner func(
 		ctx context.Context,
 		ownerUserID uuid.UUID,
@@ -619,6 +620,7 @@ func buildSessionUITestHandler(
 	router := chi.NewRouter()
 	dependencies := SessionAuthDependencies{
 		SessionManager:       manager,
+		OIDCProvider:         handlerOptions.oidcProvider,
 		LookupUserByUsername: lookupByUsername,
 		LookupUserByID:       lookupByID,
 		VerifyPassword:       auth.VerifyPassword,
