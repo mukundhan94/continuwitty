@@ -7,6 +7,44 @@
 
 ## Implementation Log
 
+### 2026-02-28 (Phase 19: collaboration, sharing, and membership-safe access)
+
+1. Added collaboration schema and persistence:
+   - `project_members` table + active/revoked indexes and owner-membership backfill in `db/init/001_schema.sql`.
+   - `project_audit_events` table + query indexes.
+2. Added repository support:
+   - `internal/repository/project_membership.go` (membership CRUD + actor role resolution).
+   - `internal/repository/project_audit.go` (audit insert/list).
+   - `internal/repository/engram_share.go` (share-target read + visibility update).
+3. Enforced membership-gated visibility reads across core paths:
+   - introduced shared SQL helpers in `internal/repository/access_policy_sql.go`.
+   - updated engram/chat/chat_message/chat_pinning/document/rehydration read predicates for owner/admin/membership policy.
+4. Added Phase 19 project service behavior:
+   - member list/add/update/remove methods with owner/admin-only management checks.
+   - audit list method with owner/admin policy.
+   - engram `share`/`unshare` methods with owner/editor/viewer/admin role matrix.
+   - hardened `ResolveProjectIDForWrite` for inaccessible existing project IDs and viewer write denial.
+5. Added REST API routes:
+   - project member CRUD and audit list in `internal/api/projects_api.go`.
+   - `POST /api/v1/engrams/{engram_id}/share` and `/unshare` in session-auth routing.
+6. Added MCP parity:
+   - new tools `project.member_list`, `project.member_add`, `project.member_update`, `project.member_remove`, `engram.share`, `engram.unshare`.
+   - updated MCP catalog metadata, dispatch wiring, and token project-scope policy maps.
+7. Added audit emission for pin/unpin:
+   - `chat.pin_engram` and `chat.unpin_engram` now write DB audit rows.
+8. Extended admin UI:
+   - `AdminMemoryPage` now includes project member management and project audit timeline panels.
+   - extended web API/type clients for member/audit routes and share/unshare helpers.
+9. Added/updated tests:
+   - fixed placeholder/index regressions in repository query builders and updated SQL expectation tests.
+   - added API tests for project member/audit handlers and engram share/unshare handlers.
+   - extended projects service tests for new member/share authorization behavior.
+   - extended web API and admin UI tests for member/audit workflows.
+10. Validation:
+   - `go test ./internal/api ./internal/projects ./internal/repository ./internal/mcp ./cmd/api`
+   - `npm test -- --run src/api/projects.test.ts src/api/memoryAdmin.test.ts src/components/AdminMemoryPage.test.tsx` (from `web/`)
+   - `npm run build` (from `web/`)
+
 ### 2026-02-22 (Go migration CP1: module scaffold + config parity)
 
 1. Started phased Go migration per `migration/migrate.md` with a dedicated checkpoint tracker:

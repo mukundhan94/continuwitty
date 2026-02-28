@@ -32,6 +32,8 @@ Sign in via `POST /login` with form credentials to obtain a session cookie.
 | `POST` | `/api/v1/engrams/query` | Semantic query |
 | `GET` | `/api/v1/engrams/{engram_id}/sources` | Inspect provenance sources |
 | `GET` | `/api/v1/engrams/{engram_id}/rehydrate` | Get rehydration bundle |
+| `POST` | `/api/v1/engrams/{engram_id}/share` | Share engram to project-visible scope |
+| `POST` | `/api/v1/engrams/{engram_id}/unshare` | Revert engram visibility to private |
 
 ### Chat Sessions
 
@@ -89,6 +91,11 @@ Sign in via `POST /login` with form credentials to obtain a session cookie.
 | `POST` | `/api/v1/projects` | Create project |
 | `GET` | `/api/v1/projects/default` | Get default project |
 | `PATCH` | `/api/v1/projects/default` | Set default project |
+| `GET` | `/api/v1/projects/{project_id}/members` | List project members (owner/admin) |
+| `POST` | `/api/v1/projects/{project_id}/members` | Add/restore project member (owner/admin) |
+| `PATCH` | `/api/v1/projects/{project_id}/members/{user_id}` | Update project member role (owner/admin) |
+| `DELETE` | `/api/v1/projects/{project_id}/members/{user_id}` | Remove project member (owner/admin) |
+| `GET` | `/api/v1/projects/{project_id}/audit-events` | List project audit events (owner/admin) |
 | `GET` | `/api/v1/projects/{project_id}/export` | Export project bundle (JSON/ZIP, optional collection filter) |
 | `POST` | `/api/v1/projects/{project_id}/import` | Import project bundle with conflict policy (`skip`/`overwrite`/`rename`) |
 

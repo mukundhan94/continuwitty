@@ -25,6 +25,10 @@ Use it as the default workflow when adding or refactoring features.
 - Keep project write resolution centralized in `ProjectService.resolve_project_id_for_write`: explicit `project_id` wins, otherwise use actor default project, otherwise fail with 422.
 - Keep soft-delete semantics for sessions/engrams/collections (`deleted_at`, `deleted_by_user_id`, `delete_reason`) and restore by clearing those fields; never hard-delete from admin APIs/tools.
 - Keep collections project-bounded: engrams can only belong to collections in the same project, and cross-project engram moves must auto-detach invalid collection links.
+- Keep project visibility membership-safe: project-visible engrams/chats/documents must only resolve for admin, owner, or active project members (including ownerless legacy rows via active membership).
+- Keep project ownership canonical: `projects.owner_user_id` remains source-of-truth and must have a mirrored active owner row in `project_members`.
+- Keep project member management restricted to owner/admin; never allow assigning/demoting/removing `owner` via member CRUD APIs.
+- Keep project audit events DB-backed in `project_audit_events` for member add/update/remove, engram share/unshare, and engram pin/unpin actions.
 - Before every commit, follow `skills/codescene/SKILL.md` and run a CodeScene MCP pre-commit health check (`pre_commit_code_health_safeguard`) on the current change set; record the outcome in the implementation log.
 
 ## 3. Daily Workflow

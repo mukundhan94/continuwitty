@@ -233,6 +233,8 @@ curl -s -b "$COOKIE_JAR" \
 - `engram.query`
 - `engram.rehydrate`
 - `engram.pin_to_session`
+- `engram.share`
+- `engram.unshare`
 
 ### Project Tools
 
@@ -240,8 +242,14 @@ curl -s -b "$COOKIE_JAR" \
 - `project.create`
 - `project.get_default`
 - `project.set_default`
+- `project.member_list`
+- `project.member_add`
+- `project.member_update`
+- `project.member_remove`
 - `project.export_bundle`
 - `project.import_bundle`
+
+Note: project audit-event listing is currently REST-only (`GET /api/v1/projects/{project_id}/audit-events`) and is not exposed as an MCP tool in this phase.
 
 ### User Tools
 

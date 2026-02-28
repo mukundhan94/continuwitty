@@ -181,6 +181,14 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 19 - Collaboration and Sharing Model
 
+### Status
+
+- Completed: project membership model (`owner`/`editor`/`viewer`) with canonical owner membership backfill.
+- Completed: membership-gated visibility enforcement across engram/chat/document read paths.
+- Completed: explicit engram share/unshare REST + MCP workflows with role-aware authorization.
+- Completed: DB-backed project audit trail for membership changes, share/unshare, and chat pin/unpin events.
+- Completed: admin memory UI panels for project member management and project audit timeline.
+
 ### Goals
 
 - Safely share memory across users/projects.

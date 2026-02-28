@@ -4,7 +4,13 @@ import { useState } from 'react'
 import { ThemeProvider } from 'styled-components'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AdminChatSessionRecord, AdminEngramRecord, EngramCollectionRecord } from '../api/types'
+import type {
+  AdminChatSessionRecord,
+  AdminEngramRecord,
+  EngramCollectionRecord,
+  ProjectAuditEventRecord,
+  ProjectMemberRecord,
+} from '../api/types'
 import { lightTheme } from '../styles/theme'
 import { AdminMemoryPage } from './AdminMemoryPage'
 
@@ -36,10 +42,38 @@ const projectApiMocks = vi.hoisted(() => ({
       updated_at: '2026-01-01T00:00:00Z',
     },
   ]),
+  listProjectMembers: vi.fn<() => Promise<ProjectMemberRecord[]>>(async () => []),
+  addProjectMember: vi.fn<() => Promise<ProjectMemberRecord>>(async () => ({
+    project_id: 'engram-vault',
+    user_id: '00000000-0000-0000-0000-000000000191',
+    role: 'viewer',
+    added_by_user_id: '00000000-0000-0000-0000-000000000001',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    revoked_at: null,
+    revoked_by_user_id: null,
+  })),
+  updateProjectMember: vi.fn<() => Promise<ProjectMemberRecord>>(async () => ({
+    project_id: 'engram-vault',
+    user_id: '00000000-0000-0000-0000-000000000191',
+    role: 'editor',
+    added_by_user_id: '00000000-0000-0000-0000-000000000001',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    revoked_at: null,
+    revoked_by_user_id: null,
+  })),
+  removeProjectMember: vi.fn<() => Promise<{ removed: boolean }>>(async () => ({ removed: true })),
+  listProjectAuditEvents: vi.fn<() => Promise<ProjectAuditEventRecord[]>>(async () => []),
 }))
 
 vi.mock('../api/projects', () => ({
   listProjects: projectApiMocks.listProjects,
+  listProjectMembers: projectApiMocks.listProjectMembers,
+  addProjectMember: projectApiMocks.addProjectMember,
+  updateProjectMember: projectApiMocks.updateProjectMember,
+  removeProjectMember: projectApiMocks.removeProjectMember,
+  listProjectAuditEvents: projectApiMocks.listProjectAuditEvents,
 }))
 
 vi.mock('../api/memoryAdmin', async () => {
@@ -116,6 +150,31 @@ describe('AdminMemoryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     memoryAdminMocks.getAdminEngram.mockResolvedValue(buildAdminEngram())
+    projectApiMocks.listProjectMembers.mockResolvedValue([
+      {
+        project_id: 'engram-vault',
+        user_id: '00000000-0000-0000-0000-000000000001',
+        role: 'owner',
+        added_by_user_id: '00000000-0000-0000-0000-000000000001',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        revoked_at: null,
+        revoked_by_user_id: null,
+      },
+    ])
+    projectApiMocks.listProjectAuditEvents.mockResolvedValue([
+      {
+        event_id: '00000000-0000-0000-0000-000000000911',
+        project_id: 'engram-vault',
+        actor_user_id: '00000000-0000-0000-0000-000000000001',
+        event_type: 'engram.share',
+        target_type: 'engram',
+        target_user_id: null,
+        target_engram_id: '00000000-0000-0000-0000-000000000812',
+        metadata: { from_visibility_scope: 'private', to_visibility_scope: 'project' },
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ])
   })
 
   it('renders management sections and loads admin datasets', async () => {
@@ -124,12 +183,16 @@ describe('AdminMemoryPage', () => {
     expect(screen.getByText('Session Management')).toBeInTheDocument()
     expect(screen.getByText('Engram Management')).toBeInTheDocument()
     expect(screen.getByText('Collections')).toBeInTheDocument()
+    expect(screen.getByText('Project Members')).toBeInTheDocument()
+    expect(screen.getByText('Project Audit Timeline')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(memoryAdminMocks.listAdminSessions).toHaveBeenCalled()
       expect(memoryAdminMocks.listAdminEngrams).toHaveBeenCalled()
       expect(memoryAdminMocks.listCollections).toHaveBeenCalled()
       expect(projectApiMocks.listProjects).toHaveBeenCalled()
+      expect(projectApiMocks.listProjectMembers).toHaveBeenCalled()
+      expect(projectApiMocks.listProjectAuditEvents).toHaveBeenCalled()
     })
   })
 
@@ -226,6 +289,26 @@ describe('AdminMemoryPage', () => {
       expect(memoryAdminMocks.listAdminEngrams).toHaveBeenLastCalledWith(
         expect.objectContaining({ q: 'latency' }),
       )
+    })
+  })
+
+  it('adds a project member from the members panel', async () => {
+    const user = userEvent.setup()
+    renderAdminPage()
+
+    await waitFor(() => {
+      expect(projectApiMocks.listProjectMembers).toHaveBeenCalled()
+    })
+
+    await user.type(screen.getByTestId('admin-member-user-id-input'), '00000000-0000-0000-0000-000000000191')
+    await user.selectOptions(screen.getByTestId('admin-member-role-select'), 'viewer')
+    await user.click(screen.getByRole('button', { name: /add member/i }))
+
+    await waitFor(() => {
+      expect(projectApiMocks.addProjectMember).toHaveBeenCalledWith('engram-vault', {
+        user_id: '00000000-0000-0000-0000-000000000191',
+        role: 'viewer',
+      })
     })
   })
 })

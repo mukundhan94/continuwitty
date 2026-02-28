@@ -6,6 +6,7 @@ import type {
   AdminEngramRestoreResponse,
   AdminSessionDeleteResponse,
   AdminSessionRestoreResponse,
+  EngramVisibilityRecord,
   EngramCollectionRecord,
 } from './types'
 
@@ -240,4 +241,16 @@ export async function removeCollectionItem(
     `/api/v1/admin/memory/collections/${collectionId}/items/${engramId}`,
     { method: 'DELETE' },
   )
+}
+
+export async function shareEngram(engramId: string): Promise<EngramVisibilityRecord> {
+  return apiJson<EngramVisibilityRecord>(`/api/v1/engrams/${engramId}/share`, {
+    method: 'POST',
+  })
+}
+
+export async function unshareEngram(engramId: string): Promise<EngramVisibilityRecord> {
+  return apiJson<EngramVisibilityRecord>(`/api/v1/engrams/${engramId}/unshare`, {
+    method: 'POST',
+  })
 }

@@ -22,6 +22,12 @@ export interface EngramSummary {
   visibility_scope: VisibilityScope
 }
 
+export interface EngramVisibilityRecord {
+  engram_id: string
+  project_id: string
+  visibility_scope: VisibilityScope
+}
+
 export interface DocumentRecord {
   document_id: string
   owner_user_id: string
@@ -220,6 +226,7 @@ export interface ProjectRecord {
   name: string
   description: string
   owner_user_id: string
+  membership_role?: ProjectMemberRole
   is_archived: boolean
   created_at: string
   updated_at: string
@@ -227,6 +234,31 @@ export interface ProjectRecord {
 
 export interface ProjectDefaultResponse {
   default_project_id: string | null
+}
+
+export type ProjectMemberRole = 'owner' | 'editor' | 'viewer'
+
+export interface ProjectMemberRecord {
+  project_id: string
+  user_id: string
+  role: ProjectMemberRole
+  added_by_user_id: string | null
+  created_at: string
+  updated_at: string
+  revoked_at: string | null
+  revoked_by_user_id: string | null
+}
+
+export interface ProjectAuditEventRecord {
+  event_id: string
+  project_id: string
+  actor_user_id: string | null
+  event_type: string
+  target_type: string
+  target_user_id: string | null
+  target_engram_id: string | null
+  metadata: Record<string, unknown>
+  created_at: string
 }
 
 export type ProjectExportFormat = 'json' | 'zip'
