@@ -52,29 +52,49 @@ func ListProjectsForActor(
 ) ([]models.ProjectRecord, error) {
 	where := []string{"1=1"}
 	params := make([]any, 0, 4)
+	joinSQL := ""
+	membershipRoleExpr := "NULL::TEXT"
 	if input.ActorRole != "admin" {
-		where = append(where, fmt.Sprintf("owner_user_id = %s", pgxPlaceholder(len(params)+1)))
+		actorPlaceholder := pgxPlaceholder(len(params) + 1)
+		joinSQL = fmt.Sprintf(
+			`
+			LEFT JOIN project_members pm
+			  ON pm.project_id = p.project_id
+			 AND pm.user_id = %s
+			 AND pm.revoked_at IS NULL
+			`,
+			actorPlaceholder,
+		)
+		membershipRoleExpr = fmt.Sprintf(
+			"CASE WHEN p.owner_user_id = %s THEN 'owner' ELSE pm.role END",
+			actorPlaceholder,
+		)
+		where = append(where, fmt.Sprintf("(p.owner_user_id = %s OR pm.user_id IS NOT NULL)", actorPlaceholder))
 		params = append(params, input.ActorUserID)
 	}
 	if !input.IncludeArchived {
-		where = append(where, "is_archived = FALSE")
+		where = append(where, "p.is_archived = FALSE")
 	}
 
 	sql := fmt.Sprintf(
 		`
 		SELECT
-			project_id,
-			name,
-			description,
-			owner_user_id,
-			is_archived,
-			created_at,
-			updated_at
-		FROM projects
+			p.project_id,
+			p.name,
+			p.description,
+			p.owner_user_id,
+			p.is_archived,
+			p.created_at,
+			p.updated_at,
+			%s AS membership_role
+		FROM projects p
+		%s
 		WHERE %s
-		ORDER BY created_at ASC
+		ORDER BY p.created_at ASC
 		LIMIT %s OFFSET %s
 		`,
+		membershipRoleExpr,
+		joinSQL,
 		strings.Join(where, " AND "),
 		pgxPlaceholder(len(params)+1),
 		pgxPlaceholder(len(params)+2),
@@ -107,14 +127,30 @@ func GetProjectForActor(
 	db Queryer,
 	input ProjectGetInput,
 ) (*models.ProjectRecord, error) {
-	where := []string{fmt.Sprintf("project_id = %s", pgxPlaceholder(1))}
+	where := []string{fmt.Sprintf("p.project_id = %s", pgxPlaceholder(1))}
 	params := []any{input.ProjectID}
+	joinSQL := ""
+	membershipRoleExpr := "NULL::TEXT"
 	if input.ActorRole != "admin" {
-		where = append(where, fmt.Sprintf("owner_user_id = %s", pgxPlaceholder(len(params)+1)))
+		actorPlaceholder := pgxPlaceholder(len(params) + 1)
+		joinSQL = fmt.Sprintf(
+			`
+			LEFT JOIN project_members pm
+			  ON pm.project_id = p.project_id
+			 AND pm.user_id = %s
+			 AND pm.revoked_at IS NULL
+			`,
+			actorPlaceholder,
+		)
+		membershipRoleExpr = fmt.Sprintf(
+			"CASE WHEN p.owner_user_id = %s THEN 'owner' ELSE pm.role END",
+			actorPlaceholder,
+		)
+		where = append(where, fmt.Sprintf("(p.owner_user_id = %s OR pm.user_id IS NOT NULL)", actorPlaceholder))
 		params = append(params, input.ActorUserID)
 	}
 	if !input.IncludeArchived {
-		where = append(where, "is_archived = FALSE")
+		where = append(where, "p.is_archived = FALSE")
 	}
 
 	row := db.QueryRow(
@@ -122,17 +158,21 @@ func GetProjectForActor(
 		fmt.Sprintf(
 			`
 			SELECT
-				project_id,
-				name,
-				description,
-				owner_user_id,
-				is_archived,
-				created_at,
-				updated_at
-			FROM projects
+				p.project_id,
+				p.name,
+				p.description,
+				p.owner_user_id,
+				p.is_archived,
+				p.created_at,
+				p.updated_at,
+				%s AS membership_role
+			FROM projects p
+			%s
 			WHERE %s
 			LIMIT 1
 			`,
+			membershipRoleExpr,
+			joinSQL,
 			strings.Join(where, " AND "),
 		),
 		params...,
@@ -179,7 +219,8 @@ func CreateProject(
 			owner_user_id,
 			is_archived,
 			created_at,
-			updated_at
+			updated_at,
+			'owner'::TEXT AS membership_role
 		`,
 		input.ProjectID,
 		input.Name,
@@ -288,6 +329,7 @@ func scanProjectRecord(row interface {
 	Scan(dest ...any) error
 }) (models.ProjectRecord, error) {
 	record := models.ProjectRecord{}
+	var membershipRoleRaw *string
 	err := row.Scan(
 		&record.ProjectID,
 		&record.Name,
@@ -296,9 +338,17 @@ func scanProjectRecord(row interface {
 		&record.IsArchived,
 		&record.CreatedAt,
 		&record.UpdatedAt,
+		&membershipRoleRaw,
 	)
 	if err != nil {
 		return models.ProjectRecord{}, err
+	}
+	if membershipRoleRaw != nil && strings.TrimSpace(*membershipRoleRaw) != "" {
+		membershipRole, parseErr := models.ParseProjectMemberRole(strings.TrimSpace(*membershipRoleRaw))
+		if parseErr != nil {
+			return models.ProjectRecord{}, parseErr
+		}
+		record.MembershipRole = &membershipRole
 	}
 	return record, nil
 }

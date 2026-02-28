@@ -231,31 +231,42 @@ func buildEngramQueryWhere(
 	whereClauses := []string{"deleted_at IS NULL"}
 	params := []any{queryLiteral}
 
+	nextPlaceholder := func() string {
+		return pgxPlaceholder(len(params) + 1)
+	}
+
 	if request.ProjectID != nil && *request.ProjectID != "" {
-		whereClauses = append(whereClauses, "project_id = %s")
+		whereClauses = append(whereClauses, fmt.Sprintf("project_id = %s", nextPlaceholder()))
 		params = append(params, *request.ProjectID)
 	}
 	if actorUserID != nil {
+		actorPlaceholder := nextPlaceholder()
 		whereClauses = append(
 			whereClauses,
-			"(owner_user_id = %s OR visibility_scope = 'project' OR owner_user_id IS NULL)",
+			buildMembershipReadClause(
+				"owner_user_id",
+				"visibility_scope",
+				"project_id",
+				actorPlaceholder,
+				true,
+			),
 		)
 		params = append(params, *actorUserID)
 	}
 	if len(request.Tags) > 0 {
-		whereClauses = append(whereClauses, "tags && %s")
+		whereClauses = append(whereClauses, fmt.Sprintf("tags && %s", nextPlaceholder()))
 		params = append(params, request.Tags)
 	}
 	if len(request.Keywords) > 0 {
-		whereClauses = append(whereClauses, "keywords && %s")
+		whereClauses = append(whereClauses, fmt.Sprintf("keywords && %s", nextPlaceholder()))
 		params = append(params, request.Keywords)
 	}
 	if request.CreatedAfter != nil {
-		whereClauses = append(whereClauses, "created_at >= %s")
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at >= %s", nextPlaceholder()))
 		params = append(params, *request.CreatedAfter)
 	}
 	if request.CreatedBefore != nil {
-		whereClauses = append(whereClauses, "created_at <= %s")
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at <= %s", nextPlaceholder()))
 		params = append(params, *request.CreatedBefore)
 	}
 

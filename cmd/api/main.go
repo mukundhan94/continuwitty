@@ -286,6 +286,8 @@ func buildSessionAuthDependencies(runtimeDependencies sessionAuthRuntimeDependen
 		QueryEngrams:             queryEngramsDependency(runtimeDependencies.pool, runtimeDependencies.settings.EmbeddingDim),
 		GetRehydrationBundle:     getRehydrationBundleDependency(runtimeDependencies.pool),
 		GetEngramSources:         getEngramSourcesDependency(runtimeDependencies.pool),
+		ShareEngram:              shareEngramDependency(runtimeDependencies.projectService),
+		UnshareEngram:            unshareEngramDependency(runtimeDependencies.projectService),
 		CreateTokenForOwner:      createMCPTokenForOwnerDependency(runtimeDependencies.mcpTokenService),
 		ListTokenSummaries:       listMCPTokenSummariesDependency(runtimeDependencies.mcpTokenService),
 		RevokeTokenForOwner:      revokeMCPTokenForOwnerDependency(runtimeDependencies.mcpTokenService),
@@ -443,6 +445,50 @@ func getEngramSourcesDependency(
 		actorUserID uuid.UUID,
 	) ([]models.EngramSourceRecord, error) {
 		return repository.GetEngramSources(ctx, pool, engramID, limit, &actorUserID)
+	}
+}
+
+func shareEngramDependency(
+	projectService projectResolutionService,
+) func(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	actorRole models.UserRole,
+	engramID uuid.UUID,
+) (*models.EngramVisibilityRecord, error) {
+	concreteService, ok := projectService.(*projects.Service)
+	if !ok || concreteService == nil {
+		return nil
+	}
+	return func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		engramID uuid.UUID,
+	) (*models.EngramVisibilityRecord, error) {
+		return concreteService.ShareEngram(ctx, actorUserID, actorRole, engramID)
+	}
+}
+
+func unshareEngramDependency(
+	projectService projectResolutionService,
+) func(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	actorRole models.UserRole,
+	engramID uuid.UUID,
+) (*models.EngramVisibilityRecord, error) {
+	concreteService, ok := projectService.(*projects.Service)
+	if !ok || concreteService == nil {
+		return nil
+	}
+	return func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		engramID uuid.UUID,
+	) (*models.EngramVisibilityRecord, error) {
+		return concreteService.UnshareEngram(ctx, actorUserID, actorRole, engramID)
 	}
 }
 

@@ -26,6 +26,7 @@ func TestListProjectsForActorScopesNonAdminAndArchived(t *testing.T) {
 					false,
 					createdAt,
 					updatedAt,
+					"owner",
 				},
 			},
 		},
@@ -92,6 +93,7 @@ func TestCreateProjectReturnsRecord(t *testing.T) {
 				false,
 				createdAt,
 				createdAt,
+				"owner",
 			},
 		},
 	}
@@ -125,6 +127,7 @@ func TestEnsureProjectExistsReturnsExistingBeforeCreate(t *testing.T) {
 				false,
 				createdAt,
 				createdAt,
+				"owner",
 			},
 		},
 	}

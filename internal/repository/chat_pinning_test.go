@@ -16,8 +16,13 @@ func TestPinEngramToSessionReturnsPinnedRecord(t *testing.T) {
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000702")
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000703")
 	createdAt := time.Date(2026, 2, 22, 11, 0, 0, 0, time.UTC)
+	auditEventID := uuid.MustParse("00000000-0000-0000-0000-000000000704")
 	db := &fakeQueryer{
-		queryRowResult: &fakeRow{values: []any{sessionID, engramID, actorUserID, createdAt}},
+		queryRowResults: []*fakeRow{
+			{values: []any{sessionID, engramID, actorUserID, createdAt}},
+			{values: []any{"proj-alpha"}},
+			{values: []any{auditEventID, "proj-alpha", actorUserID, "engram.pin", "engram", nil, engramID, []byte(`{}`), createdAt}},
+		},
 	}
 
 	originalNow := nowChatUTC
@@ -38,7 +43,7 @@ func TestPinEngramToSessionReturnsPinnedRecord(t *testing.T) {
 	requireEqual(t, engramID, record.EngramID)
 	requireEqual(t, actorUserID, record.PinnedByUserID)
 
-	requireEqual(t, 1, len(db.queryRowSQL))
+	requireEqual(t, 3, len(db.queryRowSQL))
 	query := db.queryRowSQL[0]
 	if !strings.Contains(query, "session_pinned_engrams") {
 		t.Fatalf("expected engram pin table in query, got %q", query)
@@ -56,7 +61,24 @@ func TestUnpinEngramFromSessionReturnsTrueWhenRemoved(t *testing.T) {
 	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000721")
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000722")
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000723")
-	db := &fakeQueryer{queryRowResult: &fakeRow{values: []any{sessionID}}}
+	createdAt := time.Date(2026, 2, 22, 11, 5, 0, 0, time.UTC)
+	db := &fakeQueryer{
+		queryRowResults: []*fakeRow{
+			{values: []any{sessionID}},
+			{values: []any{"proj-alpha"}},
+			{values: []any{
+				uuid.MustParse("00000000-0000-0000-0000-000000000724"),
+				"proj-alpha",
+				actorUserID,
+				"engram.unpin",
+				"engram",
+				nil,
+				engramID,
+				[]byte(`{}`),
+				createdAt,
+			}},
+		},
+	}
 
 	removed, err := UnpinEngramFromSession(
 		context.Background(),

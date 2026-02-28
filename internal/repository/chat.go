@@ -133,15 +133,23 @@ func ListChatSessions(
 	db Queryer,
 	input ChatSessionListInput,
 ) ([]models.ChatSessionRecord, error) {
+	accessClause := buildMembershipReadClause(
+		"owner_user_id",
+		"visibility_scope",
+		"project_id",
+		"$1",
+		false,
+	)
 	query := fmt.Sprintf(
 		`
 		SELECT %s
 		FROM chat_sessions
 		WHERE
 			deleted_at IS NULL
-			AND (owner_user_id = $1 OR visibility_scope = 'project')
+			AND %s
 		`,
 		chatSessionColumns,
+		accessClause,
 	)
 	params := []any{input.ActorUserID}
 	if input.ProjectID != nil && *input.ProjectID != "" {
@@ -181,6 +189,13 @@ func GetChatSession(
 	db Queryer,
 	input ChatSessionGetInput,
 ) (*models.ChatSessionRecord, error) {
+	accessClause := buildMembershipReadClause(
+		"owner_user_id",
+		"visibility_scope",
+		"project_id",
+		"$2",
+		false,
+	)
 	row := db.QueryRow(
 		ctx,
 		fmt.Sprintf(
@@ -190,9 +205,10 @@ func GetChatSession(
 			WHERE
 				session_id = $1
 				AND deleted_at IS NULL
-				AND (owner_user_id = $2 OR visibility_scope = 'project')
+				AND %s
 			`,
 			chatSessionColumns,
+			accessClause,
 		),
 		input.SessionID,
 		input.ActorUserID,

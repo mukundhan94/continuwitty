@@ -271,7 +271,14 @@ func ListDocuments(
 	db Queryer,
 	input DocumentListInput,
 ) ([]models.DocumentRecord, error) {
-	query := `
+	accessClause := buildMembershipReadClause(
+		"owner_user_id",
+		"visibility_scope",
+		"project_id",
+		"$1",
+		false,
+	)
+	query := fmt.Sprintf(`
 		SELECT
 			document_id,
 			owner_user_id,
@@ -286,8 +293,8 @@ func ListDocuments(
 			created_at,
 			updated_at
 		FROM documents
-		WHERE (owner_user_id = $1 OR visibility_scope = 'project')
-	`
+		WHERE %s
+	`, accessClause)
 	params := []any{input.ActorUserID}
 	if input.ProjectID != nil && *input.ProjectID != "" {
 		query += " AND project_id = $2"
@@ -384,8 +391,7 @@ func buildDocumentChunkQuerySQLAndParams(
 	queryVector []float64,
 	topK int,
 ) (string, []any) {
-	whereSQL, whereParams := buildDocumentChunkWhere(actorUserID, request)
-	whereSQL = percentToPGXPlaceholders(whereSQL, 2)
+	whereSQL, whereParams := buildDocumentChunkWhere(actorUserID, request, 2)
 	limitPlaceholder := pgxPlaceholder(len(whereParams) + 2)
 	querySQL := fmt.Sprintf(queryDocumentChunksSelectTemplate, whereSQL, limitPlaceholder)
 
@@ -534,15 +540,32 @@ func scanDocumentRecord(row interface {
 func buildDocumentChunkWhere(
 	actorUserID uuid.UUID,
 	request models.DocumentChunkQueryRequest,
+	startPlaceholder int,
 ) (string, []any) {
-	whereClauses := []string{"(d.owner_user_id = %s OR d.visibility_scope = 'project')"}
-	whereParams := []any{actorUserID}
+	if startPlaceholder <= 0 {
+		startPlaceholder = 1
+	}
+	whereParams := make([]any, 0, 3)
+	nextPlaceholder := func() string {
+		return pgxPlaceholder(startPlaceholder + len(whereParams))
+	}
+	actorPlaceholder := nextPlaceholder()
+	whereClauses := []string{
+		buildMembershipReadClause(
+			"d.owner_user_id",
+			"d.visibility_scope",
+			"d.project_id",
+			actorPlaceholder,
+			false,
+		),
+	}
+	whereParams = append(whereParams, actorUserID)
 	if request.ProjectID != nil && *request.ProjectID != "" {
-		whereClauses = append(whereClauses, "d.project_id = %s")
+		whereClauses = append(whereClauses, fmt.Sprintf("d.project_id = %s", nextPlaceholder()))
 		whereParams = append(whereParams, *request.ProjectID)
 	}
 	if len(request.DocumentIDs) > 0 {
-		whereClauses = append(whereClauses, "d.document_id = ANY(%s::uuid[])")
+		whereClauses = append(whereClauses, fmt.Sprintf("d.document_id = ANY(%s::uuid[])", nextPlaceholder()))
 		whereParams = append(whereParams, request.DocumentIDs)
 	}
 	return strings.Join(whereClauses, " AND "), whereParams

@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"engram/internal/models"
@@ -139,11 +138,15 @@ func fetchRehydrationEngramRow(
 	whereClauses := []string{"engram_id = $1", "deleted_at IS NULL"}
 	params := []any{engramID}
 	if actorUserID != nil {
+		actorPlaceholder := pgxPlaceholder(len(params) + 1)
 		whereClauses = append(
 			whereClauses,
-			fmt.Sprintf(
-				"(owner_user_id = %s OR visibility_scope = 'project' OR owner_user_id IS NULL)",
-				pgxPlaceholder(len(params)+1),
+			buildMembershipReadClause(
+				"owner_user_id",
+				"visibility_scope",
+				"project_id",
+				actorPlaceholder,
+				true,
 			),
 		)
 		params = append(params, *actorUserID)

@@ -56,7 +56,20 @@ func TestListEngramsAppliesVisibilityAndProjectFilters(t *testing.T) {
 
 	requireEqual(t, 1, len(db.querySQL))
 	query := db.querySQL[0]
-	if !strings.Contains(query, "owner_user_id = $1 OR visibility_scope = 'project' OR owner_user_id IS NULL") {
+	requiredFragments := []string{
+		"owner_user_id = $1",
+		"actor_user.user_id = $1",
+		"visibility_scope = 'project'",
+		"pm.project_id = project_id",
+		"pm.user_id = $1",
+		"owner_user_id IS NULL",
+	}
+	for _, fragment := range requiredFragments {
+		if !strings.Contains(query, fragment) {
+			t.Fatalf("expected visibility fragment %q in query, got %q", fragment, query)
+		}
+	}
+	if !strings.Contains(query, "OR (visibility_scope = 'project'") {
 		t.Fatalf("expected visibility clause in query, got %q", query)
 	}
 	if !strings.Contains(query, "project_id = $2") {
@@ -106,7 +119,7 @@ func TestListEngramsWithoutActorOmitsVisibilityClause(t *testing.T) {
 
 	requireEqual(t, 1, len(db.querySQL))
 	query := db.querySQL[0]
-	if strings.Contains(query, "owner_user_id = $1 OR visibility_scope = 'project' OR owner_user_id IS NULL") {
+	if strings.Contains(query, "FROM project_members pm") {
 		t.Fatalf("did not expect visibility clause when actor is nil: %q", query)
 	}
 	expectedArgs := []any{10, 5}
@@ -178,8 +191,18 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	if !strings.Contains(query, "WHERE deleted_at IS NULL AND project_id = $2") {
 		t.Fatalf("expected project clause with pgx placeholders, got %q", query)
 	}
-	if !strings.Contains(query, "owner_user_id = $3 OR visibility_scope = 'project' OR owner_user_id IS NULL") {
-		t.Fatalf("expected actor visibility clause in query, got %q", query)
+	requiredVisibilityFragments := []string{
+		"owner_user_id = $3",
+		"actor_user.user_id = $3",
+		"visibility_scope = 'project'",
+		"pm.project_id = project_id",
+		"pm.user_id = $3",
+		"owner_user_id IS NULL",
+	}
+	for _, fragment := range requiredVisibilityFragments {
+		if !strings.Contains(query, fragment) {
+			t.Fatalf("expected actor visibility fragment %q in query, got %q", fragment, query)
+		}
 	}
 	expectedArgs := []any{"[0.1,0.2,0.3]", projectID, actorUserID, 4}
 	if !reflect.DeepEqual(db.queryArgs[0], expectedArgs) {

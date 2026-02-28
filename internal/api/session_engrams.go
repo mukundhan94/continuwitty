@@ -21,6 +21,8 @@ var (
 	ErrProjectIDRequiredWhenNoDefaultProject = errors.New("project_id is required when no default project is configured")
 	// ErrDefaultProjectNotAccessible matches Python parity when caller's default project is not visible.
 	ErrDefaultProjectNotAccessible = errors.New("default project is not accessible; set a valid default project first")
+	// ErrProjectWriteForbidden indicates caller lacks write access to the resolved project.
+	ErrProjectWriteForbidden = errors.New("project is not writable by actor")
 )
 
 // SessionProjectResolution carries project-resolution output for write routes.
@@ -345,6 +347,8 @@ func mapProjectResolutionError(err error) (int, string, bool) {
 		return http.StatusUnprocessableEntity, ErrProjectIDRequiredWhenNoDefaultProject.Error(), true
 	case errors.Is(err, ErrDefaultProjectNotAccessible):
 		return http.StatusUnprocessableEntity, ErrDefaultProjectNotAccessible.Error(), true
+	case errors.Is(err, ErrProjectWriteForbidden):
+		return http.StatusForbidden, ErrProjectWriteForbidden.Error(), true
 	default:
 		return 0, "", false
 	}

@@ -217,8 +217,21 @@ func TestBuildDocumentChunkWhereDefaultsToActorScopeOnly(t *testing.T) {
 	whereSQL, params := buildDocumentChunkWhere(
 		actorUserID,
 		models.DocumentChunkQueryRequest{Query: "queue depth", TopK: 3},
+		1,
 	)
-	requireEqual(t, "(d.owner_user_id = %s OR d.visibility_scope = 'project')", whereSQL)
+	expectedFragments := []string{
+		"d.owner_user_id = $1",
+		"actor_user.user_id = $1",
+		"d.visibility_scope = 'project'",
+		"pm.project_id = d.project_id",
+		"pm.user_id = $1",
+		"pm.revoked_at IS NULL",
+	}
+	for _, fragment := range expectedFragments {
+		if !strings.Contains(whereSQL, fragment) {
+			t.Fatalf("expected where sql to contain %q, got %q", fragment, whereSQL)
+		}
+	}
 	expectedParams := []any{actorUserID}
 	if !reflect.DeepEqual(expectedParams, params) {
 		t.Fatalf("expected params %#v, got %#v", expectedParams, params)

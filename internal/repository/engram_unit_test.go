@@ -30,11 +30,15 @@ func TestBuildEngramQueryWhereIncludesAllFilters(t *testing.T) {
 
 	expectedFragments := []string{
 		"WHERE deleted_at IS NULL",
-		"project_id = %s",
-		"tags && %s",
-		"keywords && %s",
-		"created_at >= %s",
-		"created_at <= %s",
+		"project_id = $2",
+		"tags && $4",
+		"keywords && $5",
+		"created_at >= $6",
+		"created_at <= $7",
+		"owner_user_id = $3",
+		"actor_user.user_id = $3",
+		"pm.project_id = project_id",
+		"pm.user_id = $3",
 		"visibility_scope = 'project'",
 	}
 	for _, fragment := range expectedFragments {

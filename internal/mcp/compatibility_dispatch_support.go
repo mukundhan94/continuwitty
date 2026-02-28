@@ -172,6 +172,195 @@ func (service *CompatibilityService) dispatchProjectSetDefaultTool(
 	return map[string]any{"default_project_id": defaultProjectID}, true, nil
 }
 
+func (service *CompatibilityService) dispatchProjectMemberListTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.projectService == nil {
+		return nil, false, nil
+	}
+	projectID, ok := requiredStringParam(params, "project_id")
+	if !ok {
+		return nil, true, invalidParamError("project_id")
+	}
+	includeRevoked, ok := optionalBoolParam(params, "include_revoked", false)
+	if !ok {
+		return nil, true, invalidParamError("include_revoked")
+	}
+	limit, ok := optionalIntParam(params, "limit", defaultProjectListLimit)
+	if !ok {
+		return nil, true, invalidParamError("limit")
+	}
+	offset, ok := optionalIntParam(params, "offset", defaultProjectListOffset)
+	if !ok {
+		return nil, true, invalidParamError("offset")
+	}
+	members, err := service.projectService.ListProjectMembers(
+		ctx,
+		actor.UserID,
+		normalizedActorRole(actor),
+		projectID,
+		includeRevoked,
+		limit,
+		offset,
+	)
+	if err != nil {
+		return nil, true, mapProjectServiceError(err)
+	}
+	return map[string]any{"members": members}, true, nil
+}
+
+func (service *CompatibilityService) dispatchProjectMemberAddTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.projectService == nil {
+		return nil, false, nil
+	}
+	projectID, ok := requiredStringParam(params, "project_id")
+	if !ok {
+		return nil, true, invalidParamError("project_id")
+	}
+	userID, ok := requiredUUIDParam(params, "user_id")
+	if !ok {
+		return nil, true, invalidParamError("user_id")
+	}
+	role, ok := requiredProjectMemberRoleParam(params, "role")
+	if !ok {
+		return nil, true, invalidParamError("role")
+	}
+	member, err := service.projectService.AddProjectMember(
+		ctx,
+		actor.UserID,
+		normalizedActorRole(actor),
+		projects.ProjectMemberCreateRequest{
+			ProjectID: projectID,
+			UserID:    userID,
+			Role:      role,
+		},
+	)
+	if err != nil {
+		return nil, true, mapProjectServiceError(err)
+	}
+	return map[string]any{"member": member}, true, nil
+}
+
+func (service *CompatibilityService) dispatchProjectMemberUpdateTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.projectService == nil {
+		return nil, false, nil
+	}
+	projectID, ok := requiredStringParam(params, "project_id")
+	if !ok {
+		return nil, true, invalidParamError("project_id")
+	}
+	userID, ok := requiredUUIDParam(params, "user_id")
+	if !ok {
+		return nil, true, invalidParamError("user_id")
+	}
+	role, ok := requiredProjectMemberRoleParam(params, "role")
+	if !ok {
+		return nil, true, invalidParamError("role")
+	}
+	member, err := service.projectService.UpdateProjectMember(
+		ctx,
+		actor.UserID,
+		normalizedActorRole(actor),
+		projects.ProjectMemberUpdateRequest{
+			ProjectID: projectID,
+			UserID:    userID,
+			Role:      role,
+		},
+	)
+	if err != nil {
+		return nil, true, mapProjectServiceError(err)
+	}
+	return map[string]any{"member": member}, true, nil
+}
+
+func (service *CompatibilityService) dispatchProjectMemberRemoveTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.projectService == nil {
+		return nil, false, nil
+	}
+	projectID, ok := requiredStringParam(params, "project_id")
+	if !ok {
+		return nil, true, invalidParamError("project_id")
+	}
+	userID, ok := requiredUUIDParam(params, "user_id")
+	if !ok {
+		return nil, true, invalidParamError("user_id")
+	}
+	if err := service.projectService.RemoveProjectMember(
+		ctx,
+		actor.UserID,
+		normalizedActorRole(actor),
+		projects.ProjectMemberRemoveRequest{
+			ProjectID: projectID,
+			UserID:    userID,
+		},
+	); err != nil {
+		return nil, true, mapProjectServiceError(err)
+	}
+	return map[string]any{"removed": true}, true, nil
+}
+
+func (service *CompatibilityService) dispatchEngramShareTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.projectService == nil {
+		return nil, false, nil
+	}
+	engramID, ok := requiredUUIDParam(params, "engram_id")
+	if !ok {
+		return nil, true, invalidParamError("engram_id")
+	}
+	updated, err := service.projectService.ShareEngram(
+		ctx,
+		actor.UserID,
+		normalizedActorRole(actor),
+		engramID,
+	)
+	if err != nil {
+		return nil, true, mapProjectServiceError(err)
+	}
+	return map[string]any{"engram": updated}, true, nil
+}
+
+func (service *CompatibilityService) dispatchEngramUnshareTool(
+	ctx context.Context,
+	actor Actor,
+	params map[string]any,
+) (map[string]any, bool, *toolDispatchError) {
+	if service.projectService == nil {
+		return nil, false, nil
+	}
+	engramID, ok := requiredUUIDParam(params, "engram_id")
+	if !ok {
+		return nil, true, invalidParamError("engram_id")
+	}
+	updated, err := service.projectService.UnshareEngram(
+		ctx,
+		actor.UserID,
+		normalizedActorRole(actor),
+		engramID,
+	)
+	if err != nil {
+		return nil, true, mapProjectServiceError(err)
+	}
+	return map[string]any{"engram": updated}, true, nil
+}
+
 func invalidParamError(field string) *toolDispatchError {
 	return &toolDispatchError{
 		code:    -32602,
@@ -203,6 +392,17 @@ func mapProjectServiceError(err error) *toolDispatchError {
 		return invalidParamsWithStatus(404, "Project not found")
 	case errors.Is(err, projects.ErrUserNotFound):
 		return invalidParamsWithStatus(404, "User not found")
+	case errors.Is(err, projects.ErrProjectWriteForbidden),
+		errors.Is(err, projects.ErrProjectMemberManagementForbidden),
+		errors.Is(err, projects.ErrProjectAuditForbidden),
+		errors.Is(err, projects.ErrEngramShareForbidden):
+		return invalidParamsWithStatus(403, err.Error())
+	case errors.Is(err, projects.ErrProjectMemberNotFound),
+		errors.Is(err, projects.ErrEngramNotFound):
+		return invalidParamsWithStatus(404, err.Error())
+	case errors.Is(err, projects.ErrProjectOwnerMembershipImmutable),
+		errors.Is(err, projects.ErrProjectOwnerRoleNotAssignable):
+		return invalidParamsWithStatus(422, err.Error())
 	default:
 		return internalToolDispatchError()
 	}
@@ -212,6 +412,8 @@ func mapProjectCreateError(err error) *toolDispatchError {
 	switch {
 	case errors.Is(err, projects.ErrProjectIDMustNotBeBlank):
 		return invalidParamError("project_id")
+	case errors.Is(err, projects.ErrProjectWriteForbidden):
+		return invalidParamsWithStatus(403, err.Error())
 	default:
 		return internalToolDispatchError()
 	}
@@ -275,6 +477,18 @@ func requiredUUIDParam(params map[string]any, key string) (uuid.UUID, bool) {
 		return uuid.Nil, false
 	}
 	return *value, true
+}
+
+func requiredProjectMemberRoleParam(params map[string]any, key string) (models.ProjectMemberRole, bool) {
+	value, ok := requiredStringParam(params, key)
+	if !ok {
+		return "", false
+	}
+	parsed, err := models.ParseProjectMemberRole(value)
+	if err != nil {
+		return "", false
+	}
+	return parsed, true
 }
 
 func optionalProjectIDParam(params map[string]any, key string) *string {

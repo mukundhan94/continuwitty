@@ -138,6 +138,48 @@ CREATE INDEX IF NOT EXISTS projects_owner_created_idx
 CREATE INDEX IF NOT EXISTS projects_archived_idx
   ON projects (is_archived);
 
+CREATE TABLE IF NOT EXISTS project_members (
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
+  added_by_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  revoked_at TIMESTAMPTZ,
+  revoked_by_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  PRIMARY KEY (project_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS project_members_active_project_idx
+  ON project_members (project_id, role, created_at DESC)
+  WHERE revoked_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS project_members_active_user_idx
+  ON project_members (user_id, project_id, created_at DESC)
+  WHERE revoked_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS project_members_revoked_project_idx
+  ON project_members (project_id, revoked_at DESC)
+  WHERE revoked_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS project_audit_events (
+  event_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  actor_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  target_engram_id UUID REFERENCES engrams(engram_id) ON DELETE SET NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS project_audit_events_project_created_idx
+  ON project_audit_events (project_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS project_audit_events_type_created_idx
+  ON project_audit_events (event_type, created_at DESC);
+
 INSERT INTO projects (project_id, name, description, owner_user_id, is_archived)
 SELECT
   'engram-vault',
@@ -633,3 +675,31 @@ SET default_project_id = COALESCE(
   u.default_project_id
 )
 WHERE u.default_project_id IS NULL;
+
+INSERT INTO project_members (
+  project_id,
+  user_id,
+  role,
+  added_by_user_id,
+  created_at,
+  updated_at,
+  revoked_at,
+  revoked_by_user_id
+)
+SELECT
+  p.project_id,
+  p.owner_user_id,
+  'owner',
+  p.owner_user_id,
+  p.created_at,
+  p.updated_at,
+  NULL,
+  NULL
+FROM projects p
+WHERE p.owner_user_id IS NOT NULL
+ON CONFLICT (project_id, user_id) DO UPDATE
+SET
+  role = EXCLUDED.role,
+  revoked_at = NULL,
+  revoked_by_user_id = NULL,
+  updated_at = GREATEST(project_members.updated_at, EXCLUDED.updated_at);

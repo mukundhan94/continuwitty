@@ -39,11 +39,15 @@ func ListEngrams(ctx context.Context, db Queryer, input ListEngramsInput) ([]mod
 	params := make([]any, 0, 4)
 
 	if input.ActorUserID != nil {
+		actorPlaceholder := pgxPlaceholder(len(params) + 1)
 		whereClauses = append(
 			whereClauses,
-			fmt.Sprintf(
-				"(owner_user_id = %s OR visibility_scope = 'project' OR owner_user_id IS NULL)",
-				pgxPlaceholder(len(params)+1),
+			buildMembershipReadClause(
+				"owner_user_id",
+				"visibility_scope",
+				"project_id",
+				actorPlaceholder,
+				true,
 			),
 		)
 		params = append(params, *input.ActorUserID)
@@ -93,7 +97,6 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 		input.ActorUserID,
 		input.QueryLiteral,
 	)
-	whereSQL = percentToPGXPlaceholders(whereSQL, 2)
 	candidateLimit := min(max(topK*4, topK), 200)
 	limitPlaceholder := pgxPlaceholder(len(params) + 1)
 
@@ -271,19 +274,6 @@ func visibilityFromAny(value any) string {
 
 func pgxPlaceholder(index int) string {
 	return fmt.Sprintf("$%d", index)
-}
-
-func percentToPGXPlaceholders(sql string, startIndex int) string {
-	if startIndex <= 0 {
-		startIndex = 1
-	}
-	replaced := sql
-	index := startIndex
-	for strings.Contains(replaced, "%s") {
-		replaced = strings.Replace(replaced, "%s", pgxPlaceholder(index), 1)
-		index += 1
-	}
-	return replaced
 }
 
 func uuidFromAny(value any) uuid.UUID {

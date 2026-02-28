@@ -86,8 +86,18 @@ func TestGetRehydrationBundleBuildsContextWithVisibilityFilter(t *testing.T) {
 		t.Fatalf("expected citations section in context markdown, got %q", bundle.ContextMarkdown)
 	}
 	requireEqual(t, 1, len(db.queryRowSQL))
-	if !strings.Contains(db.queryRowSQL[0], "owner_user_id = $2 OR visibility_scope = 'project' OR owner_user_id IS NULL") {
-		t.Fatalf("expected visibility filter in rehydration query, got %q", db.queryRowSQL[0])
+	requiredFragments := []string{
+		"owner_user_id = $2",
+		"actor_user.user_id = $2",
+		"visibility_scope = 'project'",
+		"pm.project_id = project_id",
+		"pm.user_id = $2",
+		"owner_user_id IS NULL",
+	}
+	for _, fragment := range requiredFragments {
+		if !strings.Contains(db.queryRowSQL[0], fragment) {
+			t.Fatalf("expected visibility fragment %q in rehydration query, got %q", fragment, db.queryRowSQL[0])
+		}
 	}
 }
 

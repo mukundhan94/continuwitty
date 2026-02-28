@@ -21,6 +21,11 @@ type fakeProjectService struct {
 	createProjectFn       func(ctx context.Context, request ProjectCreateRouteRequest) (*models.ProjectRecord, error)
 	getDefaultProjectIDFn func(ctx context.Context, actorUserID uuid.UUID) (*string, error)
 	setDefaultProjectIDFn func(ctx context.Context, request ProjectDefaultUpdateRouteRequest) (string, error)
+	listProjectMembersFn  func(ctx context.Context, request ProjectMemberListRouteRequest) ([]models.ProjectMemberRecord, error)
+	addProjectMemberFn    func(ctx context.Context, request ProjectMemberCreateRouteRequest) (*models.ProjectMemberRecord, error)
+	updateProjectMemberFn func(ctx context.Context, request ProjectMemberUpdateRouteRequest) (*models.ProjectMemberRecord, error)
+	removeProjectMemberFn func(ctx context.Context, request ProjectMemberDeleteRouteRequest) error
+	listProjectAuditFn    func(ctx context.Context, request ProjectAuditListRouteRequest) ([]models.ProjectAuditEventRecord, error)
 }
 
 func (service fakeProjectService) ListProjects(
@@ -63,6 +68,56 @@ func (service fakeProjectService) SetDefaultProjectID(
 	return service.setDefaultProjectIDFn(ctx, request)
 }
 
+func (service fakeProjectService) ListProjectMembers(
+	ctx context.Context,
+	request ProjectMemberListRouteRequest,
+) ([]models.ProjectMemberRecord, error) {
+	if service.listProjectMembersFn == nil {
+		return []models.ProjectMemberRecord{}, nil
+	}
+	return service.listProjectMembersFn(ctx, request)
+}
+
+func (service fakeProjectService) AddProjectMember(
+	ctx context.Context,
+	request ProjectMemberCreateRouteRequest,
+) (*models.ProjectMemberRecord, error) {
+	if service.addProjectMemberFn == nil {
+		return nil, nil
+	}
+	return service.addProjectMemberFn(ctx, request)
+}
+
+func (service fakeProjectService) UpdateProjectMember(
+	ctx context.Context,
+	request ProjectMemberUpdateRouteRequest,
+) (*models.ProjectMemberRecord, error) {
+	if service.updateProjectMemberFn == nil {
+		return nil, nil
+	}
+	return service.updateProjectMemberFn(ctx, request)
+}
+
+func (service fakeProjectService) RemoveProjectMember(
+	ctx context.Context,
+	request ProjectMemberDeleteRouteRequest,
+) error {
+	if service.removeProjectMemberFn == nil {
+		return nil
+	}
+	return service.removeProjectMemberFn(ctx, request)
+}
+
+func (service fakeProjectService) ListProjectAuditEvents(
+	ctx context.Context,
+	request ProjectAuditListRouteRequest,
+) ([]models.ProjectAuditEventRecord, error) {
+	if service.listProjectAuditFn == nil {
+		return []models.ProjectAuditEventRecord{}, nil
+	}
+	return service.listProjectAuditFn(ctx, request)
+}
+
 func TestMountProjectRoutesRegistersEndpoints(t *testing.T) {
 	router := chi.NewRouter()
 	MountProjectRoutes(router, fakeProjectService{})
@@ -71,6 +126,9 @@ func TestMountProjectRoutesRegistersEndpoints(t *testing.T) {
 	requiredRoutes := []string{
 		"/api/v1/projects",
 		"/api/v1/projects/default",
+		"/api/v1/projects/{project_id}/members",
+		"/api/v1/projects/{project_id}/members/{user_id}",
+		"/api/v1/projects/{project_id}/audit-events",
 	}
 	for _, route := range requiredRoutes {
 		requireChatRoute(t, routes, route)
@@ -245,6 +303,82 @@ func TestSetDefaultProjectHandlerMapsProjectNotFound(t *testing.T) {
 	}
 	if payload["detail"] != projects.ErrProjectNotFound.Error() {
 		t.Fatalf("expected detail %q, got %q", projects.ErrProjectNotFound.Error(), payload["detail"])
+	}
+}
+
+func TestListProjectMembersHandlerUsesQueryDefaults(t *testing.T) {
+	actorID := uuid.MustParse("00000000-0000-0000-0000-000000000936")
+	captured := ProjectMemberListRouteRequest{}
+	service := fakeProjectService{
+		listProjectMembersFn: func(_ context.Context, request ProjectMemberListRouteRequest) ([]models.ProjectMemberRecord, error) {
+			captured = request
+			return []models.ProjectMemberRecord{}, nil
+		},
+	}
+	router := chi.NewRouter()
+	MountProjectRoutes(router, service)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/projects/engram-vault/members", nil)
+	request = WithAdminActor(request, AdminActor{UserID: actorID, Role: "admin"})
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.Code)
+	}
+	if captured.ProjectID != "engram-vault" {
+		t.Fatalf("expected project id engram-vault, got %q", captured.ProjectID)
+	}
+	if captured.ActorUserID != actorID {
+		t.Fatalf("expected actor %s, got %s", actorID, captured.ActorUserID)
+	}
+	if captured.ActorRole != models.UserRoleAdmin {
+		t.Fatalf("expected admin actor role, got %s", captured.ActorRole)
+	}
+	if captured.Limit != defaultProjectMemberLimit || captured.Offset != defaultProjectMemberOffset {
+		t.Fatalf("unexpected paging defaults: %#v", captured)
+	}
+}
+
+func TestCreateProjectMemberHandlerRejectsInvalidRole(t *testing.T) {
+	actorID := uuid.MustParse("00000000-0000-0000-0000-000000000937")
+	router := chi.NewRouter()
+	MountProjectRoutes(router, fakeProjectService{})
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/projects/engram-vault/members",
+		strings.NewReader(`{"user_id":"00000000-0000-0000-0000-000000000099","role":"invalid"}`),
+	)
+	request = WithAdminActor(request, AdminActor{UserID: actorID, Role: "admin"})
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected status 422, got %d", response.Code)
+	}
+}
+
+func TestListProjectAuditEventsHandlerMapsForbidden(t *testing.T) {
+	actorID := uuid.MustParse("00000000-0000-0000-0000-000000000938")
+	service := fakeProjectService{
+		listProjectAuditFn: func(_ context.Context, request ProjectAuditListRouteRequest) ([]models.ProjectAuditEventRecord, error) {
+			if request.ProjectID != "engram-vault" {
+				t.Fatalf("expected project id engram-vault, got %q", request.ProjectID)
+			}
+			return nil, projects.ErrProjectAuditForbidden
+		},
+	}
+	router := chi.NewRouter()
+	MountProjectRoutes(router, service)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/projects/engram-vault/audit-events", nil)
+	request = WithAdminActor(request, AdminActor{UserID: actorID, Role: "viewer"})
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", response.Code)
 	}
 }
 

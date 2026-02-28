@@ -697,6 +697,104 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"project.member_list": {
+		description: "List project members (owner/admin only).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"project_id",
+			},
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"include_revoked": map[string]any{
+					"type": "boolean",
+				},
+				"limit": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"offset": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+			},
+		},
+	},
+	"project.member_add": {
+		description: "Add a project member role (owner/admin only).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"project_id",
+				"user_id",
+				"role",
+			},
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"user_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"role": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"editor",
+						"viewer",
+					},
+				},
+			},
+		},
+	},
+	"project.member_update": {
+		description: "Update a project member role (owner/admin only).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"project_id",
+				"user_id",
+				"role",
+			},
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"user_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"role": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"editor",
+						"viewer",
+					},
+				},
+			},
+		},
+	},
+	"project.member_remove": {
+		description: "Remove/revoke a project member (owner/admin only).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"project_id",
+				"user_id",
+			},
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"user_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+			},
+		},
+	},
 	"project.export_bundle": {
 		description: "Export a project memory bundle with optional collection filters and optional embedding inclusion flag.",
 		inputSchema: map[string]any{
@@ -884,6 +982,36 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 							},
 						},
 					},
+				},
+			},
+		},
+	},
+	"engram.share": {
+		description: "Set an engram visibility scope to project.",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"engram_id",
+			},
+			"properties": map[string]any{
+				"engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+			},
+		},
+	},
+	"engram.unshare": {
+		description: "Set an engram visibility scope to private.",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"engram_id",
+			},
+			"properties": map[string]any{
+				"engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
 				},
 			},
 		},

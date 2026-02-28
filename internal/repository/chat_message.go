@@ -81,6 +81,13 @@ func CreateChatMessage(
 	input ChatMessageCreateInput,
 ) (*models.ChatMessageRecord, error) {
 	metadata := resolveMessageMetadata(input.Metadata)
+	sessionAccessClause := buildMembershipReadClause(
+		"s.owner_user_id",
+		"s.visibility_scope",
+		"s.project_id",
+		"$10",
+		false,
+	)
 	row := db.QueryRow(
 		ctx,
 		fmt.Sprintf(
@@ -110,9 +117,10 @@ func CreateChatMessage(
 			WHERE
 				s.session_id = $9
 				AND s.deleted_at IS NULL
-				AND (s.owner_user_id = $10 OR s.visibility_scope = 'project')
+				AND %s
 			RETURNING %s
 			`,
+			sessionAccessClause,
 			chatMessageColumns,
 		),
 		newChatMessageUUID(),
@@ -142,9 +150,17 @@ func ListChatMessages(
 	db Queryer,
 	input ChatMessageListInput,
 ) ([]models.ChatMessageRecord, error) {
+	sessionAccessClause := buildMembershipReadClause(
+		"s.owner_user_id",
+		"s.visibility_scope",
+		"s.project_id",
+		"$2",
+		false,
+	)
 	rows, err := db.Query(
 		ctx,
-		`
+		fmt.Sprintf(
+			`
 		SELECT
 			m.message_id,
 			m.session_id,
@@ -161,10 +177,12 @@ func ListChatMessages(
 		WHERE
 			m.session_id = $1
 			AND s.deleted_at IS NULL
-			AND (s.owner_user_id = $2 OR s.visibility_scope = 'project')
+			AND %s
 		ORDER BY m.created_at ASC
 		LIMIT $3 OFFSET $4
 		`,
+			sessionAccessClause,
+		),
 		input.SessionID,
 		input.ActorUserID,
 		input.Limit,
@@ -195,9 +213,24 @@ func ListSessionLinkedEngrams(
 	db Queryer,
 	input SessionLinkedEngramsListInput,
 ) ([]models.EngramSummary, error) {
+	sessionAccessClause := buildMembershipReadClause(
+		"s.owner_user_id",
+		"s.visibility_scope",
+		"s.project_id",
+		"$2",
+		false,
+	)
+	engramAccessClause := buildMembershipReadClause(
+		"e.owner_user_id",
+		"e.visibility_scope",
+		"e.project_id",
+		"$3",
+		true,
+	)
 	rows, err := db.Query(
 		ctx,
-		`
+		fmt.Sprintf(
+			`
 		SELECT
 			e.engram_id,
 			e.project_id,
@@ -215,12 +248,15 @@ func ListSessionLinkedEngrams(
 		WHERE
 			s.session_id = $1
 			AND s.deleted_at IS NULL
-			AND (s.owner_user_id = $2 OR s.visibility_scope = 'project')
+			AND %s
 			AND e.deleted_at IS NULL
-			AND (e.owner_user_id = $3 OR e.visibility_scope = 'project' OR e.owner_user_id IS NULL)
+			AND %s
 		ORDER BY e.created_at DESC
 		LIMIT $4 OFFSET $5
 		`,
+			sessionAccessClause,
+			engramAccessClause,
+		),
 		input.SessionID,
 		input.ActorUserID,
 		input.ActorUserID,
@@ -252,9 +288,17 @@ func CountSessionMessagesByRole(
 	db Queryer,
 	input SessionMessageRoleCountInput,
 ) (int, error) {
+	sessionAccessClause := buildMembershipReadClause(
+		"s.owner_user_id",
+		"s.visibility_scope",
+		"s.project_id",
+		"$3",
+		false,
+	)
 	row := db.QueryRow(
 		ctx,
-		`
+		fmt.Sprintf(
+			`
 		SELECT COUNT(*)::INT
 		FROM chat_messages m
 		JOIN chat_sessions s
@@ -263,8 +307,10 @@ func CountSessionMessagesByRole(
 			m.session_id = $1
 			AND m.role = $2
 			AND s.deleted_at IS NULL
-			AND (s.owner_user_id = $3 OR s.visibility_scope = 'project')
+			AND %s
 		`,
+			sessionAccessClause,
+		),
 		input.SessionID,
 		input.Role,
 		input.ActorUserID,
@@ -289,9 +335,24 @@ func DeleteSessionAutosaveEngrams(
 	if len(input.EngramIDs) == 0 {
 		return []uuid.UUID{}, nil
 	}
+	sessionAccessClause := buildMembershipReadClause(
+		"s.owner_user_id",
+		"s.visibility_scope",
+		"s.project_id",
+		"$3",
+		false,
+	)
+	engramAccessClause := buildMembershipReadClause(
+		"e.owner_user_id",
+		"e.visibility_scope",
+		"e.project_id",
+		"$4",
+		true,
+	)
 	rows, err := db.Query(
 		ctx,
-		`
+		fmt.Sprintf(
+			`
 		DELETE FROM engrams e
 		USING chat_sessions s
 		WHERE
@@ -301,10 +362,13 @@ func DeleteSessionAutosaveEngrams(
 			AND e.deleted_at IS NULL
 			AND e.tags @> ARRAY['autosave_snapshot']::TEXT[]
 			AND s.deleted_at IS NULL
-			AND (s.owner_user_id = $3 OR s.visibility_scope = 'project')
-			AND (e.owner_user_id = $4 OR e.visibility_scope = 'project' OR e.owner_user_id IS NULL)
+			AND %s
+			AND %s
 		RETURNING e.engram_id
 		`,
+			sessionAccessClause,
+			engramAccessClause,
+		),
 		input.SessionID,
 		input.EngramIDs,
 		input.ActorUserID,

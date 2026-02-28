@@ -178,6 +178,74 @@ func TestCompatibilityServiceTokenProjectScopeEngramMoveProjectRejectsSourceProj
 	}
 }
 
+func TestCompatibilityServiceTokenProjectScopeRejectsProjectMemberToolOutsideAllowlist(t *testing.T) {
+	service := &fakeProjectMembershipService{
+		addResult: projectMemberRecordForMCP(
+			"project-disallowed",
+			uuid.MustParse("40070000-0000-0000-0000-000000000401"),
+			models.ProjectMemberRoleViewer,
+		),
+	}
+	request := tokenScopedDirectRequest(tokenScopedRequest{
+		actorID:  "40070000-0000-0000-0000-000000000402",
+		toolName: "project.member_add",
+		params: map[string]any{
+			"project_id": "project-disallowed",
+			"user_id":    "40070000-0000-0000-0000-000000000403",
+			"role":       "viewer",
+		},
+		scope:             models.MCPTokenScopeWrite,
+		allowedProjectIDs: []string{"project-allowed"},
+	})
+
+	assertTokenScopeDeniedProject(
+		t,
+		newProjectDefaultCompatibilityService(service),
+		request,
+		"project-disallowed",
+	)
+	if service.addCall.request.ProjectID != "" {
+		t.Fatalf("expected member add service not to be called when project is disallowed")
+	}
+}
+
+func TestCompatibilityServiceTokenProjectScopeRejectsEngramShareToolOutsideAllowlist(t *testing.T) {
+	engramID := uuid.MustParse("40080000-0000-0000-0000-000000000400")
+	ownerUserID := uuid.MustParse("40080000-0000-0000-0000-000000000401")
+	shareService := &fakeProjectShareService{
+		shareResult: &models.EngramVisibilityRecord{
+			EngramID:        engramID,
+			ProjectID:       "project-engram",
+			VisibilityScope: models.VisibilityScopeProject,
+		},
+	}
+	service := NewCompatibilityServiceWithDependencies(
+		"1.2.3",
+		CompatibilityServiceDependencies{
+			EngramGet: &fakeEngramGetService{
+				engram: &models.AdminEngramRecord{
+					EngramID:    engramID,
+					ProjectID:   "project-engram",
+					OwnerUserID: &ownerUserID,
+				},
+			},
+			ProjectService: shareService,
+		},
+	)
+	request := tokenScopedDirectRequest(tokenScopedRequest{
+		actorID:           "40080000-0000-0000-0000-000000000402",
+		toolName:          "engram.share",
+		params:            map[string]any{"engram_id": engramID.String()},
+		scope:             models.MCPTokenScopeWrite,
+		allowedProjectIDs: []string{"project-allowed"},
+	})
+
+	assertTokenScopeDeniedProject(t, service, request, "project-engram")
+	if shareService.shareCall.engramID != uuid.Nil {
+		t.Fatalf("expected share service not to be called when project is disallowed")
+	}
+}
+
 func newSessionTokenScopeService(
 	sessionID uuid.UUID,
 	projectID string,

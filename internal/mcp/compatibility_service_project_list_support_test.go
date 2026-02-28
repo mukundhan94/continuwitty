@@ -67,6 +67,63 @@ func (fakeProjectListService) SetDefaultProjectID(
 	return "", nil
 }
 
+func (fakeProjectListService) ListProjectMembers(
+	_ context.Context,
+	_ uuid.UUID,
+	_ models.UserRole,
+	_ string,
+	_ bool,
+	_ int,
+	_ int,
+) ([]models.ProjectMemberRecord, error) {
+	return []models.ProjectMemberRecord{}, nil
+}
+
+func (fakeProjectListService) AddProjectMember(
+	_ context.Context,
+	_ uuid.UUID,
+	_ models.UserRole,
+	_ projects.ProjectMemberCreateRequest,
+) (*models.ProjectMemberRecord, error) {
+	return nil, nil
+}
+
+func (fakeProjectListService) UpdateProjectMember(
+	_ context.Context,
+	_ uuid.UUID,
+	_ models.UserRole,
+	_ projects.ProjectMemberUpdateRequest,
+) (*models.ProjectMemberRecord, error) {
+	return nil, nil
+}
+
+func (fakeProjectListService) RemoveProjectMember(
+	_ context.Context,
+	_ uuid.UUID,
+	_ models.UserRole,
+	_ projects.ProjectMemberRemoveRequest,
+) error {
+	return nil
+}
+
+func (fakeProjectListService) ShareEngram(
+	_ context.Context,
+	_ uuid.UUID,
+	_ models.UserRole,
+	_ uuid.UUID,
+) (*models.EngramVisibilityRecord, error) {
+	return nil, nil
+}
+
+func (fakeProjectListService) UnshareEngram(
+	_ context.Context,
+	_ uuid.UUID,
+	_ models.UserRole,
+	_ uuid.UUID,
+) (*models.EngramVisibilityRecord, error) {
+	return nil, nil
+}
+
 func dispatchProjectListForTest(
 	t *testing.T,
 	actorUserID uuid.UUID,

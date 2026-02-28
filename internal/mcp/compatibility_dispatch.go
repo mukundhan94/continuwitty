@@ -88,6 +88,54 @@ func buildImplementedToolHandlers() map[string]implementedToolHandler {
 		) (map[string]any, bool, *toolDispatchError) {
 			return service.dispatchProjectSetDefaultTool(ctx, actor, params)
 		},
+		"project.member_list": func(
+			service *CompatibilityService,
+			ctx context.Context,
+			actor Actor,
+			params map[string]any,
+		) (map[string]any, bool, *toolDispatchError) {
+			return service.dispatchProjectMemberListTool(ctx, actor, params)
+		},
+		"project.member_add": func(
+			service *CompatibilityService,
+			ctx context.Context,
+			actor Actor,
+			params map[string]any,
+		) (map[string]any, bool, *toolDispatchError) {
+			return service.dispatchProjectMemberAddTool(ctx, actor, params)
+		},
+		"project.member_update": func(
+			service *CompatibilityService,
+			ctx context.Context,
+			actor Actor,
+			params map[string]any,
+		) (map[string]any, bool, *toolDispatchError) {
+			return service.dispatchProjectMemberUpdateTool(ctx, actor, params)
+		},
+		"project.member_remove": func(
+			service *CompatibilityService,
+			ctx context.Context,
+			actor Actor,
+			params map[string]any,
+		) (map[string]any, bool, *toolDispatchError) {
+			return service.dispatchProjectMemberRemoveTool(ctx, actor, params)
+		},
+		"engram.share": func(
+			service *CompatibilityService,
+			ctx context.Context,
+			actor Actor,
+			params map[string]any,
+		) (map[string]any, bool, *toolDispatchError) {
+			return service.dispatchEngramShareTool(ctx, actor, params)
+		},
+		"engram.unshare": func(
+			service *CompatibilityService,
+			ctx context.Context,
+			actor Actor,
+			params map[string]any,
+		) (map[string]any, bool, *toolDispatchError) {
+			return service.dispatchEngramUnshareTool(ctx, actor, params)
+		},
 	}
 	registerProjectTransferToolHandlers(handlers)
 	registerChatToolHandlers(handlers)

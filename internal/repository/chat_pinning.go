@@ -64,18 +64,28 @@ var (
 		table:         "session_pinned_engrams",
 		idColumn:      "engram_id",
 		resourceTable: "engrams",
-		resourceAccessClause: `
-			r.deleted_at IS NULL
-			AND (r.owner_user_id = %s OR r.visibility_scope = 'project' OR r.owner_user_id IS NULL)
-		`,
+		resourceAccessClause: fmt.Sprintf(
+			`r.deleted_at IS NULL AND %s`,
+			buildMembershipReadClause(
+				"r.owner_user_id",
+				"r.visibility_scope",
+				"r.project_id",
+				"%s",
+				true,
+			),
+		),
 	}
 	documentPinMutationConfig = pinnedResourceMutationConfig{
 		table:         "session_pinned_documents",
 		idColumn:      "document_id",
 		resourceTable: "documents",
-		resourceAccessClause: `
-			(r.owner_user_id = %s OR r.visibility_scope = 'project')
-		`,
+		resourceAccessClause: buildMembershipReadClause(
+			"r.owner_user_id",
+			"r.visibility_scope",
+			"r.project_id",
+			"%s",
+			false,
+		),
 	}
 	engramPinListConfig = pinnedResourceListConfig{
 		table:                "session_pinned_engrams",
@@ -89,8 +99,14 @@ var (
 		JOIN documents d
 		  ON d.document_id = p.document_id
 		`,
-		resourceAccessClause: "(d.owner_user_id = %s OR d.visibility_scope = 'project')",
-		includeActorParam:    true,
+		resourceAccessClause: buildMembershipReadClause(
+			"d.owner_user_id",
+			"d.visibility_scope",
+			"d.project_id",
+			"%s",
+			false,
+		),
+		includeActorParam: true,
 	}
 )
 
@@ -100,12 +116,22 @@ func PinEngramToSession(
 	db Queryer,
 	input ChatPinEngramInput,
 ) (*models.PinnedEngramRecord, error) {
-	return pinResourceRecord(
+	record, err := pinResourceRecord(
 		ctx,
 		db,
 		engramMutationInput(input.resourceInput()),
 		pinnedEngramRecordFromRow,
 	)
+	if err != nil {
+		return nil, err
+	}
+	if record == nil {
+		return nil, nil
+	}
+	if err := emitEngramPinAuditEvent(ctx, db, input, "engram.pin"); err != nil {
+		return nil, err
+	}
+	return record, nil
 }
 
 // PinDocumentToSession pins a document when both session and document are visible.
@@ -128,7 +154,17 @@ func UnpinEngramFromSession(
 	db Queryer,
 	input ChatPinEngramInput,
 ) (bool, error) {
-	return unpinResourceFromSession(ctx, db, engramMutationInput(input.resourceInput()))
+	removed, err := unpinResourceFromSession(ctx, db, engramMutationInput(input.resourceInput()))
+	if err != nil {
+		return false, err
+	}
+	if !removed {
+		return false, nil
+	}
+	if err := emitEngramPinAuditEvent(ctx, db, input, "engram.unpin"); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // UnpinDocumentFromSession removes a document pin for visible sessions.
@@ -155,9 +191,24 @@ func ListPinnedEngramSummaries(
 	db Queryer,
 	input ChatPinnedListInput,
 ) ([]models.EngramSummary, error) {
+	sessionAccessClause := buildMembershipReadClause(
+		"s.owner_user_id",
+		"s.visibility_scope",
+		"s.project_id",
+		"$2",
+		false,
+	)
+	engramAccessClause := buildMembershipReadClause(
+		"e.owner_user_id",
+		"e.visibility_scope",
+		"e.project_id",
+		"$3",
+		true,
+	)
 	rows, err := db.Query(
 		ctx,
-		`
+		fmt.Sprintf(
+			`
 		SELECT
 			e.engram_id,
 			e.project_id,
@@ -177,11 +228,14 @@ func ListPinnedEngramSummaries(
 		WHERE
 			p.session_id = $1
 			AND s.deleted_at IS NULL
-			AND (s.owner_user_id = $2 OR s.visibility_scope = 'project')
+			AND %s
 			AND e.deleted_at IS NULL
-			AND (e.owner_user_id = $3 OR e.visibility_scope = 'project' OR e.owner_user_id IS NULL)
+			AND %s
 		ORDER BY p.created_at ASC
 		`,
+			sessionAccessClause,
+			engramAccessClause,
+		),
 		input.SessionID,
 		input.ActorUserID,
 		input.ActorUserID,
@@ -224,6 +278,13 @@ func pinResourceToSession(
 	if strings.Contains(resourceAccessClause, "%s") {
 		resourceAccessClause = fmt.Sprintf(resourceAccessClause, pgxPlaceholder(4))
 	}
+	sessionAccessClause := buildMembershipReadClause(
+		"s.owner_user_id",
+		"s.visibility_scope",
+		"s.project_id",
+		"$2",
+		false,
+	)
 	row := db.QueryRow(
 		ctx,
 		fmt.Sprintf(
@@ -234,7 +295,7 @@ func pinResourceToSession(
 				WHERE
 					s.session_id = $1
 					AND s.deleted_at IS NULL
-					AND (s.owner_user_id = $2 OR s.visibility_scope = 'project')
+					AND %s
 			),
 			accessible_resource AS (
 				SELECT r.%s
@@ -264,6 +325,7 @@ func pinResourceToSession(
 				pinned_by_user_id,
 				created_at
 			`,
+			sessionAccessClause,
 			config.idColumn,
 			config.resourceTable,
 			config.idColumn,
@@ -297,6 +359,13 @@ func unpinResourceFromSession(
 	input pinnedResourceMutationInput,
 ) (bool, error) {
 	config := input.Config
+	sessionAccessClause := buildMembershipReadClause(
+		"s.owner_user_id",
+		"s.visibility_scope",
+		"s.project_id",
+		"$3",
+		false,
+	)
 	row := db.QueryRow(
 		ctx,
 		fmt.Sprintf(
@@ -308,11 +377,12 @@ func unpinResourceFromSession(
 				AND p.session_id = $1
 				AND p.%s = $2
 				AND s.deleted_at IS NULL
-				AND (s.owner_user_id = $3 OR s.visibility_scope = 'project')
+				AND %s
 			RETURNING p.session_id
 			`,
 			config.table,
 			config.idColumn,
+			sessionAccessClause,
 		),
 		input.Resource.SessionID,
 		input.Resource.ResourceID,
@@ -341,6 +411,13 @@ func listPinnedResources(
 		resourceAccessClause = fmt.Sprintf(resourceAccessClause, pgxPlaceholder(len(params)+1))
 		params = append(params, input.ActorUserID)
 	}
+	sessionAccessClause := buildMembershipReadClause(
+		"s.owner_user_id",
+		"s.visibility_scope",
+		"s.project_id",
+		"$2",
+		false,
+	)
 
 	rows, err := db.Query(
 		ctx,
@@ -358,13 +435,14 @@ func listPinnedResources(
 			WHERE
 				p.session_id = $1
 				AND s.deleted_at IS NULL
-				AND (s.owner_user_id = $2 OR s.visibility_scope = 'project')
+				AND %s
 				AND %s
 			ORDER BY p.created_at ASC
 			`,
 			config.idColumn,
 			config.table,
 			config.joinSQL,
+			sessionAccessClause,
 			resourceAccessClause,
 		),
 		params...,
@@ -499,4 +577,54 @@ func scanPinnedResourceRow(row interface {
 		return pinnedResourceRow{}, err
 	}
 	return record, nil
+}
+
+func emitEngramPinAuditEvent(
+	ctx context.Context,
+	db Queryer,
+	input ChatPinEngramInput,
+	eventType string,
+) error {
+	projectID, err := lookupSessionProjectID(ctx, db, input.SessionID)
+	if err != nil || strings.TrimSpace(projectID) == "" {
+		return err
+	}
+	actorUserID := input.ActorUserID
+	targetEngramID := input.EngramID
+	_, err = CreateProjectAuditEvent(
+		ctx,
+		db,
+		ProjectAuditEventCreateInput{
+			ProjectID:      projectID,
+			ActorUserID:    &actorUserID,
+			EventType:      eventType,
+			TargetType:     "engram",
+			TargetEngramID: &targetEngramID,
+			Metadata: map[string]any{
+				"session_id": input.SessionID.String(),
+			},
+		},
+	)
+	return err
+}
+
+func lookupSessionProjectID(ctx context.Context, db Queryer, sessionID uuid.UUID) (string, error) {
+	row := db.QueryRow(
+		ctx,
+		`
+		SELECT project_id
+		FROM chat_sessions
+		WHERE session_id = $1
+		LIMIT 1
+		`,
+		sessionID,
+	)
+	var projectID string
+	if err := row.Scan(&projectID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	return projectID, nil
 }

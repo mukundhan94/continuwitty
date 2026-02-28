@@ -48,6 +48,8 @@ func mapSessionProjectResolutionError(err error) error {
 		return internalapi.ErrProjectIDRequiredWhenNoDefaultProject
 	case errors.Is(err, projects.ErrDefaultProjectNotAccessible):
 		return internalapi.ErrDefaultProjectNotAccessible
+	case errors.Is(err, projects.ErrProjectWriteForbidden):
+		return internalapi.ErrProjectWriteForbidden
 	default:
 		return err
 	}
@@ -84,7 +86,8 @@ func mapAdminProjectResolutionError(err error) error {
 	switch {
 	case errors.Is(err, projects.ErrProjectIDMustNotBeBlank),
 		errors.Is(err, projects.ErrProjectIDRequiredWhenNoDefaultProject),
-		errors.Is(err, projects.ErrDefaultProjectNotAccessible):
+		errors.Is(err, projects.ErrDefaultProjectNotAccessible),
+		errors.Is(err, projects.ErrProjectWriteForbidden):
 		return admin.ErrProjectIDRequired
 	default:
 		return err

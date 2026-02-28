@@ -39,6 +39,45 @@ type ProjectListService interface {
 		actorRole models.UserRole,
 		projectID string,
 	) (string, error)
+	ListProjectMembers(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		projectID string,
+		includeRevoked bool,
+		limit int,
+		offset int,
+	) ([]models.ProjectMemberRecord, error)
+	AddProjectMember(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		request projects.ProjectMemberCreateRequest,
+	) (*models.ProjectMemberRecord, error)
+	UpdateProjectMember(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		request projects.ProjectMemberUpdateRequest,
+	) (*models.ProjectMemberRecord, error)
+	RemoveProjectMember(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		request projects.ProjectMemberRemoveRequest,
+	) error
+	ShareEngram(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		engramID uuid.UUID,
+	) (*models.EngramVisibilityRecord, error)
+	UnshareEngram(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		engramID uuid.UUID,
+	) (*models.EngramVisibilityRecord, error)
 }
 
 // ProjectExportService captures project export-bundle behavior used by MCP compatibility dispatch.

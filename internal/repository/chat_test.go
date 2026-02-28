@@ -118,8 +118,8 @@ func TestListChatSessionsAppliesVisibilityAndProjectFilter(t *testing.T) {
 
 	requireEqual(t, 1, len(db.querySQL))
 	query := db.querySQL[0]
-	if !strings.Contains(query, "(owner_user_id = $1 OR visibility_scope = 'project')") {
-		t.Fatalf("expected visibility clause in query, got %q", query)
+	if !strings.Contains(query, "project_members pm") || !strings.Contains(query, "actor_user.role = 'admin'") {
+		t.Fatalf("expected membership/admin visibility clause in query, got %q", query)
 	}
 	if !strings.Contains(query, "project_id = $2") {
 		t.Fatalf("expected project filter clause in query, got %q", query)

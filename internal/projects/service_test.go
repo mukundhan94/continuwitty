@@ -169,7 +169,9 @@ func TestResolveProjectIDForWriteEnsuresExplicitProjectWhenHidden(t *testing.T) 
 	requireNoError(t, err)
 	requireEqual(t, "project-explicit", resolution.ProjectID)
 	requireEqual(t, false, resolution.UsedDefaultProject)
-	requireEqual(t, 1, len(getInputs))
+	requireEqual(t, 2, len(getInputs))
+	requireEqual(t, string(models.UserRoleAnalyst), getInputs[0].ActorRole)
+	requireEqual(t, string(models.UserRoleAdmin), getInputs[1].ActorRole)
 	requireEqual(t, 1, len(ensureInputs))
 	requireEqual(t, "project-explicit", ensureInputs[0].ProjectID)
 	requireEqual(t, actorUserID, ensureInputs[0].OwnerUserID)
@@ -183,9 +185,14 @@ func TestResolveProjectIDForWriteUsesVisibleDefaultProject(t *testing.T) {
 	service.deps.getUserDefault = func(_ context.Context, _ repository.Queryer, _ uuid.UUID) (*string, error) {
 		return &defaultProjectID, nil
 	}
+	membershipRole := models.ProjectMemberRoleOwner
 	service.deps.getProjectForActor = func(_ context.Context, _ repository.Queryer, input repository.ProjectGetInput) (*models.ProjectRecord, error) {
 		getInputs = append(getInputs, input)
-		return &models.ProjectRecord{ProjectID: "project-default", OwnerUserID: actorUserID}, nil
+		return &models.ProjectRecord{
+			ProjectID:      "project-default",
+			OwnerUserID:    actorUserID,
+			MembershipRole: &membershipRole,
+		}, nil
 	}
 
 	resolution, err := service.ResolveProjectIDForWrite(
@@ -254,6 +261,92 @@ func TestResolveOwnerUserIDUsesAdminOverrideOnly(t *testing.T) {
 	if got := resolveOwnerUserID(actorUserID, models.UserRoleAdmin, nil); got != actorUserID {
 		t.Fatalf("expected missing override to keep actor owner %v, got %v", actorUserID, got)
 	}
+}
+
+func TestAddProjectMemberRejectsOwnerRoleAssignment(t *testing.T) {
+	service := NewService(nil)
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000727")
+	called := false
+	service.deps.getProjectForActor = func(_ context.Context, _ repository.Queryer, _ repository.ProjectGetInput) (*models.ProjectRecord, error) {
+		called = true
+		return nil, nil
+	}
+
+	_, err := service.AddProjectMember(
+		context.Background(),
+		actorUserID,
+		models.UserRoleAdmin,
+		ProjectMemberCreateRequest{
+			ProjectID: "engram-vault",
+			UserID:    uuid.MustParse("00000000-0000-0000-0000-000000000728"),
+			Role:      models.ProjectMemberRoleOwner,
+		},
+	)
+	if !errors.Is(err, ErrProjectOwnerRoleNotAssignable) {
+		t.Fatalf("expected ErrProjectOwnerRoleNotAssignable, got %v", err)
+	}
+	if called {
+		t.Fatalf("expected no visibility lookup when role is invalid")
+	}
+}
+
+func TestRemoveProjectMemberRejectsOwnerMembershipRow(t *testing.T) {
+	service := NewService(nil)
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000729")
+	ownerUserID := uuid.MustParse("00000000-0000-0000-0000-000000000730")
+	service.deps.getProjectForActor = func(_ context.Context, _ repository.Queryer, _ repository.ProjectGetInput) (*models.ProjectRecord, error) {
+		return &models.ProjectRecord{
+			ProjectID:   "engram-vault",
+			OwnerUserID: ownerUserID,
+		}, nil
+	}
+
+	err := service.RemoveProjectMember(
+		context.Background(),
+		actorUserID,
+		models.UserRoleAdmin,
+		ProjectMemberRemoveRequest{
+			ProjectID: "engram-vault",
+			UserID:    ownerUserID,
+		},
+	)
+	if !errors.Is(err, ErrProjectOwnerMembershipImmutable) {
+		t.Fatalf("expected ErrProjectOwnerMembershipImmutable, got %v", err)
+	}
+}
+
+func TestCanShareEngramEditorRequiresEngramOwnership(t *testing.T) {
+	service := NewService(nil)
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000731")
+	otherUserID := uuid.MustParse("00000000-0000-0000-0000-000000000732")
+	editorRole := models.ProjectMemberRoleEditor
+	service.deps.resolveActorProjectRole = func(_ context.Context, _ repository.Queryer, _ repository.ActorProjectRoleInput) (*models.ProjectMemberRole, error) {
+		return &editorRole, nil
+	}
+
+	allowedOwned, err := service.canShareEngram(
+		context.Background(),
+		actorUserID,
+		models.UserRoleAnalyst,
+		repository.EngramShareRecord{
+			ProjectID:   "engram-vault",
+			OwnerUserID: &actorUserID,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, true, allowedOwned)
+
+	allowedOther, err := service.canShareEngram(
+		context.Background(),
+		actorUserID,
+		models.UserRoleAnalyst,
+		repository.EngramShareRecord{
+			ProjectID:   "engram-vault",
+			OwnerUserID: &otherUserID,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, false, allowedOther)
 }
 
 func requireEqual[T any](t *testing.T, expected, actual T) {

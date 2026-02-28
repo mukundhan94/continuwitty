@@ -81,6 +81,18 @@ type SessionAuthDependencies struct {
 		limit int,
 		actorUserID uuid.UUID,
 	) ([]models.EngramSourceRecord, error)
+	ShareEngram func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		engramID uuid.UUID,
+	) (*models.EngramVisibilityRecord, error)
+	UnshareEngram func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		engramID uuid.UUID,
+	) (*models.EngramVisibilityRecord, error)
 	CreateTokenForOwner func(
 		ctx context.Context,
 		ownerUserID uuid.UUID,
@@ -148,6 +160,18 @@ type sessionAuthDependencies struct {
 		limit int,
 		actorUserID uuid.UUID,
 	) ([]models.EngramSourceRecord, error)
+	shareEngram func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		engramID uuid.UUID,
+	) (*models.EngramVisibilityRecord, error)
+	unshareEngram func(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		actorRole models.UserRole,
+		engramID uuid.UUID,
+	) (*models.EngramVisibilityRecord, error)
 	createTokenForOwner func(
 		ctx context.Context,
 		ownerUserID uuid.UUID,
@@ -206,6 +230,8 @@ func newSessionAuthDependencies(dependencies SessionAuthDependencies) sessionAut
 		queryEngrams:             dependencies.QueryEngrams,
 		getRehydrationBundle:     dependencies.GetRehydrationBundle,
 		getEngramSources:         dependencies.GetEngramSources,
+		shareEngram:              dependencies.ShareEngram,
+		unshareEngram:            dependencies.UnshareEngram,
 		createTokenForOwner:      dependencies.CreateTokenForOwner,
 		listTokenSummaries:       dependencies.ListTokenSummaries,
 		revokeTokenForOwner:      dependencies.RevokeTokenForOwner,
@@ -234,6 +260,8 @@ func MountSessionAuthRoutes(router chi.Router, dependencies SessionAuthDependenc
 	router.Post("/api/v1/engrams/query", deps.handleQueryEngrams)
 	router.Get("/api/v1/engrams/{engram_id}/sources", deps.handleListEngramSources)
 	router.Get("/api/v1/engrams/{engram_id}/rehydrate", deps.handleRehydrateEngram)
+	router.Post("/api/v1/engrams/{engram_id}/share", deps.handleShareEngram)
+	router.Post("/api/v1/engrams/{engram_id}/unshare", deps.handleUnshareEngram)
 }
 
 func (dependencies sessionAuthDependencies) handleCSRF(writer http.ResponseWriter, request *http.Request) {
