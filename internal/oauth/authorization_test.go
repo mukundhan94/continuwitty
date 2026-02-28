@@ -189,6 +189,62 @@ func TestHandleAuthorizeCreatesCodeAndReturnsRedirect(t *testing.T) {
 	}
 }
 
+func TestHandleAuthorizeDefaultsScopeToMCPWriteWhenOmitted(t *testing.T) {
+	createdInput := repository.OAuthAuthorizationCodeCreateInput{}
+	service := authorizationServiceForTest(
+		authorizationDeps{
+			generateAuthorizationCode: func() (string, error) {
+				return "generated-code", nil
+			},
+			authorizationCodeHash: func(_ AuthorizationCodeHashInput) string {
+				return "hashed-code"
+			},
+			getOAuthClient: func(
+				_ context.Context,
+				_ repository.Queryer,
+				_ string,
+			) (*models.OAuthClientRecord, error) {
+				return &models.OAuthClientRecord{
+					ClientID:                "client-1",
+					RedirectURIs:            []string{"https://client.example/callback"},
+					GrantTypes:              []string{"authorization_code"},
+					TokenEndpointAuthMethod: "none",
+				}, nil
+			},
+			createOAuthAuthorizationCode: func(
+				_ context.Context,
+				_ repository.Queryer,
+				input repository.OAuthAuthorizationCodeCreateInput,
+			) (*models.OAuthAuthorizationCodeRecord, error) {
+				createdInput = input
+				return &models.OAuthAuthorizationCodeRecord{
+					CodeID: input.CodeID,
+				}, nil
+			},
+		},
+	)
+
+	_, err := service.HandleAuthorize(
+		context.Background(),
+		config.Settings{MCPTokenPepper: "pepper"},
+		AuthorizationRequest{
+			ResponseType:        "code",
+			ClientID:            "client-1",
+			RedirectURI:         "https://client.example/callback",
+			CodeChallenge:       "pkce-challenge",
+			CodeChallengeMethod: "S256",
+			SessionUser: &SessionUser{
+				UserID: uuid.MustParse("00000000-0000-0000-0000-000000000972").String(),
+				Role:   "admin",
+			},
+		},
+	)
+	requireOAuthNoError(t, err)
+	if createdInput.RequestedScope != "mcp:write" {
+		t.Fatalf("expected default requested scope mcp:write, got %q", createdInput.RequestedScope)
+	}
+}
+
 func authorizationServiceForTest(overrides authorizationDeps) *AuthorizationService {
 	deps := defaultAuthorizationDeps()
 	if overrides.nowUTC != nil {

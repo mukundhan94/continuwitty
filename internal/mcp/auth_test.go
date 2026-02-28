@@ -64,6 +64,9 @@ func TestActorResolverMissingSessionReturnsUnauthorizedWithOAuthHeader(t *testin
 	if !strings.Contains(headerValue, "resource_metadata=\"https://auth.example.com/.well-known/oauth-protected-resource\"") {
 		t.Fatalf("expected resource metadata in authenticate header, got %q", headerValue)
 	}
+	if !strings.Contains(headerValue, "scope=\"mcp:write\"") {
+		t.Fatalf("expected mcp:write challenge scope, got %q", headerValue)
+	}
 }
 
 func TestActorResolverRejectsInvalidAuthorizationScheme(t *testing.T) {

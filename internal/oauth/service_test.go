@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestNormalizeScopeDefaultsToMCPRead(t *testing.T) {
-	requireEqualString(t, "mcp:read", NormalizeScope(""))
-	requireEqualString(t, "mcp:read", NormalizeScope("   "))
+func TestNormalizeScopeDefaultsToMCPWrite(t *testing.T) {
+	requireEqualString(t, "mcp:write", NormalizeScope(""))
+	requireEqualString(t, "mcp:write", NormalizeScope("   "))
 }
 
 func TestNormalizeScopeAliasesAndDeduplicates(t *testing.T) {

@@ -181,7 +181,7 @@ func (resolver *ActorResolver) unauthorized(request *http.Request) error {
 		if issuer != "" {
 			metadataURL := fmt.Sprintf("%s/.well-known/oauth-protected-resource", strings.TrimRight(issuer, "/"))
 			headers["WWW-Authenticate"] = fmt.Sprintf(
-				`Bearer realm="engram-mcp", resource_metadata="%s", scope="mcp:read"`,
+				`Bearer realm="engram-mcp", resource_metadata="%s", scope="mcp:write"`,
 				metadataURL,
 			)
 		}

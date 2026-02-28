@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultScope = "mcp:read"
+	defaultScope = "mcp:write"
 )
 
 var scopeAliasMap = map[string]string{
@@ -75,7 +75,7 @@ func IssuerURLForRequest(request *http.Request, settings config.Settings) string
 	return strings.TrimRight(scheme+"://"+request.Host, "/")
 }
 
-// NormalizeScope aliases and deduplicates scope values, defaulting to mcp:read.
+// NormalizeScope aliases and deduplicates scope values, defaulting to mcp:write.
 func NormalizeScope(scope string) string {
 	tokens := strings.Split(scope, " ")
 	normalized := make([]string, 0, len(tokens))
