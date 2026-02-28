@@ -208,6 +208,17 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 20 - Production Security Hardening
 
+### Status
+
+- In progress (2026-02-28 checkpoint).
+- Completed in this phase kickoff:
+  - OIDC login/session mapping baseline (`/login/oidc`, `/login/oidc/callback`) with ID-token verification and session-cookie integration.
+  - OIDC config validation + redaction wiring (`OIDC_*` settings).
+  - OIDC login route coverage in API/session UI tests.
+- Remaining focus:
+  - centralized audit sink strategy and rollout contract.
+  - security-focused OIDC abuse-path/negative acceptance coverage.
+
 ### Goals
 
 - Move from local auth baseline to production-grade identity and controls.
@@ -799,18 +810,16 @@ Build a local-first memory system where agents and humans can:
 
 ## Near-Term Execution Order
 
-1. Phase 33 cross-surface closeout and round-trip hardening
-2. Phase 19 (sharing model) and Phase 20 (security hardening) parallel planning
-3. Phase 21 onward after security and data-sharing model stabilize
-4. After phase 23, execute link-graph roadmap in order:
+1. Complete Phase 20 (production security hardening) with centralized audit sink + abuse-path coverage.
+2. Execute Phase 21 (observability and reliability) after Phase 20 gate closes.
+3. Execute Phase 22 (release automation and deployment profiles).
+4. Execute Phase 23 (EvalOps and prompt/policy governance).
+5. After Phase 23, execute link-graph roadmap in order:
    - Phase 24 (graph foundations)
    - Phase 25 (link APIs/MCP + suggestions)
    - Phase 26 (graph-aware recall)
    - Phase 27 (traceability UX)
    - Phase 28 (temporal dynamics + graph quality)
-5. Execute Phase 32 after Phase 19 + Phase 24-28 baselines are in place:
+6. Execute Phase 32 after Phase 24-28 baselines are in place:
    - add `cw>` query protocol
    - enable access-aware federated linked recall across projects
-6. Execute Phase 34 after Phase 33 foundations land:
-   - remediate security audit backlog by priority
-   - enforce production-safe defaults and distributed protection controls

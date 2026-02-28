@@ -81,11 +81,11 @@ Prerequisites: Docker, Go 1.25+, Node 18+. See [docs/env-reference.md](docs/env-
 
 ## Current Status
 
-Phases 0-18, 29-34 implemented. Go migration cutover checklist completed through CP183. See [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) for details.
+Phases 0-19 and 29-34 implemented; Phase 20 is in progress. Go migration checkpoints are complete through CP185. See [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) for details.
 
 **Completed:** foundation, schema, retrieval, durability, chat continuity, providers (OpenAI/Anthropic/Bedrock), MCP stream, React UI, acceptance testing, theme/UX, MCP developer experience, document ingestion (RAG), memory lifecycle, auto-metadata enrichment, MCP tokens, enterprise memory management.
 
-**Current focus:** post-migration operational hardening and forward roadmap phases (19+).
+**Current focus:** Phase 20 production security hardening closeout (OIDC rollout hardening, centralized audit sink, security regression depth) and forward roadmap phases (21+).
 
 ## Repository Layout
 

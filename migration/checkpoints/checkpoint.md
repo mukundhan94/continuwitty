@@ -12,17 +12,33 @@
 - **Phase 17 completed:** document ingestion and RAG-ready retrieval, including session-level document pinning.
 - **Phase 18 completed:** memory lifecycle policies (autosave/retention controls, timeline APIs/UI, and explicit consolidation merge/group semantics).
 - **Phase 19 completed:** collaboration + sharing model (project memberships, membership-enforced visibility, share/unshare APIs + MCP tools, and DB-backed audit trail + admin UI controls).
+- **Phase 20 in progress:** production security hardening kickoff with OIDC login/session mapping baseline, OIDC config validation/redaction coverage, and session UI callback tests in Go runtime.
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
 - **Phase 33 completed:** portable export/import stash workflow with REST + MCP + web transfer flows, owner/admin authorization, and source-fidelity round-trip coverage.
 - **Phase 34 completed:** security audit remediation for production-safe config defaults, distributed login/MCP throttling, protected OAuth registration, and security regression coverage.
 - **Go migration initiated (2026-02-22):** phased Python/FastAPI → Go migration started with dedicated progress tracker in `checkpoint-go-migration.md` (CP1 complete: module scaffold + config parity tests; CP2 complete: DB bootstrap/transaction parity tests; CP3 complete: API scaffold + health/version route parity tests; CP4 complete: auth hashing/CSRF parity tests; CP5 complete: user models/repository parity tests; CP6 complete: embeddings local/fallback parity tests; CP7 complete: engram repository helper/query parity tests; CP8 complete: DB read-path parity for `list_engrams`/`query_engrams`; CP9 complete: rehydration/source read-path parity; CP10 complete: engram write-path repository flows; CP11 complete: chat session repository baseline; CP12 complete: project repository baseline; CP13 complete: chat message/session pinning repository continuation; CP14 complete: document repository baseline; CP15 complete: MCP token repository baseline; CP16 complete: OAuth repository baseline; CP17 complete: collection repository baseline; CP18 complete: memory-admin session repository baseline; CP19 complete: memory-admin engram repository baseline; CP20 complete: memory-admin engram update/source-replacement repository parity; CP21 complete: memory-admin service baseline; CP22 complete: memory-admin API route baseline; CP23 complete: dependency-aware memory-admin API integration baseline; CP24 complete: runtime dependency wiring with migration-time actor/project resolver bridges; CP25 complete: context-first admin actor hardening baseline; CP26 complete: session-cookie actor middleware baseline with DB-backed canonicalization; CP27 complete: session login/logout/csrf route baseline with `/api/v1/me`; CP28 complete: session hardening baseline for TTL/issued-at validation and secure cookie attributes; CP29 complete: UI/login parity baseline (`/`, `/login`, `/logout`, `/ui`) on hardened sessions; CP30 complete: login guard + auth audit parity baseline in Go runtime/UI flow; CP31 complete: distributed limiter parity baseline with `rate_limit_state` store wiring and local fallback hardening; CP32 complete: UI/admin auth integration hardening with `/ui/admin` role-gating parity and auth/session code-health uplift; CP33 complete: role-aware `/api/v1/users` API parity + auth/session route health uplift; CP34 complete: session-auth engram route parity (`/api/v1/engrams*`) with strict >9.5 code-health gate; CP35 complete: non-checkpoint code-health uplift for `internal/auth/session.go` from 9.38 to 9.68; CP36 complete: non-checkpoint code-health uplift for `internal/repository/user.go` from 9.38 to 10.0; CP37 complete: non-checkpoint code-health uplift for `internal/embeddings/service.go` from 9.09 to 9.68; CP38 complete: non-checkpoint code-health uplift for `internal/repository/oauth.go` from 9.38 to 10.0; CP39 complete: non-checkpoint code-health uplift for `internal/repository/chat_test.go` from 9.09 to 10.0; CP40 complete: non-checkpoint code-health uplift for `internal/repository/chat.go` from 9.02 to 9.68; CP41 complete: non-checkpoint code-health uplift for `internal/repository/oauth_test.go` from 9.38 to 10.0; CP42 complete: non-checkpoint code-health uplift for `internal/repository/collection_test.go` from 9.09 to 10.0; CP43 complete: non-checkpoint code-health uplift for `internal/repository/document_test.go` from 8.72 to 9.68; CP44 complete: non-checkpoint code-health uplift for `internal/repository/document.go` from 8.81 to 9.68; CP45 complete: non-checkpoint code-health uplift for `internal/repository/chat_pinning.go` from 8.81 to 9.68; CP46 complete: non-checkpoint code-health uplift for `internal/repository/engram_write_test.go` from 9.26 to 10.0; CP47 complete: non-checkpoint code-health uplift for `internal/repository/admin_engram_update_test.go` from 9.25 to 10.0; CP48 complete: non-checkpoint code-health uplift for `internal/repository/admin_engram_test.go` from 9.38 to 10.0; CP49 complete: non-checkpoint code-health uplift for `internal/admin/service_test.go` from 9.38 to 10.0; CP50 complete: non-checkpoint code-health uplift for `internal/admin/service.go` from 8.54 to 9.68; CP51 complete: non-checkpoint code-health uplift for `internal/repository/chat_pinning_test.go` from 9.38 to 9.51).
-- **Go migration current checkpoint (2026-02-28):** CP184 completed in `checkpoint-go-migration.md` with Phase 19 collaboration vertical slice parity in Go runtime (`project_members`, `project_audit_events`, membership-gated read policies, member/audit REST routes, share/unshare routes, MCP tool parity, admin UI controls) validated via targeted Go and web test suites.
+- **Go migration current checkpoint (2026-02-28):** CP185 completed in `checkpoint-go-migration.md` with Phase 20 security kickoff baseline in Go runtime (OIDC login provider wiring, session OIDC start/callback routes, OIDC config validation/redaction updates, and targeted Go tests) validated with `go test ./...`.
 
 ---
 
 ## Active Phase Progress
+
+### Phase 20 Progress Tracker
+
+- [x] Added optional OIDC login/session mapping (`/login/oidc`, `/login/oidc/callback`) with verified ID-token flow in Go runtime.
+- [x] Added OIDC runtime config validation + redaction behavior (`OIDC_*` settings).
+- [x] Added/updated tests for OIDC login start/callback routes and config validation.
+- [ ] Add centralized audit sink strategy and implementation path beyond JSONL/stdout baseline.
+- [ ] Extend security regression and acceptance coverage for OIDC/provider negative paths.
+
+#### Phase 20 Implemented So Far
+
+1. OIDC runtime provider module with discovery, auth URL generation, code exchange, ID-token validation, nonce enforcement, and claim-to-username mapping.
+2. Session UI OIDC routes with pending state/nonce storage in signed session cookies and final session-authenticated login mapping.
+3. Config and env updates for `OIDC_ENABLED`, issuer/client/redirect/scopes/username-claim controls with validation/redaction coverage.
+4. Route and config test coverage for OIDC happy-path + not-enabled behavior.
 
 ### Phase 31 Progress Tracker
 
@@ -158,8 +174,9 @@
 - DB-backed audit events for member changes, share/unshare, and chat pin/unpin.
 - Admin memory page member management + audit timeline panels.
 
-### Milestone 20 — Production Security (Planned)
-- OIDC integration, distributed auth rate limiting, centralized audit
+### Milestone 20 — Production Security (In Progress)
+- Completed kickoff: OIDC login/session mapping baseline, OIDC config validation/redaction coverage.
+- Remaining: centralized audit sink and expanded security abuse-path coverage.
 
 ---
 
@@ -181,7 +198,7 @@
 | 30 | MCP Personal Access Tokens | Completed |
 | 31 | Enterprise Memory Management | Completed |
 | 19 | Collaboration + Sharing | Completed |
-| 20 | Production Security | Planned |
+| 20 | Production Security | In Progress |
 | 21-23 | Observability, Release, EvalOps | Planned |
 | 24-28 | Engram Link Graph | Planned |
 | 32 | ContinuWitty Query Protocol | Planned |

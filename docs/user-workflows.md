@@ -68,7 +68,7 @@ make test
 ```bash
 make api
 ```
-Open `http://localhost:8000/login`, sign in, then use `/ui` to run create/list/query/rehydrate from the dashboard.
+Open `http://localhost:8000/login`, sign in (local credentials or OIDC when enabled), then use `/ui` to run create/list/query/rehydrate from the dashboard.
 For admin role validation, open `http://localhost:8000/ui/admin` and verify user list visibility.
 
 Then test durable agent runs:

@@ -17,7 +17,7 @@
 - [x] Phase 33: portable export/import stash workflow (project + collections + engrams) with owner/admin authorization and round-trip tests
 - [x] Phase 34: security audit remediation program (critical defaults, auth/session hardening, MCP/OAuth protections)
 - [x] Phase 19: implement project membership and scoped sharing/revocation flows with audit trails
-- [ ] Phase 20: OIDC integration + distributed rate-limit strategy + production auth hardening tests
+- [ ] Phase 20: production security closeout (OIDC rollout hardening + centralized audit sink + auth abuse-path tests)
 - [ ] Phase 21: observability and reliability
 - [ ] Phase 22: release automation and deployment profiles
 - [ ] Phase 23: EvalOps and prompt/policy governance
@@ -41,6 +41,6 @@
 
 ## Technical Debt
 
-- [ ] Production security hardening (full OIDC, centralized audit sink, distributed rate limits)
+- [ ] Production security hardening follow-up (OIDC provider rollout validation, centralized audit sink integration, expanded auth abuse-path tests)
 - [ ] Swap local deterministic embeddings for a real embedding model (sentence-transformers or hosted provider)
 - [ ] Cross-provider engram reuse validation (same stored engram with different LLM providers)

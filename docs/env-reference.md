@@ -39,6 +39,18 @@
 | `MCP_TRANSPORT_RATE_LIMIT_WINDOW_SECONDS` | `60` | MCP transport rate-limit window |
 | `MCP_TRANSPORT_RATE_LIMIT_BLOCK_SECONDS` | `30` | MCP transport block duration once threshold is exceeded |
 
+## OIDC Login
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OIDC_ENABLED` | `false` | Enable external OIDC login flow (`/login/oidc`) |
+| `OIDC_ISSUER_URL` | - | OIDC issuer URL used for discovery |
+| `OIDC_CLIENT_ID` | - | OIDC client ID |
+| `OIDC_CLIENT_SECRET` | - | OIDC client secret |
+| `OIDC_REDIRECT_URL` | `http://localhost:8000/login/oidc/callback` | Redirect URI registered with the OIDC provider |
+| `OIDC_SCOPES` | `openid profile email` | Requested OIDC scopes |
+| `OIDC_USERNAME_CLAIM` | `email` | Preferred ID-token claim mapped to local username lookup |
+
 ## Debug / Observability
 
 | Variable | Default | Description |

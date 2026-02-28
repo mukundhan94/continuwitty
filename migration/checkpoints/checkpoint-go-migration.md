@@ -46,7 +46,7 @@
 | CP31 | 2026-02-22 | Completed | Distributed limiter parity baseline (`rate_limit_state`-backed auth limiter state + process-local fallback hardening) |
 | CP32 | 2026-02-22 | Completed | UI/admin auth integration hardening (`/ui/admin` role-gating parity + auth/session code-health uplift) |
 | CP33 | 2026-02-22 | Completed | Auth/session continuation (`/api/v1/users` role-aware API parity + session/user route health uplift) |
-| CP34 | 2026-02-22 | In Progress | Auth/session continuation follow-up (incremental non-checkpoint file code-health uplift toward >9.5 baseline) |
+| CP34 | 2026-02-22 | Completed | Auth/session continuation follow-up (incremental non-checkpoint file code-health uplift toward >9.5 baseline; superseded by CP35+ uplift checkpoints) |
 | CP80 | 2026-02-26 | Completed | Phase 3 chat API session-derivative route baseline (`save-engram` + `continue`) with migrated unit tests and >9.5 code-health gate |
 | CP81 | 2026-02-26 | Completed | Phase 3 chat API session CRUD route baseline (`create/list/get/update`) with query defaults and >9.5 code-health gate |
 | CP82 | 2026-02-26 | Completed | Phase 3 chat API lifecycle/timeline route baseline (`lifecycle-policy` + `timeline`) with migrated unit tests and >9.5 code-health gate |
@@ -152,6 +152,7 @@
 | CP182 | 2026-02-27 | Completed | Migration runbook/doc alignment baseline: updated primary developer docs (`README.md`, `docs/user-workflows.md`) to reflect completed Go migration status and added first-class command references for contract, shadow, and benchmark workflows (`make openapi-check`, `make shadow-compare`, `make benchmark-compare`) under >9.5 code-health gate |
 | CP183 | 2026-02-27 | Completed | Go-only runtime cleanup baseline: removed legacy Python runtime artifacts (`api/`, Python migration parity scripts, shadow proxy config, Python contract/benchmark outputs), simplified `docker-compose.yml` and `Makefile` to Go-only flows, and updated docs/checkpoint links to `migration/` paths under >9.5 code-health gate |
 | CP184 | 2026-02-28 | Completed | Phase 19 collaboration parity baseline: added `project_members` + `project_audit_events` persistence/read models, membership-gated read predicates across engram/chat/document repositories, project member/audit REST routes, engram share/unshare REST routes, MCP tool parity (`project.member_*`, `engram.share`, `engram.unshare`), chat pin/unpin audit emission, and admin memory UI member/audit controls with targeted Go + web test pass under >9.5 code-health gate |
+| CP185 | 2026-02-28 | Completed | Phase 20 security kickoff baseline: added optional OIDC login provider (`internal/auth/oidc_login.go`), wired `/login/oidc` + `/login/oidc/callback` session mapping routes, extended config/env validation + redaction for `OIDC_*`, and shipped targeted OIDC route/config tests plus full `go test ./...` pass under >9.5 code-health gate |
 
 ## Checkpoint Details
 

@@ -7,8 +7,8 @@
 
 ## Authentication
 
-All API endpoints (except `/healthz`, `/login`, and `/.well-known/*`) require an authenticated session.
-Sign in via `POST /login` with form credentials to obtain a session cookie.
+All API endpoints (except `/healthz`, `/login`, `/login/oidc*`, and `/.well-known/*`) require an authenticated session.
+Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain a session cookie.
 
 ---
 
@@ -22,6 +22,16 @@ Sign in via `POST /login` with form credentials to obtain a session cookie.
 | `GET` | `/api/v1/users` | List users (admin) |
 | `POST` | `/api/v1/users` | Create user (admin) |
 | `PATCH` | `/api/v1/users/{user_id}` | Update user (admin) |
+
+### Session Auth
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/session/csrf` | Issue/refresh CSRF token and session cookie |
+| `POST` | `/api/v1/session/login` | Session login (JSON username/password) |
+| `POST` | `/api/v1/session/logout` | Session logout (JSON + CSRF) |
+| `GET` | `/api/v1/session/oidc/start` | Start OIDC auth flow (redirect) |
+| `GET` | `/api/v1/session/oidc/callback` | Complete OIDC auth flow (redirect/login mapping) |
 
 ### Engrams
 
