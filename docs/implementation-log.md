@@ -7,6 +7,27 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 32 closeout: retrieval-audit telemetry + cross-project usage signals)
+
+1. Added retrieval-audit telemetry to chat context assembly in `internal/chat/context.go`:
+   - introduced `ChatRetrievalAudit` with blocked candidate counts, trace suppression/filtering/truncation counts, and cross-project usage counters.
+   - added `retrieval_audit` metadata to `AssembledChatContext` and populated it during engram context assembly.
+   - included cross-project usage project IDs and per-trace/bundle cross-project counters based on packed bundles and filtered trace paths.
+2. Propagated retrieval audit metadata through send/stream outputs:
+   - `internal/chat/service.go`: `ChatSendResponse` now includes `retrieval_audit`.
+   - `internal/chat/message_runtime.go`: stream `meta` and `done` payloads now include `retrieval_audit`.
+   - `internal/mcp/compatibility_service.go` + `cmd/api/mcp_message_send_adapter.go`: MCP send-message responses now include `retrieval_audit`.
+3. Added integration and propagation coverage:
+   - `internal/chat/context_links_test.go`: verifies blocked linked-candidate backfill telemetry and cross-project usage telemetry.
+   - `internal/chat/message_runtime_test.go` and `internal/chat/service_test.go`: verify `retrieval_audit` propagation in stream payloads and non-stream send responses.
+4. Code health + quality-gate uplift:
+   - refactored context and test fixture methods into smaller helpers to satisfy CodeScene guardrails (large-method/complexity thresholds).
+5. Validation:
+   - `go test ./internal/chat -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Phase 32 extension: federated ranking/context-packing fusion + rehydration backfill)
 
 1. Tuned linked-context candidate selection in `internal/chat/context_links.go`:

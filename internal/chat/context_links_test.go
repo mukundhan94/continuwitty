@@ -50,74 +50,7 @@ func TestAssembleChatContextBackfillsWhenLinkedBundleUnavailable(t *testing.T) {
 	linkedEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006713")
 	linkID := uuid.MustParse("00000000-0000-0000-0000-000000006714")
 
-	deps := ChatContextDependencies{
-		ListPinnedEngramSummaries: func(
-			_ context.Context,
-			_ uuid.UUID,
-			actorUserID uuid.UUID,
-		) ([]models.EngramSummary, error) {
-			return []models.EngramSummary{
-				contextEngramSummary(rootEngramID, "Root", actorUserID),
-			}, nil
-		},
-		ListPinnedDocuments: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]models.PinnedDocumentRecord, error) {
-			return []models.PinnedDocumentRecord{}, nil
-		},
-		QueryEngrams: func(
-			_ context.Context,
-			actorUserID uuid.UUID,
-			_ models.EngramQueryRequest,
-			_ int,
-		) ([]models.EngramQueryResult, error) {
-			return []models.EngramQueryResult{
-				contextEngramQueryResult(fallbackSeedID, "Fallback", actorUserID, 1.4),
-			}, nil
-		},
-		GetRehydrationBundle: func(
-			_ context.Context,
-			engramID uuid.UUID,
-			_ uuid.UUID,
-		) (*models.RehydrationBundle, error) {
-			switch engramID {
-			case linkedEngramID:
-				return nil, nil
-			case rootEngramID:
-				bundle := contextBundle(rootEngramID, "Root", nil)
-				return &bundle, nil
-			case fallbackSeedID:
-				bundle := contextBundle(fallbackSeedID, "Fallback", nil)
-				return &bundle, nil
-			default:
-				return nil, nil
-			}
-		},
-		TraverseEngramLinks: func(
-			_ context.Context,
-			rootID uuid.UUID,
-			_ uuid.UUID,
-			_ int,
-			_ int,
-			_ bool,
-		) ([]models.EngramLinkTraversalStep, error) {
-			if rootID != rootEngramID {
-				return []models.EngramLinkTraversalStep{}, nil
-			}
-			return []models.EngramLinkTraversalStep{
-				{
-					Depth: 1,
-					Link:  contextLinkRecord(linkID, rootEngramID, linkedEngramID),
-				},
-			}, nil
-		},
-		QueryDocumentChunks: func(
-			_ context.Context,
-			_ uuid.UUID,
-			_ models.DocumentChunkQueryRequest,
-			_ int,
-		) ([]models.DocumentChunkQueryResult, error) {
-			return []models.DocumentChunkQueryResult{}, nil
-		},
-	}
+	deps := dependenciesForUnavailableLinkedBundle(rootEngramID, fallbackSeedID, linkedEngramID, linkID)
 	request := contextRequest(session, "federated fallback", 2)
 	request.MaxEngrams = 2
 
@@ -135,5 +68,159 @@ func TestAssembleChatContextBackfillsWhenLinkedBundleUnavailable(t *testing.T) {
 	}
 	if len(assembled.EngramTracePaths) != 0 {
 		t.Fatalf("expected no trace paths when linked candidate is not packed, got %d", len(assembled.EngramTracePaths))
+	}
+	if assembled.RetrievalAudit == nil {
+		t.Fatalf("expected retrieval audit metadata")
+	}
+	requireEqualAnyRuntime(t, 1, assembled.RetrievalAudit.BlockedEngramCandidateCount)
+	requireEqualAnyRuntime(t, 0, assembled.RetrievalAudit.CrossProjectEngramCount)
+}
+
+func TestAssembleChatContextRetrievalAuditCapturesCrossProjectUsage(t *testing.T) {
+	session := contextSessionRecord()
+	rootEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006721")
+	linkedEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006722")
+	linkID := uuid.MustParse("00000000-0000-0000-0000-000000006723")
+
+	deps := dependenciesForLinkedRecallDefault(rootEngramID, linkedEngramID, linkID)
+	deps.GetRehydrationBundle = func(
+		_ context.Context,
+		engramID uuid.UUID,
+		_ uuid.UUID,
+	) (*models.RehydrationBundle, error) {
+		switch engramID {
+		case rootEngramID:
+			bundle := contextBundle(rootEngramID, "Root", nil)
+			bundle.ProjectID = session.ProjectID
+			return &bundle, nil
+		case linkedEngramID:
+			bundle := contextBundle(linkedEngramID, "Linked", nil)
+			bundle.ProjectID = "project-federated"
+			return &bundle, nil
+		default:
+			return nil, nil
+		}
+	}
+	request := contextRequest(session, "cross project trace", 2)
+	request.MaxEngrams = 2
+
+	assembled, err := AssembleChatContext(context.Background(), request, deps)
+	if err != nil {
+		t.Fatalf("assemble chat context: %v", err)
+	}
+
+	if assembled.RetrievalAudit == nil {
+		t.Fatalf("expected retrieval audit metadata")
+	}
+	requireEqualAnyRuntime(t, 1, assembled.RetrievalAudit.CrossProjectEngramCount)
+	requireEqualAnyRuntime(t, 1, assembled.RetrievalAudit.CrossProjectTracePathCount)
+	requireEqualAnyRuntime(t, []string{"project-federated"}, assembled.RetrievalAudit.CrossProjectProjectIDs)
+}
+
+func dependenciesForUnavailableLinkedBundle(
+	rootEngramID uuid.UUID,
+	fallbackSeedID uuid.UUID,
+	linkedEngramID uuid.UUID,
+	linkID uuid.UUID,
+) ChatContextDependencies {
+	return ChatContextDependencies{
+		ListPinnedEngramSummaries: unavailableLinkedPinnedSummaries(rootEngramID),
+		ListPinnedDocuments: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]models.PinnedDocumentRecord, error) {
+			return []models.PinnedDocumentRecord{}, nil
+		},
+		QueryEngrams: unavailableLinkedQuery(fallbackSeedID),
+		GetRehydrationBundle: unavailableLinkedBundleLookup(
+			rootEngramID,
+			fallbackSeedID,
+			linkedEngramID,
+		),
+		TraverseEngramLinks: unavailableLinkedTraversal(rootEngramID, linkedEngramID, linkID),
+		QueryDocumentChunks: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ models.DocumentChunkQueryRequest,
+			_ int,
+		) ([]models.DocumentChunkQueryResult, error) {
+			return []models.DocumentChunkQueryResult{}, nil
+		},
+	}
+}
+
+func unavailableLinkedPinnedSummaries(
+	rootEngramID uuid.UUID,
+) func(context.Context, uuid.UUID, uuid.UUID) ([]models.EngramSummary, error) {
+	return func(
+		_ context.Context,
+		_ uuid.UUID,
+		actorUserID uuid.UUID,
+	) ([]models.EngramSummary, error) {
+		return []models.EngramSummary{
+			contextEngramSummary(rootEngramID, "Root", actorUserID),
+		}, nil
+	}
+}
+
+func unavailableLinkedQuery(
+	fallbackSeedID uuid.UUID,
+) func(context.Context, uuid.UUID, models.EngramQueryRequest, int) ([]models.EngramQueryResult, error) {
+	return func(
+		_ context.Context,
+		actorUserID uuid.UUID,
+		_ models.EngramQueryRequest,
+		_ int,
+	) ([]models.EngramQueryResult, error) {
+		return []models.EngramQueryResult{
+			contextEngramQueryResult(fallbackSeedID, "Fallback", actorUserID, 1.4),
+		}, nil
+	}
+}
+
+func unavailableLinkedBundleLookup(
+	rootEngramID uuid.UUID,
+	fallbackSeedID uuid.UUID,
+	linkedEngramID uuid.UUID,
+) func(context.Context, uuid.UUID, uuid.UUID) (*models.RehydrationBundle, error) {
+	return func(
+		_ context.Context,
+		engramID uuid.UUID,
+		_ uuid.UUID,
+	) (*models.RehydrationBundle, error) {
+		if engramID == linkedEngramID {
+			return nil, nil
+		}
+		title := "Root"
+		if engramID == fallbackSeedID {
+			title = "Fallback"
+		}
+		if engramID != rootEngramID && engramID != fallbackSeedID {
+			return nil, nil
+		}
+		bundle := contextBundle(engramID, title, nil)
+		return &bundle, nil
+	}
+}
+
+func unavailableLinkedTraversal(
+	rootEngramID uuid.UUID,
+	linkedEngramID uuid.UUID,
+	linkID uuid.UUID,
+) func(context.Context, uuid.UUID, uuid.UUID, int, int, bool) ([]models.EngramLinkTraversalStep, error) {
+	return func(
+		_ context.Context,
+		rootID uuid.UUID,
+		_ uuid.UUID,
+		_ int,
+		_ int,
+		_ bool,
+	) ([]models.EngramLinkTraversalStep, error) {
+		if rootID != rootEngramID {
+			return []models.EngramLinkTraversalStep{}, nil
+		}
+		return []models.EngramLinkTraversalStep{
+			{
+				Depth: 1,
+				Link:  contextLinkRecord(linkID, rootEngramID, linkedEngramID),
+			},
+		}, nil
 	}
 }

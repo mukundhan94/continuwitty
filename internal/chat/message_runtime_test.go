@@ -27,6 +27,7 @@ func TestBuildStreamMetaPayloadIncludesContextReferences(t *testing.T) {
 	requireEqualAnyRuntime(t, prepared.Context.EngramTracePaths, payload["engram_trace_paths"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedDocumentChunkIDs, payload["used_document_chunk_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.SourceReferences, payload["source_references"])
+	requireEqualAnyRuntime(t, prepared.Context.RetrievalAudit, payload["retrieval_audit"])
 }
 
 func TestBuildStreamDonePayloadIncludesReplyAndContextFields(t *testing.T) {
@@ -54,6 +55,7 @@ func TestBuildStreamDonePayloadIncludesReplyAndContextFields(t *testing.T) {
 	requireEqualAnyRuntime(t, prepared.Context.EngramTracePaths, payload["engram_trace_paths"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedDocumentChunkIDs, payload["used_document_chunk_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.SourceReferences, payload["source_references"])
+	requireEqualAnyRuntime(t, prepared.Context.RetrievalAudit, payload["retrieval_audit"])
 	requireEqualAnyRuntime(t, debugTrace, payload["debug_trace"])
 }
 
@@ -315,13 +317,13 @@ func preparedGenerationFixture() PreparedGeneration {
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000007001")
 	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000007002")
 	userMessageID := uuid.MustParse("00000000-0000-0000-0000-000000007003")
-	engramID := uuid.MustParse("00000000-0000-0000-0000-000000007005")
-	documentChunkID := uuid.MustParse("00000000-0000-0000-0000-000000007006")
-	documentID := uuid.MustParse("00000000-0000-0000-0000-000000007007")
-	linkID := uuid.MustParse("00000000-0000-0000-0000-000000007008")
-	linkedEngramID := uuid.MustParse("00000000-0000-0000-0000-000000007009")
-	chunkIndex := 1
-	sourceTitle := "runbook.md"
+	ids := preparedFixtureIDs{
+		engramID:        uuid.MustParse("00000000-0000-0000-0000-000000007005"),
+		documentChunkID: uuid.MustParse("00000000-0000-0000-0000-000000007006"),
+		documentID:      uuid.MustParse("00000000-0000-0000-0000-000000007007"),
+		linkID:          uuid.MustParse("00000000-0000-0000-0000-000000007008"),
+		linkedEngramID:  uuid.MustParse("00000000-0000-0000-0000-000000007009"),
+	}
 	return PreparedGeneration{
 		Session: models.ChatSessionRecord{
 			SessionID:       sessionID,
@@ -345,36 +347,7 @@ func preparedGenerationFixture() PreparedGeneration {
 			UsedEngramIDs:  []uuid.UUID{},
 			CreatedAt:      now,
 		},
-		Context: AssembledChatContext{
-			ContextMarkdown:   "ctx",
-			UsedEngramIDs:     []uuid.UUID{engramID},
-			UsedEngramLinkIDs: []uuid.UUID{linkID},
-			EngramTracePaths: []EngramTracePath{
-				{
-					RootEngramID:   engramID,
-					TargetEngramID: linkedEngramID,
-					Depth:          1,
-					LinkIDs:        []uuid.UUID{linkID},
-					EngramIDs:      []uuid.UUID{engramID, linkedEngramID},
-					Score:          0.91,
-				},
-			},
-			UsedDocumentChunkIDs: []uuid.UUID{documentChunkID},
-			SourceReferences: []ChatSourceReference{
-				{
-					SourceType:  "document_chunk",
-					EngramID:    documentID,
-					EngramTitle: "Runbook",
-					URL:         "document://" + documentID.String(),
-					Title:       &sourceTitle,
-					Snippet:     "snippet",
-					CapturedAt:  now,
-					DocumentID:  &documentID,
-					ChunkID:     &documentChunkID,
-					ChunkIndex:  &chunkIndex,
-				},
-			},
-		},
+		Context: preparedContextFixture(now, ids),
 		ProviderRequest: providers.ProviderGenerateRequest{
 			ModelID:      "gpt-4o-mini",
 			Messages:     []providers.ProviderMessage{{Role: "user", Content: "Q"}},
@@ -384,6 +357,65 @@ func preparedGenerationFixture() PreparedGeneration {
 		PrepareDurationMS:     1.0,
 		ContextDurationMS:     1.0,
 		HistoryLoadDurationMS: 1.0,
+	}
+}
+
+type preparedFixtureIDs struct {
+	engramID        uuid.UUID
+	documentChunkID uuid.UUID
+	documentID      uuid.UUID
+	linkID          uuid.UUID
+	linkedEngramID  uuid.UUID
+}
+
+func preparedContextFixture(now time.Time, ids preparedFixtureIDs) AssembledChatContext {
+	chunkIndex := 1
+	sourceTitle := "runbook.md"
+	return AssembledChatContext{
+		ContextMarkdown:   "ctx",
+		UsedEngramIDs:     []uuid.UUID{ids.engramID},
+		UsedEngramLinkIDs: []uuid.UUID{ids.linkID},
+		EngramTracePaths: []EngramTracePath{
+			{
+				RootEngramID:   ids.engramID,
+				TargetEngramID: ids.linkedEngramID,
+				Depth:          1,
+				LinkIDs:        []uuid.UUID{ids.linkID},
+				EngramIDs:      []uuid.UUID{ids.engramID, ids.linkedEngramID},
+				Score:          0.91,
+			},
+		},
+		UsedDocumentChunkIDs: []uuid.UUID{ids.documentChunkID},
+		SourceReferences: []ChatSourceReference{
+			{
+				SourceType:  "document_chunk",
+				EngramID:    ids.documentID,
+				EngramTitle: "Runbook",
+				URL:         "document://" + ids.documentID.String(),
+				Title:       &sourceTitle,
+				Snippet:     "snippet",
+				CapturedAt:  now,
+				DocumentID:  &ids.documentID,
+				ChunkID:     &ids.documentChunkID,
+				ChunkIndex:  &chunkIndex,
+			},
+		},
+		RetrievalAudit: preparedRetrievalAuditFixture(),
+	}
+}
+
+func preparedRetrievalAuditFixture() *ChatRetrievalAudit {
+	return &ChatRetrievalAudit{
+		CandidateEngramCount:        3,
+		PackedEngramCount:           2,
+		BlockedEngramCandidateCount: 1,
+		LinkedTraceCandidateCount:   1,
+		SuppressedTracePathCount:    0,
+		FilteredTracePathCount:      0,
+		TruncatedTracePathCount:     0,
+		CrossProjectEngramCount:     1,
+		CrossProjectTracePathCount:  1,
+		CrossProjectProjectIDs:      []string{"project-federated"},
 	}
 }
 

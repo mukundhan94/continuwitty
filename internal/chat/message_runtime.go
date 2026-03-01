@@ -245,6 +245,7 @@ func BuildStreamMetaPayload(prepared PreparedGeneration) map[string]any {
 		"used_document_chunk_ids": prepared.Context.UsedDocumentChunkIDs,
 		"source_references":       prepared.Context.SourceReferences,
 		"cw_plan_applied":         prepared.CWPlanApplied,
+		"retrieval_audit":         prepared.Context.RetrievalAudit,
 	}
 }
 
@@ -273,6 +274,7 @@ func BuildStreamDonePayload(
 		"used_document_chunk_ids": prepared.Context.UsedDocumentChunkIDs,
 		"source_references":       prepared.Context.SourceReferences,
 		"cw_plan_applied":         prepared.CWPlanApplied,
+		"retrieval_audit":         prepared.Context.RetrievalAudit,
 		"debug_trace":             nil,
 	}
 	if debugTrace != nil {

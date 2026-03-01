@@ -577,6 +577,7 @@ type MessageSendResponse struct {
 	EngramTracePaths     any            `json:"engram_trace_paths"`
 	UsedDocumentChunkIDs []uuid.UUID    `json:"used_document_chunk_ids"`
 	SourceReferences     any            `json:"source_references"`
+	RetrievalAudit       any            `json:"retrieval_audit,omitempty"`
 	DebugTrace           map[string]any `json:"debug_trace,omitempty"`
 }
 

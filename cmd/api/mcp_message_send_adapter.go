@@ -62,6 +62,7 @@ func (adapter *mcpMessageSendAdapter) SendMessage(
 		EngramTracePaths:     result.EngramTracePaths,
 		UsedDocumentChunkIDs: append([]uuid.UUID(nil), result.UsedDocumentChunkIDs...),
 		SourceReferences:     result.SourceReferences,
+		RetrievalAudit:       result.RetrievalAudit,
 		DebugTrace:           mapStringAnyCopy(result.DebugTrace),
 	}, nil
 }

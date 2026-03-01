@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -53,6 +54,21 @@ type AssembledChatContext struct {
 	EngramTracePaths     []EngramTracePath     `json:"engram_trace_paths"`
 	UsedDocumentChunkIDs []uuid.UUID           `json:"used_document_chunk_ids"`
 	SourceReferences     []ChatSourceReference `json:"source_references"`
+	RetrievalAudit       *ChatRetrievalAudit   `json:"retrieval_audit,omitempty"`
+}
+
+// ChatRetrievalAudit captures retrieval-path diagnostics for traceability and safety review.
+type ChatRetrievalAudit struct {
+	CandidateEngramCount        int      `json:"candidate_engram_count"`
+	PackedEngramCount           int      `json:"packed_engram_count"`
+	BlockedEngramCandidateCount int      `json:"blocked_engram_candidate_count"`
+	LinkedTraceCandidateCount   int      `json:"linked_trace_candidate_count"`
+	SuppressedTracePathCount    int      `json:"suppressed_trace_path_count"`
+	FilteredTracePathCount      int      `json:"filtered_trace_path_count"`
+	TruncatedTracePathCount     int      `json:"truncated_trace_path_count"`
+	CrossProjectEngramCount     int      `json:"cross_project_engram_count"`
+	CrossProjectTracePathCount  int      `json:"cross_project_trace_path_count"`
+	CrossProjectProjectIDs      []string `json:"cross_project_project_ids,omitempty"`
 }
 
 // EngramTracePath captures one compact root->target trace chain used in context recall.
@@ -103,6 +119,7 @@ type assembledEngramContext struct {
 	usedEngramID      []uuid.UUID
 	usedEngramLinkIDs []uuid.UUID
 	tracePaths        []EngramTracePath
+	retrievalAudit    ChatRetrievalAudit
 }
 
 type assembledDocumentContext struct {
@@ -115,6 +132,22 @@ type rehydrationBundleCollectInput struct {
 	EngramIDs   []uuid.UUID
 	ActorUserID uuid.UUID
 	Limit       int
+}
+
+type rehydrationBundleCollectResult struct {
+	Bundles                       []models.RehydrationBundle
+	BlockedEngramCandidateCount   int
+	VisitedCandidateEngramIDCount int
+}
+
+type engramRetrievalAuditInput struct {
+	SessionProjectID   string
+	RankedCandidateIDs []uuid.UUID
+	LinkSelection      linkedEngramSelection
+	BundleCollect      rehydrationBundleCollectResult
+	Bundles            []models.RehydrationBundle
+	FilteredTracePaths []EngramTracePath
+	UsedEngramIDs      []uuid.UUID
 }
 
 // DefaultChatContextDependencies maps chat context dependencies to repository operations.
@@ -156,6 +189,7 @@ func AssembleChatContext(
 			EngramTracePaths:     engramContext.tracePaths,
 			UsedDocumentChunkIDs: documentContext.usedDocumentChunkIDs,
 			SourceReferences:     []ChatSourceReference{},
+			RetrievalAudit:       &engramContext.retrievalAudit,
 		}, nil
 	}
 
@@ -178,6 +212,7 @@ func AssembleChatContext(
 		EngramTracePaths:     engramContext.tracePaths,
 		UsedDocumentChunkIDs: documentContext.usedDocumentChunkIDs,
 		SourceReferences:     sourceReferences,
+		RetrievalAudit:       &engramContext.retrievalAudit,
 	}, nil
 }
 
@@ -222,7 +257,7 @@ func assembleEngramContext(
 		linkSelection.tracePaths,
 		request.MaxEngrams,
 	)
-	bundles, err := collectRehydrationBundles(
+	bundleCollect, err := collectRehydrationBundles(
 		ctx,
 		dependencies,
 		rehydrationBundleCollectInput{
@@ -234,16 +269,29 @@ func assembleEngramContext(
 	if err != nil {
 		return assembledEngramContext{}, err
 	}
+	bundles := bundleCollect.Bundles
 	usedEngramIDs := collectBundleEngramIDs(bundles)
 	filteredTracePaths := filterTracePathsForUsedEngrams(
 		linkSelection.tracePaths,
 		usedEngramIDs,
+	)
+	retrievalAudit := buildEngramRetrievalAudit(
+		engramRetrievalAuditInput{
+			SessionProjectID:   request.Session.ProjectID,
+			RankedCandidateIDs: rankedCandidateIDs,
+			LinkSelection:      linkSelection,
+			BundleCollect:      bundleCollect,
+			Bundles:            bundles,
+			FilteredTracePaths: filteredTracePaths,
+			UsedEngramIDs:      usedEngramIDs,
+		},
 	)
 	return assembledEngramContext{
 		bundles:           bundles,
 		usedEngramID:      usedEngramIDs,
 		usedEngramLinkIDs: collectUsedLinkIDs(filteredTracePaths),
 		tracePaths:        filteredTracePaths,
+		retrievalAudit:    retrievalAudit,
 	}, nil
 }
 
@@ -480,26 +528,114 @@ func collectRehydrationBundles(
 	ctx context.Context,
 	dependencies ChatContextDependencies,
 	input rehydrationBundleCollectInput,
-) ([]models.RehydrationBundle, error) {
+) (rehydrationBundleCollectResult, error) {
 	if input.Limit <= 0 {
-		return []models.RehydrationBundle{}, nil
+		return rehydrationBundleCollectResult{
+			Bundles:                       []models.RehydrationBundle{},
+			BlockedEngramCandidateCount:   0,
+			VisitedCandidateEngramIDCount: 0,
+		}, nil
 	}
 	dedupedEngramIDs := dedupeUUIDsPreserveOrder(input.EngramIDs)
 	bundles := make([]models.RehydrationBundle, 0, min(input.Limit, len(dedupedEngramIDs)))
+	blockedCount := 0
+	visitedCount := 0
 	for _, engramID := range dedupedEngramIDs {
 		if len(bundles) >= input.Limit {
 			break
 		}
+		visitedCount++
 		bundle, err := dependencies.GetRehydrationBundle(ctx, engramID, input.ActorUserID)
 		if err != nil {
-			return nil, err
+			return rehydrationBundleCollectResult{}, err
 		}
 		if bundle == nil {
+			blockedCount++
 			continue
 		}
 		bundles = append(bundles, *bundle)
 	}
-	return bundles, nil
+	return rehydrationBundleCollectResult{
+		Bundles:                       bundles,
+		BlockedEngramCandidateCount:   blockedCount,
+		VisitedCandidateEngramIDCount: visitedCount,
+	}, nil
+}
+
+func buildEngramRetrievalAudit(input engramRetrievalAuditInput) ChatRetrievalAudit {
+	crossProjectEngramCount, crossProjectTracePathCount, crossProjectProjectIDs := resolveCrossProjectUsage(
+		input.SessionProjectID,
+		input.Bundles,
+		input.FilteredTracePaths,
+	)
+	filteredTracePathCount := max(len(input.LinkSelection.tracePaths)-len(input.FilteredTracePaths), 0)
+	return ChatRetrievalAudit{
+		CandidateEngramCount:        len(input.RankedCandidateIDs),
+		PackedEngramCount:           len(input.UsedEngramIDs),
+		BlockedEngramCandidateCount: input.BundleCollect.BlockedEngramCandidateCount,
+		LinkedTraceCandidateCount:   len(input.LinkSelection.tracePaths),
+		SuppressedTracePathCount:    input.LinkSelection.suppressedTraceCount,
+		FilteredTracePathCount:      filteredTracePathCount,
+		TruncatedTracePathCount:     input.LinkSelection.truncatedTracePathCount,
+		CrossProjectEngramCount:     crossProjectEngramCount,
+		CrossProjectTracePathCount:  crossProjectTracePathCount,
+		CrossProjectProjectIDs:      crossProjectProjectIDs,
+	}
+}
+
+func resolveCrossProjectUsage(
+	sessionProjectID string,
+	bundles []models.RehydrationBundle,
+	tracePaths []EngramTracePath,
+) (int, int, []string) {
+	projectByEngramID, crossProjectEngramCount, crossProjectProjectSet := summarizeCrossProjectBundles(sessionProjectID, bundles)
+	crossProjectTracePathCount := countCrossProjectTracePaths(sessionProjectID, tracePaths, projectByEngramID)
+	return crossProjectEngramCount, crossProjectTracePathCount, sortedProjectIDs(crossProjectProjectSet)
+}
+
+func summarizeCrossProjectBundles(
+	sessionProjectID string,
+	bundles []models.RehydrationBundle,
+) (map[uuid.UUID]string, int, map[string]struct{}) {
+	projectByEngramID := make(map[uuid.UUID]string, len(bundles))
+	crossProjectSet := make(map[string]struct{})
+	crossProjectCount := 0
+	for _, bundle := range bundles {
+		projectByEngramID[bundle.EngramID] = bundle.ProjectID
+		if !isCrossProjectID(bundle.ProjectID, sessionProjectID) {
+			continue
+		}
+		crossProjectCount++
+		crossProjectSet[bundle.ProjectID] = struct{}{}
+	}
+	return projectByEngramID, crossProjectCount, crossProjectSet
+}
+
+func countCrossProjectTracePaths(
+	sessionProjectID string,
+	tracePaths []EngramTracePath,
+	projectByEngramID map[uuid.UUID]string,
+) int {
+	count := 0
+	for _, path := range tracePaths {
+		if isCrossProjectID(projectByEngramID[path.TargetEngramID], sessionProjectID) {
+			count++
+		}
+	}
+	return count
+}
+
+func sortedProjectIDs(projectSet map[string]struct{}) []string {
+	ids := make([]string, 0, len(projectSet))
+	for projectID := range projectSet {
+		ids = append(ids, projectID)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+func isCrossProjectID(projectID string, sessionProjectID string) bool {
+	return projectID != "" && projectID != sessionProjectID
 }
 
 func formatListSection(lines []string, fallback string) string {

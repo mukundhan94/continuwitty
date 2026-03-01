@@ -118,6 +118,7 @@ func TestSendMessageReturnsUsedEngramIDsAndSources(t *testing.T) {
 	requireEqualAnyRuntime(t, state.context.EngramTracePaths, response.EngramTracePaths)
 	requireEqualAnyRuntime(t, state.context.UsedDocumentChunkIDs, response.UsedDocumentChunkIDs)
 	requireEqualAnyRuntime(t, state.context.SourceReferences, response.SourceReferences)
+	requireEqualAnyRuntime(t, state.context.RetrievalAudit, response.RetrievalAudit)
 	requireEqualIntRuntime(t, 1, lifecycleCalls)
 	requireEqualIntRuntime(t, 2, len(state.createInputs))
 	requireEqualAnyRuntime(t, state.context.UsedEngramIDs, state.createInputs[1].Metadata.UsedEngramIDs)
@@ -498,16 +499,6 @@ func newServiceRuntimeState() serviceRuntimeState {
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000007205")
 	linkedEngramID := uuid.MustParse("00000000-0000-0000-0000-000000007206")
 	engramLinkID := uuid.MustParse("00000000-0000-0000-0000-000000007207")
-	sourceTitle := "Source"
-	source := ChatSourceReference{
-		SourceType:  "engram_source",
-		EngramID:    engramID,
-		EngramTitle: "Referenced",
-		URL:         "https://example.com/source",
-		Title:       &sourceTitle,
-		Snippet:     "Snippet",
-		CapturedAt:  now,
-	}
 	return serviceRuntimeState{
 		session: models.ChatSessionRecord{
 			SessionID:       sessionID,
@@ -540,24 +531,55 @@ func newServiceRuntimeState() serviceRuntimeState {
 			UsedEngramIDs:  []uuid.UUID{},
 			CreatedAt:      now,
 		},
-		context: AssembledChatContext{
-			ContextMarkdown:   "ctx",
-			UsedEngramIDs:     []uuid.UUID{engramID},
-			UsedEngramLinkIDs: []uuid.UUID{engramLinkID},
-			EngramTracePaths: []EngramTracePath{
-				{
-					RootEngramID:   engramID,
-					TargetEngramID: linkedEngramID,
-					Depth:          1,
-					LinkIDs:        []uuid.UUID{engramLinkID},
-					EngramIDs:      []uuid.UUID{engramID, linkedEngramID},
-					Score:          0.82,
-				},
-			},
-			UsedDocumentChunkIDs: []uuid.UUID{},
-			SourceReferences:     []ChatSourceReference{source},
-		},
+		context:      serviceContextFixture(now, engramID, linkedEngramID, engramLinkID),
 		createInputs: []RuntimeMessageCreateInput{},
+	}
+}
+
+func serviceContextFixture(
+	now time.Time,
+	engramID uuid.UUID,
+	linkedEngramID uuid.UUID,
+	engramLinkID uuid.UUID,
+) AssembledChatContext {
+	sourceTitle := "Source"
+	source := ChatSourceReference{
+		SourceType:  "engram_source",
+		EngramID:    engramID,
+		EngramTitle: "Referenced",
+		URL:         "https://example.com/source",
+		Title:       &sourceTitle,
+		Snippet:     "Snippet",
+		CapturedAt:  now,
+	}
+	return AssembledChatContext{
+		ContextMarkdown:   "ctx",
+		UsedEngramIDs:     []uuid.UUID{engramID},
+		UsedEngramLinkIDs: []uuid.UUID{engramLinkID},
+		EngramTracePaths: []EngramTracePath{
+			{
+				RootEngramID:   engramID,
+				TargetEngramID: linkedEngramID,
+				Depth:          1,
+				LinkIDs:        []uuid.UUID{engramLinkID},
+				EngramIDs:      []uuid.UUID{engramID, linkedEngramID},
+				Score:          0.82,
+			},
+		},
+		UsedDocumentChunkIDs: []uuid.UUID{},
+		SourceReferences:     []ChatSourceReference{source},
+		RetrievalAudit: &ChatRetrievalAudit{
+			CandidateEngramCount:        2,
+			PackedEngramCount:           2,
+			BlockedEngramCandidateCount: 0,
+			LinkedTraceCandidateCount:   1,
+			SuppressedTracePathCount:    0,
+			FilteredTracePathCount:      0,
+			TruncatedTracePathCount:     0,
+			CrossProjectEngramCount:     0,
+			CrossProjectTracePathCount:  0,
+			CrossProjectProjectIDs:      []string{},
+		},
 	}
 }
 

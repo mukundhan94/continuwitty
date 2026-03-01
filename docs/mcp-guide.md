@@ -461,6 +461,7 @@ curl -sN -b "$COOKIE_JAR" \
 - `engram_trace_paths`
 - `used_document_chunk_ids`
 - `source_references`
+- `retrieval_audit` (blocked candidate count + trace suppression/filtering/truncation + cross-project usage signals)
 
 `content_text` can begin with `cw>` to activate ContinuWitty query-protocol planning. The first-line directive is parsed and excluded from the stored/context query text.
 

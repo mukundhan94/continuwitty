@@ -11,8 +11,10 @@ import (
 )
 
 type linkedEngramSelection struct {
-	linkedIDs  []uuid.UUID
-	tracePaths []EngramTracePath
+	linkedIDs               []uuid.UUID
+	tracePaths              []EngramTracePath
+	suppressedTraceCount    int
+	truncatedTracePathCount int
 }
 
 type traceChain struct {
@@ -50,6 +52,7 @@ func selectLinkedEngramContext(
 	}
 
 	candidateByTarget := make(map[uuid.UUID]EngramTracePath)
+	suppressedTraceCount := 0
 	for _, rootEngramID := range seedEngramIDs {
 		steps, err := dependencies.TraverseEngramLinks(
 			ctx,
@@ -67,6 +70,7 @@ func selectLinkedEngramContext(
 				continue
 			}
 			if shouldSuppressNoisyTracePath(request, path) {
+				suppressedTraceCount++
 				continue
 			}
 			if existing, exists := candidateByTarget[path.TargetEngramID]; !exists || path.Score > existing.Score {
@@ -86,6 +90,7 @@ func selectLinkedEngramContext(
 	slices.SortStableFunc(candidates, compareTracePathForSelection)
 
 	candidatePoolLimit := linkedCandidatePoolLimit(request.MaxEngrams, len(seedEngramIDs))
+	truncatedTracePathCount := max(len(candidates)-candidatePoolLimit, 0)
 	selectedPaths := make([]EngramTracePath, 0, candidatePoolLimit)
 	selectedIDs := make([]uuid.UUID, 0, candidatePoolLimit)
 	for _, path := range candidates {
@@ -96,8 +101,10 @@ func selectLinkedEngramContext(
 		selectedPaths = append(selectedPaths, path)
 	}
 	return linkedEngramSelection{
-		linkedIDs:  selectedIDs,
-		tracePaths: selectedPaths,
+		linkedIDs:               selectedIDs,
+		tracePaths:              selectedPaths,
+		suppressedTraceCount:    suppressedTraceCount,
+		truncatedTracePathCount: truncatedTracePathCount,
 	}, nil
 }
 
@@ -202,7 +209,7 @@ func buildEngramContextCandidate(
 	traceDepth := resolveTraceDepth(traceDepthByTarget[engramID])
 	_, isSeed := seedSet[engramID]
 	return engramContextCandidate{
-		engramID:        engramID,
+		engramID: engramID,
 		score: fusedCandidateScore(
 			engramCandidateScoreInput{
 				semanticScore: semanticScore,

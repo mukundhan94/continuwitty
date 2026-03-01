@@ -49,6 +49,7 @@ type ChatSendResponse struct {
 	EngramTracePaths     []EngramTracePath     `json:"engram_trace_paths"`
 	UsedDocumentChunkIDs []uuid.UUID           `json:"used_document_chunk_ids"`
 	SourceReferences     []ChatSourceReference `json:"source_references"`
+	RetrievalAudit       *ChatRetrievalAudit   `json:"retrieval_audit,omitempty"`
 	DebugTrace           map[string]any        `json:"debug_trace,omitempty"`
 }
 
@@ -451,6 +452,7 @@ func buildChatSendResponse(
 		EngramTracePaths:     prepared.Context.EngramTracePaths,
 		UsedDocumentChunkIDs: prepared.Context.UsedDocumentChunkIDs,
 		SourceReferences:     prepared.Context.SourceReferences,
+		RetrievalAudit:       prepared.Context.RetrievalAudit,
 		DebugTrace:           nil,
 	}
 }

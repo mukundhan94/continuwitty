@@ -693,16 +693,15 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress (2026-03-01 kickoff).
-- Completed in this kickoff slice:
+- Completed (2026-03-01).
+- Completed in this phase:
   - Added `cw>` query protocol parsing and normalization in `internal/chat/query_protocol.go`.
   - Added runtime integration to strip directives from persisted/context query text while preserving a normalized `cw_plan_applied` plan in send/stream metadata.
   - Extended REST + MCP send-message payload surfaces with additive `cw_plan_applied` metadata in responses.
   - Added parser/runtime regression coverage for directive forms and payload metadata propagation.
   - Enabled federated cross-project link traversal/read SQL paths with per-node access filters (same-project restriction removed from link visibility/traversal queries).
   - Added fused semantic + trace ranking for federated engram candidates with resilient context packing backfill when higher-ranked candidates cannot be rehydrated.
-- Remaining focus:
-  - explicit retrieval audit signals for blocked-node filtering and cross-project path usage.
+  - Added retrieval audit telemetry signals (`retrieval_audit`) for blocked candidate filtering, suppressed/filtered/truncated trace paths, and cross-project path usage counts.
 - This phase introduces a lightweight query protocol for users/agents (`cw>`) and extends linked-memory retrieval to cross-project associations with strict access-aware filtering.
 
 ### Why This Phase
@@ -752,6 +751,7 @@ Build a local-first memory system where agents and humans can:
      - `used_engram_ids`
      - `used_engram_link_ids`
      - `engram_trace_paths`
+     - `retrieval_audit`
      - optional `cw_plan_applied` summary.
 5. UI affordances:
    - add optional helper/hint near composer describing `cw>` usage patterns.

@@ -227,6 +227,7 @@ Chat send responses and stream `meta`/`done` events include:
 - `engram_trace_paths`
 - `used_document_chunk_ids`
 - `source_references`
+- `retrieval_audit` (blocked candidate count + trace suppression/filtering/truncation + cross-project usage signals)
 
 ### Create Engram
 
