@@ -23,7 +23,7 @@ NC = \033[0m
 
 WEB_PORT ?= 5173
 
-.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api lint format format-check check test test-unit test-integration coverage web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke release-smoke-docker release-gate release-live-provider-gate acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api lint format format-check check test test-unit test-integration coverage web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
 help: ## Print all Makefile commands with categorized descriptions and usage hints
 	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
@@ -42,6 +42,7 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 			if (target ~ /^db-/) return "Database"; \
 			if (target ~ /^stack-/) return "Stack"; \
 			if (target == "dev") return "Local Dev"; \
+			if (target ~ /^release-/) return "Release"; \
 			if (target ~ /^acceptance-/) return "Acceptance"; \
 			if (target ~ /^web-/ || target == "web") return "Web"; \
 			if (target ~ /^diagram-/) return "Diagrams"; \
@@ -74,6 +75,7 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 	@printf '  $(INFO)make stack-up$(NC)                               Container stack (use sparingly)\n'
 	@printf '  $(INFO)make check && make web-check$(NC)                Run backend + web quality gates\n'
 	@printf '  $(INFO)make acceptance-bddgen && make acceptance-test-mock$(NC)  Run deterministic acceptance tests\n'
+	@printf '  $(INFO)make release-gate$(NC)                            Run release candidate deterministic gates\n'
 	@printf '\n'
 	@$(MAKE) --no-print-directory print-config
 
@@ -148,6 +150,14 @@ stack-smoke: ## Build/start db + api and verify Go API health/version endpoints
 	@curl -fsS "http://127.0.0.1:$${API_PORT:-8000}/api/v1/version" >/dev/null
 	@printf '$(SUCCESS)✓ Go API container smoke checks passed$(NC)\n'
 
+release-smoke-docker: ## Run release smoke checks in Docker compose profile "release-smoke"
+	@printf '$(PROGRESS)Running release smoke checks in Docker profile "release-smoke"...$(NC)\n'
+	@exit_code=0; \
+	$(DOCKER_COMPOSE) --profile release-smoke up --build --force-recreate --abort-on-container-exit release-smoke || exit_code=$$?; \
+	$(DOCKER_COMPOSE) --profile release-smoke down; \
+	exit $$exit_code
+	@printf '$(SUCCESS)✓ Docker release smoke checks completed$(NC)\n'
+
 acceptance-sync: ## Install acceptance test dependencies
 	@printf '$(PROGRESS)Installing acceptance test dependencies...$(NC)\n'
 	@cd $(ACCEPTANCE_DIR) && npm install
@@ -214,6 +224,12 @@ acceptance-test-triage-live-docker: ## Run live triage acceptance in docker (ACC
 	$(DOCKER_COMPOSE) --profile acceptance down; \
 	exit $$exit_code
 	@printf '$(SUCCESS)✓ Docker triage acceptance suite completed$(NC)\n'
+
+release-live-provider-gate: ## Run optional live-provider release gate (Bedrock + triage)
+	@printf '$(PROGRESS)Running optional live-provider release gate...$(NC)\n'
+	@$(MAKE) --no-print-directory acceptance-test-bedrock-live-docker
+	@$(MAKE) --no-print-directory acceptance-test-triage-live-docker
+	@printf '$(SUCCESS)✓ Live-provider release gate completed$(NC)\n'
 
 sync: ## Sync Go module dependencies
 	@printf '$(PROGRESS)Syncing Go module dependencies...$(NC)\n'
@@ -308,6 +324,8 @@ web-build: ## Build production web bundle
 	@printf '$(SUCCESS)✓ Web build completed$(NC)\n'
 
 web-check: web-lint web-test web-build ## Run full web quality gate (lint + tests + build)
+
+release-gate: check web-check acceptance-test-mock-docker release-smoke-docker ## Run deterministic release candidate gate
 
 diagram-render: ## Render PlantUML diagrams to SVG
 	@printf '$(PROGRESS)Rendering PlantUML diagrams to SVG...$(NC)\n'

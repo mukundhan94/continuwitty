@@ -1,5 +1,9 @@
 services:
   db:
+    profiles:
+      - dev
+      - acceptance
+      - release-smoke
     image: pgvector/pgvector:pg16
     container_name: engram-db
     restart: unless-stopped
@@ -19,6 +23,10 @@ services:
       retries: 20
 
   api:
+    profiles:
+      - dev
+      - acceptance
+      - release-smoke
     build:
       context: .
       dockerfile: Dockerfile
@@ -72,6 +80,10 @@ services:
       retries: 20
 
   web:
+    profiles:
+      - dev
+      - acceptance
+      - release-smoke
     build:
       context: .
       dockerfile: web/Dockerfile
@@ -120,6 +132,25 @@ services:
     volumes:
       - ./acceptance-tests/artifacts:/work/acceptance-tests/artifacts
     command: ["npm", "run", "test"]
+
+  release-smoke:
+    image: curlimages/curl:8.12.1
+    profiles:
+      - release-smoke
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    command:
+      - "sh"
+      - "-c"
+      - |
+        set -eu
+        curl -fsS http://api:8000/healthz | grep -q '"status":"ok"'
+        curl -fsS http://api:8000/api/v1/version | grep -q '"semantic_version"'
+        curl -fsS http://api:8000/api/v1/metrics | grep -q '"totals"'
+        curl -fsS http://web:5173 >/dev/null
 
 volumes:
   pgdata:
