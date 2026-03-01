@@ -15,6 +15,7 @@
 - **Phase 20 in progress:** production security hardening kickoff with OIDC login/session mapping baseline, OIDC config validation/redaction coverage, and session UI callback tests in Go runtime.
 - **Phase 21 completed:** observability/reliability foundation with request telemetry middleware, expanded `/api/v1/metrics` health categories (provider failures, stream outcomes, lifecycle traces), and provider fallback/circuit strategy.
 - **Phase 22 completed:** release automation and deployment profile hardening with staged CI gates, compose profile matrix (`dev`/`acceptance`/`release-smoke`), and versioned release checklist/rollback runbook.
+- **Phase 23 completed:** EvalOps + governance hardening with versioned prompt/tool/eval metadata, deterministic continuity/citation/memory-drift suite, delta regression gates, and historical trend artifacts.
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
@@ -50,6 +51,14 @@
 - [x] Add stream-health and provider-failure category metrics.
 - [x] Add trace hooks for chat/session/message lifecycle.
 - [x] Add provider fallback/circuit-breaker strategy and regression coverage.
+
+### Phase 23 Progress Tracker
+
+- [x] Added deterministic EvalOps suite for `continuity`, `citation_trust`, and `memory_drift`.
+- [x] Added governance version metadata in chat responses, stream payloads, MCP initialize policy, and version endpoint.
+- [x] Added baseline + previous-run delta regression gate for eval scores.
+- [x] Added run history persistence and markdown trend reporting.
+- [x] Integrated eval gate into `make check`, `make release-gate`, and CI Go backend checks.
 
 ### Phase 31 Progress Tracker
 
@@ -212,7 +221,7 @@
 | 20 | Production Security | In Progress |
 | 21 | Observability and Reliability | Completed |
 | 22 | Release Automation and Deployment Profiles | Completed |
-| 23 | EvalOps and Prompt/Policy Governance | Planned |
+| 23 | EvalOps and Prompt/Policy Governance | Completed |
 | 24-28 | Engram Link Graph | Planned |
 | 32 | ContinuWitty Query Protocol | Planned |
 | 33 | Portable Export/Import Stash | Completed |

@@ -20,7 +20,7 @@
 - [ ] Phase 20: production security closeout (OIDC rollout hardening + centralized audit sink + auth abuse-path tests)
 - [x] Phase 21: observability and reliability (request telemetry/metrics, stream/provider health categories, lifecycle tracing hooks, provider fallback/circuit strategy)
 - [x] Phase 22: release automation and deployment profiles (CI staged gates + compose profiles + versioned release checklist/runbook)
-- [ ] Phase 23: EvalOps and prompt/policy governance
+- [x] Phase 23: EvalOps and prompt/policy governance
 
 ## Future (Post Phase 23)
 

@@ -23,7 +23,7 @@ NC = \033[0m
 
 WEB_PORT ?= 5173
 
-.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke release-smoke-docker release-gate release-live-provider-gate acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api lint format format-check check test test-unit test-integration coverage web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke release-smoke-docker release-gate release-live-provider-gate acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api lint format format-check check test test-unit test-integration coverage eval eval-report web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
 help: ## Print all Makefile commands with categorized descriptions and usage hints
 	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
@@ -46,7 +46,7 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 			if (target ~ /^acceptance-/) return "Acceptance"; \
 			if (target ~ /^web-/ || target == "web") return "Web"; \
 			if (target ~ /^diagram-/) return "Diagrams"; \
-			if (target == "sync" || target == "api" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "coverage" || target == "check") return "API/Backend"; \
+			if (target == "sync" || target == "api" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "coverage" || target == "eval" || target == "eval-report" || target == "check") return "API/Backend"; \
 			return "Other"; \
 		} \
 		/^[a-zA-Z0-9_.-]+:.*## / { \
@@ -295,7 +295,27 @@ coverage: ## Run backend Go coverage and write coverage.out
 	@go tool cover -func=coverage.out | tail -n 1
 	@printf '$(SUCCESS)✓ Backend Go coverage completed (coverage.out)$(NC)\n'
 
-check: lint format-check test ## Run backend Go quality gate (vet + format-check + tests)
+eval: ## Run EvalOps suite + baseline/previous delta gate and write reports
+	@printf '$(PROGRESS)Running EvalOps suite with regression delta gate...$(NC)\n'
+	@go run ./cmd/evalops \
+		-out data/evals/latest.json \
+		-history data/evals/history.jsonl \
+		-baseline evals/baselines/eval-suite-v1.json \
+		-trend-report data/evals/trend-report.md \
+		-enforce-delta-gate=true
+	@printf '$(SUCCESS)✓ EvalOps suite passed (data/evals/latest.json)$(NC)\n'
+
+eval-report: ## Generate EvalOps run + trend report without enforcing delta gate
+	@printf '$(PROGRESS)Generating EvalOps trend report (delta gate disabled)...$(NC)\n'
+	@go run ./cmd/evalops \
+		-out data/evals/latest.json \
+		-history data/evals/history.jsonl \
+		-baseline evals/baselines/eval-suite-v1.json \
+		-trend-report data/evals/trend-report.md \
+		-enforce-delta-gate=false
+	@printf '$(SUCCESS)✓ EvalOps trend report updated$(NC)\n'
+
+check: lint format-check test eval ## Run backend Go quality gate (vet + format-check + tests + eval gate)
 
 web-sync: ## Install web dependencies
 	@printf '$(PROGRESS)Installing web dependencies...$(NC)\n'

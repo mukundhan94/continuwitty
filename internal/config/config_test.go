@@ -19,6 +19,7 @@ func baseSettings() Settings {
 		DefaultChatProvider:               "openai",
 		ChatPromptPolicyVersion:           defaultChatPromptPolicyVersion,
 		MCPToolPolicyVersion:              defaultMCPToolPolicyVersion,
+		EvalSuiteVersion:                  defaultEvalSuiteVersion,
 	}
 }
 
@@ -53,6 +54,7 @@ func TestBuildDebugSettingsSnapshotRedactsSecrets(t *testing.T) {
 	assertEqualString(t, snapshot["default_chat_provider"], "openai")
 	assertEqualString(t, snapshot["chat_prompt_policy_version"], defaultChatPromptPolicyVersion)
 	assertEqualString(t, snapshot["mcp_tool_policy_version"], defaultMCPToolPolicyVersion)
+	assertEqualString(t, snapshot["eval_suite_version"], defaultEvalSuiteVersion)
 }
 
 func TestShouldLogSettingsOnlyForDevModes(t *testing.T) {

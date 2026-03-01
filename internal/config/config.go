@@ -70,6 +70,7 @@ const (
 	defaultLanggraphCheckpointSQL  = "./data/langgraph_checkpoints.sqlite"
 	defaultChatPromptPolicyVersion = governance.DefaultChatPromptPolicyVersion
 	defaultMCPToolPolicyVersion    = governance.DefaultMCPToolPolicyVersion
+	defaultEvalSuiteVersion        = governance.DefaultEvalSuiteVersion
 )
 
 // Settings stores backend runtime configuration.
@@ -109,6 +110,7 @@ type Settings struct {
 	DefaultChatModel                   string  `envconfig:"DEFAULT_CHAT_MODEL" default:"gpt-4o-mini"`
 	ChatPromptPolicyVersion            string  `envconfig:"CHAT_PROMPT_POLICY_VERSION" default:"chat-prompt-policy-v1"`
 	MCPToolPolicyVersion               string  `envconfig:"MCP_TOOL_POLICY_VERSION" default:"mcp-tool-policy-v1"`
+	EvalSuiteVersion                   string  `envconfig:"EVAL_SUITE_VERSION" default:"eval-suite-v1"`
 	ChatDebugEnabled                   bool    `envconfig:"CHAT_DEBUG_ENABLED" default:"true"`
 	ChatDebugLogConsole                bool    `envconfig:"CHAT_DEBUG_LOG_CONSOLE" default:"true"`
 	ChatDebugIncludeRawText            bool    `envconfig:"CHAT_DEBUG_INCLUDE_RAW_TEXT" default:"true"`
@@ -155,6 +157,7 @@ func applyDefaults(settings *Settings) {
 	setStringDefault(&settings.DefaultChatModel, defaultDefaultChatModel)
 	setStringDefault(&settings.ChatPromptPolicyVersion, defaultChatPromptPolicyVersion)
 	setStringDefault(&settings.MCPToolPolicyVersion, defaultMCPToolPolicyVersion)
+	setStringDefault(&settings.EvalSuiteVersion, defaultEvalSuiteVersion)
 	setStringDefault(&settings.AuditLogPath, defaultAuditLogPath)
 	setStringDefault(&settings.LanggraphCheckpointPath, defaultLanggraphCheckpointSQL)
 }
@@ -317,6 +320,7 @@ func settingsMap(settings Settings) map[string]any {
 		"default_chat_model":                      settings.DefaultChatModel,
 		"chat_prompt_policy_version":              settings.ChatPromptPolicyVersion,
 		"mcp_tool_policy_version":                 settings.MCPToolPolicyVersion,
+		"eval_suite_version":                      settings.EvalSuiteVersion,
 		"chat_debug_enabled":                      settings.ChatDebugEnabled,
 		"chat_debug_log_console":                  settings.ChatDebugLogConsole,
 		"chat_debug_include_raw_text":             settings.ChatDebugIncludeRawText,

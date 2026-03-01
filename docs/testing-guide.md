@@ -11,9 +11,11 @@
 make test              # Run all Go backend tests
 make test-unit         # Run Go unit tests
 make test-integration  # Run Go integration tests
+make eval              # Run EvalOps suite + delta regression gate
+make eval-report       # Refresh eval artifacts without enforcing delta gate
 make lint              # go vet
 make format-check      # Go formatting verification
-make check             # lint + format-check + tests
+make check             # lint + format-check + tests + eval gate
 make web-check         # frontend lint + test + build
 make stack-smoke       # containerized db+api smoke check
 make release-gate      # deterministic release candidate gate
@@ -40,6 +42,33 @@ Notes:
 - Repository semantics are primarily covered under `internal/repository`.
 - API/auth/router behavior is primarily covered under `internal/api`.
 - MCP transport and compatibility behavior is primarily covered under `internal/mcp`.
+
+---
+
+## EvalOps Suite (Phase 23)
+
+Deterministic suite dimensions:
+
+- continuity
+- citation_trust
+- memory_drift
+
+Primary commands:
+
+```bash
+make eval
+make eval-report
+```
+
+Artifacts:
+
+- `data/evals/latest.json`
+- `data/evals/history.jsonl`
+- `data/evals/trend-report.md`
+
+Baseline:
+
+- `evals/baselines/eval-suite-v1.json`
 
 ---
 

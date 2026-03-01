@@ -17,7 +17,7 @@ make release-gate
 
 This includes:
 
-1. `make check` (backend vet + formatting + tests)
+1. `make check` (backend vet + formatting + tests + EvalOps delta gate)
 2. `make web-check` (frontend lint + tests + build)
 3. `make acceptance-test-mock-docker` (deterministic acceptance profile)
 4. `make release-smoke-docker` (compose `release-smoke` profile)

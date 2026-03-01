@@ -46,6 +46,7 @@ func TestVersionEndpoint(t *testing.T) {
 		AppCommitSHA:            "abc1234",
 		ChatPromptPolicyVersion: "chat-policy-v9",
 		MCPToolPolicyVersion:    "mcp-policy-v4",
+		EvalSuiteVersion:        "eval-suite-v2",
 	}
 	router := NewRouter(settings)
 
@@ -62,21 +63,16 @@ func TestVersionEndpoint(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-
-	if payload["semantic_version"] != settings.AppSemanticVersion {
-		t.Fatalf("expected semantic version %q, got %q", settings.AppSemanticVersion, payload["semantic_version"])
+	expectedFields := map[string]string{
+		"semantic_version":           settings.AppSemanticVersion,
+		"release":                    "v" + settings.AppSemanticVersion,
+		"commit_id":                  settings.AppCommitSHA,
+		"chat_prompt_policy_version": settings.ChatPromptPolicyVersion,
+		"mcp_tool_policy_version":    settings.MCPToolPolicyVersion,
+		"eval_suite_version":         settings.EvalSuiteVersion,
 	}
-	if payload["release"] != "v"+settings.AppSemanticVersion {
-		t.Fatalf("expected release %q, got %q", "v"+settings.AppSemanticVersion, payload["release"])
-	}
-	if payload["commit_id"] == "" {
-		t.Fatalf("expected non-empty commit id")
-	}
-	if payload["chat_prompt_policy_version"] != settings.ChatPromptPolicyVersion {
-		t.Fatalf("expected chat prompt policy version %q, got %q", settings.ChatPromptPolicyVersion, payload["chat_prompt_policy_version"])
-	}
-	if payload["mcp_tool_policy_version"] != settings.MCPToolPolicyVersion {
-		t.Fatalf("expected mcp tool policy version %q, got %q", settings.MCPToolPolicyVersion, payload["mcp_tool_policy_version"])
+	for key, expectedValue := range expectedFields {
+		assertVersionFieldValue(t, payload, key, expectedValue)
 	}
 }
 
@@ -569,6 +565,18 @@ func assertRouteStatus(
 	router.ServeHTTP(response, request)
 	if response.Code != expectedStatus {
 		t.Fatalf("expected status %d for %s, got %d", expectedStatus, path, response.Code)
+	}
+}
+
+func assertVersionFieldValue(
+	t *testing.T,
+	payload map[string]string,
+	key string,
+	expectedValue string,
+) {
+	t.Helper()
+	if payload[key] != expectedValue {
+		t.Fatalf("expected %s %q, got %q", key, expectedValue, payload[key])
 	}
 }
 

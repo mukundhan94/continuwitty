@@ -81,6 +81,14 @@
 | `AWS_SECRET_ACCESS_KEY` | - | AWS secret key |
 | `AWS_SESSION_TOKEN` | - | AWS session token (optional) |
 
+## Governance Versions
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CHAT_PROMPT_POLICY_VERSION` | `chat-prompt-policy-v1` | Version tag surfaced in chat responses/stream events for prompt-governance tracking |
+| `MCP_TOOL_POLICY_VERSION` | `mcp-tool-policy-v1` | Version tag surfaced in MCP `initialize` policy metadata |
+| `EVAL_SUITE_VERSION` | `eval-suite-v1` | EvalOps suite version surfaced in `/api/v1/version` and MCP `initialize` policy metadata |
+
 ## Embedding
 
 | Variable | Default | Description |

@@ -7,6 +7,61 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 23 closeout: EvalOps + prompt/policy governance)
+
+1. Added governance version constants and runtime config:
+   - `internal/governance/versions.go` now defines:
+     - `chat-prompt-policy-v1`
+     - `mcp-tool-policy-v1`
+     - `eval-suite-v1`
+   - `internal/config/config.go` now supports:
+     - `CHAT_PROMPT_POLICY_VERSION`
+     - `MCP_TOOL_POLICY_VERSION`
+     - `EVAL_SUITE_VERSION`
+2. Exposed policy/eval metadata in runtime contracts:
+   - chat send response + stream meta/done payloads now include `prompt_policy_version`.
+   - MCP `initialize` now includes `policy.tool_policy_version` and `policy.eval_suite_version`.
+   - `/api/v1/version` now includes:
+     - `chat_prompt_policy_version`
+     - `mcp_tool_policy_version`
+     - `eval_suite_version`
+3. Added deterministic EvalOps suite in Go:
+   - `internal/evalops` with case runner, delta-gate evaluator, history storage, and trend reporting.
+   - suite dimensions:
+     - continuity
+     - citation trust
+     - memory drift
+4. Added EvalOps CLI runner:
+   - `cmd/evalops/main.go`
+   - writes:
+     - `data/evals/latest.json`
+     - `data/evals/history.jsonl`
+     - `data/evals/trend-report.md`
+5. Added baseline and gate controls:
+   - baseline file: `evals/baselines/eval-suite-v1.json`
+   - delta thresholds:
+     - overall >= `-0.03`
+     - dimension >= `-0.05`
+   - compares current run against baseline and previous run.
+6. Integrated quality/release automation:
+   - Makefile:
+     - `make eval`
+     - `make eval-report`
+     - `make check` now includes eval gate.
+   - CI:
+     - Go backend job now runs `make eval`.
+7. Added/updated test coverage:
+   - `internal/evalops/runner_test.go`
+   - `internal/evalops/gate_test.go`
+   - `internal/evalops/storage_report_test.go`
+   - updated config/router/MCP tests for new governance metadata fields.
+8. Docs consolidation and alignment:
+   - added `docs/evalops-governance-v1.md`
+   - updated `README.md`, `docs/testing-guide.md`, `docs/env-reference.md`, `docs/api-reference.md`, `docs/mcp-guide.md`, `Plan.md`, `todo.md`, and `migration/checkpoints/checkpoint.md`.
+9. Validation:
+   - `go test ./internal/evalops ./cmd/evalops ./internal/config ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make eval`
+
 ### 2026-03-01 (Phase 22 closeout: release automation + deployment profiles)
 
 1. Split CI into explicit release stages:

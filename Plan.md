@@ -296,6 +296,15 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 23 - EvalOps and Prompt/Policy Governance
 
+### Status
+
+- Completed (2026-03-01).
+- Completed deliverables:
+  - versioned governance metadata for chat/MCP/eval surfaces (`chat_prompt_policy_version`, `mcp_tool_policy_version`, `eval_suite_version`).
+  - deterministic EvalOps suite in Go for `continuity`, `citation_trust`, and `memory_drift`.
+  - release/CI regression delta gate with baseline + previous-run threshold enforcement.
+  - historical trend artifacts (`latest.json`, `history.jsonl`, markdown trend report) and operational runbook.
+
 ### Goals
 
 - Keep memory quality stable as features evolve.
@@ -831,8 +840,8 @@ Build a local-first memory system where agents and humans can:
 ## Near-Term Execution Order
 
 1. Complete Phase 20 (production security hardening) with centralized audit sink + abuse-path coverage.
-2. Execute Phase 23 (EvalOps and prompt/policy governance).
-3. After Phase 23, execute link-graph roadmap in order:
+2. Phase 23 (EvalOps and prompt/policy governance) completed on 2026-03-01.
+3. Execute link-graph roadmap in order:
    - Phase 24 (graph foundations)
    - Phase 25 (link APIs/MCP + suggestions)
    - Phase 26 (graph-aware recall)

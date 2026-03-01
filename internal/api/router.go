@@ -71,6 +71,7 @@ func mountVersionRoute(router chi.Router, settings config.Settings) {
 				"commit_id":                  settings.AppCommitSHA,
 				"chat_prompt_policy_version": settings.ChatPromptPolicyVersion,
 				"mcp_tool_policy_version":    settings.MCPToolPolicyVersion,
+				"eval_suite_version":         settings.EvalSuiteVersion,
 			})
 		})
 	})

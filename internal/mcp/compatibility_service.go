@@ -758,6 +758,7 @@ type EngramCollectionRemoveItemResponse struct {
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
 	MCPToolPolicyVersion     string
+	EvalSuiteVersion         string
 	ProjectService           ProjectListService
 	ProjectExport            ProjectExportService
 	ProjectImport            ProjectImportService
@@ -803,6 +804,7 @@ type CompatibilityServiceDependencies struct {
 type CompatibilityService struct {
 	serverVersion            string
 	mcpToolPolicyVersion     string
+	evalSuiteVersion         string
 	projectService           ProjectListService
 	projectExport            ProjectExportService
 	projectImport            ProjectImportService
@@ -865,9 +867,14 @@ func NewCompatibilityServiceWithDependencies(
 	if policyVersion == "" {
 		policyVersion = governance.DefaultMCPToolPolicyVersion
 	}
+	evalSuiteVersion := strings.TrimSpace(dependencies.EvalSuiteVersion)
+	if evalSuiteVersion == "" {
+		evalSuiteVersion = governance.DefaultEvalSuiteVersion
+	}
 	return &CompatibilityService{
 		serverVersion:            trimmed,
 		mcpToolPolicyVersion:     policyVersion,
+		evalSuiteVersion:         evalSuiteVersion,
 		projectService:           dependencies.ProjectService,
 		projectExport:            dependencies.ProjectExport,
 		projectImport:            dependencies.ProjectImport,
@@ -953,6 +960,7 @@ func (service *CompatibilityService) dispatch(
 			},
 			"policy": map[string]any{
 				"tool_policy_version": service.mcpToolPolicyVersion,
+				"eval_suite_version":  service.evalSuiteVersion,
 			},
 			"capabilities": map[string]any{
 				"tools": map[string]any{"listChanged": false},

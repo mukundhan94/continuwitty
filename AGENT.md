@@ -38,7 +38,7 @@ Use it as the default workflow when adding or refactoring features.
 4. Use split terminals only when needed: run `make api` and `make web` separately.
 5. Use `make stack-up` sparingly (containerized stack debugging only, not default day-to-day development).
 6. Implement one phase at a time.
-7. Run checks: `make lint`, `make test`, `make check`.
+7. Run checks: `make lint`, `make test`, `make eval`, `make check`.
 8. If `web/` changed: run `make web-check`.
 9. If `acceptance-tests/`, `web/Dockerfile`, `Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-bddgen`, `make acceptance-typecheck`, and `make acceptance-test-docker`.
 10. If Bedrock provider behavior changed, run live non-deterministic acceptance gate: `make acceptance-test-bedrock-live` (or docker equivalent).
@@ -146,7 +146,7 @@ Before merging refactors:
 - If acceptance tests fail to render UI in Docker: verify Vite host allow list (`VITE_ALLOWED_HOSTS`) and proxy target (`VITE_API_PROXY_TARGET`).
 
 ## 12. Long-Run Maintenance Cadence
-- Weekly: run full quality gates and evals.
+- Weekly: run full quality gates and evals (`make check`, `make web-check`, `make eval-report`).
 - Monthly: review dependency updates and provider API changes.
 - Each feature cycle: refresh `docs/implementation-log.md`, `migration/checkpoints/checkpoint.md`, `Plan.md`, and affected skill docs; update `docs/architecture-playbook.md` for call-flow or data-semantics changes.
 - Keep skill instructions short, precise, and executable.

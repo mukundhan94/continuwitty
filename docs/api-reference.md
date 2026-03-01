@@ -173,7 +173,7 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/healthz` | Health check |
-| `GET` | `/api/v1/version` | Version info |
+| `GET` | `/api/v1/version` | Version + governance metadata (`semantic_version`, `commit_id`, `chat_prompt_policy_version`, `mcp_tool_policy_version`, `eval_suite_version`) |
 
 ---
 
@@ -187,6 +187,13 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 - `provider_failures` keyed by `operation provider error_code`.
 - `stream_health` keyed by `operation provider outcome` with count, chunks, and duration aggregates.
 - `lifecycle_traces` keyed by `operation stage` (or `operation stage error_code` for failure stages).
+
+### Version Snapshot
+
+`GET /api/v1/version` returns:
+
+- build metadata: `semantic_version`, `release`, `commit_id`
+- governance metadata: `chat_prompt_policy_version`, `mcp_tool_policy_version`, `eval_suite_version`
 
 ### Create Engram
 

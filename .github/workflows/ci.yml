@@ -53,6 +53,9 @@ jobs:
       - name: Run tests
         run: go test ./... -count=1
 
+      - name: Run EvalOps delta gate
+        run: make eval
+
   web-frontend:
     name: Web Frontend Checks
     runs-on: ubuntu-latest

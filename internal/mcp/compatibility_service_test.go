@@ -38,6 +38,10 @@ func TestCompatibilityServiceInitialize(t *testing.T) {
 	if policyVersion != governance.DefaultMCPToolPolicyVersion {
 		t.Fatalf("expected tool policy version %q, got %q", governance.DefaultMCPToolPolicyVersion, policyVersion)
 	}
+	evalSuiteVersion, _ := policy["eval_suite_version"].(string)
+	if evalSuiteVersion != governance.DefaultEvalSuiteVersion {
+		t.Fatalf("expected eval suite version %q, got %q", governance.DefaultEvalSuiteVersion, evalSuiteVersion)
+	}
 }
 
 func TestCompatibilityServiceToolsList(t *testing.T) {

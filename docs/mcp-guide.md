@@ -191,6 +191,11 @@ curl -s -b "$COOKIE_JAR" \
 - `tools/list`
 - `tools/call`
 
+`initialize` includes a `policy` block with governance metadata:
+
+- `tool_policy_version`
+- `eval_suite_version`
+
 ---
 
 ## Tool Naming
@@ -430,6 +435,13 @@ curl -sN -b "$COOKIE_JAR" \
   }
 }
 ```
+
+`chat.send_message` responses include:
+
+- `prompt_policy_version`
+- `used_engram_ids`
+- `used_document_chunk_ids`
+- `source_references`
 
 Document pin/list helpers:
 

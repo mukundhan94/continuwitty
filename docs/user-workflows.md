@@ -77,6 +77,7 @@ make format-check
 4. Run automated tests:
 ```bash
 make test
+make eval
 ```
 
 5. Manual API smoke test:

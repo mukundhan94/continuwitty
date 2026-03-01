@@ -248,6 +248,7 @@ func newMCPCompatibilityService(
 		settings.AppSemanticVersion,
 		mcp.CompatibilityServiceDependencies{
 			MCPToolPolicyVersion:   settings.MCPToolPolicyVersion,
+			EvalSuiteVersion:       settings.EvalSuiteVersion,
 			ProjectService:         dependencies.projectService,
 			ProjectExport:          newMCPProjectExportAdapter(dependencies.exportService),
 			ProjectImport:          newMCPProjectImportAdapter(dependencies.exportService),
