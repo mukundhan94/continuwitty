@@ -67,7 +67,7 @@ type BedrockErrorCodeCarrier interface {
 
 var newBedrockRuntimeClient = func(credentials AWSRuntimeCredentials) (BedrockRuntimeClient, error) {
 	_ = credentials
-	return nil, NewProviderAPIError("Bedrock runtime client is not configured")
+	return nil, NewProviderAPIError("Bedrock runtime client is not configured in this server build")
 }
 
 // BedrockProvider adapts Bedrock model invocation to the provider interface.

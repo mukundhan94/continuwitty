@@ -60,6 +60,9 @@ func buildProviderFallbackStrategy(settings config.Settings) chat.ProviderFallba
 			Enabled:                true,
 			FallbackOrder:          providerFallbackOrder(settings),
 			DefaultFallbackModelID: settings.DefaultChatModel,
+			DisableCrossProviderFor: []models.ChatProvider{
+				models.ChatProviderBedrock,
+			},
 		},
 	)
 }

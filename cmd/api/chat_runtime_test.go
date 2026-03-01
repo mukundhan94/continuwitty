@@ -151,6 +151,38 @@ func TestApplyGraphNoiseSuppressionPolicyDefaultsPreservesOverrides(t *testing.T
 	requireOptionalFloatRuntime(t, overridden.LinkNoiseScoreThreshold, 0.22, "link_noise_score_threshold")
 }
 
+func TestBuildProviderFallbackStrategyDisablesCrossProviderFallbackForBedrock(t *testing.T) {
+	strategy := buildProviderFallbackStrategy(
+		config.Settings{
+			DefaultChatProvider: string(models.ChatProviderOpenAI),
+			DefaultChatModel:    "gpt-4o-mini",
+		},
+	)
+
+	bedrockCandidates := strategy.Candidates(
+		models.ChatSessionRecord{
+			Provider: models.ChatProviderBedrock,
+			ModelID:  "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+		},
+	)
+	if len(bedrockCandidates) != 1 {
+		t.Fatalf("expected bedrock candidates to remain primary-only, got %d", len(bedrockCandidates))
+	}
+	if bedrockCandidates[0].Provider != models.ChatProviderBedrock {
+		t.Fatalf("expected bedrock primary candidate, got %q", bedrockCandidates[0].Provider)
+	}
+
+	openAICandidates := strategy.Candidates(
+		models.ChatSessionRecord{
+			Provider: models.ChatProviderOpenAI,
+			ModelID:  "gpt-4o-mini",
+		},
+	)
+	if len(openAICandidates) < 2 {
+		t.Fatalf("expected openai candidates to include fallback providers, got %d", len(openAICandidates))
+	}
+}
+
 func collectRegisteredRoutes(t *testing.T, router chi.Router) map[string]struct{} {
 	t.Helper()
 	paths := map[string]struct{}{}

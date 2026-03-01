@@ -34,12 +34,14 @@ type ProviderFallbackStrategyOptions struct {
 	FallbackOrder           []models.ChatProvider
 	DefaultFallbackModelID  string
 	FallbackModelByProvider map[models.ChatProvider]string
+	DisableCrossProviderFor []models.ChatProvider
 }
 
 type staticProviderFallbackStrategy struct {
 	fallbackOrder           []models.ChatProvider
 	defaultFallbackModelID  string
 	fallbackModelByProvider map[models.ChatProvider]string
+	disableCrossProviderFor map[models.ChatProvider]struct{}
 }
 
 // NewStaticProviderFallbackStrategy builds an ordered fallback strategy.
@@ -51,6 +53,7 @@ func NewStaticProviderFallbackStrategy(options ProviderFallbackStrategyOptions) 
 		fallbackOrder:           append([]models.ChatProvider(nil), options.FallbackOrder...),
 		defaultFallbackModelID:  strings.TrimSpace(options.DefaultFallbackModelID),
 		fallbackModelByProvider: cloneFallbackModelMap(options.FallbackModelByProvider),
+		disableCrossProviderFor: mapDisableCrossProvider(options.DisableCrossProviderFor),
 	}
 }
 
@@ -64,6 +67,9 @@ func (strategy *staticProviderFallbackStrategy) Candidates(
 			Provider: primaryProvider,
 			ModelID:  primaryModelID,
 		},
+	}
+	if strategy != nil && strategy.crossProviderDisabled(primaryProvider) {
+		return candidates
 	}
 	seen := map[models.ChatProvider]struct{}{
 		primaryProvider: {},
@@ -82,6 +88,14 @@ func (strategy *staticProviderFallbackStrategy) Candidates(
 		)
 	}
 	return candidates
+}
+
+func (strategy *staticProviderFallbackStrategy) crossProviderDisabled(provider models.ChatProvider) bool {
+	if strategy == nil || len(strategy.disableCrossProviderFor) == 0 {
+		return false
+	}
+	_, disabled := strategy.disableCrossProviderFor[provider]
+	return disabled
 }
 
 func (strategy *staticProviderFallbackStrategy) resolveFallbackModelID(
@@ -114,4 +128,15 @@ func cloneFallbackModelMap(
 		cloned[provider] = modelID
 	}
 	return cloned
+}
+
+func mapDisableCrossProvider(providers []models.ChatProvider) map[models.ChatProvider]struct{} {
+	if len(providers) == 0 {
+		return map[models.ChatProvider]struct{}{}
+	}
+	mapped := make(map[models.ChatProvider]struct{}, len(providers))
+	for _, provider := range providers {
+		mapped[provider] = struct{}{}
+	}
+	return mapped
 }

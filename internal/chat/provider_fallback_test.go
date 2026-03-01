@@ -67,3 +67,25 @@ func TestStaticProviderFallbackStrategyUsesPrimaryModelWhenNoFallbackModelConfig
 	}
 	requireEqualAnyRuntime(t, "gpt-4o-mini", candidates[1].ModelID)
 }
+
+func TestStaticProviderFallbackStrategyCanDisableCrossProviderForBedrock(t *testing.T) {
+	strategy := NewStaticProviderFallbackStrategy(
+		ProviderFallbackStrategyOptions{
+			Enabled:                 true,
+			FallbackOrder:           []models.ChatProvider{models.ChatProviderOpenAI, models.ChatProviderAnthropic},
+			DefaultFallbackModelID:  "fallback-default",
+			DisableCrossProviderFor: []models.ChatProvider{models.ChatProviderBedrock},
+		},
+	)
+	session := models.ChatSessionRecord{
+		Provider: models.ChatProviderBedrock,
+		ModelID:  "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+	}
+
+	candidates := strategy.Candidates(session)
+	if len(candidates) != 1 {
+		t.Fatalf("expected bedrock session to keep primary-only fallback, got %d", len(candidates))
+	}
+	requireEqualAnyRuntime(t, models.ChatProviderBedrock, candidates[0].Provider)
+	requireEqualAnyRuntime(t, "eu.anthropic.claude-haiku-4-5-20251001-v1:0", candidates[0].ModelID)
+}
