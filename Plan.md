@@ -32,7 +32,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 1 - Framework and Storage Decisions
 
-- Selected FastAPI + Postgres/pgvector + LangGraph + React.
+- Selected Go + Postgres/pgvector + LangGraph + React (initial FastAPI baseline was later migrated to Go).
 - Chose metadata+vector retrieval as baseline.
 
 ### Phase 2 - Engram Schema and Contracts
@@ -604,7 +604,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress (2026-02-19 checkpoint).
+- Completed (2026-03-01).
 - Completed subphases:
   - 31.0 roadmap scaffolding in `Plan.md` and `README.md`
   - 31.1 schema/repository foundation (`projects`, default-project persistence, soft-delete metadata, collections)
@@ -613,8 +613,7 @@ Build a local-first memory system where agents and humans can:
   - 31.4 MCP organization tools with scope/owner/admin/project-policy enforcement
   - 31.5 web routing + admin memory management page + workspace default-project control
   - 31.6 backend/web/acceptance test additions for phase behavior
-- Remaining subphase:
-  - 31.7 docs/skills closeout (`AGENT.md`, skills updates, final acceptance-test-mock rerun and log sync).
+  - 31.7 docs/skills closeout (`AGENT.md`, skills updates, final acceptance-test-mock rerun and log sync)
 
 ### Goals
 
@@ -649,7 +648,7 @@ Build a local-first memory system where agents and humans can:
 - [x] `/api/v1/engrams*` endpoints are authenticated and actor-scoped.
 - [x] Web admin memory route is implemented (`/admin/memory`) with management workflows.
 - [x] Backend/web test coverage added for project defaults, memory admin APIs, schema backfill, MCP organization, and admin UI route behavior.
-- [ ] Phase closeout docs still pending (`AGENT.md`/skills final pass + final acceptance mock evidence append).
+- [x] Phase closeout docs synced (`AGENT.md`/skills final pass + final acceptance mock evidence appended).
 
 ### Completed In Current Checkpoint
 
@@ -657,9 +656,8 @@ Build a local-first memory system where agents and humans can:
    - `db/init/001_schema.sql` now includes first-class `projects`, user `default_project_id`, soft-delete metadata for sessions/engrams, and collection tables.
    - Added idempotent backfill logic so existing project IDs are promoted into `projects`.
 2. Backend module layout for maintainability:
-   - Added `api/app/projects/` (api/repository/service/models).
-   - Added `api/app/memory_admin/` (api/repository/service/models).
-   - Wired routers into `api/app/main.py`.
+   - Added `internal/projects/` (service + model boundaries) and `internal/admin/` for memory-admin workflows.
+   - Added `internal/api/admin_memory*.go` route modules plus runtime dependency wiring in `cmd/api/main.go`.
 3. Behavior and security changes:
    - `/api/v1/engrams*` now requires authenticated actors.
    - Missing `project_id` on engram creation now resolves via caller default project with explicit response metadata.
@@ -837,7 +835,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Deliverables
 
-1. Backend export/import domain module under `api/app/export/` with typed bundle contracts and services.
+1. Backend export/import domain module under `internal/export/` with typed bundle contracts and services.
 2. REST endpoints for export and import bound to project context.
 3. MCP tools for export/import with scope + ownership checks.
 4. Web actions for project export/import with optional collection subset selection.

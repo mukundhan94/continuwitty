@@ -7,6 +7,28 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 31 closeout: AGENT/skills realignment + acceptance mock evidence refresh)
+
+1. Completed Phase 31 documentation closeout and skills realignment:
+   - updated `AGENT.md` with an explicit rule to keep active skills aligned to the Go runtime module layout (`internal/`, `cmd/api/`, `web/src/`) and remove deprecated `api/app`/`api/tests` references.
+   - refreshed skill playbooks to current Go architecture and test surfaces:
+     - `skills/domain-module-layout/SKILL.md`
+     - `skills/chat-rag-operator/SKILL.md`
+     - `skills/document-ingestion-rag/SKILL.md`
+     - `skills/engram-lifecycle/SKILL.md`
+     - `skills/engram-auto-metadata-enrichment/SKILL.md`
+     - `skills/memory-lifecycle-policies/SKILL.md`
+     - `skills/mcp-http-stream-tools/SKILL.md`
+     - `skills/mcp-token-authz/SKILL.md`
+2. Updated phase tracking and status alignment:
+   - `Plan.md` now marks Phase 31 as completed and marks the docs/skills closeout deliverable as done.
+   - `migration/checkpoints/checkpoint.md` now reflects current Phase 31 acceptance evidence and Go module references for implemented backend scope.
+3. Refreshed acceptance mock validation evidence:
+   - `make acceptance-bddgen` passed.
+   - `make acceptance-typecheck` passed.
+   - `make acceptance-test-mock` initially failed due missing Playwright browser binaries (`chromium_headless_shell`).
+   - installed browsers with `npx playwright install` in `acceptance-tests/`, then reran `make acceptance-test-mock` successfully (`20 passed`).
+
 ### 2026-03-01 (Phase 20 closeout: OIDC abuse-path coverage + callback hardening)
 
 1. Hardened OIDC callback state handling in `internal/api/session_auth.go`:

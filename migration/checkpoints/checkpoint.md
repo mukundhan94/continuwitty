@@ -122,7 +122,7 @@
 - [x] Hardened `/api/v1/engrams*` with authenticated actor-scoped visibility.
 - [x] Added backend/web/acceptance tests for Phase 31 behavior.
 - [x] Update `AGENT.md` + skills docs and append final phase-closeout validation evidence.
-- [x] Validation evidence: `make acceptance-test-mock` (2026-02-22) -> `18 passed`, including `@phase31 @memory-admin` scenarios.
+- [x] Validation evidence: `make acceptance-test-mock` (2026-03-01) -> `20 passed`, including `@phase31 @memory-admin` scenarios.
 
 #### Planned Phase 31 User-Facing Areas
 
@@ -133,7 +133,7 @@
 #### Phase 31 Implemented So Far
 
 1. Schema: `projects` table, `users.default_project_id` FK, soft-delete metadata, `engram_collections`/`engram_collection_items`, idempotent project backfill.
-2. Backend: `api/app/projects/`, `api/app/memory_admin/`, wired into `api/app/main.py`.
+2. Backend: `internal/projects/`, `internal/admin/`, and `internal/api/admin_memory*.go` wired through `cmd/api/main.go`.
 3. API: engrams require auth, default-project resolution, `resolved_project_id`/`used_default_project` in responses.
 4. MCP: project/engram/collection/session tools with dotted aliases for backward compatibility.
 5. Web: routing (`/`, `/admin/memory`), default-project controls, admin page list/filter/edit/move/delete/restore workflows.

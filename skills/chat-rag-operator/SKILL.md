@@ -13,38 +13,35 @@ description: Use this skill when implementing chat sessions, context assembly wi
 - Adding session lifecycle policy controls (autosave cadence, retention, timeline events).
 
 ## Workflow
-1. Persist session and message state in DB-backed repositories.
+1. Persist session and message state through repository modules.
 2. Build context assembler using:
    - pinned engrams
    - dynamic retrieval hits
-   - short citation pack
+   - link-aware recall (when enabled)
    - document chunk evidence (when available)
-3. Call provider adapter through registry.
-4. Save assistant/user messages and metadata.
-5. Expose `used_engram_ids`, `used_document_chunk_ids`, and `source_references` in chat response payloads.
-6. Emit debug trace payloads for developer inspection:
-   - embedding timings
-   - provider call duration and token usage
-   - request/response snapshots
-7. Add save-as-engram endpoint to snapshot useful chat state.
-8. Apply lifecycle maintenance after assistant output:
-   - autosave policy trigger (interval or message-count)
+3. Call provider adapters via `internal/providers` registry.
+4. Persist assistant/user messages and structured metadata.
+5. Expose `used_engram_ids`, `used_engram_link_ids`, `used_document_chunk_ids`, and `source_references` in chat payloads.
+6. Run lifecycle maintenance after successful assistant output:
+   - autosave trigger (interval or message-count)
    - duplicate/low-value snapshot guards
-   - retention pruning of autosave-tagged snapshots
-   - timeline event typing for UI/MCP consumers
+   - retention pruning and timeline emission
 
 ## Module Layout (Current)
-- `api/app/chat/api.py`: chat route transport layer.
-- `api/app/chat/service.py`: orchestration and continuity flows.
-- `api/app/chat/context.py`: retrieval + pinned context assembly.
-- `api/app/chat/errors.py`: domain errors for HTTP mapping.
-- `api/app/chat/lifecycle_policy.py`: autosave trigger/retention/timeline pure-policy helpers.
+- `internal/chat/service.go`: orchestration and continuity flows.
+- `internal/chat/context*.go`: retrieval + pinned context assembly.
+- `internal/chat/lifecycle_policy.go`: autosave/retention/timeline pure-policy helpers.
+- `internal/api/chat_api*.go`: REST transport handlers.
+- `internal/mcp/compatibility_dispatch_chat*.go`: MCP tool routing.
+- `cmd/api/chat_runtime.go`: runtime dependency wiring.
+- `web/src/api/chat*.ts`: typed frontend API client contracts.
 
 ## Continuity Pattern
-- Start a new session by cloning provider/system settings and pinned engrams.
-- Keep sessions immutable by ID: continuation always creates a new session ID.
+- Continuation creates a new session and clones selected context/settings.
+- Session IDs are immutable; do not mutate historical sessions in place.
 
 ## Validation
-- Integration test: create -> message -> pin -> continue -> save-as-engram.
-- Unit test: debug trace contains timings/tokens and remains non-blocking when telemetry sinks fail.
-- Lifecycle test: policy normalization, autosave trigger guards, retention pruning, and timeline route/MCP parity.
+- Unit tests: `internal/chat/*_test.go`.
+- API/MCP tests: `internal/api/chat_api*_test.go`, `internal/mcp/compatibility_service_chat*_test.go`.
+- Frontend tests: `web/src/api/chat*.test.ts`, `web/src/utils/chat.test.ts`.
+- Run `go test ./... -count=1` and `make eval`.

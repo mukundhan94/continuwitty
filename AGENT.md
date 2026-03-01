@@ -30,6 +30,7 @@ Use it as the default workflow when adding or refactoring features.
 - Keep project member management restricted to owner/admin; never allow assigning/demoting/removing `owner` via member CRUD APIs.
 - Keep project audit events DB-backed in `project_audit_events` for member add/update/remove, engram share/unshare, and engram pin/unpin actions.
 - Before every commit, follow `skills/codescene/SKILL.md` and run a CodeScene MCP pre-commit health check (`pre_commit_code_health_safeguard`) on the current change set; record the outcome in the implementation log.
+- Keep skill docs aligned with the Go runtime layout (`internal/`, `cmd/api/`, `web/src/`); do not leave deprecated `api/app`/`api/tests` path references in active skills.
 
 ## 3. Daily Workflow
 1. Pull latest and inspect `git status`.
