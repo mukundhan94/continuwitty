@@ -36,6 +36,21 @@ make db-reset
 make stack-reset
 ```
 
+### Compose Profiles
+
+The compose file now exposes explicit profiles:
+
+- `dev`: local runtime stack (`db`, `api`, `web`)
+- `acceptance`: acceptance runner (`acceptance-tests`) with stack dependencies
+- `release-smoke`: release smoke probe (`release-smoke`) with stack dependencies
+
+Profile smoke commands:
+
+```bash
+make acceptance-test-mock-docker
+make release-smoke-docker
+```
+
 ---
 
 ## Local Validation Sequence

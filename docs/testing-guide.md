@@ -16,6 +16,8 @@ make format-check      # Go formatting verification
 make check             # lint + format-check + tests
 make web-check         # frontend lint + test + build
 make stack-smoke       # containerized db+api smoke check
+make release-gate      # deterministic release candidate gate
+make release-live-provider-gate # optional live-provider release gate
 ```
 
 ---
@@ -87,3 +89,24 @@ Notes:
 - `make acceptance-bddgen` regenerates Playwright specs from `.feature` files.
 - Failure screenshots are persisted to `acceptance-tests/artifacts/`.
 - Generated specs are written to `acceptance-tests/.features-gen/`.
+
+---
+
+## Release Gates
+
+Deterministic release gate (required):
+
+```bash
+make release-gate
+```
+
+Optional live-provider gate (release candidates):
+
+```bash
+make release-live-provider-gate
+```
+
+For full process details, see:
+
+- [release-checklist-v1.md](release-checklist-v1.md)
+- [release-rollback-runbook-v1.md](release-rollback-runbook-v1.md)

@@ -156,6 +156,7 @@
 | CP186 | 2026-03-01 | Completed | Phase 21 observability kickoff baseline: added request telemetry middleware with structured route/domain/status/duration logging, introduced process-local in-memory request metrics and `/api/v1/metrics` route wiring, extended config/env toggles for request logging/metrics, and shipped router+middleware tests plus full `go test ./...` pass under >9.5 code-health gate |
 | CP187 | 2026-03-01 | Completed | Phase 21 reliability primitives baseline: added provider circuit policy (`internal/chat/provider_circuit.go`) with transient-failure cooldown behavior, added ordered provider fallback strategy (`internal/chat/provider_fallback.go`) with model selection rules, and shipped focused unit coverage for both modules under >9.5 code-health gate |
 | CP188 | 2026-03-01 | Completed | Phase 21 observability/reliability closure: wired fallback+circuit logic into chat send/stream flows, added lifecycle trace hooks and provider/stream observability callbacks, expanded `/api/v1/metrics` snapshot with provider-failure/stream-health/lifecycle counters, wired REST+MCP runtime dependencies, and shipped regression coverage with `go test ./cmd/api ./internal/api ./internal/chat` under >9.5 code-health gate |
+| CP189 | 2026-03-01 | Completed | Phase 22 release automation closure: split CI into backend/web/deterministic acceptance/release-smoke stages, added optional workflow-dispatched live-provider release gate, standardized compose profiles (`dev`, `acceptance`, `release-smoke`) with smoke probe service, and published versioned release checklist + rollback runbook docs under >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -6552,3 +6553,34 @@
 - Full verification:
   - `go test ./cmd/api ./internal/api ./internal/chat -count=1`
   - passed.
+
+### CP189 - Phase 22 Release Automation and Deployment Profiles Closure
+
+- Split CI into explicit phase-22 gates:
+  - `.github/workflows/ci.yml`
+  - `Go Backend Checks`, `Web Frontend Checks`, `Acceptance Deterministic Suite`, and `Release Smoke (Compose Profile)`.
+- Added optional gated live-provider release suite:
+  - `.github/workflows/ci.yml` `workflow_dispatch` input `run_live_provider`.
+  - `Release Live-Provider Gate` runs only when manually requested and secrets are present.
+- Standardized compose profiles:
+  - `docker-compose.yml` now declares `dev`, `acceptance`, `release-smoke`.
+  - added `release-smoke` probe service that validates API health/version/metrics plus web availability.
+- Added release automation Makefile targets:
+  - `release-smoke-docker`
+  - `release-gate`
+  - `release-live-provider-gate`.
+- Added versioned release operational docs:
+  - `docs/release-checklist-v1.md`
+  - `docs/release-rollback-runbook-v1.md`.
+- Aligned docs and roadmap references:
+  - `README.md`
+  - `docs/testing-guide.md`
+  - `docs/user-workflows.md`
+  - `docs/go-rollout-playbook.md`
+  - `Plan.md`
+  - `todo.md`
+  - `migration/checkpoints/checkpoint.md`.
+- Verification:
+  - `docker compose --profile acceptance config` passed.
+  - `docker compose --profile release-smoke config` passed.
+  - `go test ./... -count=1` passed.

@@ -45,6 +45,8 @@ Prerequisites: Docker, Go 1.25+, Node 18+. See [docs/env-reference.md](docs/env-
 | [docs/mcp-client-integrations.md](docs/mcp-client-integrations.md) | LibreChat, Copilot, and Codex MCP config |
 | [docs/go-migration-test-matrix.md](docs/go-migration-test-matrix.md) | Go migration parity gate mapping |
 | [docs/go-rollout-playbook.md](docs/go-rollout-playbook.md) | Staged Go traffic rollout + rollback criteria |
+| [docs/release-checklist-v1.md](docs/release-checklist-v1.md) | Versioned release checklist and required gates |
+| [docs/release-rollback-runbook-v1.md](docs/release-rollback-runbook-v1.md) | Versioned rollback procedure for incidents |
 
 ## Architecture
 
@@ -81,11 +83,11 @@ Prerequisites: Docker, Go 1.25+, Node 18+. See [docs/env-reference.md](docs/env-
 
 ## Current Status
 
-Phases 0-19 and 29-34 implemented; Phase 20 is in progress. Go migration checkpoints are complete through CP185. See [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) for details.
+Phases 0-19, 21-22, and 29-34 implemented; Phase 20 is in progress. Go migration checkpoints are complete through CP188. See [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) for details.
 
 **Completed:** foundation, schema, retrieval, durability, chat continuity, providers (OpenAI/Anthropic/Bedrock), MCP stream, React UI, acceptance testing, theme/UX, MCP developer experience, document ingestion (RAG), memory lifecycle, auto-metadata enrichment, MCP tokens, enterprise memory management.
 
-**Current focus:** Phase 20 security closeout and Phase 21 observability kickoff (structured request telemetry + in-process metrics), then Phase 22+ release/eval hardening.
+**Current focus:** Phase 20 security closeout, then Phase 23 eval/policy governance hardening.
 
 ## Repository Layout
 
@@ -130,6 +132,7 @@ make acceptance-test-mock   # acceptance tests (dockerized)
 make stack-up      # full containerized stack
 make stack-down    # tear down
 make stack-smoke   # db + api container smoke check
+make release-gate  # deterministic release candidate gate
 ```
 
 ## Success Checklist

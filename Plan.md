@@ -268,6 +268,15 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 22 - Release Automation and Deployment Profiles
 
+### Status
+
+- Completed (2026-03-01).
+- Completed deliverables:
+  - CI split into explicit backend/web/deterministic-acceptance/release-smoke stages.
+  - optional gated live-provider suite for release candidates (`workflow_dispatch` + `run_live_provider`).
+  - compose profiles standardized for `dev`, `acceptance`, and `release-smoke`.
+  - versioned release checklist + rollback runbook docs and Makefile release-gate targets.
+
 ### Goals
 
 - Standardize repeatable release workflows.
@@ -822,14 +831,13 @@ Build a local-first memory system where agents and humans can:
 ## Near-Term Execution Order
 
 1. Complete Phase 20 (production security hardening) with centralized audit sink + abuse-path coverage.
-2. Execute Phase 22 (release automation and deployment profiles).
-3. Execute Phase 23 (EvalOps and prompt/policy governance).
-4. After Phase 23, execute link-graph roadmap in order:
+2. Execute Phase 23 (EvalOps and prompt/policy governance).
+3. After Phase 23, execute link-graph roadmap in order:
    - Phase 24 (graph foundations)
    - Phase 25 (link APIs/MCP + suggestions)
    - Phase 26 (graph-aware recall)
    - Phase 27 (traceability UX)
    - Phase 28 (temporal dynamics + graph quality)
-5. Execute Phase 32 after Phase 24-28 baselines are in place:
+4. Execute Phase 32 after Phase 24-28 baselines are in place:
    - add `cw>` query protocol
    - enable access-aware federated linked recall across projects

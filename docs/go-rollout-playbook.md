@@ -2,11 +2,15 @@
 
 This runbook defines the staged production rollout for the Go API after release gates are green.
 
+Versioned release prep and rollback references:
+
+- [release-checklist-v1.md](release-checklist-v1.md)
+- [release-rollback-runbook-v1.md](release-rollback-runbook-v1.md)
+
 ## Prerequisites
 
-- `go test ./... -count=1` passes on the target branch.
-- `make acceptance-test-mock-docker` passes.
-- `make stack-smoke` passes.
+- `make release-gate` passes on the target branch.
+- optional release-candidate live checks run via `make release-live-provider-gate` when required.
 - Observability dashboards for API error rate, latency, and DB saturation are live.
 
 ## Traffic Shift Stages

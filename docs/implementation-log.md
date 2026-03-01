@@ -7,6 +7,29 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 22 closeout: release automation + deployment profiles)
+
+1. Split CI into explicit release stages:
+   - `.github/workflows/ci.yml` now runs backend, web, deterministic acceptance, and release-smoke jobs.
+2. Added optional gated live-provider release gate:
+   - CI supports `workflow_dispatch` with `run_live_provider=true` to run Bedrock/triage live acceptance checks.
+3. Standardized compose profiles:
+   - `docker-compose.yml` now declares `dev`, `acceptance`, and `release-smoke`.
+   - added `release-smoke` probe service for API/web readiness and observability endpoint checks.
+4. Added Makefile release automation targets:
+   - `release-smoke-docker`
+   - `release-gate`
+   - `release-live-provider-gate`
+5. Added versioned release operational docs:
+   - `docs/release-checklist-v1.md`
+   - `docs/release-rollback-runbook-v1.md`
+6. Consolidated docs/roadmap alignment:
+   - `README.md`, `docs/testing-guide.md`, `docs/user-workflows.md`, `docs/go-rollout-playbook.md`, `Plan.md`, `todo.md`, and checkpoint trackers.
+7. Validation:
+   - `docker compose --profile acceptance config`
+   - `docker compose --profile release-smoke config`
+   - `go test ./... -count=1`
+
 ### 2026-03-01 (Phase 21 closeout: chat reliability + observability expansion)
 
 1. Added provider reliability primitives:
