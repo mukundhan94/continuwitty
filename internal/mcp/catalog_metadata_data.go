@@ -229,6 +229,14 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":    "integer",
 					"minimum": 1,
 				},
+				"link_noise_suppression_enabled": map[string]any{
+					"type": "boolean",
+				},
+				"link_noise_score_threshold": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
 			},
 		},
 	},

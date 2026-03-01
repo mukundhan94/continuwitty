@@ -479,7 +479,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress (2026-03-01).
+- Completed (2026-03-01).
 - Completed in this checkpoint:
   - temporal decay now affects effective link quality scoring during graph-aware context assembly.
   - successful chat send/stream paths now reinforce used links (`last_reinforced_at` + boosted decayed `temporal_weight`).
@@ -488,8 +488,7 @@ Build a local-first memory system where agents and humans can:
   - authenticated hygiene API route is available at `POST /api/v1/engrams/{engram_id}/links/hygiene`.
   - graph-focused EvalOps coverage now includes `graph_trace` dimension checks (`used_engram_link_count`, `required_trace_targets`) with updated baseline fixtures (8 deterministic cases across 4 dimensions).
   - scheduled hygiene execution now runs on successful link reinforcement with per-source cadence, and stale/low-value recommendations are auto-archived from hygiene outputs.
-- Remaining focus:
-  - optional noisy-link suppression threshold tuning and policy controls.
+  - configurable noisy-link suppression controls are available via policy settings and bounded request overrides (`link_noise_suppression_enabled`, `link_noise_score_threshold`).
 
 ### Goals
 
@@ -902,7 +901,7 @@ Build a local-first memory system where agents and humans can:
    - Phase 25 (link APIs/MCP + suggestions) completed on 2026-03-01.
    - Phase 26 (graph-aware recall) backend baseline completed on 2026-03-01.
    - Phase 27 (traceability UX) completed on 2026-03-01.
-   - Phase 28 (temporal dynamics + graph quality) in progress: temporal dynamics, hygiene API, graph-trace eval coverage, and scheduled hygiene auto-archival are complete; noisy-link suppression controls remain.
+   - Phase 28 (temporal dynamics + graph quality) completed on 2026-03-01.
 4. Execute Phase 32 after Phase 24-28 baselines are in place:
    - add `cw>` query protocol
    - enable access-aware federated linked recall across projects

@@ -7,6 +7,39 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 28 closeout: configurable noisy-link suppression controls)
+
+1. Added bounded noisy-link suppression controls in chat context assembly:
+   - `internal/chat/context.go` now normalizes:
+     - `link_noise_suppression_enabled` (default `true`)
+     - `link_noise_score_threshold` (default `0.30`, bounded `0..1`)
+   - `internal/chat/context_links.go` now filters low-score trace paths when suppression is enabled.
+2. Added runtime policy defaults in API chat runtime wiring:
+   - `cmd/api/chat_runtime.go` injects configured graph suppression defaults into context requests.
+3. Added configuration controls and validation:
+   - `internal/config/config.go` settings:
+     - `GRAPH_LINK_NOISE_SUPPRESSION_ENABLED`
+     - `GRAPH_LINK_NOISE_SCORE_THRESHOLD`
+   - added bounded validation in `ValidateGraphSettings`.
+4. Extended request and MCP contracts:
+   - chat payload supports optional overrides:
+     - `link_noise_suppression_enabled`
+     - `link_noise_score_threshold`
+   - MCP `chat.send_message` parsing, adapter forwarding, and catalog metadata updated with the same controls.
+5. Added/updated tests:
+   - `internal/chat/context_test.go` (suppression filter behavior and override policy).
+   - `internal/chat/message_runtime_test.go` (forwarding of noisy-link controls).
+   - `cmd/api/chat_runtime_test.go` (runtime default injection behavior).
+   - `internal/api/chat_api_messages_test.go` (REST payload forwarding).
+   - `internal/mcp/compatibility_service_chat_send_message_test.go`
+   - `internal/mcp/compatibility_service_chat_send_message_stream_test.go`
+   - `internal/config/config_test.go` (graph setting bounds validation).
+6. Validation:
+   - `go test ./internal/chat ./internal/config ./internal/mcp ./internal/api ./cmd/api -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Phase 28 extension: scheduled hygiene execution + auto-archival baseline)
 
 1. Extended successful link reinforcement runtime in `cmd/api/chat_link_reinforcement.go`:
@@ -3130,10 +3163,9 @@
 
 ### Next Immediate Steps (One By One)
 
-1. Phase 28: add configurable noisy-link suppression thresholds and operator-facing tuning controls.
-2. Phase 20: complete production security hardening with centralized audit sink rollout contract.
-3. Phase 20: extend OIDC/provider abuse-path and negative acceptance coverage.
-4. Phase 32 prep: finalize remaining Phase 28 controls before cross-project federated query protocol rollout.
+1. Phase 20: complete production security hardening with centralized audit sink rollout contract.
+2. Phase 20: extend OIDC/provider abuse-path and negative acceptance coverage.
+3. Phase 32 prep: Phase 24-28 graph baseline is complete; begin cross-project federated query protocol rollout.
 
 ### 2026-02-22 (Phase tracking kickoff - export/import stash + audit remediation)
 

@@ -71,6 +71,8 @@
 |----------|---------|-------------|
 | `DEFAULT_CHAT_PROVIDER` | `openai` | Default LLM provider |
 | `DEFAULT_CHAT_MODEL` | `gpt-4o-mini` | Default LLM model ID |
+| `GRAPH_LINK_NOISE_SUPPRESSION_ENABLED` | `true` | Enable suppression filter for low-score linked-memory trace paths during graph recall |
+| `GRAPH_LINK_NOISE_SCORE_THRESHOLD` | `0.30` | Minimum trace-path score (`0..1`) required when noise suppression is enabled |
 | `OPENAI_API_KEY` | - | OpenAI API key |
 | `OPENAI_BASE_URL` | - | OpenAI base URL override |
 | `ANTHROPIC_API_KEY` | - | Anthropic API key |

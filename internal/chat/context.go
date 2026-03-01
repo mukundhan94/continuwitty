@@ -22,6 +22,7 @@ const (
 	maxLinkRecallDepth             = 3
 	defaultLinkRecallMaxNeighbors  = 8
 	maxLinkRecallMaxNeighbors      = 24
+	defaultLinkNoiseScoreThreshold = 0.30
 
 	engramSourceType   = "engram_source"
 	documentSourceType = "document_chunk"
@@ -65,16 +66,18 @@ type EngramTracePath struct {
 
 // ChatContextRequest captures retrieval inputs used when building chat context.
 type ChatContextRequest struct {
-	Session                models.ChatSessionRecord
-	ActorUserID            uuid.UUID
-	UserQuery              string
-	EmbeddingDim           int
-	MaxEngrams             int
-	RetrievalTopK          int
-	DocumentTopK           int
-	LinkRecallEnabled      *bool
-	LinkRecallDepth        *int
-	LinkRecallMaxNeighbors *int
+	Session                     models.ChatSessionRecord
+	ActorUserID                 uuid.UUID
+	UserQuery                   string
+	EmbeddingDim                int
+	MaxEngrams                  int
+	RetrievalTopK               int
+	DocumentTopK                int
+	LinkRecallEnabled           *bool
+	LinkRecallDepth             *int
+	LinkRecallMaxNeighbors      *int
+	LinkNoiseSuppressionEnabled *bool
+	LinkNoiseScoreThreshold     *float64
 }
 
 // ChatContextDependencies captures retrieval operations used by context assembly.
@@ -306,6 +309,12 @@ func normalizeChatContextRequest(request ChatContextRequest) ChatContextRequest 
 	if request.DocumentTopK <= 0 {
 		request.DocumentTopK = defaultChatContextDocumentTop
 	}
+	request = normalizeLinkRecallOptions(request)
+	request = normalizeLinkNoiseOptions(request)
+	return request
+}
+
+func normalizeLinkRecallOptions(request ChatContextRequest) ChatContextRequest {
 	if request.LinkRecallEnabled == nil {
 		request.LinkRecallEnabled = boolPointer(true)
 	}
@@ -319,6 +328,18 @@ func normalizeChatContextRequest(request ChatContextRequest) ChatContextRequest 
 	}
 	maxNeighbors := clamp(*request.LinkRecallMaxNeighbors, 1, maxLinkRecallMaxNeighbors)
 	request.LinkRecallMaxNeighbors = intPointer(maxNeighbors)
+	return request
+}
+
+func normalizeLinkNoiseOptions(request ChatContextRequest) ChatContextRequest {
+	if request.LinkNoiseSuppressionEnabled == nil {
+		request.LinkNoiseSuppressionEnabled = boolPointer(true)
+	}
+	if request.LinkNoiseScoreThreshold == nil {
+		request.LinkNoiseScoreThreshold = floatPointer(defaultLinkNoiseScoreThreshold)
+	}
+	threshold := clampFloat(*request.LinkNoiseScoreThreshold, 0.0, 1.0)
+	request.LinkNoiseScoreThreshold = floatPointer(threshold)
 	return request
 }
 
@@ -341,6 +362,11 @@ func collectPinnedDocumentIDs(records []models.PinnedDocumentRecord) []uuid.UUID
 		ids = append(ids, record.DocumentID)
 	}
 	return ids
+}
+
+func floatPointer(value float64) *float64 {
+	copied := value
+	return &copied
 }
 
 func collectPinnedDocumentChunks(

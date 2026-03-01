@@ -109,9 +109,33 @@ func buildChatMessageRuntimeDependencies(
 		CreateChatMessage:         createChatMessageDependency(pool),
 		ListChatMessages:          listChatMessagesDependency(pool),
 		AssembleChatContext: func(ctx context.Context, request chat.ChatContextRequest) (chat.AssembledChatContext, error) {
+			request = applyGraphNoiseSuppressionPolicyDefaults(request, settings)
 			return chat.AssembleChatContext(ctx, request, chatContextDependencies)
 		},
 	}
+}
+
+func applyGraphNoiseSuppressionPolicyDefaults(
+	request chat.ChatContextRequest,
+	settings config.Settings,
+) chat.ChatContextRequest {
+	if request.LinkNoiseSuppressionEnabled == nil {
+		request.LinkNoiseSuppressionEnabled = boolPointerRuntime(settings.GraphLinkNoiseSuppressionEnabled)
+	}
+	if request.LinkNoiseScoreThreshold == nil {
+		request.LinkNoiseScoreThreshold = floatPointerRuntime(settings.GraphLinkNoiseScoreThreshold)
+	}
+	return request
+}
+
+func boolPointerRuntime(value bool) *bool {
+	copy := value
+	return &copy
+}
+
+func floatPointerRuntime(value float64) *float64 {
+	copy := value
+	return &copy
 }
 
 func getChatSessionDependency(

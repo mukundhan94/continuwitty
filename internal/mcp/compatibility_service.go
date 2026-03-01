@@ -554,12 +554,14 @@ type MessageListRequest struct {
 
 // SessionMessageSendRequest captures compatibility-level send-message inputs.
 type SessionMessageSendRequest struct {
-	ActorUserID            uuid.UUID
-	SessionID              uuid.UUID
-	ContentText            string
-	LinkRecallEnabled      *bool
-	LinkRecallDepth        *int
-	LinkRecallMaxNeighbors *int
+	ActorUserID                 uuid.UUID
+	SessionID                   uuid.UUID
+	ContentText                 string
+	LinkRecallEnabled           *bool
+	LinkRecallDepth             *int
+	LinkRecallMaxNeighbors      *int
+	LinkNoiseSuppressionEnabled *bool
+	LinkNoiseScoreThreshold     *float64
 }
 
 // MessageSendResponse captures send-message outputs.

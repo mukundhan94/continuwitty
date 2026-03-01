@@ -39,10 +39,12 @@ func (adapter *mcpMessageSendAdapter) SendMessage(
 		request.ActorUserID,
 		request.SessionID,
 		chat.ChatMessageCreateRequest{
-			ContentText:            request.ContentText,
-			LinkRecallEnabled:      request.LinkRecallEnabled,
-			LinkRecallDepth:        request.LinkRecallDepth,
-			LinkRecallMaxNeighbors: request.LinkRecallMaxNeighbors,
+			ContentText:                 request.ContentText,
+			LinkRecallEnabled:           request.LinkRecallEnabled,
+			LinkRecallDepth:             request.LinkRecallDepth,
+			LinkRecallMaxNeighbors:      request.LinkRecallMaxNeighbors,
+			LinkNoiseSuppressionEnabled: request.LinkNoiseSuppressionEnabled,
+			LinkNoiseScoreThreshold:     request.LinkNoiseScoreThreshold,
 		},
 	)
 	if err != nil {
@@ -75,10 +77,12 @@ func (adapter *mcpMessageSendAdapter) StreamMessageEvents(
 		request.ActorUserID,
 		request.SessionID,
 		chat.ChatMessageCreateRequest{
-			ContentText:            request.ContentText,
-			LinkRecallEnabled:      request.LinkRecallEnabled,
-			LinkRecallDepth:        request.LinkRecallDepth,
-			LinkRecallMaxNeighbors: request.LinkRecallMaxNeighbors,
+			ContentText:                 request.ContentText,
+			LinkRecallEnabled:           request.LinkRecallEnabled,
+			LinkRecallDepth:             request.LinkRecallDepth,
+			LinkRecallMaxNeighbors:      request.LinkRecallMaxNeighbors,
+			LinkNoiseSuppressionEnabled: request.LinkNoiseSuppressionEnabled,
+			LinkNoiseScoreThreshold:     request.LinkNoiseScoreThreshold,
 		},
 	)
 	if err != nil {

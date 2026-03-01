@@ -51,6 +51,9 @@ func selectLinkedEngramContext(
 			if containsUUID(seedEngramIDs, path.TargetEngramID) {
 				continue
 			}
+			if shouldSuppressNoisyTracePath(request, path) {
+				continue
+			}
 			if existing, exists := candidateByTarget[path.TargetEngramID]; !exists || path.Score > existing.Score {
 				candidateByTarget[path.TargetEngramID] = path
 			}
@@ -271,6 +274,21 @@ func scoreLinkQuality(link models.EngramLinkRecord) float64 {
 
 func scoreLinkRecency(link models.EngramLinkRecord) float64 {
 	return scoreLinkRecencyAt(time.Now().UTC(), link)
+}
+
+func shouldSuppressNoisyTracePath(
+	request ChatContextRequest,
+	path EngramTracePath,
+) bool {
+	enabled := request.LinkNoiseSuppressionEnabled != nil && *request.LinkNoiseSuppressionEnabled
+	if !enabled {
+		return false
+	}
+	threshold := defaultLinkNoiseScoreThreshold
+	if request.LinkNoiseScoreThreshold != nil {
+		threshold = clampFloat(*request.LinkNoiseScoreThreshold, 0.0, 1.0)
+	}
+	return path.Score < threshold
 }
 
 func filterTracePathsForUsedEngrams(

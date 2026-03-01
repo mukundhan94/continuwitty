@@ -17,6 +17,8 @@ func baseSettings() Settings {
 		OAuthClientSecretPepper:           defaultOAuthClientSecret,
 		OAuthRequireProtectedRegistration: true,
 		DefaultChatProvider:               "openai",
+		GraphLinkNoiseSuppressionEnabled:  true,
+		GraphLinkNoiseScoreThreshold:      0.30,
 		ChatPromptPolicyVersion:           defaultChatPromptPolicyVersion,
 		MCPToolPolicyVersion:              defaultMCPToolPolicyVersion,
 		EvalSuiteVersion:                  defaultEvalSuiteVersion,
@@ -166,6 +168,27 @@ func TestOIDCSettingsAcceptConfiguredValuesWhenEnabled(t *testing.T) {
 
 	if err := ValidateOIDCSettings(settings); err != nil {
 		t.Fatalf("expected oidc validation success, got %v", err)
+	}
+}
+
+func TestGraphSettingsRejectOutOfRangeNoiseThreshold(t *testing.T) {
+	settings := baseSettings()
+	settings.GraphLinkNoiseScoreThreshold = -0.1
+	if err := ValidateGraphSettings(settings); err == nil {
+		t.Fatalf("expected negative threshold to fail validation")
+	}
+
+	settings.GraphLinkNoiseScoreThreshold = 1.1
+	if err := ValidateGraphSettings(settings); err == nil {
+		t.Fatalf("expected threshold > 1 to fail validation")
+	}
+}
+
+func TestGraphSettingsAcceptBoundedNoiseThreshold(t *testing.T) {
+	settings := baseSettings()
+	settings.GraphLinkNoiseScoreThreshold = 0.65
+	if err := ValidateGraphSettings(settings); err != nil {
+		t.Fatalf("expected graph settings validation success, got %v", err)
 	}
 }
 

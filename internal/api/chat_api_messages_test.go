@@ -161,7 +161,7 @@ func TestSendMessageHandlerForwardsLinkRecallOverrides(t *testing.T) {
 		http.MethodPost,
 		"/api/v1/chat/sessions/"+sessionID.String()+"/messages",
 		strings.NewReader(
-			`{"content_text":"Hello world","link_recall_enabled":false,"link_recall_depth":2,"link_recall_max_neighbors":9}`,
+			`{"content_text":"Hello world","link_recall_enabled":false,"link_recall_depth":2,"link_recall_max_neighbors":9,"link_noise_suppression_enabled":false,"link_noise_score_threshold":0.66}`,
 		),
 	)
 	request.Header.Set("Content-Type", "application/json")
@@ -171,15 +171,7 @@ func TestSendMessageHandlerForwardsLinkRecallOverrides(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("expected status 201, got %d", response.Code)
 	}
-	if capturedPayload.LinkRecallEnabled == nil || *capturedPayload.LinkRecallEnabled {
-		t.Fatalf("expected link_recall_enabled=false to be forwarded")
-	}
-	if capturedPayload.LinkRecallDepth == nil || *capturedPayload.LinkRecallDepth != 2 {
-		t.Fatalf("expected link_recall_depth=2 to be forwarded")
-	}
-	if capturedPayload.LinkRecallMaxNeighbors == nil || *capturedPayload.LinkRecallMaxNeighbors != 9 {
-		t.Fatalf("expected link_recall_max_neighbors=9 to be forwarded")
-	}
+	assertForwardedChatLinkControls(t, capturedPayload)
 }
 
 func TestListMessagesHandlerRejectsInvalidLimit(t *testing.T) {
@@ -204,5 +196,35 @@ func TestListMessagesHandlerRejectsInvalidLimit(t *testing.T) {
 	body := decodeChatResponseBody[map[string]string](t, response.Body.Bytes())
 	if body["detail"] != "Invalid query parameters" {
 		t.Fatalf("unexpected detail: %q", body["detail"])
+	}
+}
+
+func assertForwardedChatLinkControls(t *testing.T, payload chat.ChatMessageCreateRequest) {
+	t.Helper()
+	requireBoolPointerChat(t, payload.LinkRecallEnabled, false, "link_recall_enabled")
+	requireIntPointerChat(t, payload.LinkRecallDepth, 2, "link_recall_depth")
+	requireIntPointerChat(t, payload.LinkRecallMaxNeighbors, 9, "link_recall_max_neighbors")
+	requireBoolPointerChat(t, payload.LinkNoiseSuppressionEnabled, false, "link_noise_suppression_enabled")
+	requireFloatPointerChat(t, payload.LinkNoiseScoreThreshold, 0.66, "link_noise_score_threshold")
+}
+
+func requireBoolPointerChat(t *testing.T, value *bool, expected bool, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%v to be forwarded", field, expected)
+	}
+}
+
+func requireIntPointerChat(t *testing.T, value *int, expected int, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%d to be forwarded", field, expected)
+	}
+}
+
+func requireFloatPointerChat(t *testing.T, value *float64, expected float64, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%v to be forwarded", field, expected)
 	}
 }

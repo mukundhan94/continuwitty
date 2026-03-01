@@ -20,7 +20,7 @@
 - **Phase 25 completed:** link REST + MCP operations (`create/list/update/archive/suggest/trace`) and hybrid link suggestion pipeline.
 - **Phase 26 completed (backend baseline):** graph-aware chat context assembly with bounded linked recall and trace metadata (`used_engram_link_ids`, `engram_trace_paths`).
 - **Phase 27 completed:** web graph traceability UX with linked-recall controls, linked-memory panel (relation/weight/age), and suggestion accept/reject workflow.
-- **Phase 28 in progress:** temporal decay/reinforcement baseline, graph hygiene recommendation API for duplicate/conflict/stale link detection, graph-trace EvalOps coverage for trace correctness checks, and scheduled hygiene auto-archival baseline in chat reinforcement flows.
+- **Phase 28 completed:** temporal decay/reinforcement, graph hygiene recommendation API, graph-trace EvalOps coverage, scheduled hygiene auto-archival execution, and configurable noisy-link suppression controls.
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
@@ -107,7 +107,7 @@
 - [x] Added graph hygiene recommendation engine + route (`/api/v1/engrams/{engram_id}/links/hygiene`) for duplicate/conflict/stale-low-value detection.
 - [x] Added graph-focused eval coverage (`trace correctness`, `relevance impact`, `drift tolerance`) via `graph_trace` fixtures and checks (`used_engram_link_count`, `required_trace_targets`).
 - [x] Added scheduled hygiene execution/auto-archival policy around recommendation outputs (per-source cadence with stale-low-value recommendation archival on successful reinforcement paths).
-- [ ] Add configurable noisy-link suppression thresholds.
+- [x] Added configurable noisy-link suppression thresholds (policy defaults + bounded request overrides) with chat context suppression filtering.
 
 ### Phase 31 Progress Tracker
 
@@ -275,7 +275,7 @@
 | 25 | Link APIs, MCP Tools, Suggestion Pipeline | Completed |
 | 26 | Graph-Aware Context Assembly | Completed (backend baseline) |
 | 27 | Memory Graph UX and Traceability | Completed |
-| 28 | Temporal Dynamics and Graph Quality Controls | In Progress |
+| 28 | Temporal Dynamics and Graph Quality Controls | Completed |
 | 32 | ContinuWitty Query Protocol | Planned |
 | 33 | Portable Export/Import Stash | Completed |
 | 34 | Security Audit Remediation Program | Completed |

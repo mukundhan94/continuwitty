@@ -26,11 +26,13 @@ func TestCompatibilityServiceChatSendMessageDirectStreamFrames(t *testing.T) {
 				actorUserID.String(),
 				"chat.send_message",
 				map[string]any{
-					"session_id":                sessionID.String(),
-					"content_text":              "hi",
-					"link_recall_enabled":       true,
-					"link_recall_depth":         2,
-					"link_recall_max_neighbors": 6,
+					"session_id":                     sessionID.String(),
+					"content_text":                   "hi",
+					"link_recall_enabled":            true,
+					"link_recall_depth":              2,
+					"link_recall_max_neighbors":      6,
+					"link_noise_suppression_enabled": true,
+					"link_noise_score_threshold":     0.58,
 				},
 			),
 		),
@@ -56,9 +58,11 @@ func TestCompatibilityServiceChatSendMessageDirectStreamFrames(t *testing.T) {
 		t,
 		streamService.call,
 		expectedLinkRecallOptions{
-			enabled:      true,
-			depth:        2,
-			maxNeighbors: 6,
+			enabled:                 true,
+			depth:                   2,
+			maxNeighbors:            6,
+			noiseSuppressionEnabled: true,
+			noiseScoreThreshold:     0.58,
 		},
 	)
 }
@@ -245,9 +249,11 @@ func terminalFrame(t *testing.T, frames []Frame) Frame {
 }
 
 type expectedLinkRecallOptions struct {
-	enabled      bool
-	depth        int
-	maxNeighbors int
+	enabled                 bool
+	depth                   int
+	maxNeighbors            int
+	noiseSuppressionEnabled bool
+	noiseScoreThreshold     float64
 }
 
 func assertForwardedLinkRecallOptions(
@@ -256,14 +262,41 @@ func assertForwardedLinkRecallOptions(
 	expected expectedLinkRecallOptions,
 ) {
 	t.Helper()
-	if request.LinkRecallEnabled == nil || *request.LinkRecallEnabled != expected.enabled {
-		t.Fatalf("expected link_recall_enabled=%v forwarded to stream service", expected.enabled)
+	requireBoolOption(t, request.LinkRecallEnabled, expected.enabled, "link_recall_enabled")
+	requireIntOption(t, request.LinkRecallDepth, expected.depth, "link_recall_depth")
+	requireIntOption(t, request.LinkRecallMaxNeighbors, expected.maxNeighbors, "link_recall_max_neighbors")
+	requireBoolOption(
+		t,
+		request.LinkNoiseSuppressionEnabled,
+		expected.noiseSuppressionEnabled,
+		"link_noise_suppression_enabled",
+	)
+	requireFloatOption(
+		t,
+		request.LinkNoiseScoreThreshold,
+		expected.noiseScoreThreshold,
+		"link_noise_score_threshold",
+	)
+}
+
+func requireBoolOption(t *testing.T, value *bool, expected bool, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%v forwarded to stream service", field, expected)
 	}
-	if request.LinkRecallDepth == nil || *request.LinkRecallDepth != expected.depth {
-		t.Fatalf("expected link_recall_depth=%d forwarded to stream service", expected.depth)
+}
+
+func requireIntOption(t *testing.T, value *int, expected int, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%d forwarded to stream service", field, expected)
 	}
-	if request.LinkRecallMaxNeighbors == nil || *request.LinkRecallMaxNeighbors != expected.maxNeighbors {
-		t.Fatalf("expected link_recall_max_neighbors=%d forwarded to stream service", expected.maxNeighbors)
+}
+
+func requireFloatOption(t *testing.T, value *float64, expected float64, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%.2f forwarded to stream service", field, expected)
 	}
 }
 

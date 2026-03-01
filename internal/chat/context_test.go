@@ -310,6 +310,47 @@ func TestAssembleChatContextIncludesLinkedEngramsAndTraceMetadataByDefault(t *te
 	assertLinkedTraceContext(t, assembled, rootEngramID, linkedEngramID, linkID)
 }
 
+func TestAssembleChatContextSuppressesNoisyLinkedPaths(t *testing.T) {
+	session := contextSessionRecord()
+	rootEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006674")
+	linkedEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006675")
+	linkID := uuid.MustParse("00000000-0000-0000-0000-000000006676")
+	deps := dependenciesForLinkedRecallDefault(rootEngramID, linkedEngramID, linkID)
+	request := contextRequest(session, "suppress noisy links", 4)
+	request.LinkNoiseSuppressionEnabled = boolPtr(true)
+	request.LinkNoiseScoreThreshold = contextFloatPtr(0.99)
+
+	assembled, err := AssembleChatContext(context.Background(), request, deps)
+	if err != nil {
+		t.Fatalf("assemble chat context: %v", err)
+	}
+
+	requireUUIDSliceEqual(t, []uuid.UUID{rootEngramID}, assembled.UsedEngramIDs)
+	if len(assembled.UsedEngramLinkIDs) != 0 {
+		t.Fatalf("expected no linked engram ids after suppression, got %v", assembled.UsedEngramLinkIDs)
+	}
+	if len(assembled.EngramTracePaths) != 0 {
+		t.Fatalf("expected no trace paths after suppression, got %d", len(assembled.EngramTracePaths))
+	}
+}
+
+func TestAssembleChatContextNoiseSuppressionPolicyAllowsOverride(t *testing.T) {
+	session := contextSessionRecord()
+	rootEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006677")
+	linkedEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006678")
+	linkID := uuid.MustParse("00000000-0000-0000-0000-000000006679")
+	deps := dependenciesForLinkedRecallDefault(rootEngramID, linkedEngramID, linkID)
+	request := contextRequest(session, "disable suppression override", 4)
+	request.LinkNoiseSuppressionEnabled = boolPtr(false)
+	request.LinkNoiseScoreThreshold = contextFloatPtr(0.99)
+
+	assembled, err := AssembleChatContext(context.Background(), request, deps)
+	if err != nil {
+		t.Fatalf("assemble chat context: %v", err)
+	}
+	assertLinkedTraceContext(t, assembled, rootEngramID, linkedEngramID, linkID)
+}
+
 func TestAssembleChatContextLinkRecallDisabledSkipsTraversal(t *testing.T) {
 	session := contextSessionRecord()
 	rootEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006681")
@@ -995,6 +1036,11 @@ func boolPtr(value bool) *bool {
 }
 
 func contextIntPtr(value int) *int {
+	copy := value
+	return &copy
+}
+
+func contextFloatPtr(value float64) *float64 {
 	copy := value
 	return &copy
 }

@@ -101,16 +101,20 @@ func TestPrepareGenerationForwardsLinkRecallOverrides(t *testing.T) {
 	enabled := false
 	depth := 2
 	maxNeighbors := 9
+	noiseSuppressionEnabled := false
+	noiseThreshold := 0.72
 
 	_, err := runtime.PrepareGeneration(
 		context.Background(),
 		base.Session.OwnerUserID,
 		base.Session.SessionID,
 		ChatMessageCreateRequest{
-			ContentText:            "How should we proceed?",
-			LinkRecallEnabled:      &enabled,
-			LinkRecallDepth:        &depth,
-			LinkRecallMaxNeighbors: &maxNeighbors,
+			ContentText:                 "How should we proceed?",
+			LinkRecallEnabled:           &enabled,
+			LinkRecallDepth:             &depth,
+			LinkRecallMaxNeighbors:      &maxNeighbors,
+			LinkNoiseSuppressionEnabled: &noiseSuppressionEnabled,
+			LinkNoiseScoreThreshold:     &noiseThreshold,
 		},
 	)
 	if err != nil {
@@ -122,6 +126,8 @@ func TestPrepareGenerationForwardsLinkRecallOverrides(t *testing.T) {
 	requireOptionalBoolRuntime(t, requests[0].LinkRecallEnabled, false, "link_recall_enabled")
 	requireOptionalIntRuntime(t, requests[0].LinkRecallDepth, 2, "link_recall_depth")
 	requireOptionalIntRuntime(t, requests[0].LinkRecallMaxNeighbors, 9, "link_recall_max_neighbors")
+	requireOptionalBoolRuntime(t, requests[0].LinkNoiseSuppressionEnabled, false, "link_noise_suppression_enabled")
+	requireOptionalFloatRuntime(t, requests[0].LinkNoiseScoreThreshold, 0.72, "link_noise_score_threshold")
 }
 
 func TestPrepareGenerationRejectsEmptyPayload(t *testing.T) {
@@ -339,6 +345,13 @@ func requireOptionalIntRuntime(t *testing.T, value *int, expected int, field str
 	t.Helper()
 	if value == nil || *value != expected {
 		t.Fatalf("expected %s=%d, got %v", field, expected, value)
+	}
+}
+
+func requireOptionalFloatRuntime(t *testing.T, value *float64, expected float64, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%v, got %v", field, expected, value)
 	}
 }
 

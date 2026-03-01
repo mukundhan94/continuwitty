@@ -20,12 +20,22 @@ func parseSessionMessageSendRequest(
 	if !ok {
 		return SessionMessageSendRequest{}, invalidParamError("link_recall_max_neighbors")
 	}
+	linkNoiseSuppressionEnabled, ok := optionalBoolPointerParam(params, "link_noise_suppression_enabled")
+	if !ok {
+		return SessionMessageSendRequest{}, invalidParamError("link_noise_suppression_enabled")
+	}
+	linkNoiseScoreThreshold, ok := optionalBoundedFloatPointer(params, "link_noise_score_threshold")
+	if !ok {
+		return SessionMessageSendRequest{}, invalidParamError("link_noise_score_threshold")
+	}
 	return SessionMessageSendRequest{
-		ActorUserID:            actor.UserID,
-		SessionID:              sessionID,
-		ContentText:            stringParamWithDefault(params, "content_text", ""),
-		LinkRecallEnabled:      linkRecallEnabled,
-		LinkRecallDepth:        linkRecallDepth,
-		LinkRecallMaxNeighbors: linkRecallMaxNeighbors,
+		ActorUserID:                 actor.UserID,
+		SessionID:                   sessionID,
+		ContentText:                 stringParamWithDefault(params, "content_text", ""),
+		LinkRecallEnabled:           linkRecallEnabled,
+		LinkRecallDepth:             linkRecallDepth,
+		LinkRecallMaxNeighbors:      linkRecallMaxNeighbors,
+		LinkNoiseSuppressionEnabled: linkNoiseSuppressionEnabled,
+		LinkNoiseScoreThreshold:     linkNoiseScoreThreshold,
 	}, nil
 }

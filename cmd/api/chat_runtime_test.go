@@ -122,6 +122,35 @@ func TestMapRuntimeMessageMetadataConvertsTokenUsageAndCopiesSlices(t *testing.T
 	}
 }
 
+func TestApplyGraphNoiseSuppressionPolicyDefaultsSetsUnsetValues(t *testing.T) {
+	defaulted := applyGraphNoiseSuppressionPolicyDefaults(
+		chat.ChatContextRequest{},
+		config.Settings{
+			GraphLinkNoiseSuppressionEnabled: false,
+			GraphLinkNoiseScoreThreshold:     0.73,
+		},
+	)
+	requireOptionalBoolRuntime(t, defaulted.LinkNoiseSuppressionEnabled, false, "link_noise_suppression_enabled")
+	requireOptionalFloatRuntime(t, defaulted.LinkNoiseScoreThreshold, 0.73, "link_noise_score_threshold")
+}
+
+func TestApplyGraphNoiseSuppressionPolicyDefaultsPreservesOverrides(t *testing.T) {
+	overrideEnabled := true
+	overrideThreshold := 0.22
+	overridden := applyGraphNoiseSuppressionPolicyDefaults(
+		chat.ChatContextRequest{
+			LinkNoiseSuppressionEnabled: &overrideEnabled,
+			LinkNoiseScoreThreshold:     &overrideThreshold,
+		},
+		config.Settings{
+			GraphLinkNoiseSuppressionEnabled: false,
+			GraphLinkNoiseScoreThreshold:     0.73,
+		},
+	)
+	requireOptionalBoolRuntime(t, overridden.LinkNoiseSuppressionEnabled, true, "link_noise_suppression_enabled")
+	requireOptionalFloatRuntime(t, overridden.LinkNoiseScoreThreshold, 0.22, "link_noise_score_threshold")
+}
+
 func collectRegisteredRoutes(t *testing.T, router chi.Router) map[string]struct{} {
 	t.Helper()
 	paths := map[string]struct{}{}
@@ -136,4 +165,18 @@ func collectRegisteredRoutes(t *testing.T, router chi.Router) map[string]struct{
 		t.Fatalf("walk routes: %v", err)
 	}
 	return paths
+}
+
+func requireOptionalBoolRuntime(t *testing.T, value *bool, expected bool, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%v, got %v", field, expected, value)
+	}
+}
+
+func requireOptionalFloatRuntime(t *testing.T, value *float64, expected float64, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%v, got %v", field, expected, value)
+	}
 }

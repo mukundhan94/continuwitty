@@ -21,10 +21,12 @@ var errMessageRuntimeDependenciesIncomplete = errors.New("chat message runtime d
 
 // ChatMessageCreateRequest captures inbound chat message payloads for runtime preparation.
 type ChatMessageCreateRequest struct {
-	ContentText            string `json:"content_text"`
-	LinkRecallEnabled      *bool  `json:"link_recall_enabled,omitempty"`
-	LinkRecallDepth        *int   `json:"link_recall_depth,omitempty"`
-	LinkRecallMaxNeighbors *int   `json:"link_recall_max_neighbors,omitempty"`
+	ContentText                 string   `json:"content_text"`
+	LinkRecallEnabled           *bool    `json:"link_recall_enabled,omitempty"`
+	LinkRecallDepth             *int     `json:"link_recall_depth,omitempty"`
+	LinkRecallMaxNeighbors      *int     `json:"link_recall_max_neighbors,omitempty"`
+	LinkNoiseSuppressionEnabled *bool    `json:"link_noise_suppression_enabled,omitempty"`
+	LinkNoiseScoreThreshold     *float64 `json:"link_noise_score_threshold,omitempty"`
 }
 
 // RuntimeMessageMetadata captures optional metadata persisted with a chat message.
@@ -340,13 +342,15 @@ func (runtime *ChatMessageRuntime) prepareChatContext(
 	assembledContext, err := runtime.assembleChatContext(
 		ctx,
 		ChatContextRequest{
-			Session:                session,
-			ActorUserID:            actorUserID,
-			UserQuery:              payload.ContentText,
-			EmbeddingDim:           runtime.embeddingDim,
-			LinkRecallEnabled:      payload.LinkRecallEnabled,
-			LinkRecallDepth:        payload.LinkRecallDepth,
-			LinkRecallMaxNeighbors: payload.LinkRecallMaxNeighbors,
+			Session:                     session,
+			ActorUserID:                 actorUserID,
+			UserQuery:                   payload.ContentText,
+			EmbeddingDim:                runtime.embeddingDim,
+			LinkRecallEnabled:           payload.LinkRecallEnabled,
+			LinkRecallDepth:             payload.LinkRecallDepth,
+			LinkRecallMaxNeighbors:      payload.LinkRecallMaxNeighbors,
+			LinkNoiseSuppressionEnabled: payload.LinkNoiseSuppressionEnabled,
+			LinkNoiseScoreThreshold:     payload.LinkNoiseScoreThreshold,
 		},
 	)
 	if err != nil {

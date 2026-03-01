@@ -301,6 +301,8 @@ Note: project audit-event listing is currently REST-only (`GET /api/v1/projects/
         "link_recall_enabled": true,
         "link_recall_depth": 1,
         "link_recall_max_neighbors": 8,
+        "link_noise_suppression_enabled": true,
+        "link_noise_score_threshold": 0.30,
         "stream": true
       }
     }
@@ -415,6 +417,8 @@ curl -sN -b "$COOKIE_JAR" \
         "link_recall_enabled": true,
         "link_recall_depth": 1,
         "link_recall_max_neighbors": 8,
+        "link_noise_suppression_enabled": true,
+        "link_noise_score_threshold": 0.30,
         "stream": true
       }
     }
@@ -462,6 +466,8 @@ curl -sN -b "$COOKIE_JAR" \
 - `link_recall_enabled`
 - `link_recall_depth`
 - `link_recall_max_neighbors`
+- `link_noise_suppression_enabled`
+- `link_noise_score_threshold`
 
 Document pin/list helpers:
 

@@ -214,6 +214,8 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 - `link_recall_enabled` (bool)
 - `link_recall_depth` (int, bounded)
 - `link_recall_max_neighbors` (int, bounded)
+- `link_noise_suppression_enabled` (bool)
+- `link_noise_score_threshold` (number, bounded `0..1`)
 
 Chat send responses and stream `meta`/`done` events include:
 

@@ -108,6 +108,8 @@ type Settings struct {
 	MCPTransportRateLimitBlockSeconds  int     `envconfig:"MCP_TRANSPORT_RATE_LIMIT_BLOCK_SECONDS" default:"30"`
 	DefaultChatProvider                string  `envconfig:"DEFAULT_CHAT_PROVIDER" default:"openai"`
 	DefaultChatModel                   string  `envconfig:"DEFAULT_CHAT_MODEL" default:"gpt-4o-mini"`
+	GraphLinkNoiseSuppressionEnabled   bool    `envconfig:"GRAPH_LINK_NOISE_SUPPRESSION_ENABLED" default:"true"`
+	GraphLinkNoiseScoreThreshold       float64 `envconfig:"GRAPH_LINK_NOISE_SCORE_THRESHOLD" default:"0.30"`
 	ChatPromptPolicyVersion            string  `envconfig:"CHAT_PROMPT_POLICY_VERSION" default:"chat-prompt-policy-v1"`
 	MCPToolPolicyVersion               string  `envconfig:"MCP_TOOL_POLICY_VERSION" default:"mcp-tool-policy-v1"`
 	EvalSuiteVersion                   string  `envconfig:"EVAL_SUITE_VERSION" default:"eval-suite-v1"`
@@ -184,6 +186,9 @@ func LoadSettings() (Settings, error) {
 	if err := ValidateOIDCSettings(settings); err != nil {
 		return Settings{}, err
 	}
+	if err := ValidateGraphSettings(settings); err != nil {
+		return Settings{}, err
+	}
 	if err := ValidateProductionSecurity(settings); err != nil {
 		return Settings{}, err
 	}
@@ -212,6 +217,14 @@ func ValidateOIDCSettings(settings Settings) error {
 		return nil
 	}
 	return fmt.Errorf("oidc is enabled but missing required settings: %s", strings.Join(missing, ", "))
+}
+
+// ValidateGraphSettings enforces graph link-noise suppression tuning bounds.
+func ValidateGraphSettings(settings Settings) error {
+	if settings.GraphLinkNoiseScoreThreshold < 0 || settings.GraphLinkNoiseScoreThreshold > 1 {
+		return fmt.Errorf("GRAPH_LINK_NOISE_SCORE_THRESHOLD must be between 0 and 1")
+	}
+	return nil
 }
 
 func appendSecretViolations(violations []string, name, value, insecureDefault string) []string {
@@ -318,6 +331,8 @@ func settingsMap(settings Settings) map[string]any {
 		"mcp_transport_rate_limit_block_seconds":  settings.MCPTransportRateLimitBlockSeconds,
 		"default_chat_provider":                   settings.DefaultChatProvider,
 		"default_chat_model":                      settings.DefaultChatModel,
+		"graph_link_noise_suppression_enabled":    settings.GraphLinkNoiseSuppressionEnabled,
+		"graph_link_noise_score_threshold":        settings.GraphLinkNoiseScoreThreshold,
 		"chat_prompt_policy_version":              settings.ChatPromptPolicyVersion,
 		"mcp_tool_policy_version":                 settings.MCPToolPolicyVersion,
 		"eval_suite_version":                      settings.EvalSuiteVersion,

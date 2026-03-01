@@ -109,24 +109,22 @@ func TestCompatibilityServiceChatSendMessageForwardsLinkRecallOptions(t *testing
 			"39061000-0000-0000-0000-000000000393",
 			"chat.send_message",
 			map[string]any{
-				"session_id":                "39061000-0000-0000-0000-000000000394",
-				"content_text":              "use linked recall",
-				"link_recall_enabled":       false,
-				"link_recall_depth":         2,
-				"link_recall_max_neighbors": 7,
+				"session_id":                     "39061000-0000-0000-0000-000000000394",
+				"content_text":                   "use linked recall",
+				"link_recall_enabled":            false,
+				"link_recall_depth":              2,
+				"link_recall_max_neighbors":      7,
+				"link_noise_suppression_enabled": false,
+				"link_noise_score_threshold":     0.61,
 			},
 		),
 	)
 	_ = messageSendFromFrame(t, frame, false)
-	if sendService.call.LinkRecallEnabled == nil || *sendService.call.LinkRecallEnabled {
-		t.Fatalf("expected link_recall_enabled=false to be forwarded")
-	}
-	if sendService.call.LinkRecallDepth == nil || *sendService.call.LinkRecallDepth != 2 {
-		t.Fatalf("expected link_recall_depth=2 to be forwarded")
-	}
-	if sendService.call.LinkRecallMaxNeighbors == nil || *sendService.call.LinkRecallMaxNeighbors != 7 {
-		t.Fatalf("expected link_recall_max_neighbors=7 to be forwarded")
-	}
+	requireBoolPointerField(t, sendService.call.LinkRecallEnabled, false, "link_recall_enabled")
+	requireIntPointerField(t, sendService.call.LinkRecallDepth, 2, "link_recall_depth")
+	requireIntPointerField(t, sendService.call.LinkRecallMaxNeighbors, 7, "link_recall_max_neighbors")
+	requireBoolPointerField(t, sendService.call.LinkNoiseSuppressionEnabled, false, "link_noise_suppression_enabled")
+	requireFloatPointerField(t, sendService.call.LinkNoiseScoreThreshold, 0.61, "link_noise_score_threshold")
 }
 
 func TestCompatibilityServiceChatSendMessageValidationErrors(t *testing.T) {
@@ -253,6 +251,27 @@ func assertErrorCodeField(t *testing.T, errorPayload map[string]any, expected st
 	data := mapFromMap(t, errorPayload, "data")
 	if data["error_code"] != expected {
 		t.Fatalf("expected error_code %q in error data", expected)
+	}
+}
+
+func requireBoolPointerField(t *testing.T, value *bool, expected bool, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%v, got %v", field, expected, value)
+	}
+}
+
+func requireIntPointerField(t *testing.T, value *int, expected int, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%d, got %v", field, expected, value)
+	}
+}
+
+func requireFloatPointerField(t *testing.T, value *float64, expected float64, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%v, got %v", field, expected, value)
 	}
 }
 
