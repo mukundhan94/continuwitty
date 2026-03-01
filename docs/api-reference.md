@@ -60,6 +60,7 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 | `PATCH` | `/api/v1/engrams/links/{link_id}` | Update link weight/confidence/status/evidence |
 | `DELETE` | `/api/v1/engrams/links/{link_id}` | Archive link (soft delete) |
 | `POST` | `/api/v1/engrams/{engram_id}/links/suggest` | Get ranked link suggestions |
+| `POST` | `/api/v1/engrams/{engram_id}/links/hygiene` | Get graph hygiene recommendations (duplicate/conflict/stale low-value) |
 | `POST` | `/api/v1/engrams/{engram_id}/trace` | Traverse linked engrams (depth-limited) |
 
 ### Chat Sessions

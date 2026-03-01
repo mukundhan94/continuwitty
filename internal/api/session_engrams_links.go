@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -18,6 +19,9 @@ const (
 	defaultEngramLinkSuggestMaxCandiate = 20
 	defaultEngramTraceMaxDepth          = 2
 	defaultEngramTraceMaxNeighbors      = 20
+	defaultEngramLinkHygieneLimit       = 500
+	defaultEngramLinkHygieneStaleDays   = 120
+	defaultEngramLinkHygieneLowValue    = 0.25
 )
 
 // SessionEngramLinkCreateInput captures authenticated create-link route inputs.
@@ -83,6 +87,16 @@ type SessionEngramTraceInput struct {
 	IncludeArchived bool
 }
 
+// SessionEngramLinkHygieneInput captures authenticated hygiene recommendation inputs.
+type SessionEngramLinkHygieneInput struct {
+	SourceEngramID    uuid.UUID
+	ActorUserID       uuid.UUID
+	IncludeArchived   bool
+	Limit             int
+	StaleAfterDays    int
+	LowValueThreshold float64
+}
+
 type createEngramLinkPayload struct {
 	TargetEngramID   uuid.UUID      `json:"target_engram_id"`
 	RelationType     string         `json:"relation_type"`
@@ -115,6 +129,13 @@ type traceEngramPayload struct {
 	MaxDepth        int   `json:"max_depth"`
 	MaxNeighbors    int   `json:"max_neighbors"`
 	IncludeArchived *bool `json:"include_archived,omitempty"`
+}
+
+type hygieneEngramLinkPayload struct {
+	IncludeArchived   *bool    `json:"include_archived,omitempty"`
+	Limit             int      `json:"limit"`
+	StaleAfterDays    int      `json:"stale_after_days"`
+	LowValueThreshold *float64 `json:"low_value_threshold,omitempty"`
 }
 
 func (dependencies sessionAuthDependencies) handleCreateEngramLink(writer http.ResponseWriter, request *http.Request) {
@@ -260,12 +281,18 @@ func (dependencies sessionAuthDependencies) handleArchiveEngramLink(writer http.
 	writeJSON(writer, http.StatusOK, archived)
 }
 
-func (dependencies sessionAuthDependencies) handleSuggestEngramLinks(writer http.ResponseWriter, request *http.Request) {
+func handleEngramLinkQueryRoute[T any, R any](
+	dependencies sessionAuthDependencies,
+	writer http.ResponseWriter,
+	request *http.Request,
+	service func(context.Context, T) (R, error),
+	decode func(http.ResponseWriter, *http.Request, uuid.UUID, uuid.UUID) (T, bool),
+) {
 	actor, ok := dependencies.requireAuthenticatedAPIActor(writer, request)
 	if !ok {
 		return
 	}
-	if dependencies.suggestEngramLinks == nil {
+	if service == nil {
 		writeSessionUserDependenciesError(writer)
 		return
 	}
@@ -273,41 +300,46 @@ func (dependencies sessionAuthDependencies) handleSuggestEngramLinks(writer http
 	if !ok {
 		return
 	}
-	input, ok := decodeSuggestEngramLinksInput(writer, request, sourceEngramID, actor.UserID)
+	input, ok := decode(writer, request, sourceEngramID, actor.UserID)
 	if !ok {
 		return
 	}
-	suggestions, err := dependencies.suggestEngramLinks(request.Context(), input)
+	result, err := service(request.Context(), input)
 	if err != nil {
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
 		return
 	}
-	writeJSON(writer, http.StatusOK, suggestions)
+	writeJSON(writer, http.StatusOK, result)
+}
+
+func (dependencies sessionAuthDependencies) handleSuggestEngramLinks(writer http.ResponseWriter, request *http.Request) {
+	handleEngramLinkQueryRoute(
+		dependencies,
+		writer,
+		request,
+		dependencies.suggestEngramLinks,
+		decodeSuggestEngramLinksInput,
+	)
 }
 
 func (dependencies sessionAuthDependencies) handleTraceEngramLinks(writer http.ResponseWriter, request *http.Request) {
-	actor, ok := dependencies.requireAuthenticatedAPIActor(writer, request)
-	if !ok {
-		return
-	}
-	if dependencies.traceEngramLinks == nil {
-		writeSessionUserDependenciesError(writer)
-		return
-	}
-	rootEngramID, ok := parsePathUUID(writer, request, "engram_id")
-	if !ok {
-		return
-	}
-	input, ok := decodeTraceEngramLinksInput(writer, request, rootEngramID, actor.UserID)
-	if !ok {
-		return
-	}
-	steps, err := dependencies.traceEngramLinks(request.Context(), input)
-	if err != nil {
-		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
-		return
-	}
-	writeJSON(writer, http.StatusOK, steps)
+	handleEngramLinkQueryRoute(
+		dependencies,
+		writer,
+		request,
+		dependencies.traceEngramLinks,
+		decodeTraceEngramLinksInput,
+	)
+}
+
+func (dependencies sessionAuthDependencies) handleHygieneEngramLinks(writer http.ResponseWriter, request *http.Request) {
+	handleEngramLinkQueryRoute(
+		dependencies,
+		writer,
+		request,
+		dependencies.hygieneEngramLinks,
+		decodeHygieneEngramLinksInput,
+	)
 }
 
 func decodeCreateEngramLinkInput(
@@ -520,6 +552,85 @@ func decodeTraceEngramLinksInput(
 		MaxNeighbors:    maxNeighbors,
 		IncludeArchived: includeArchived,
 	}, true
+}
+
+func decodeHygieneEngramLinksInput(
+	writer http.ResponseWriter,
+	request *http.Request,
+	sourceEngramID uuid.UUID,
+	actorUserID uuid.UUID,
+) (SessionEngramLinkHygieneInput, bool) {
+	payload := hygieneEngramLinkPayload{}
+	if !decodeJSONAllowEmpty(writer, request, &payload) {
+		return SessionEngramLinkHygieneInput{}, false
+	}
+	includeArchived := parseHygieneIncludeArchived(payload)
+	limit, ok := parseHygieneLimit(writer, payload.Limit)
+	if !ok {
+		return SessionEngramLinkHygieneInput{}, false
+	}
+	staleAfterDays, ok := parseHygieneStaleAfterDays(writer, payload.StaleAfterDays)
+	if !ok {
+		return SessionEngramLinkHygieneInput{}, false
+	}
+	lowValueThreshold, ok := parseHygieneLowValueThreshold(writer, payload.LowValueThreshold)
+	if !ok {
+		return SessionEngramLinkHygieneInput{}, false
+	}
+	return SessionEngramLinkHygieneInput{
+		SourceEngramID:    sourceEngramID,
+		ActorUserID:       actorUserID,
+		IncludeArchived:   includeArchived,
+		Limit:             limit,
+		StaleAfterDays:    staleAfterDays,
+		LowValueThreshold: lowValueThreshold,
+	}, true
+}
+
+func parseHygieneIncludeArchived(payload hygieneEngramLinkPayload) bool {
+	if payload.IncludeArchived == nil {
+		return false
+	}
+	return *payload.IncludeArchived
+}
+
+func parseHygieneLimit(writer http.ResponseWriter, value int) (int, bool) {
+	limit := value
+	if limit == 0 {
+		limit = defaultEngramLinkHygieneLimit
+	}
+	if limit < 1 || limit > 1000 {
+		writeInvalidParameter(writer, "limit")
+		return 0, false
+	}
+	return limit, true
+}
+
+func parseHygieneStaleAfterDays(writer http.ResponseWriter, value int) (int, bool) {
+	staleAfterDays := value
+	if staleAfterDays == 0 {
+		staleAfterDays = defaultEngramLinkHygieneStaleDays
+	}
+	if staleAfterDays < 7 || staleAfterDays > 3650 {
+		writeInvalidParameter(writer, "stale_after_days")
+		return 0, false
+	}
+	return staleAfterDays, true
+}
+
+func parseHygieneLowValueThreshold(
+	writer http.ResponseWriter,
+	value *float64,
+) (float64, bool) {
+	lowValueThreshold := defaultEngramLinkHygieneLowValue
+	if value != nil {
+		lowValueThreshold = *value
+	}
+	if lowValueThreshold <= 0 || lowValueThreshold > 1 {
+		writeInvalidParameter(writer, "low_value_threshold")
+		return 0, false
+	}
+	return lowValueThreshold, true
 }
 
 func parseOptionalEngramLinkRelationTypeQuery(

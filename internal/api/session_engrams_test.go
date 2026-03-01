@@ -90,6 +90,10 @@ type sessionEngramRoutesHandlerOptions struct {
 		ctx context.Context,
 		input SessionEngramTraceInput,
 	) ([]models.EngramLinkTraversalStep, error)
+	hygieneEngramLinks func(
+		ctx context.Context,
+		input SessionEngramLinkHygieneInput,
+	) ([]models.EngramLinkHygieneRecommendation, error)
 }
 
 type sessionEngramLoginCredentials struct {
@@ -629,6 +633,7 @@ func buildSessionEngramRoutesTestHandler(
 			UpdateEngramLink:         options.updateEngramLink,
 			ArchiveEngramLink:        options.archiveEngramLink,
 			SuggestEngramLinks:       options.suggestEngramLinks,
+			HygieneEngramLinks:       options.hygieneEngramLinks,
 			TraceEngramLinks:         options.traceEngramLinks,
 		},
 	)

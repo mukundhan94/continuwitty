@@ -340,6 +340,70 @@ func TestMountSessionAuthRoutesSuggestEngramLinksUsesRepository(t *testing.T) {
 	requireEqual(t, targetEngramID.String(), payload[0]["target_engram_id"].(string))
 }
 
+func TestMountSessionAuthRoutesHygieneEngramLinksUsesRepository(t *testing.T) {
+	actor := newSessionRoutesTestActor(t, models.UserRoleViewer)
+	sourceEngramID := uuid.MustParse("00000000-0000-0000-0000-000000009130")
+	targetEngramID := uuid.MustParse("00000000-0000-0000-0000-000000009131")
+	linkID := uuid.MustParse("00000000-0000-0000-0000-000000009132")
+	handler, manager := buildSessionEngramRoutesTestHandler(
+		t,
+		sessionEngramRoutesHandlerOptions{
+			actor: actor,
+			hygieneEngramLinks: func(
+				_ context.Context,
+				input SessionEngramLinkHygieneInput,
+			) ([]models.EngramLinkHygieneRecommendation, error) {
+				requireEqual(t, sourceEngramID, input.SourceEngramID)
+				requireEqual(t, actor.UserID, input.ActorUserID)
+				requireEqual(t, 300, input.Limit)
+				requireEqual(t, 90, input.StaleAfterDays)
+				requireEqual(t, 0.3, input.LowValueThreshold)
+				requireEqual(t, true, input.IncludeArchived)
+				return []models.EngramLinkHygieneRecommendation{
+					{
+						Category:        models.EngramLinkHygieneCategoryStaleLowValue,
+						Severity:        "low",
+						SourceEngramID:  sourceEngramID,
+						TargetEngramID:  targetEngramID,
+						LinkIDs:         []uuid.UUID{linkID},
+						Detail:          "stale low-value link",
+						SuggestedAction: "archive_stale_low_value",
+						Score:           0.22,
+					},
+				}, nil
+			},
+		},
+	)
+	loginCookie := loginSessionEngramActor(
+		t,
+		handler,
+		manager,
+		sessionEngramLoginCredentials{username: actor.Username, password: "StrongPassword-12345"},
+	)
+	response := executeEngramRequest(
+		t,
+		handler,
+		loginCookie,
+		engramRequestSpec{
+			method: http.MethodPost,
+			path:   "/api/v1/engrams/" + sourceEngramID.String() + "/links/hygiene",
+			body: map[string]any{
+				"include_archived":    true,
+				"limit":               300,
+				"stale_after_days":    90,
+				"low_value_threshold": 0.3,
+			},
+		},
+	)
+	requireEqual(t, http.StatusOK, response.Code)
+	var payload []map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode hygiene response: %v", err)
+	}
+	requireEqual(t, 1, len(payload))
+	requireEqual(t, "stale_low_value", payload[0]["category"].(string))
+}
+
 func TestMountSessionAuthRoutesTraceEngramLinksUsesRepository(t *testing.T) {
 	actor := newSessionRoutesTestActor(t, models.UserRoleViewer)
 	rootEngramID := uuid.MustParse("00000000-0000-0000-0000-000000009115")

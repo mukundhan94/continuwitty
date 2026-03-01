@@ -118,6 +118,10 @@ type SessionAuthDependencies struct {
 		ctx context.Context,
 		input SessionEngramTraceInput,
 	) ([]models.EngramLinkTraversalStep, error)
+	HygieneEngramLinks func(
+		ctx context.Context,
+		input SessionEngramLinkHygieneInput,
+	) ([]models.EngramLinkHygieneRecommendation, error)
 	CreateTokenForOwner func(
 		ctx context.Context,
 		ownerUserID uuid.UUID,
@@ -222,6 +226,10 @@ type sessionAuthDependencies struct {
 		ctx context.Context,
 		input SessionEngramTraceInput,
 	) ([]models.EngramLinkTraversalStep, error)
+	hygieneEngramLinks func(
+		ctx context.Context,
+		input SessionEngramLinkHygieneInput,
+	) ([]models.EngramLinkHygieneRecommendation, error)
 	createTokenForOwner func(
 		ctx context.Context,
 		ownerUserID uuid.UUID,
@@ -289,6 +297,7 @@ func newSessionAuthDependencies(dependencies SessionAuthDependencies) sessionAut
 		archiveEngramLink:        dependencies.ArchiveEngramLink,
 		suggestEngramLinks:       dependencies.SuggestEngramLinks,
 		traceEngramLinks:         dependencies.TraceEngramLinks,
+		hygieneEngramLinks:       dependencies.HygieneEngramLinks,
 		createTokenForOwner:      dependencies.CreateTokenForOwner,
 		listTokenSummaries:       dependencies.ListTokenSummaries,
 		revokeTokenForOwner:      dependencies.RevokeTokenForOwner,
@@ -326,6 +335,7 @@ func MountSessionAuthRoutes(router chi.Router, dependencies SessionAuthDependenc
 	router.Patch("/api/v1/engrams/links/{link_id}", deps.handleUpdateEngramLink)
 	router.Delete("/api/v1/engrams/links/{link_id}", deps.handleArchiveEngramLink)
 	router.Post("/api/v1/engrams/{engram_id}/links/suggest", deps.handleSuggestEngramLinks)
+	router.Post("/api/v1/engrams/{engram_id}/links/hygiene", deps.handleHygieneEngramLinks)
 	router.Post("/api/v1/engrams/{engram_id}/trace", deps.handleTraceEngramLinks)
 }
 

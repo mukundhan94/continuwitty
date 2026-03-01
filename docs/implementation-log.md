@@ -7,6 +7,28 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 28 extension: graph hygiene recommendation route)
+
+1. Added graph hygiene models and service:
+   - `internal/models/engram_link_hygiene.go` defines recommendation categories/shape.
+   - `internal/graph/link_hygiene.go` detects:
+     - duplicate target links
+     - conflicting relation types
+     - stale low-value link candidates
+2. Added authenticated REST route:
+   - `POST /api/v1/engrams/{engram_id}/links/hygiene`
+   - wired through `internal/api/session_auth.go` and `internal/api/session_engrams_links.go`.
+3. Added runtime dependency wiring:
+   - `cmd/api/main.go` now provides `HygieneEngramLinks` via `hygieneEngramLinksDependency(...)`.
+4. Added/updated tests:
+   - `internal/graph/link_hygiene_test.go`
+   - `internal/api/session_engrams_links_test.go` (hygiene route contract)
+   - `internal/api/session_engrams_test.go` (test harness wiring update)
+5. Validation:
+   - `go test ./internal/graph ./internal/api ./cmd/api -count=1`
+   - `go test ./... -count=1`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`).
+
 ### 2026-03-01 (Phase 28 kickoff: temporal decay + reinforcement in graph recall)
 
 1. Added temporal weighting helpers in `internal/chat/link_temporal.go`:

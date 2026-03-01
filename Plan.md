@@ -484,10 +484,12 @@ Build a local-first memory system where agents and humans can:
   - temporal decay now affects effective link quality scoring during graph-aware context assembly.
   - successful chat send/stream paths now reinforce used links (`last_reinforced_at` + boosted decayed `temporal_weight`).
   - suggested links that are reinforced through successful usage are promoted to `active`.
+  - graph hygiene recommendation engine now detects duplicate-target links, relation conflicts, and stale low-value links.
+  - authenticated hygiene API route is available at `POST /api/v1/engrams/{engram_id}/links/hygiene`.
 - Remaining focus:
-  - graph hygiene jobs for duplicate/conflict detection and stale-link archival recommendations.
   - graph-focused eval coverage for trace correctness/relevance/drift tolerance.
-  - optional noisy-link suppression threshold tuning.
+  - scheduled hygiene execution/auto-archival policy around recommendation outputs.
+  - optional noisy-link suppression threshold tuning and policy controls.
 
 ### Goals
 

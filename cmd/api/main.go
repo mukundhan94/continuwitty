@@ -391,6 +391,7 @@ func buildSessionAuthDependencies(runtimeDependencies sessionAuthRuntimeDependen
 		UpdateEngramLink:         linkAdapter.update,
 		ArchiveEngramLink:        linkAdapter.archive,
 		SuggestEngramLinks:       suggestEngramLinksDependency(runtimeDependencies.pool, runtimeDependencies.settings.EmbeddingDim),
+		HygieneEngramLinks:       hygieneEngramLinksDependency(runtimeDependencies.pool),
 		TraceEngramLinks:         linkAdapter.trace,
 		CreateTokenForOwner:      createMCPTokenForOwnerDependency(runtimeDependencies.mcpTokenService),
 		ListTokenSummaries:       listMCPTokenSummariesDependency(runtimeDependencies.mcpTokenService),
@@ -730,6 +731,34 @@ func suggestEngramLinksDependency(
 				MaxCandidates:   input.MaxCandidates,
 				MinimumScore:    input.MinimumScore,
 				IncludeArchived: input.IncludeArchived,
+			},
+		)
+	}
+}
+
+func hygieneEngramLinksDependency(
+	pool repository.Queryer,
+) func(
+	ctx context.Context,
+	input internalapi.SessionEngramLinkHygieneInput,
+) ([]models.EngramLinkHygieneRecommendation, error) {
+	service := graph.NewLinkHygieneService(pool)
+	if service == nil {
+		return nil
+	}
+	return func(
+		ctx context.Context,
+		input internalapi.SessionEngramLinkHygieneInput,
+	) ([]models.EngramLinkHygieneRecommendation, error) {
+		return service.Recommend(
+			ctx,
+			graph.LinkHygieneInput{
+				SourceEngramID:    input.SourceEngramID,
+				ActorUserID:       input.ActorUserID,
+				IncludeArchived:   input.IncludeArchived,
+				Limit:             input.Limit,
+				StaleAfterDays:    input.StaleAfterDays,
+				LowValueThreshold: input.LowValueThreshold,
 			},
 		)
 	}
