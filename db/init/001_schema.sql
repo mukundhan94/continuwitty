@@ -22,6 +22,10 @@ ALTER TABLE engrams
   ADD COLUMN IF NOT EXISTS owner_user_id UUID,
   ADD COLUMN IF NOT EXISTS visibility_scope TEXT NOT NULL DEFAULT 'private',
   ADD COLUMN IF NOT EXISTS source_session_id UUID,
+  ADD COLUMN IF NOT EXISTS access_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS useful_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS contradiction_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS deleted_by_user_id UUID,
   ADD COLUMN IF NOT EXISTS delete_reason TEXT,
@@ -63,6 +67,9 @@ CREATE INDEX IF NOT EXISTS engrams_active_project_created_idx
 
 CREATE INDEX IF NOT EXISTS engrams_deleted_at_idx
   ON engrams (deleted_at);
+
+CREATE INDEX IF NOT EXISTS engrams_access_last_accessed_idx
+  ON engrams (access_count DESC, last_accessed_at DESC);
 
 CREATE INDEX IF NOT EXISTS engrams_embed_hnsw_idx
   ON engrams USING hnsw (embed vector_cosine_ops);
@@ -487,6 +494,24 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 
 CREATE INDEX IF NOT EXISTS chat_messages_session_created_idx
   ON chat_messages (session_id, created_at ASC);
+
+CREATE TABLE IF NOT EXISTS engram_access_events (
+  event_id UUID PRIMARY KEY,
+  engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  session_id UUID REFERENCES chat_sessions(session_id) ON DELETE SET NULL,
+  access_source TEXT NOT NULL,
+  accessed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS engram_access_events_engram_accessed_idx
+  ON engram_access_events (engram_id, accessed_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_access_events_session_accessed_idx
+  ON engram_access_events (session_id, accessed_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_access_events_source_accessed_idx
+  ON engram_access_events (access_source, accessed_at DESC);
 
 CREATE TABLE IF NOT EXISTS session_pinned_engrams (
   session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,

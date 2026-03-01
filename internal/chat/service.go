@@ -30,6 +30,8 @@ const (
 	chatTracePersistFail   = "persist_failed"
 	chatTraceReinforceOK   = "link_reinforce_success"
 	chatTraceReinforceFail = "link_reinforce_failed"
+	chatTraceAccessOK      = "engram_access_record_success"
+	chatTraceAccessFail    = "engram_access_record_failed"
 	chatTraceLifecycleOK   = "lifecycle_success"
 	chatTraceLifecycleFail = "lifecycle_failed"
 )
@@ -58,6 +60,7 @@ type ChatServiceDependencies struct {
 	Runtime                        *ChatMessageRuntime
 	ResolveProvider                func(provider models.ChatProvider) (providers.ChatProviderAdapter, error)
 	ReinforceEngramLinks           func(ctx context.Context, actorUserID uuid.UUID, linkIDs []uuid.UUID) error
+	RecordEngramAccess             func(ctx context.Context, sessionID uuid.UUID, accessSource string, engramIDs []uuid.UUID) error
 	RunSessionLifecycleMaintenance func(ctx context.Context, actorUserID uuid.UUID, session models.ChatSessionRecord) error
 	ProviderFallback               ProviderFallbackStrategy
 	CircuitPolicy                  ProviderCircuitPolicy
@@ -71,6 +74,7 @@ type ChatService struct {
 	runtime                        *ChatMessageRuntime
 	resolveProvider                func(provider models.ChatProvider) (providers.ChatProviderAdapter, error)
 	reinforceEngramLinks           func(ctx context.Context, actorUserID uuid.UUID, linkIDs []uuid.UUID) error
+	recordEngramAccess             func(ctx context.Context, sessionID uuid.UUID, accessSource string, engramIDs []uuid.UUID) error
 	runSessionLifecycleMaintenance func(ctx context.Context, actorUserID uuid.UUID, session models.ChatSessionRecord) error
 	providerFallback               ProviderFallbackStrategy
 	circuitPolicy                  ProviderCircuitPolicy
@@ -87,12 +91,20 @@ type reinforceTraceInput struct {
 	Provider    models.ChatProvider
 }
 
+type accessTraceInput struct {
+	Prepared  PreparedGeneration
+	TraceID   string
+	Operation string
+	Provider  models.ChatProvider
+}
+
 // NewChatService builds a chat service with injected dependencies.
 func NewChatService(dependencies ChatServiceDependencies) *ChatService {
 	service := &ChatService{
 		runtime:                        dependencies.Runtime,
 		resolveProvider:                dependencies.ResolveProvider,
 		reinforceEngramLinks:           dependencies.ReinforceEngramLinks,
+		recordEngramAccess:             dependencies.RecordEngramAccess,
 		runSessionLifecycleMaintenance: dependencies.RunSessionLifecycleMaintenance,
 		providerFallback:               dependencies.ProviderFallback,
 		circuitPolicy:                  dependencies.CircuitPolicy,
@@ -100,6 +112,12 @@ func NewChatService(dependencies ChatServiceDependencies) *ChatService {
 		resolveTraceID:                 dependencies.ResolveTraceID,
 		nowUTC:                         dependencies.NowUTC,
 	}
+	applyChatServiceExecutionDefaults(service)
+	applyChatServiceObservationDefaults(service)
+	return service
+}
+
+func applyChatServiceExecutionDefaults(service *ChatService) {
 	if service.runSessionLifecycleMaintenance == nil {
 		service.runSessionLifecycleMaintenance = func(context.Context, uuid.UUID, models.ChatSessionRecord) error {
 			return nil
@@ -108,12 +126,18 @@ func NewChatService(dependencies ChatServiceDependencies) *ChatService {
 	if service.reinforceEngramLinks == nil {
 		service.reinforceEngramLinks = func(context.Context, uuid.UUID, []uuid.UUID) error { return nil }
 	}
+	if service.recordEngramAccess == nil {
+		service.recordEngramAccess = func(context.Context, uuid.UUID, string, []uuid.UUID) error { return nil }
+	}
 	if service.providerFallback == nil {
 		service.providerFallback = noopProviderFallbackStrategy{}
 	}
 	if service.circuitPolicy == nil {
 		service.circuitPolicy = noopProviderCircuitPolicy{}
 	}
+}
+
+func applyChatServiceObservationDefaults(service *ChatService) {
 	if service.observability == nil {
 		service.observability = noopObservabilityRecorder{}
 	}
@@ -123,7 +147,6 @@ func NewChatService(dependencies ChatServiceDependencies) *ChatService {
 	if service.nowUTC == nil {
 		service.nowUTC = func() time.Time { return time.Now().UTC() }
 	}
-	return service
 }
 
 // SendMessage executes non-streaming generation and persists assistant output.
@@ -181,6 +204,12 @@ func (service *ChatService) SendMessage(
 	); err != nil {
 		return ChatSendResponse{}, err
 	}
+	service.recordEngramAccessWithTrace(ctx, accessTraceInput{
+		Prepared:  prepared,
+		TraceID:   traceID,
+		Operation: chatOperationSend,
+		Provider:  providerCandidate.Provider,
+	})
 	return buildChatSendResponse(prepared, *assistantMessage, result.Text), nil
 }
 
@@ -222,34 +251,45 @@ func (service *ChatService) StreamMessageEvents(
 		), nil
 	}
 	events = append(events, streamResult.Events...)
+	return service.completeStreamSuccess(
+		ctx,
+		actorUserID,
+		traceID,
+		prepared,
+		streamResult,
+		providerCandidate,
+		events,
+		streamStartedAt,
+	)
+}
 
-	assistantResult := providers.ProviderGenerateResult{
-		Provider:   providerCandidate.Provider,
-		ModelID:    providerCandidate.ModelID,
-		Text:       streamResult.FullText,
-		TokenUsage: map[string]int{},
-	}
+func (service *ChatService) completeStreamSuccess(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	traceID string,
+	prepared PreparedGeneration,
+	streamResult StreamChunkResult,
+	providerCandidate ProviderFallbackCandidate,
+	events []StreamEvent,
+	streamStartedAt time.Time,
+) ([]StreamEvent, error) {
 	assistantMessage, err := service.persistAssistantReplyWithTrace(
 		ctx,
 		actorUserID,
 		prepared,
-		assistantResult,
+		streamAssistantResult(providerCandidate, streamResult),
 		traceID,
 		chatOperationStream,
 		providerCandidate.Provider,
 	)
 	if err != nil {
-		serviceError, ok := err.(*ChatServiceError)
-		if ok {
-			return service.handleStreamPersistenceFailure(
-				events,
-				serviceError,
-				providerCandidate.Provider,
-				streamResult.Events,
-				streamStartedAt,
-			), nil
-		}
-		return nil, err
+		return service.mapStreamPersistenceError(
+			err,
+			events,
+			providerCandidate.Provider,
+			streamResult.Events,
+			streamStartedAt,
+		)
 	}
 	service.reinforceLinksWithTrace(ctx, reinforceTraceInput{
 		ActorUserID: actorUserID,
@@ -268,15 +308,58 @@ func (service *ChatService) StreamMessageEvents(
 	); err != nil {
 		return nil, err
 	}
-	events = append(
-		events,
-		StreamEvent{
-			Type:    "done",
-			Payload: BuildStreamDonePayload(prepared, *assistantMessage, streamResult.FullText, nil),
-		},
-	)
+	service.recordEngramAccessWithTrace(ctx, accessTraceInput{
+		Prepared:  prepared,
+		TraceID:   traceID,
+		Operation: chatOperationStream,
+		Provider:  providerCandidate.Provider,
+	})
+	events = append(events, streamDoneEvent(prepared, *assistantMessage, streamResult.FullText))
 	service.recordStreamCompletion(providerCandidate.Provider, streamResult.Events, streamStartedAt)
 	return events, nil
+}
+
+func streamAssistantResult(
+	providerCandidate ProviderFallbackCandidate,
+	streamResult StreamChunkResult,
+) providers.ProviderGenerateResult {
+	return providers.ProviderGenerateResult{
+		Provider:   providerCandidate.Provider,
+		ModelID:    providerCandidate.ModelID,
+		Text:       streamResult.FullText,
+		TokenUsage: map[string]int{},
+	}
+}
+
+func (service *ChatService) mapStreamPersistenceError(
+	err error,
+	events []StreamEvent,
+	provider models.ChatProvider,
+	streamEvents []StreamEvent,
+	streamStartedAt time.Time,
+) ([]StreamEvent, error) {
+	serviceError, ok := err.(*ChatServiceError)
+	if ok {
+		return service.handleStreamPersistenceFailure(
+			events,
+			serviceError,
+			provider,
+			streamEvents,
+			streamStartedAt,
+		), nil
+	}
+	return nil, err
+}
+
+func streamDoneEvent(
+	prepared PreparedGeneration,
+	assistantMessage models.ChatMessageRecord,
+	fullText string,
+) StreamEvent {
+	return StreamEvent{
+		Type:    "done",
+		Payload: BuildStreamDonePayload(prepared, assistantMessage, fullText, nil),
+	}
 }
 
 func (service *ChatService) handleStreamProviderFailure(
@@ -433,6 +516,68 @@ func (service *ChatService) reinforceLinksWithTrace(ctx context.Context, input r
 		"",
 		0,
 	)
+}
+
+func (service *ChatService) recordEngramAccessWithTrace(ctx context.Context, input accessTraceInput) {
+	engramIDs := dedupeUUIDs(input.Prepared.Context.UsedEngramIDs)
+	if len(engramIDs) == 0 {
+		return
+	}
+	accessSource := resolveEngramAccessSource(input.Operation)
+	if err := service.recordEngramAccess(
+		ctx,
+		input.Prepared.Session.SessionID,
+		accessSource,
+		engramIDs,
+	); err != nil {
+		service.recordLifecycleTrace(
+			input.TraceID,
+			input.Operation,
+			chatTraceAccessFail,
+			&input.Prepared,
+			input.Provider,
+			"engram_access_record_error",
+			0,
+		)
+		return
+	}
+	service.recordLifecycleTrace(
+		input.TraceID,
+		input.Operation,
+		chatTraceAccessOK,
+		&input.Prepared,
+		input.Provider,
+		"",
+		0,
+	)
+}
+
+func resolveEngramAccessSource(operation string) string {
+	switch operation {
+	case chatOperationStream:
+		return "chat_stream"
+	default:
+		return "chat_send"
+	}
+}
+
+func dedupeUUIDs(values []uuid.UUID) []uuid.UUID {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[uuid.UUID]struct{}, len(values))
+	deduped := make([]uuid.UUID, 0, len(values))
+	for _, value := range values {
+		if value == uuid.Nil {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		deduped = append(deduped, value)
+	}
+	return deduped
 }
 
 func buildChatSendResponse(

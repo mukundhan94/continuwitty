@@ -44,6 +44,7 @@ func buildChatService(
 			Runtime:                        messageRuntime,
 			ResolveProvider:                resolveChatProviderDependency(settings),
 			ReinforceEngramLinks:           reinforceEngramLinksDependency(pool),
+			RecordEngramAccess:             recordEngramAccessDependency(pool),
 			RunSessionLifecycleMaintenance: runSessionLifecycleMaintenanceDependency(settings, pool),
 			ProviderFallback:               buildProviderFallbackStrategy(settings),
 			CircuitPolicy:                  buildProviderCircuitPolicy(),
@@ -231,6 +232,33 @@ func runSessionLifecycleMaintenanceDependency(
 			lifecycleDependencies,
 		)
 		return err
+	}
+}
+
+func recordEngramAccessDependency(
+	pool *pgxpool.Pool,
+) func(ctx context.Context, sessionID uuid.UUID, accessSource string, engramIDs []uuid.UUID) error {
+	return func(
+		ctx context.Context,
+		sessionID uuid.UUID,
+		accessSource string,
+		engramIDs []uuid.UUID,
+	) error {
+		if len(engramIDs) == 0 {
+			return nil
+		}
+		sessionIDCopy := sessionID
+		accessedAt := time.Now().UTC()
+		events := make([]repository.EngramAccessEventRecord, 0, len(engramIDs))
+		for _, engramID := range engramIDs {
+			events = append(events, repository.EngramAccessEventRecord{
+				EngramID:     engramID,
+				SessionID:    &sessionIDCopy,
+				AccessSource: repository.EngramAccessSource(accessSource),
+				AccessedAt:   accessedAt,
+			})
+		}
+		return repository.RecordEngramAccessEvents(ctx, pool, events)
 	}
 }
 

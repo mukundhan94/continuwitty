@@ -431,17 +431,14 @@ func TestSendMessageEmitsLifecycleTraceAndProviderFailureSamples(t *testing.T) {
 
 func TestSendMessageReinforcesUsedEngramLinks(t *testing.T) {
 	state := newServiceRuntimeState()
-	runtime := runtimeFromServiceState(&state)
 	reinforcementCalls := 0
 	var reinforcedActor uuid.UUID
 	var reinforcedIDs []uuid.UUID
-	service := NewChatService(
-		ChatServiceDependencies{
-			Runtime: runtime,
-			ResolveProvider: func(provider models.ChatProvider) (providers.ChatProviderAdapter, error) {
-				return &serviceAdapterStub{provider: provider, generateText: "ok"}, nil
-			},
-			ReinforceEngramLinks: func(
+	service := newServiceForState(
+		&state,
+		resolveGenerateOKProviderStub,
+		func(deps *ChatServiceDependencies) {
+			deps.ReinforceEngramLinks = func(
 				_ context.Context,
 				actorUserID uuid.UUID,
 				linkIDs []uuid.UUID,
@@ -450,7 +447,7 @@ func TestSendMessageReinforcesUsedEngramLinks(t *testing.T) {
 				reinforcedActor = actorUserID
 				reinforcedIDs = append([]uuid.UUID(nil), linkIDs...)
 				return nil
-			},
+			}
 		},
 	)
 
@@ -469,21 +466,33 @@ func TestSendMessageReinforcesUsedEngramLinks(t *testing.T) {
 	requireEqualAnyRuntime(t, state.context.UsedEngramLinkIDs, reinforcedIDs)
 }
 
-func TestSendMessageContinuesWhenLinkReinforcementFails(t *testing.T) {
+func TestSendMessageRecordsEngramAccessEvents(t *testing.T) {
 	state := newServiceRuntimeState()
-	runtime := runtimeFromServiceState(&state)
-	observability := &serviceObservabilityRecorderStub{}
-	service := NewChatService(
-		ChatServiceDependencies{
-			Runtime: runtime,
-			ResolveProvider: func(provider models.ChatProvider) (providers.ChatProviderAdapter, error) {
-				return &serviceAdapterStub{provider: provider, generateText: "ok"}, nil
-			},
-			ReinforceEngramLinks: func(context.Context, uuid.UUID, []uuid.UUID) error {
-				return errors.New("reinforce failed")
-			},
-			Observability:  observability,
-			ResolveTraceID: func(context.Context) string { return "trace-777" },
+	state.context.UsedEngramIDs = append(
+		state.context.UsedEngramIDs,
+		state.context.UsedEngramIDs[0],
+		uuid.Nil,
+	)
+	recordCalls := 0
+	var recordedSessionID uuid.UUID
+	var recordedSource string
+	var recordedEngramIDs []uuid.UUID
+	service := newServiceForState(
+		&state,
+		resolveGenerateOKProviderStub,
+		func(deps *ChatServiceDependencies) {
+			deps.RecordEngramAccess = func(
+				_ context.Context,
+				sessionID uuid.UUID,
+				accessSource string,
+				engramIDs []uuid.UUID,
+			) error {
+				recordCalls++
+				recordedSessionID = sessionID
+				recordedSource = accessSource
+				recordedEngramIDs = append([]uuid.UUID(nil), engramIDs...)
+				return nil
+			}
 		},
 	)
 
@@ -491,23 +500,153 @@ func TestSendMessageContinuesWhenLinkReinforcementFails(t *testing.T) {
 		context.Background(),
 		state.session.OwnerUserID,
 		state.session.SessionID,
-		ChatMessageCreateRequest{ContentText: "ignore reinforce failure"},
+		ChatMessageCreateRequest{ContentText: "record engram access"},
 	)
 	if err != nil {
-		t.Fatalf("send message should succeed despite reinforce failure: %v", err)
+		t.Fatalf("send message with access recorder: %v", err)
 	}
 	requireEqualAnyRuntime(t, "ok", response.AssistantText)
+	requireEqualIntRuntime(t, 1, recordCalls)
+	requireEqualAnyRuntime(t, state.session.SessionID, recordedSessionID)
+	requireEqualAnyRuntime(t, "chat_send", recordedSource)
+	requireEqualAnyRuntime(t, []uuid.UUID{state.context.UsedEngramIDs[0]}, recordedEngramIDs)
+}
 
-	hasReinforceFailTrace := false
-	for _, sample := range observability.lifecycleTraces {
-		if sample.Stage == chatTraceReinforceFail && sample.ErrorCode == "link_reinforce_error" {
-			hasReinforceFailTrace = true
-			break
+func TestStreamMessageRecordsEngramAccessEvents(t *testing.T) {
+	state := newServiceRuntimeState()
+	state.context.UsedEngramIDs = append(
+		state.context.UsedEngramIDs,
+		state.context.UsedEngramIDs[0],
+	)
+	recordCalls := 0
+	var recordedSource string
+	var recordedEngramIDs []uuid.UUID
+	service := newServiceForState(
+		&state,
+		resolveStreamOKProviderStub,
+		func(deps *ChatServiceDependencies) {
+			deps.RecordEngramAccess = func(
+				_ context.Context,
+				_ uuid.UUID,
+				accessSource string,
+				engramIDs []uuid.UUID,
+			) error {
+				recordCalls++
+				recordedSource = accessSource
+				recordedEngramIDs = append([]uuid.UUID(nil), engramIDs...)
+				return nil
+			}
+		},
+	)
+
+	events, err := service.StreamMessageEvents(
+		context.Background(),
+		state.session.OwnerUserID,
+		state.session.SessionID,
+		ChatMessageCreateRequest{ContentText: "stream and record access"},
+	)
+	if err != nil {
+		t.Fatalf("stream message with access recorder: %v", err)
+	}
+	requireEqualAnyRuntime(t, []string{"meta", "chunk", "done"}, eventKinds(events))
+	requireEqualIntRuntime(t, 1, recordCalls)
+	requireEqualAnyRuntime(t, "chat_stream", recordedSource)
+	requireEqualAnyRuntime(t, []uuid.UUID{state.context.UsedEngramIDs[0]}, recordedEngramIDs)
+}
+
+func TestSendMessageContinuesWhenSideEffectsFail(t *testing.T) {
+	testCases := []struct {
+		name          string
+		contentText   string
+		expectedStage string
+		expectedCode  string
+		configureDeps func(deps *ChatServiceDependencies)
+	}{
+		{
+			name:          "access recorder failure is non-blocking",
+			contentText:   "ignore access record failure",
+			expectedStage: chatTraceAccessFail,
+			expectedCode:  "engram_access_record_error",
+			configureDeps: func(deps *ChatServiceDependencies) {
+				deps.RecordEngramAccess = func(context.Context, uuid.UUID, string, []uuid.UUID) error {
+					return errors.New("record access failed")
+				}
+			},
+		},
+		{
+			name:          "link reinforcement failure is non-blocking",
+			contentText:   "ignore reinforce failure",
+			expectedStage: chatTraceReinforceFail,
+			expectedCode:  "link_reinforce_error",
+			configureDeps: func(deps *ChatServiceDependencies) {
+				deps.ReinforceEngramLinks = func(context.Context, uuid.UUID, []uuid.UUID) error {
+					return errors.New("reinforce failed")
+				}
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			state := newServiceRuntimeState()
+			observability := &serviceObservabilityRecorderStub{}
+			service := newServiceForState(
+				&state,
+				resolveGenerateOKProviderStub,
+				func(deps *ChatServiceDependencies) {
+					testCase.configureDeps(deps)
+					deps.Observability = observability
+					deps.ResolveTraceID = func(context.Context) string { return "trace-side-effect-failure" }
+				},
+			)
+
+			response, err := service.SendMessage(
+				context.Background(),
+				state.session.OwnerUserID,
+				state.session.SessionID,
+				ChatMessageCreateRequest{ContentText: testCase.contentText},
+			)
+			if err != nil {
+				t.Fatalf("send message should succeed despite side-effect failure: %v", err)
+			}
+			requireEqualAnyRuntime(t, "ok", response.AssistantText)
+			if !hasLifecycleTrace(observability.lifecycleTraces, testCase.expectedStage, testCase.expectedCode) {
+				t.Fatalf("expected lifecycle trace stage %q code %q, got: %+v", testCase.expectedStage, testCase.expectedCode, observability.lifecycleTraces)
+			}
+		})
+	}
+}
+
+func newServiceForState(
+	state *serviceRuntimeState,
+	resolveProvider func(provider models.ChatProvider) (providers.ChatProviderAdapter, error),
+	configure func(deps *ChatServiceDependencies),
+) *ChatService {
+	dependencies := ChatServiceDependencies{
+		Runtime:         runtimeFromServiceState(state),
+		ResolveProvider: resolveProvider,
+	}
+	if configure != nil {
+		configure(&dependencies)
+	}
+	return NewChatService(dependencies)
+}
+
+func resolveGenerateOKProviderStub(provider models.ChatProvider) (providers.ChatProviderAdapter, error) {
+	return &serviceAdapterStub{provider: provider, generateText: "ok"}, nil
+}
+
+func resolveStreamOKProviderStub(provider models.ChatProvider) (providers.ChatProviderAdapter, error) {
+	return &serviceAdapterStub{provider: provider, streamParts: []string{"ok"}}, nil
+}
+
+func hasLifecycleTrace(samples []LifecycleTraceSample, stage, errorCode string) bool {
+	for _, sample := range samples {
+		if sample.Stage == stage && sample.ErrorCode == errorCode {
+			return true
 		}
 	}
-	if !hasReinforceFailTrace {
-		t.Fatalf("expected reinforce failure lifecycle trace, got: %+v", observability.lifecycleTraces)
-	}
+	return false
 }
 
 func runtimeFromServiceState(state *serviceRuntimeState) *ChatMessageRuntime {

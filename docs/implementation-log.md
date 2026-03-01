@@ -937,6 +937,31 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-03-01 (Phase 35 kickoff: memory engagement tracking baseline)
+
+1. Roadmap alignment and docs consolidation:
+   - updated `Plan.md` with a canonical "Memory Improvements Alignment" section mapping `docs/memory-improvements.md` to Phase 35-40 execution.
+   - added explicit Phase 35/36/37 sections and near-term execution order updates to avoid roadmap drift.
+2. Schema baseline for engagement telemetry:
+   - `db/init/001_schema.sql`
+   - added engram counters: `access_count`, `last_accessed_at`, `useful_count`, `contradiction_count`.
+   - added `engram_access_events` table and indexes for engram/session/source + recency access patterns.
+3. Repository implementation:
+   - added `internal/repository/engram_access.go` with `RecordEngramAccessEvents`.
+   - write path appends access events and updates engram aggregate counters in one SQL flow per event.
+4. Chat runtime integration:
+   - `internal/chat/service.go` now records engram access usage for successful send and stream flows.
+   - access recording failures are explicitly non-blocking and captured as lifecycle trace signals.
+   - refactored stream-success handling into helper methods to keep code-health gates green.
+5. Tests added/updated:
+   - `internal/repository/engram_access_test.go`
+   - `internal/chat/service_test.go`
+   - coverage includes normalization defaults, dedupe behavior, and side-effect failure isolation.
+6. Verification:
+   - `go test ./...` passed.
+   - CodeScene pre-commit safeguard passed (`quality_gates=passed`).
+   - CodeScene reported a tooling notice: MCP server update available (`MCP-0.2.1`).
+
 ### 2026-02-22 (Go migration CP51: non-checkpoint code-health uplift for chat pinning repository tests)
 
 1. Improved legacy non-checkpoint chat pinning repository tests:
