@@ -40,6 +40,7 @@ type ChatSendResponse struct {
 	MessageID            uuid.UUID             `json:"message_id"`
 	ReplyMessageID       uuid.UUID             `json:"reply_message_id"`
 	AssistantText        string                `json:"assistant_text"`
+	PromptPolicyVersion  string                `json:"prompt_policy_version,omitempty"`
 	UsedEngramIDs        []uuid.UUID           `json:"used_engram_ids"`
 	UsedDocumentChunkIDs []uuid.UUID           `json:"used_document_chunk_ids"`
 	SourceReferences     []ChatSourceReference `json:"source_references"`
@@ -116,95 +117,44 @@ func (service *ChatService) SendMessage(
 		return ChatSendResponse{}, err
 	}
 	traceID := service.resolveTraceID(ctx)
-	prepareStartedAt := service.nowUTC()
-	service.recordLifecycleTrace(
+	prepared, err := service.prepareGenerationWithTrace(
+		ctx,
+		actorUserID,
+		sessionID,
+		payload,
 		traceID,
 		chatOperationSend,
-		chatTracePrepareStart,
-		nil,
-		"",
-		"",
-		0,
 	)
-	prepared, err := service.runtime.PrepareGeneration(ctx, actorUserID, sessionID, payload)
 	if err != nil {
-		service.recordLifecycleTrace(
-			traceID,
-			chatOperationSend,
-			chatTracePrepareFailed,
-			nil,
-			"",
-			"",
-			service.nowUTC().Sub(prepareStartedAt),
-		)
 		return ChatSendResponse{}, err
 	}
-	service.recordLifecycleTrace(
-		traceID,
-		chatOperationSend,
-		chatTracePrepareDone,
-		&prepared,
-		prepared.Session.Provider,
-		"",
-		service.nowUTC().Sub(prepareStartedAt),
-	)
 	result, providerCandidate, err := service.generateWithFallback(ctx, traceID, prepared)
 	if err != nil {
 		return ChatSendResponse{}, err
 	}
-	assistantMessage, err := service.runtime.PersistAssistantReply(ctx, actorUserID, prepared, result)
+	assistantMessage, err := service.persistAssistantReplyWithTrace(
+		ctx,
+		actorUserID,
+		prepared,
+		result,
+		traceID,
+		chatOperationSend,
+		providerCandidate.Provider,
+	)
 	if err != nil {
-		service.recordLifecycleTrace(
-			traceID,
-			chatOperationSend,
-			chatTracePersistFail,
-			&prepared,
-			providerCandidate.Provider,
-			"",
-			0,
-		)
 		return ChatSendResponse{}, err
 	}
-	service.recordLifecycleTrace(
+	if err := service.runLifecycleWithTrace(
+		ctx,
+		actorUserID,
+		prepared,
 		traceID,
 		chatOperationSend,
-		chatTracePersistOK,
-		&prepared,
 		providerCandidate.Provider,
-		"",
-		0,
-	)
-	if err := service.runSessionLifecycleMaintenance(ctx, actorUserID, prepared.Session); err != nil {
-		service.recordLifecycleTrace(
-			traceID,
-			chatOperationSend,
-			chatTraceLifecycleFail,
-			&prepared,
-			providerCandidate.Provider,
-			"",
-			0,
-		)
+	); err != nil {
 		return ChatSendResponse{}, err
 	}
-	service.recordLifecycleTrace(
-		traceID,
-		chatOperationSend,
-		chatTraceLifecycleOK,
-		&prepared,
-		providerCandidate.Provider,
-		"",
-		0,
-	)
-	return ChatSendResponse{
-		SessionID:            prepared.Session.SessionID,
-		MessageID:            prepared.UserMessage.MessageID,
-		ReplyMessageID:       assistantMessage.MessageID,
-		AssistantText:        result.Text,
-		UsedEngramIDs:        prepared.Context.UsedEngramIDs,
-		UsedDocumentChunkIDs: prepared.Context.UsedDocumentChunkIDs,
-		SourceReferences:     prepared.Context.SourceReferences,
-		DebugTrace:           nil,
-	}, nil
+	return buildChatSendResponse(prepared, *assistantMessage, result.Text), nil
 }
 
 // StreamMessageEvents executes streaming generation and returns ordered stream events.
@@ -218,38 +168,17 @@ func (service *ChatService) StreamMessageEvents(
 		return nil, err
 	}
 	traceID := service.resolveTraceID(ctx)
-	prepareStartedAt := service.nowUTC()
-	service.recordLifecycleTrace(
+	prepared, err := service.prepareGenerationWithTrace(
+		ctx,
+		actorUserID,
+		sessionID,
+		payload,
 		traceID,
 		chatOperationStream,
-		chatTracePrepareStart,
-		nil,
-		"",
-		"",
-		0,
 	)
-	prepared, err := service.runtime.PrepareGeneration(ctx, actorUserID, sessionID, payload)
 	if err != nil {
-		service.recordLifecycleTrace(
-			traceID,
-			chatOperationStream,
-			chatTracePrepareFailed,
-			nil,
-			"",
-			"",
-			service.nowUTC().Sub(prepareStartedAt),
-		)
 		return nil, err
 	}
-	service.recordLifecycleTrace(
-		traceID,
-		chatOperationStream,
-		chatTracePrepareDone,
-		&prepared,
-		prepared.Session.Provider,
-		"",
-		service.nowUTC().Sub(prepareStartedAt),
-	)
 	events := []StreamEvent{{Type: "meta", Payload: BuildStreamMetaPayload(prepared)}}
 
 	streamStartedAt := service.nowUTC()
@@ -273,27 +202,22 @@ func (service *ChatService) StreamMessageEvents(
 	}
 	events = append(events, streamResult.Events...)
 
-	assistantMessage, err := service.runtime.PersistAssistantReply(
+	assistantResult := providers.ProviderGenerateResult{
+		Provider:   providerCandidate.Provider,
+		ModelID:    providerCandidate.ModelID,
+		Text:       streamResult.FullText,
+		TokenUsage: map[string]int{},
+	}
+	assistantMessage, err := service.persistAssistantReplyWithTrace(
 		ctx,
 		actorUserID,
 		prepared,
-		providers.ProviderGenerateResult{
-			Provider:   providerCandidate.Provider,
-			ModelID:    providerCandidate.ModelID,
-			Text:       streamResult.FullText,
-			TokenUsage: map[string]int{},
-		},
+		assistantResult,
+		traceID,
+		chatOperationStream,
+		providerCandidate.Provider,
 	)
 	if err != nil {
-		service.recordLifecycleTrace(
-			traceID,
-			chatOperationStream,
-			chatTracePersistFail,
-			&prepared,
-			providerCandidate.Provider,
-			"",
-			0,
-		)
 		if serviceError, ok := err.(*ChatServiceError); ok {
 			events = append(events, streamPersistenceErrorEvent(serviceError))
 			service.recordStreamHealth(
@@ -309,36 +233,16 @@ func (service *ChatService) StreamMessageEvents(
 		}
 		return nil, err
 	}
-	service.recordLifecycleTrace(
+	if err := service.runLifecycleWithTrace(
+		ctx,
+		actorUserID,
+		prepared,
 		traceID,
 		chatOperationStream,
-		chatTracePersistOK,
-		&prepared,
 		providerCandidate.Provider,
-		"",
-		0,
-	)
-	if err := service.runSessionLifecycleMaintenance(ctx, actorUserID, prepared.Session); err != nil {
-		service.recordLifecycleTrace(
-			traceID,
-			chatOperationStream,
-			chatTraceLifecycleFail,
-			&prepared,
-			providerCandidate.Provider,
-			"",
-			0,
-		)
+	); err != nil {
 		return nil, err
 	}
-	service.recordLifecycleTrace(
-		traceID,
-		chatOperationStream,
-		chatTraceLifecycleOK,
-		&prepared,
-		providerCandidate.Provider,
-		"",
-		0,
-	)
 	events = append(
 		events,
 		StreamEvent{
@@ -356,6 +260,93 @@ func (service *ChatService) StreamMessageEvents(
 		},
 	)
 	return events, nil
+}
+
+func (service *ChatService) prepareGenerationWithTrace(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	sessionID uuid.UUID,
+	payload ChatMessageCreateRequest,
+	traceID string,
+	operation string,
+) (PreparedGeneration, error) {
+	startedAt := service.nowUTC()
+	service.recordLifecycleTrace(traceID, operation, chatTracePrepareStart, nil, "", "", 0)
+	prepared, err := service.runtime.PrepareGeneration(ctx, actorUserID, sessionID, payload)
+	if err != nil {
+		service.recordLifecycleTrace(
+			traceID,
+			operation,
+			chatTracePrepareFailed,
+			nil,
+			"",
+			"",
+			service.nowUTC().Sub(startedAt),
+		)
+		return PreparedGeneration{}, err
+	}
+	service.recordLifecycleTrace(
+		traceID,
+		operation,
+		chatTracePrepareDone,
+		&prepared,
+		prepared.Session.Provider,
+		"",
+		service.nowUTC().Sub(startedAt),
+	)
+	return prepared, nil
+}
+
+func (service *ChatService) persistAssistantReplyWithTrace(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	prepared PreparedGeneration,
+	result providers.ProviderGenerateResult,
+	traceID string,
+	operation string,
+	provider models.ChatProvider,
+) (*models.ChatMessageRecord, error) {
+	assistantMessage, err := service.runtime.PersistAssistantReply(ctx, actorUserID, prepared, result)
+	if err != nil {
+		service.recordLifecycleTrace(traceID, operation, chatTracePersistFail, &prepared, provider, "", 0)
+		return nil, err
+	}
+	service.recordLifecycleTrace(traceID, operation, chatTracePersistOK, &prepared, provider, "", 0)
+	return assistantMessage, nil
+}
+
+func (service *ChatService) runLifecycleWithTrace(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	prepared PreparedGeneration,
+	traceID string,
+	operation string,
+	provider models.ChatProvider,
+) error {
+	if err := service.runSessionLifecycleMaintenance(ctx, actorUserID, prepared.Session); err != nil {
+		service.recordLifecycleTrace(traceID, operation, chatTraceLifecycleFail, &prepared, provider, "", 0)
+		return err
+	}
+	service.recordLifecycleTrace(traceID, operation, chatTraceLifecycleOK, &prepared, provider, "", 0)
+	return nil
+}
+
+func buildChatSendResponse(
+	prepared PreparedGeneration,
+	assistantMessage models.ChatMessageRecord,
+	assistantText string,
+) ChatSendResponse {
+	return ChatSendResponse{
+		SessionID:            prepared.Session.SessionID,
+		MessageID:            prepared.UserMessage.MessageID,
+		ReplyMessageID:       assistantMessage.MessageID,
+		AssistantText:        assistantText,
+		PromptPolicyVersion:  prepared.PromptPolicyVersion,
+		UsedEngramIDs:        prepared.Context.UsedEngramIDs,
+		UsedDocumentChunkIDs: prepared.Context.UsedDocumentChunkIDs,
+		SourceReferences:     prepared.Context.SourceReferences,
+		DebugTrace:           nil,
+	}
 }
 
 func (service *ChatService) validateDependencies() error {

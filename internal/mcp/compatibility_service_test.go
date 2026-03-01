@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"engram/internal/governance"
 	"engram/internal/models"
 )
 
@@ -28,6 +29,14 @@ func TestCompatibilityServiceInitialize(t *testing.T) {
 	serverVersion, _ := serverInfo["version"].(string)
 	if serverVersion != "1.2.3" {
 		t.Fatalf("expected server version 1.2.3, got %q", serverVersion)
+	}
+	policy, ok := result["policy"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected policy payload")
+	}
+	policyVersion, _ := policy["tool_policy_version"].(string)
+	if policyVersion != governance.DefaultMCPToolPolicyVersion {
+		t.Fatalf("expected tool policy version %q, got %q", governance.DefaultMCPToolPolicyVersion, policyVersion)
 	}
 }
 

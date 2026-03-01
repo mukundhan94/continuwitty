@@ -17,6 +17,8 @@ func baseSettings() Settings {
 		OAuthClientSecretPepper:           defaultOAuthClientSecret,
 		OAuthRequireProtectedRegistration: true,
 		DefaultChatProvider:               "openai",
+		ChatPromptPolicyVersion:           defaultChatPromptPolicyVersion,
+		MCPToolPolicyVersion:              defaultMCPToolPolicyVersion,
 	}
 }
 
@@ -49,6 +51,8 @@ func TestBuildDebugSettingsSnapshotRedactsSecrets(t *testing.T) {
 	assertEqualString(t, snapshot["aws_session_token"], "<redacted>")
 	assertEqualString(t, snapshot["oauth_client_secret_pepper"], "<redacted>")
 	assertEqualString(t, snapshot["default_chat_provider"], "openai")
+	assertEqualString(t, snapshot["chat_prompt_policy_version"], defaultChatPromptPolicyVersion)
+	assertEqualString(t, snapshot["mcp_tool_policy_version"], defaultMCPToolPolicyVersion)
 }
 
 func TestShouldLogSettingsOnlyForDevModes(t *testing.T) {

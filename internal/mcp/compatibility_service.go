@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"engram/internal/governance"
 	"engram/internal/models"
 	"engram/internal/projects"
 
@@ -508,6 +509,7 @@ type MessageSendResponse struct {
 	MessageID            uuid.UUID      `json:"message_id"`
 	ReplyMessageID       uuid.UUID      `json:"reply_message_id"`
 	AssistantText        string         `json:"assistant_text"`
+	PromptPolicyVersion  string         `json:"prompt_policy_version,omitempty"`
 	UsedEngramIDs        []uuid.UUID    `json:"used_engram_ids"`
 	UsedDocumentChunkIDs []uuid.UUID    `json:"used_document_chunk_ids"`
 	SourceReferences     any            `json:"source_references"`
@@ -755,6 +757,7 @@ type EngramCollectionRemoveItemResponse struct {
 
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
+	MCPToolPolicyVersion     string
 	ProjectService           ProjectListService
 	ProjectExport            ProjectExportService
 	ProjectImport            ProjectImportService
@@ -799,6 +802,7 @@ type CompatibilityServiceDependencies struct {
 // CompatibilityService provides baseline MCP interop behavior while the full tool catalog migrates.
 type CompatibilityService struct {
 	serverVersion            string
+	mcpToolPolicyVersion     string
 	projectService           ProjectListService
 	projectExport            ProjectExportService
 	projectImport            ProjectImportService
@@ -857,8 +861,13 @@ func NewCompatibilityServiceWithDependencies(
 	if trimmed == "" {
 		trimmed = "0.1.0"
 	}
+	policyVersion := strings.TrimSpace(dependencies.MCPToolPolicyVersion)
+	if policyVersion == "" {
+		policyVersion = governance.DefaultMCPToolPolicyVersion
+	}
 	return &CompatibilityService{
 		serverVersion:            trimmed,
+		mcpToolPolicyVersion:     policyVersion,
 		projectService:           dependencies.ProjectService,
 		projectExport:            dependencies.ProjectExport,
 		projectImport:            dependencies.ProjectImport,
@@ -941,6 +950,9 @@ func (service *CompatibilityService) dispatch(
 			"serverInfo": map[string]any{
 				"name":    mcpServerName,
 				"version": service.serverVersion,
+			},
+			"policy": map[string]any{
+				"tool_policy_version": service.mcpToolPolicyVersion,
 			},
 			"capabilities": map[string]any{
 				"tools": map[string]any{"listChanged": false},

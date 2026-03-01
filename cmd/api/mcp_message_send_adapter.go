@@ -48,6 +48,7 @@ func (adapter *mcpMessageSendAdapter) SendMessage(
 		MessageID:            result.MessageID,
 		ReplyMessageID:       result.ReplyMessageID,
 		AssistantText:        result.AssistantText,
+		PromptPolicyVersion:  result.PromptPolicyVersion,
 		UsedEngramIDs:        append([]uuid.UUID(nil), result.UsedEngramIDs...),
 		UsedDocumentChunkIDs: append([]uuid.UUID(nil), result.UsedDocumentChunkIDs...),
 		SourceReferences:     result.SourceReferences,

@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"engram/internal/governance"
+
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -47,25 +49,27 @@ var (
 )
 
 const (
-	minSecretLength               = 32
-	minPasswordLength             = 12
-	defaultSessionSecret          = "engram-local-dev-session-secret"
-	defaultMCPTokenPepper         = "engram-local-dev-mcp-token-pepper"
-	defaultOAuthClientSecret      = "engram-local-dev-oauth-client-pepper"
-	defaultUIDemoPassword         = "admin123"
-	defaultDatabaseURL            = "postgresql://engram:engram@localhost:5432/engram_vault"
-	defaultEmbeddingModel         = "text-embedding-3-small"
-	defaultOpenAIBaseURL          = "https://api.openai.com"
-	defaultAnthropicBaseURL       = "https://api.anthropic.com"
-	defaultAnthropicVersion       = "2023-06-01"
-	defaultLangfuseHost           = "https://cloud.langfuse.com"
-	defaultAppSemanticVersion     = "0.1.0"
-	defaultAppCommitSHA           = "unknown"
-	defaultAPIServerHost          = "0.0.0.0"
-	defaultDefaultChatProvider    = "openai"
-	defaultDefaultChatModel       = "gpt-4o-mini"
-	defaultAuditLogPath           = "./data/audit_events.jsonl"
-	defaultLanggraphCheckpointSQL = "./data/langgraph_checkpoints.sqlite"
+	minSecretLength                = 32
+	minPasswordLength              = 12
+	defaultSessionSecret           = "engram-local-dev-session-secret"
+	defaultMCPTokenPepper          = "engram-local-dev-mcp-token-pepper"
+	defaultOAuthClientSecret       = "engram-local-dev-oauth-client-pepper"
+	defaultUIDemoPassword          = "admin123"
+	defaultDatabaseURL             = "postgresql://engram:engram@localhost:5432/engram_vault"
+	defaultEmbeddingModel          = "text-embedding-3-small"
+	defaultOpenAIBaseURL           = "https://api.openai.com"
+	defaultAnthropicBaseURL        = "https://api.anthropic.com"
+	defaultAnthropicVersion        = "2023-06-01"
+	defaultLangfuseHost            = "https://cloud.langfuse.com"
+	defaultAppSemanticVersion      = "0.1.0"
+	defaultAppCommitSHA            = "unknown"
+	defaultAPIServerHost           = "0.0.0.0"
+	defaultDefaultChatProvider     = "openai"
+	defaultDefaultChatModel        = "gpt-4o-mini"
+	defaultAuditLogPath            = "./data/audit_events.jsonl"
+	defaultLanggraphCheckpointSQL  = "./data/langgraph_checkpoints.sqlite"
+	defaultChatPromptPolicyVersion = governance.DefaultChatPromptPolicyVersion
+	defaultMCPToolPolicyVersion    = governance.DefaultMCPToolPolicyVersion
 )
 
 // Settings stores backend runtime configuration.
@@ -103,6 +107,8 @@ type Settings struct {
 	MCPTransportRateLimitBlockSeconds  int     `envconfig:"MCP_TRANSPORT_RATE_LIMIT_BLOCK_SECONDS" default:"30"`
 	DefaultChatProvider                string  `envconfig:"DEFAULT_CHAT_PROVIDER" default:"openai"`
 	DefaultChatModel                   string  `envconfig:"DEFAULT_CHAT_MODEL" default:"gpt-4o-mini"`
+	ChatPromptPolicyVersion            string  `envconfig:"CHAT_PROMPT_POLICY_VERSION" default:"chat-prompt-policy-v1"`
+	MCPToolPolicyVersion               string  `envconfig:"MCP_TOOL_POLICY_VERSION" default:"mcp-tool-policy-v1"`
 	ChatDebugEnabled                   bool    `envconfig:"CHAT_DEBUG_ENABLED" default:"true"`
 	ChatDebugLogConsole                bool    `envconfig:"CHAT_DEBUG_LOG_CONSOLE" default:"true"`
 	ChatDebugIncludeRawText            bool    `envconfig:"CHAT_DEBUG_INCLUDE_RAW_TEXT" default:"true"`
@@ -147,6 +153,8 @@ func applyDefaults(settings *Settings) {
 	setStringDefault(&settings.APIHost, defaultAPIServerHost)
 	setStringDefault(&settings.DefaultChatProvider, defaultDefaultChatProvider)
 	setStringDefault(&settings.DefaultChatModel, defaultDefaultChatModel)
+	setStringDefault(&settings.ChatPromptPolicyVersion, defaultChatPromptPolicyVersion)
+	setStringDefault(&settings.MCPToolPolicyVersion, defaultMCPToolPolicyVersion)
 	setStringDefault(&settings.AuditLogPath, defaultAuditLogPath)
 	setStringDefault(&settings.LanggraphCheckpointPath, defaultLanggraphCheckpointSQL)
 }
@@ -307,6 +315,8 @@ func settingsMap(settings Settings) map[string]any {
 		"mcp_transport_rate_limit_block_seconds":  settings.MCPTransportRateLimitBlockSeconds,
 		"default_chat_provider":                   settings.DefaultChatProvider,
 		"default_chat_model":                      settings.DefaultChatModel,
+		"chat_prompt_policy_version":              settings.ChatPromptPolicyVersion,
+		"mcp_tool_policy_version":                 settings.MCPToolPolicyVersion,
 		"chat_debug_enabled":                      settings.ChatDebugEnabled,
 		"chat_debug_log_console":                  settings.ChatDebugLogConsole,
 		"chat_debug_include_raw_text":             settings.ChatDebugIncludeRawText,

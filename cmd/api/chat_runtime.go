@@ -101,6 +101,7 @@ func buildChatMessageRuntimeDependencies(
 	chatContextDependencies := chat.DefaultChatContextDependencies(pool)
 	return chat.ChatMessageRuntimeDependencies{
 		EmbeddingDim:              settings.EmbeddingDim,
+		PromptPolicyVersion:       settings.ChatPromptPolicyVersion,
 		ChatDebugEnabled:          settings.ChatDebugEnabled,
 		ChatDebugIncludeRawOutput: settings.ChatDebugIncludeRawText,
 		GetSession:                getChatSessionDependency(pool),

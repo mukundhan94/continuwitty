@@ -66,9 +66,11 @@ func mountVersionRoute(router chi.Router, settings config.Settings) {
 	router.Route("/api/v1", func(versioned chi.Router) {
 		versioned.Get("/version", func(writer http.ResponseWriter, _ *http.Request) {
 			writeJSON(writer, http.StatusOK, map[string]string{
-				"semantic_version": settings.AppSemanticVersion,
-				"release":          "v" + settings.AppSemanticVersion,
-				"commit_id":        settings.AppCommitSHA,
+				"semantic_version":           settings.AppSemanticVersion,
+				"release":                    "v" + settings.AppSemanticVersion,
+				"commit_id":                  settings.AppCommitSHA,
+				"chat_prompt_policy_version": settings.ChatPromptPolicyVersion,
+				"mcp_tool_policy_version":    settings.MCPToolPolicyVersion,
 			})
 		})
 	})

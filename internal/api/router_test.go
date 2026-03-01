@@ -41,7 +41,12 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestVersionEndpoint(t *testing.T) {
-	settings := config.Settings{AppSemanticVersion: "1.2.3", AppCommitSHA: "abc1234"}
+	settings := config.Settings{
+		AppSemanticVersion:      "1.2.3",
+		AppCommitSHA:            "abc1234",
+		ChatPromptPolicyVersion: "chat-policy-v9",
+		MCPToolPolicyVersion:    "mcp-policy-v4",
+	}
 	router := NewRouter(settings)
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/version", nil)
@@ -66,6 +71,12 @@ func TestVersionEndpoint(t *testing.T) {
 	}
 	if payload["commit_id"] == "" {
 		t.Fatalf("expected non-empty commit id")
+	}
+	if payload["chat_prompt_policy_version"] != settings.ChatPromptPolicyVersion {
+		t.Fatalf("expected chat prompt policy version %q, got %q", settings.ChatPromptPolicyVersion, payload["chat_prompt_policy_version"])
+	}
+	if payload["mcp_tool_policy_version"] != settings.MCPToolPolicyVersion {
+		t.Fatalf("expected mcp tool policy version %q, got %q", settings.MCPToolPolicyVersion, payload["mcp_tool_policy_version"])
 	}
 }
 

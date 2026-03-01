@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"engram/internal/governance"
 	"engram/internal/models"
 	"engram/internal/providers"
 
@@ -110,6 +111,7 @@ func TestSendMessageReturnsUsedEngramIDsAndSources(t *testing.T) {
 	requireEqualAnyRuntime(t, state.userMessage.MessageID, response.MessageID)
 	requireEqualAnyRuntime(t, state.assistantMessage.MessageID, response.ReplyMessageID)
 	requireEqualAnyRuntime(t, "Proceed with option A.", response.AssistantText)
+	requireEqualAnyRuntime(t, governance.DefaultChatPromptPolicyVersion, response.PromptPolicyVersion)
 	requireEqualAnyRuntime(t, state.context.UsedEngramIDs, response.UsedEngramIDs)
 	requireEqualAnyRuntime(t, state.context.UsedDocumentChunkIDs, response.UsedDocumentChunkIDs)
 	requireEqualAnyRuntime(t, state.context.SourceReferences, response.SourceReferences)
@@ -149,6 +151,7 @@ func TestStreamMessageEventsEmitsMetaChunksAndDone(t *testing.T) {
 	donePayload := events[len(events)-1].Payload
 	requireEqualAnyRuntime(t, "part-1 part-2", donePayload["assistant_text"])
 	requireEqualAnyRuntime(t, state.assistantMessage.MessageID, donePayload["reply_message_id"])
+	requireEqualAnyRuntime(t, governance.DefaultChatPromptPolicyVersion, donePayload["prompt_policy_version"])
 	requireEqualAnyRuntime(t, nil, donePayload["debug_trace"])
 	requireEqualIntRuntime(t, 1, lifecycleCalls)
 }

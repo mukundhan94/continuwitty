@@ -21,6 +21,7 @@ func TestBuildStreamMetaPayloadIncludesContextReferences(t *testing.T) {
 
 	requireEqualAnyRuntime(t, prepared.Session.SessionID, payload["session_id"])
 	requireEqualAnyRuntime(t, prepared.UserMessage.MessageID, payload["message_id"])
+	requireEqualAnyRuntime(t, prepared.PromptPolicyVersion, payload["prompt_policy_version"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedEngramIDs, payload["used_engram_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedDocumentChunkIDs, payload["used_document_chunk_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.SourceReferences, payload["source_references"])
@@ -45,6 +46,7 @@ func TestBuildStreamDonePayloadIncludesReplyAndContextFields(t *testing.T) {
 	requireEqualAnyRuntime(t, prepared.UserMessage.MessageID, payload["message_id"])
 	requireEqualAnyRuntime(t, assistantMessageID, payload["reply_message_id"])
 	requireEqualAnyRuntime(t, "answer", payload["assistant_text"])
+	requireEqualAnyRuntime(t, prepared.PromptPolicyVersion, payload["prompt_policy_version"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedEngramIDs, payload["used_engram_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedDocumentChunkIDs, payload["used_document_chunk_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.SourceReferences, payload["source_references"])
@@ -227,6 +229,7 @@ func preparedGenerationFixture() PreparedGeneration {
 			Messages:     []providers.ProviderMessage{{Role: "user", Content: "Q"}},
 			SystemPrompt: "sys",
 		},
+		PromptPolicyVersion:   "chat-prompt-policy-test-v1",
 		PrepareDurationMS:     1.0,
 		ContextDurationMS:     1.0,
 		HistoryLoadDurationMS: 1.0,

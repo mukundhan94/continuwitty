@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"engram/internal/governance"
+
 	"github.com/google/uuid"
 )
 
@@ -61,6 +63,7 @@ type PreparedGeneration struct {
 	UserMessage           models.ChatMessageRecord
 	Context               AssembledChatContext
 	ProviderRequest       providers.ProviderGenerateRequest
+	PromptPolicyVersion   string
 	PrepareDurationMS     float64
 	ContextDurationMS     float64
 	HistoryLoadDurationMS float64
@@ -69,6 +72,7 @@ type PreparedGeneration struct {
 // ChatMessageRuntimeDependencies captures runtime configuration for chat generation.
 type ChatMessageRuntimeDependencies struct {
 	EmbeddingDim              int
+	PromptPolicyVersion       string
 	ChatDebugEnabled          bool
 	ChatDebugIncludeRawOutput bool
 	GetSession                func(ctx context.Context, actorUserID uuid.UUID, sessionID uuid.UUID) (*models.ChatSessionRecord, error)
@@ -80,6 +84,7 @@ type ChatMessageRuntimeDependencies struct {
 // ChatMessageRuntime coordinates chat generation and stream payload shaping.
 type ChatMessageRuntime struct {
 	embeddingDim              int
+	promptPolicyVersion       string
 	chatDebugEnabled          bool
 	chatDebugIncludeRawOutput bool
 	getSession                func(ctx context.Context, actorUserID uuid.UUID, sessionID uuid.UUID) (*models.ChatSessionRecord, error)
@@ -90,8 +95,13 @@ type ChatMessageRuntime struct {
 
 // NewChatMessageRuntime builds a message runtime from dependency configuration.
 func NewChatMessageRuntime(dependencies ChatMessageRuntimeDependencies) *ChatMessageRuntime {
+	promptPolicyVersion := strings.TrimSpace(dependencies.PromptPolicyVersion)
+	if promptPolicyVersion == "" {
+		promptPolicyVersion = governance.DefaultChatPromptPolicyVersion
+	}
 	return &ChatMessageRuntime{
 		embeddingDim:              dependencies.EmbeddingDim,
+		promptPolicyVersion:       promptPolicyVersion,
 		chatDebugEnabled:          dependencies.ChatDebugEnabled,
 		chatDebugIncludeRawOutput: dependencies.ChatDebugIncludeRawOutput,
 		getSession:                dependencies.GetSession,
@@ -145,6 +155,7 @@ func (runtime *ChatMessageRuntime) PrepareGeneration(
 		UserMessage:           userMessage,
 		Context:               assembledContext,
 		ProviderRequest:       buildPreparedProviderRequest(session, history, assembledContext.ContextMarkdown),
+		PromptPolicyVersion:   runtime.promptPolicyVersion,
 		PrepareDurationMS:     durationMS(prepareStartedAt),
 		ContextDurationMS:     contextDurationMS,
 		HistoryLoadDurationMS: historyLoadDurationMS,
@@ -218,6 +229,7 @@ func BuildStreamMetaPayload(prepared PreparedGeneration) map[string]any {
 	return map[string]any{
 		"session_id":              prepared.Session.SessionID,
 		"message_id":              prepared.UserMessage.MessageID,
+		"prompt_policy_version":   prepared.PromptPolicyVersion,
 		"used_engram_ids":         prepared.Context.UsedEngramIDs,
 		"used_document_chunk_ids": prepared.Context.UsedDocumentChunkIDs,
 		"source_references":       prepared.Context.SourceReferences,
@@ -242,6 +254,7 @@ func BuildStreamDonePayload(
 		"message_id":              prepared.UserMessage.MessageID,
 		"reply_message_id":        assistantMessage.MessageID,
 		"assistant_text":          fullText,
+		"prompt_policy_version":   prepared.PromptPolicyVersion,
 		"used_engram_ids":         prepared.Context.UsedEngramIDs,
 		"used_document_chunk_ids": prepared.Context.UsedDocumentChunkIDs,
 		"source_references":       prepared.Context.SourceReferences,
