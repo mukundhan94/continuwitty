@@ -18,15 +18,12 @@ type mcpMessageSendAdapter struct {
 func newMCPMessageAdapter(
 	settings config.Settings,
 	pool *pgxpool.Pool,
+	observability chat.ObservabilityRecorder,
 ) *mcpMessageSendAdapter {
 	if pool == nil {
 		return nil
 	}
-	service := chat.NewChatService(chat.ChatServiceDependencies{
-		Runtime:                        chat.NewChatMessageRuntime(buildChatMessageRuntimeDependencies(settings, pool)),
-		ResolveProvider:                resolveChatProviderDependency(settings),
-		RunSessionLifecycleMaintenance: runSessionLifecycleMaintenanceDependency(settings, pool),
-	})
+	service := buildChatService(settings, pool, observability)
 	return &mcpMessageSendAdapter{service: service}
 }
 

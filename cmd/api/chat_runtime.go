@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"time"
 
 	internalapi "engram/internal/api"
 	"engram/internal/chat"
@@ -12,24 +13,85 @@ import (
 	"engram/internal/repository"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func buildChatRouter(settings config.Settings, pool *pgxpool.Pool) chi.Router {
+func buildChatRouter(
+	settings config.Settings,
+	pool *pgxpool.Pool,
+	observability chat.ObservabilityRecorder,
+) chi.Router {
 	sessionService := chat.NewSessionOperationsService(pool)
-	messageRuntime := chat.NewChatMessageRuntime(buildChatMessageRuntimeDependencies(settings, pool))
-	messageService := chat.NewChatService(chat.ChatServiceDependencies{
-		Runtime:                        messageRuntime,
-		ResolveProvider:                resolveChatProviderDependency(settings),
-		RunSessionLifecycleMaintenance: runSessionLifecycleMaintenanceDependency(settings, pool),
-	})
+	messageService := buildChatService(settings, pool, observability)
 	return internalapi.CreateChatRouter(
 		sessionService,
 		messageService,
 		sessionService,
 		chatActorResolverFromContext,
 	)
+}
+
+func buildChatService(
+	settings config.Settings,
+	pool *pgxpool.Pool,
+	observability chat.ObservabilityRecorder,
+) *chat.ChatService {
+	messageRuntime := chat.NewChatMessageRuntime(buildChatMessageRuntimeDependencies(settings, pool))
+	return chat.NewChatService(
+		chat.ChatServiceDependencies{
+			Runtime:                        messageRuntime,
+			ResolveProvider:                resolveChatProviderDependency(settings),
+			RunSessionLifecycleMaintenance: runSessionLifecycleMaintenanceDependency(settings, pool),
+			ProviderFallback:               buildProviderFallbackStrategy(settings),
+			CircuitPolicy:                  buildProviderCircuitPolicy(),
+			Observability:                  observability,
+			ResolveTraceID:                 resolveChatTraceID,
+			NowUTC:                         func() time.Time { return time.Now().UTC() },
+		},
+	)
+}
+
+func buildProviderFallbackStrategy(settings config.Settings) chat.ProviderFallbackStrategy {
+	return chat.NewStaticProviderFallbackStrategy(
+		chat.ProviderFallbackStrategyOptions{
+			Enabled:                true,
+			FallbackOrder:          providerFallbackOrder(settings),
+			DefaultFallbackModelID: settings.DefaultChatModel,
+		},
+	)
+}
+
+func providerFallbackOrder(settings config.Settings) []models.ChatProvider {
+	ordered := []models.ChatProvider{
+		models.ChatProviderOpenAI,
+		models.ChatProviderAnthropic,
+		models.ChatProviderBedrock,
+	}
+	if parsed, err := models.ParseChatProvider(settings.DefaultChatProvider); err == nil {
+		ordered = append([]models.ChatProvider{parsed}, ordered...)
+	}
+	seen := make(map[models.ChatProvider]struct{}, len(ordered))
+	unique := make([]models.ChatProvider, 0, len(ordered))
+	for _, provider := range ordered {
+		if _, exists := seen[provider]; exists {
+			continue
+		}
+		seen[provider] = struct{}{}
+		unique = append(unique, provider)
+	}
+	return unique
+}
+
+func buildProviderCircuitPolicy() chat.ProviderCircuitPolicy {
+	return chat.NewSimpleProviderCircuitPolicy(chat.ProviderCircuitPolicyOptions{
+		Enabled: true,
+	})
+}
+
+func resolveChatTraceID(ctx context.Context) string {
+	return middleware.GetReqID(ctx)
 }
 
 func buildChatMessageRuntimeDependencies(

@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"engram/internal/chat"
+	"engram/internal/models"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -55,6 +58,67 @@ func TestInMemoryRequestMetricsAggregatesSamples(t *testing.T) {
 	}
 	if routeStats.AverageDurationMS <= 0 {
 		t.Fatalf("expected positive average duration, got %f", routeStats.AverageDurationMS)
+	}
+}
+
+func TestInMemoryRequestMetricsAggregatesChatObservabilitySamples(t *testing.T) {
+	metrics := NewInMemoryRequestMetrics()
+	metrics.RecordProviderFailure(
+		chat.ProviderFailureSample{
+			Provider:  models.ChatProviderOpenAI,
+			Operation: "send",
+			ErrorCode: "provider_rate_limit",
+		},
+	)
+	metrics.RecordStreamHealth(
+		chat.StreamHealthSample{
+			Provider:   models.ChatProviderAnthropic,
+			Operation:  "stream",
+			Outcome:    "completed",
+			ChunkCount: 3,
+			Duration:   90 * time.Millisecond,
+		},
+	)
+	metrics.RecordStreamHealth(
+		chat.StreamHealthSample{
+			Provider:   models.ChatProviderAnthropic,
+			Operation:  "stream",
+			Outcome:    "provider_error",
+			ErrorCode:  "provider_rate_limit",
+			ChunkCount: 0,
+			Duration:   30 * time.Millisecond,
+		},
+	)
+	metrics.RecordLifecycleTrace(
+		chat.LifecycleTraceSample{
+			TraceID:   "trace-123",
+			Operation: "send",
+			Stage:     "provider_failure",
+			Provider:  models.ChatProviderOpenAI,
+			ErrorCode: "provider_rate_limit",
+		},
+	)
+
+	snapshot := metrics.Snapshot()
+	if snapshot.ProviderFails["send openai provider_rate_limit"] != 1 {
+		t.Fatalf("expected provider failure count")
+	}
+	healthy, ok := snapshot.StreamHealth["stream anthropic completed"]
+	if !ok {
+		t.Fatalf("expected stream health entry for completed stream")
+	}
+	if healthy.Count != 1 || healthy.TotalChunks != 3 {
+		t.Fatalf("unexpected completed stream stats: %+v", healthy)
+	}
+	failed, ok := snapshot.StreamHealth["stream anthropic provider_error"]
+	if !ok {
+		t.Fatalf("expected stream health entry for provider_error")
+	}
+	if failed.ErrorCount != 1 {
+		t.Fatalf("expected failed stream error count 1, got %d", failed.ErrorCount)
+	}
+	if snapshot.Lifecycle["send provider_failure provider_rate_limit"] != 1 {
+		t.Fatalf("expected lifecycle trace count")
 	}
 }
 

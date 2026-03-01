@@ -162,7 +162,13 @@ func (runtime *ChatMessageRuntime) PersistAssistantReply(
 		return nil, errMessageRuntimeDependenciesIncomplete
 	}
 	provider := string(prepared.Session.Provider)
+	if result.Provider != "" {
+		provider = string(result.Provider)
+	}
 	modelID := prepared.Session.ModelID
+	if strings.TrimSpace(result.ModelID) != "" {
+		modelID = strings.TrimSpace(result.ModelID)
+	}
 	record, err := runtime.createChatMessage(
 		ctx,
 		RuntimeMessageCreateInput{

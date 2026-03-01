@@ -15,7 +15,7 @@ import (
 )
 
 func TestBuildChatRouterRegistersRuntimeRoutes(t *testing.T) {
-	router := buildChatRouter(config.Settings{EmbeddingDim: 256}, nil)
+	router := buildChatRouter(config.Settings{EmbeddingDim: 256}, nil, nil)
 	routes := collectRegisteredRoutes(t, router)
 
 	requiredRoutes := []string{

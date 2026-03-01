@@ -14,6 +14,7 @@ import (
 	internalapi "engram/internal/api"
 	"engram/internal/audit"
 	"engram/internal/auth"
+	"engram/internal/chat"
 	"engram/internal/config"
 	"engram/internal/db"
 	internalexport "engram/internal/export"
@@ -129,9 +130,10 @@ func buildHandlerOrExit(
 		logger.Error("failed to initialize oidc login provider", "error", err)
 		os.Exit(1)
 	}
-	services := initializeRuntimeServices(settings, pool)
 	requestLogger := resolveRequestLogger(logger, settings)
 	requestMetrics := resolveRequestMetrics(settings)
+	chatObservability := resolveChatObservabilityRecorder(requestMetrics)
+	services := initializeRuntimeServices(settings, pool, chatObservability)
 
 	routerDependencies := internalapi.RouterDependencies{
 		MemoryAdminService: services.memoryAdminService,
@@ -156,7 +158,7 @@ func buildHandlerOrExit(
 		OAuthRegistration:   services.oauthRegistrationService,
 		OAuthAuthorization:  services.oauthAuthorization,
 		OAuthToken:          services.oauthTokenService,
-		ChatRouter:          buildChatRouter(settings, pool),
+		ChatRouter:          buildChatRouter(settings, pool, chatObservability),
 		AgentWorkflow:       services.agentWorkflowService,
 		ExportService:       services.exportService,
 		MCPService:          services.mcpService,
@@ -171,7 +173,11 @@ func buildHandlerOrExit(
 	return handler
 }
 
-func initializeRuntimeServices(settings config.Settings, pool *pgxpool.Pool) runtimeServices {
+func initializeRuntimeServices(
+	settings config.Settings,
+	pool *pgxpool.Pool,
+	chatObservability chat.ObservabilityRecorder,
+) runtimeServices {
 	projectService := projects.NewService(pool)
 	memoryAdminService := admin.NewService(pool, settings.EmbeddingDim, newAdminProjectResolver(projectService))
 	exportService := internalexport.NewService(pool, projectService, memoryAdminService, settings.EmbeddingDim)
@@ -191,6 +197,7 @@ func initializeRuntimeServices(settings config.Settings, pool *pgxpool.Pool) run
 				memoryAdminService: memoryAdminService,
 				exportService:      exportService,
 			},
+			chatObservability,
 		),
 		mcpTransportLimiter: newMCPTransportRateLimiter(settings, pool),
 		mcpActorResolver: mcp.NewActorResolver(
@@ -227,8 +234,9 @@ func resolveRequestMetrics(settings config.Settings) internalapi.RequestMetricsR
 func newMCPCompatibilityService(
 	settings config.Settings,
 	dependencies mcpCompatibilityRuntimeDependencies,
+	chatObservability chat.ObservabilityRecorder,
 ) *mcp.CompatibilityService {
-	messageAdapter := newMCPMessageAdapter(settings, dependencies.pool)
+	messageAdapter := newMCPMessageAdapter(settings, dependencies.pool, chatObservability)
 	var messageSend mcp.MessageSendService
 	var messageStream mcp.MessageStreamService
 	if messageAdapter != nil {
@@ -291,6 +299,16 @@ func newMCPCompatibilityService(
 			UnpinDocumentService:     newMCPUnpinDocumentAdapter(dependencies.pool),
 		},
 	)
+}
+
+func resolveChatObservabilityRecorder(
+	requestMetrics internalapi.RequestMetricsRecorder,
+) chat.ObservabilityRecorder {
+	recorder, ok := requestMetrics.(chat.ObservabilityRecorder)
+	if !ok {
+		return nil
+	}
+	return recorder
 }
 
 func resolveMCPActorFromSessionContext(request *http.Request) (mcp.Actor, error) {

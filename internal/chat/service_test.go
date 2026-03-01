@@ -29,6 +29,24 @@ type serviceAdapterStub struct {
 	streamErr    error
 }
 
+type serviceObservabilityRecorderStub struct {
+	providerFailures []ProviderFailureSample
+	streamHealth     []StreamHealthSample
+	lifecycleTraces  []LifecycleTraceSample
+}
+
+func (recorder *serviceObservabilityRecorderStub) RecordProviderFailure(sample ProviderFailureSample) {
+	recorder.providerFailures = append(recorder.providerFailures, sample)
+}
+
+func (recorder *serviceObservabilityRecorderStub) RecordStreamHealth(sample StreamHealthSample) {
+	recorder.streamHealth = append(recorder.streamHealth, sample)
+}
+
+func (recorder *serviceObservabilityRecorderStub) RecordLifecycleTrace(sample LifecycleTraceSample) {
+	recorder.lifecycleTraces = append(recorder.lifecycleTraces, sample)
+}
+
 func (adapter *serviceAdapterStub) Provider() models.ChatProvider {
 	return adapter.provider
 }
@@ -162,6 +180,194 @@ func TestStreamMessageEventsEmitsProviderErrorEvent(t *testing.T) {
 	requireEqualAnyRuntime(t, 429, errorPayload["status_code"])
 	requireEqualAnyRuntime(t, "provider_rate_limit", errorPayload["error_code"])
 	requireEqualIntRuntime(t, 1, len(state.createInputs))
+}
+
+func TestSendMessageFallsBackToSecondaryProviderOnTransientFailure(t *testing.T) {
+	state := newServiceRuntimeState()
+	state.session.ModelID = "primary-model"
+	state.session.Provider = models.ChatProviderOpenAI
+	runtime := runtimeFromServiceState(&state)
+	service := NewChatService(
+		ChatServiceDependencies{
+			Runtime: runtime,
+			ResolveProvider: func(provider models.ChatProvider) (providers.ChatProviderAdapter, error) {
+				switch provider {
+				case models.ChatProviderOpenAI:
+					return &serviceAdapterStub{
+						provider:    provider,
+						generateErr: providers.NewProviderRateLimitError("too many requests"),
+					}, nil
+				case models.ChatProviderAnthropic:
+					return &serviceAdapterStub{
+						provider:     provider,
+						generateText: "fallback response",
+					}, nil
+				default:
+					return nil, nil
+				}
+			},
+			ProviderFallback: NewStaticProviderFallbackStrategy(
+				ProviderFallbackStrategyOptions{
+					Enabled:                true,
+					FallbackOrder:          []models.ChatProvider{models.ChatProviderAnthropic},
+					DefaultFallbackModelID: "fallback-model",
+				},
+			),
+		},
+	)
+
+	response, err := service.SendMessage(
+		context.Background(),
+		state.session.OwnerUserID,
+		state.session.SessionID,
+		ChatMessageCreateRequest{ContentText: "hello"},
+	)
+	if err != nil {
+		t.Fatalf("send message with fallback: %v", err)
+	}
+	requireEqualAnyRuntime(t, "fallback response", response.AssistantText)
+	assistantInput := state.createInputs[len(state.createInputs)-1]
+	if assistantInput.Metadata == nil || assistantInput.Metadata.Provider == nil {
+		t.Fatalf("expected assistant provider metadata")
+	}
+	requireEqualAnyRuntime(t, string(models.ChatProviderAnthropic), *assistantInput.Metadata.Provider)
+	requireEqualAnyRuntime(t, "fallback-model", *assistantInput.Metadata.ModelID)
+}
+
+func TestSendMessageReturnsCircuitOpenWhenNoFallbackCandidateAvailable(t *testing.T) {
+	state := newServiceRuntimeState()
+	runtime := runtimeFromServiceState(&state)
+	clock := time.Date(2026, 3, 1, 11, 0, 0, 0, time.UTC)
+	circuitPolicy := NewSimpleProviderCircuitPolicy(
+		ProviderCircuitPolicyOptions{
+			Enabled:          true,
+			FailureThreshold: 1,
+			Cooldown:         time.Minute,
+			NowUTC:           func() time.Time { return clock },
+		},
+	)
+	circuitPolicy.RecordResult(state.session.Provider, "provider_rate_limit")
+	service := NewChatService(
+		ChatServiceDependencies{
+			Runtime: runtime,
+			ResolveProvider: func(provider models.ChatProvider) (providers.ChatProviderAdapter, error) {
+				return &serviceAdapterStub{provider: provider, generateText: "unused"}, nil
+			},
+			CircuitPolicy: circuitPolicy,
+		},
+	)
+
+	_, err := service.SendMessage(
+		context.Background(),
+		state.session.OwnerUserID,
+		state.session.SessionID,
+		ChatMessageCreateRequest{ContentText: "hello"},
+	)
+	if err == nil {
+		t.Fatalf("expected provider circuit open error")
+	}
+	providerErr, ok := err.(*ChatProviderExecutionError)
+	if !ok {
+		t.Fatalf("expected provider execution error, got %T", err)
+	}
+	requireEqualAnyRuntime(t, "provider_circuit_open", providerErr.ErrorCode())
+}
+
+func TestStreamMessageEventsFallsBackAfterTransientProviderFailure(t *testing.T) {
+	state := newServiceRuntimeState()
+	runtime := runtimeFromServiceState(&state)
+	service := NewChatService(
+		ChatServiceDependencies{
+			Runtime: runtime,
+			ResolveProvider: func(provider models.ChatProvider) (providers.ChatProviderAdapter, error) {
+				if provider == models.ChatProviderOpenAI {
+					return &serviceAdapterStub{provider: provider, streamErr: providers.NewProviderRateLimitError("throttled")}, nil
+				}
+				return &serviceAdapterStub{provider: provider, streamParts: []string{"fallback ", "stream"}}, nil
+			},
+			ProviderFallback: NewStaticProviderFallbackStrategy(
+				ProviderFallbackStrategyOptions{
+					Enabled:                true,
+					FallbackOrder:          []models.ChatProvider{models.ChatProviderAnthropic},
+					DefaultFallbackModelID: "fallback-model",
+				},
+			),
+		},
+	)
+
+	events, err := service.StreamMessageEvents(
+		context.Background(),
+		state.session.OwnerUserID,
+		state.session.SessionID,
+		ChatMessageCreateRequest{ContentText: "stream with fallback"},
+	)
+	if err != nil {
+		t.Fatalf("stream message with fallback: %v", err)
+	}
+	requireEqualAnyRuntime(t, []string{"meta", "chunk", "chunk", "done"}, eventKinds(events))
+	donePayload := events[len(events)-1].Payload
+	requireEqualAnyRuntime(t, "fallback stream", donePayload["assistant_text"])
+}
+
+func TestSendMessageEmitsLifecycleTraceAndProviderFailureSamples(t *testing.T) {
+	state := newServiceRuntimeState()
+	runtime := runtimeFromServiceState(&state)
+	observability := &serviceObservabilityRecorderStub{}
+	service := NewChatService(
+		ChatServiceDependencies{
+			Runtime: runtime,
+			ResolveProvider: func(provider models.ChatProvider) (providers.ChatProviderAdapter, error) {
+				if provider == models.ChatProviderOpenAI {
+					return &serviceAdapterStub{provider: provider, generateErr: providers.NewProviderRateLimitError("throttled")}, nil
+				}
+				return &serviceAdapterStub{provider: provider, generateText: "ok"}, nil
+			},
+			ProviderFallback: NewStaticProviderFallbackStrategy(
+				ProviderFallbackStrategyOptions{
+					Enabled:                true,
+					FallbackOrder:          []models.ChatProvider{models.ChatProviderAnthropic},
+					DefaultFallbackModelID: "fallback-model",
+				},
+			),
+			Observability:  observability,
+			ResolveTraceID: func(context.Context) string { return "trace-123" },
+		},
+	)
+
+	_, err := service.SendMessage(
+		context.Background(),
+		state.session.OwnerUserID,
+		state.session.SessionID,
+		ChatMessageCreateRequest{ContentText: "record telemetry"},
+	)
+	if err != nil {
+		t.Fatalf("send message telemetry: %v", err)
+	}
+	if len(observability.providerFailures) == 0 {
+		t.Fatalf("expected provider failure sample")
+	}
+	requireEqualAnyRuntime(t, models.ChatProviderOpenAI, observability.providerFailures[0].Provider)
+	requireEqualAnyRuntime(t, "provider_rate_limit", observability.providerFailures[0].ErrorCode)
+	if len(observability.lifecycleTraces) == 0 {
+		t.Fatalf("expected lifecycle traces")
+	}
+	hasPrepare := false
+	hasProviderFail := false
+	hasLifecycleSuccess := false
+	for _, sample := range observability.lifecycleTraces {
+		if sample.Stage == chatTracePrepareDone {
+			hasPrepare = true
+		}
+		if sample.Stage == chatTraceProviderFail && sample.ErrorCode == "provider_rate_limit" {
+			hasProviderFail = true
+		}
+		if sample.Stage == chatTraceLifecycleOK {
+			hasLifecycleSuccess = true
+		}
+	}
+	if !hasPrepare || !hasProviderFail || !hasLifecycleSuccess {
+		t.Fatalf("missing expected lifecycle trace samples: %+v", observability.lifecycleTraces)
+	}
 }
 
 func runtimeFromServiceState(state *serviceRuntimeState) *ChatMessageRuntime {
