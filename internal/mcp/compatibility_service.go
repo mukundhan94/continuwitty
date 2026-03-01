@@ -571,6 +571,7 @@ type MessageSendResponse struct {
 	ReplyMessageID       uuid.UUID      `json:"reply_message_id"`
 	AssistantText        string         `json:"assistant_text"`
 	PromptPolicyVersion  string         `json:"prompt_policy_version,omitempty"`
+	CWPlanApplied        any            `json:"cw_plan_applied,omitempty"`
 	UsedEngramIDs        []uuid.UUID    `json:"used_engram_ids"`
 	UsedEngramLinkIDs    []uuid.UUID    `json:"used_engram_link_ids"`
 	EngramTracePaths     any            `json:"engram_trace_paths"`

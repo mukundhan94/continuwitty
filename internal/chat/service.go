@@ -43,6 +43,7 @@ type ChatSendResponse struct {
 	ReplyMessageID       uuid.UUID             `json:"reply_message_id"`
 	AssistantText        string                `json:"assistant_text"`
 	PromptPolicyVersion  string                `json:"prompt_policy_version,omitempty"`
+	CWPlanApplied        *CWQueryPlan          `json:"cw_plan_applied,omitempty"`
 	UsedEngramIDs        []uuid.UUID           `json:"used_engram_ids"`
 	UsedEngramLinkIDs    []uuid.UUID           `json:"used_engram_link_ids"`
 	EngramTracePaths     []EngramTracePath     `json:"engram_trace_paths"`
@@ -444,6 +445,7 @@ func buildChatSendResponse(
 		ReplyMessageID:       assistantMessage.MessageID,
 		AssistantText:        assistantText,
 		PromptPolicyVersion:  prepared.PromptPolicyVersion,
+		CWPlanApplied:        prepared.CWPlanApplied,
 		UsedEngramIDs:        prepared.Context.UsedEngramIDs,
 		UsedEngramLinkIDs:    prepared.Context.UsedEngramLinkIDs,
 		EngramTracePaths:     prepared.Context.EngramTracePaths,

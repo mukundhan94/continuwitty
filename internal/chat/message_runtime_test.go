@@ -130,6 +130,64 @@ func TestPrepareGenerationForwardsLinkRecallOverrides(t *testing.T) {
 	requireOptionalFloatRuntime(t, requests[0].LinkNoiseScoreThreshold, 0.72, "link_noise_score_threshold")
 }
 
+func TestPrepareGenerationParsesCWQueryProtocolAndSanitizesUserContent(t *testing.T) {
+	base := preparedGenerationFixture()
+	contextRequests := make([]ChatContextRequest, 0, 1)
+	createdMessages := make([]RuntimeMessageCreateInput, 0, 1)
+	runtime := NewChatMessageRuntime(
+		ChatMessageRuntimeDependencies{
+			EmbeddingDim: 256,
+			GetSession: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*models.ChatSessionRecord, error) {
+				session := base.Session
+				return &session, nil
+			},
+			CreateChatMessage: func(_ context.Context, input RuntimeMessageCreateInput) (*models.ChatMessageRecord, error) {
+				createdMessages = append(createdMessages, input)
+				record := base.UserMessage
+				record.ContentText = input.ContentText
+				return &record, nil
+			},
+			ListChatMessages: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ int, _ int) ([]models.ChatMessageRecord, error) {
+				return []models.ChatMessageRecord{}, nil
+			},
+			AssembleChatContext: func(_ context.Context, request ChatContextRequest) (AssembledChatContext, error) {
+				contextRequests = append(contextRequests, request)
+				return base.Context, nil
+			},
+		},
+	)
+
+	prepared, err := runtime.PrepareGeneration(
+		context.Background(),
+		base.Session.OwnerUserID,
+		base.Session.SessionID,
+		ChatMessageCreateRequest{
+			ContentText: "cw> mode=retrieve project=ops citations=required\nFind linked incidents from this quarter.",
+		},
+	)
+	if err != nil {
+		t.Fatalf("prepare generation: %v", err)
+	}
+	if len(createdMessages) != 1 {
+		t.Fatalf("expected one user-message create call, got %d", len(createdMessages))
+	}
+	if createdMessages[0].ContentText != "Find linked incidents from this quarter." {
+		t.Fatalf("expected sanitized user content, got %q", createdMessages[0].ContentText)
+	}
+	if len(contextRequests) != 1 {
+		t.Fatalf("expected one context assembly request, got %d", len(contextRequests))
+	}
+	if contextRequests[0].UserQuery != "Find linked incidents from this quarter." {
+		t.Fatalf("expected sanitized query for context assembly, got %q", contextRequests[0].UserQuery)
+	}
+	if prepared.CWPlanApplied == nil {
+		t.Fatalf("expected cw plan metadata")
+	}
+	requireEqualAnyRuntime(t, "retrieve", prepared.CWPlanApplied.Mode)
+	requireEqualAnyRuntime(t, "ops", prepared.CWPlanApplied.Project)
+	requireEqualAnyRuntime(t, true, prepared.CWPlanApplied.CitationsRequired)
+}
+
 func TestPrepareGenerationRejectsEmptyPayload(t *testing.T) {
 	runtime := NewChatMessageRuntime(ChatMessageRuntimeDependencies{})
 	_, err := runtime.PrepareGeneration(
@@ -141,6 +199,26 @@ func TestPrepareGenerationRejectsEmptyPayload(t *testing.T) {
 	validationErr := requireChatServiceError(t, err)
 	requireEqualIntRuntime(t, 400, validationErr.StatusCode())
 	requireEqualAnyRuntime(t, "Message content cannot be empty", validationErr.Detail())
+}
+
+func TestBuildStreamPayloadIncludesCWPlanMetadata(t *testing.T) {
+	prepared := preparedGenerationFixture()
+	prepared.CWPlanApplied = &CWQueryPlan{
+		Mode:              "analyze",
+		Project:           "project-ops",
+		CitationsRequired: true,
+	}
+	runtime := NewChatMessageRuntime(ChatMessageRuntimeDependencies{EmbeddingDim: 256})
+	assistant := models.ChatMessageRecord{
+		MessageID: uuid.MustParse("00000000-0000-0000-0000-000000007011"),
+		SessionID: prepared.Session.SessionID,
+		Role:      "assistant",
+	}
+
+	metaPayload := runtime.BuildStreamMetaPayload(prepared)
+	donePayload := runtime.BuildStreamDonePayload(prepared, assistant, "answer", nil)
+	requireEqualAnyRuntime(t, prepared.CWPlanApplied, metaPayload["cw_plan_applied"])
+	requireEqualAnyRuntime(t, prepared.CWPlanApplied, donePayload["cw_plan_applied"])
 }
 
 func TestPersistAssistantReplyWritesProviderMetadata(t *testing.T) {

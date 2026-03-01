@@ -56,6 +56,7 @@ func (adapter *mcpMessageSendAdapter) SendMessage(
 		ReplyMessageID:       result.ReplyMessageID,
 		AssistantText:        result.AssistantText,
 		PromptPolicyVersion:  result.PromptPolicyVersion,
+		CWPlanApplied:        result.CWPlanApplied,
 		UsedEngramIDs:        append([]uuid.UUID(nil), result.UsedEngramIDs...),
 		UsedEngramLinkIDs:    append([]uuid.UUID(nil), result.UsedEngramLinkIDs...),
 		EngramTracePaths:     result.EngramTracePaths,

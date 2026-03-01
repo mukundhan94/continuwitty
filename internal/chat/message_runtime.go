@@ -67,6 +67,7 @@ type PreparedGeneration struct {
 	Session               models.ChatSessionRecord
 	UserMessage           models.ChatMessageRecord
 	Context               AssembledChatContext
+	CWPlanApplied         *CWQueryPlan
 	ProviderRequest       providers.ProviderGenerateRequest
 	PromptPolicyVersion   string
 	PrepareDurationMS     float64
@@ -123,6 +124,8 @@ func (runtime *ChatMessageRuntime) PrepareGeneration(
 	sessionID uuid.UUID,
 	payload ChatMessageCreateRequest,
 ) (PreparedGeneration, error) {
+	normalizedContentText, cwPlan := ParseCWQueryProtocol(payload.ContentText)
+	payload.ContentText = normalizedContentText
 	if strings.TrimSpace(payload.ContentText) == "" {
 		return PreparedGeneration{}, NewChatValidationError("Message content cannot be empty")
 	}
@@ -159,6 +162,7 @@ func (runtime *ChatMessageRuntime) PrepareGeneration(
 		Session:               session,
 		UserMessage:           userMessage,
 		Context:               assembledContext,
+		CWPlanApplied:         cwPlan,
 		ProviderRequest:       buildPreparedProviderRequest(session, history, assembledContext.ContextMarkdown),
 		PromptPolicyVersion:   runtime.promptPolicyVersion,
 		PrepareDurationMS:     durationMS(prepareStartedAt),
@@ -240,6 +244,7 @@ func BuildStreamMetaPayload(prepared PreparedGeneration) map[string]any {
 		"engram_trace_paths":      prepared.Context.EngramTracePaths,
 		"used_document_chunk_ids": prepared.Context.UsedDocumentChunkIDs,
 		"source_references":       prepared.Context.SourceReferences,
+		"cw_plan_applied":         prepared.CWPlanApplied,
 	}
 }
 
@@ -267,6 +272,7 @@ func BuildStreamDonePayload(
 		"engram_trace_paths":      prepared.Context.EngramTracePaths,
 		"used_document_chunk_ids": prepared.Context.UsedDocumentChunkIDs,
 		"source_references":       prepared.Context.SourceReferences,
+		"cw_plan_applied":         prepared.CWPlanApplied,
 		"debug_trace":             nil,
 	}
 	if debugTrace != nil {

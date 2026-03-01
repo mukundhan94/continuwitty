@@ -454,12 +454,15 @@ curl -sN -b "$COOKIE_JAR" \
 
 `chat.send_message` responses include:
 
+- `cw_plan_applied` (optional normalized `cw>` directive plan)
 - `prompt_policy_version`
 - `used_engram_ids`
 - `used_engram_link_ids`
 - `engram_trace_paths`
 - `used_document_chunk_ids`
 - `source_references`
+
+`content_text` can begin with `cw>` to activate ContinuWitty query-protocol planning. The first-line directive is parsed and excluded from the stored/context query text.
 
 `chat.send_message` request arguments can also include optional bounded recall controls:
 

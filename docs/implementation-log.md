@@ -7,6 +7,27 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 32 kickoff: `cw>` query protocol parser + runtime metadata baseline)
+
+1. Added `cw>` parser module in `internal/chat/query_protocol.go`:
+   - detects first-line `cw>` directives.
+   - supports bare prefix default (`mode=auto`), intent form (`cw> retrieve`), and key-value directives (`mode=...`, `project=...`, `citations=required`).
+   - returns normalized query content with directive lines stripped.
+2. Integrated query protocol parsing into runtime preparation in `internal/chat/message_runtime.go`:
+   - `PrepareGeneration` now parses `content_text`, stores normalized plan in `PreparedGeneration.CWPlanApplied`, and uses normalized content for both persisted user message content and context assembly query.
+3. Added additive protocol metadata to outputs:
+   - `internal/chat/service.go`: `ChatSendResponse` now includes optional `cw_plan_applied`.
+   - `internal/chat/message_runtime.go`: stream `meta` and `done` payloads now include `cw_plan_applied`.
+   - `internal/mcp/compatibility_service.go` + `cmd/api/mcp_message_send_adapter.go`: MCP send-message responses now include `cw_plan_applied`.
+4. Added tests:
+   - `internal/chat/query_protocol_test.go` for parser normalization/precedence behavior.
+   - `internal/chat/message_runtime_test.go` for parser integration, sanitized user-query behavior, and stream payload metadata propagation.
+5. Validation:
+   - `go test ./internal/chat ./internal/mcp ./cmd/api -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Phase 31 closeout: AGENT/skills realignment + acceptance mock evidence refresh)
 
 1. Completed Phase 31 documentation closeout and skills realignment:

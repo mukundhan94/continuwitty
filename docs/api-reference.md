@@ -217,8 +217,11 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 - `link_noise_suppression_enabled` (bool)
 - `link_noise_score_threshold` (number, bounded `0..1`)
 
+Message content can also start with `cw>` to activate ContinuWitty query-protocol planning; directive text is parsed from the first line and excluded from persisted/context query content.
+
 Chat send responses and stream `meta`/`done` events include:
 
+- `cw_plan_applied` (optional normalized `cw>` plan summary)
 - `used_engram_ids`
 - `used_engram_link_ids`
 - `engram_trace_paths`
