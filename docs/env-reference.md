@@ -23,6 +23,8 @@
 | `LOG_CONFIG_IN_DEV` | `true` | Print redacted parsed-config snapshot on startup in dev/local envs |
 | `APP_SEMANTIC_VERSION` | - | Application version string |
 | `APP_COMMIT_SHA` | - | Git commit SHA |
+| `API_REQUEST_LOG_ENABLED` | `true` | Enable structured per-request telemetry logs |
+| `API_METRICS_ENABLED` | `true` | Enable in-process request metrics endpoint (`/api/v1/metrics`) |
 | `APP_SESSION_SECRET` | - | Session signing secret |
 
 ## Security

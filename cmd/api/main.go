@@ -130,6 +130,8 @@ func buildHandlerOrExit(
 		os.Exit(1)
 	}
 	services := initializeRuntimeServices(settings, pool)
+	requestLogger := resolveRequestLogger(logger, settings)
+	requestMetrics := resolveRequestMetrics(settings)
 
 	routerDependencies := internalapi.RouterDependencies{
 		MemoryAdminService: services.memoryAdminService,
@@ -160,6 +162,8 @@ func buildHandlerOrExit(
 		MCPService:          services.mcpService,
 		MCPActorResolver:    services.mcpActorResolver,
 		MCPTransportLimiter: services.mcpTransportLimiter,
+		RequestLogger:       requestLogger,
+		RequestMetrics:      requestMetrics,
 	}
 	handler := internalapi.NewRouterWithDependencies(settings, routerDependencies)
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
@@ -204,6 +208,20 @@ func initializeRuntimeServices(settings config.Settings, pool *pgxpool.Pool) run
 		loginAttemptGuard: newLoginAttemptGuard(settings, pool),
 		auditLogger:       newSessionAuditLogger(settings),
 	}
+}
+
+func resolveRequestLogger(logger *slog.Logger, settings config.Settings) *slog.Logger {
+	if !settings.APIRequestLogEnabled {
+		return nil
+	}
+	return logger
+}
+
+func resolveRequestMetrics(settings config.Settings) internalapi.RequestMetricsRecorder {
+	if !settings.APIMetricsEnabled {
+		return nil
+	}
+	return internalapi.NewInMemoryRequestMetrics()
 }
 
 func newMCPCompatibilityService(

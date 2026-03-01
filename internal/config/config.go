@@ -85,6 +85,8 @@ type Settings struct {
 	IngestionMaxMetadataJSONBytes      int     `envconfig:"INGESTION_MAX_METADATA_JSON_BYTES" default:"20000"`
 	APIHost                            string  `envconfig:"API_HOST" default:"0.0.0.0"`
 	APIPort                            int     `envconfig:"API_PORT" default:"8000"`
+	APIRequestLogEnabled               bool    `envconfig:"API_REQUEST_LOG_ENABLED" default:"true"`
+	APIMetricsEnabled                  bool    `envconfig:"API_METRICS_ENABLED" default:"true"`
 	AppSessionSecret                   string  `envconfig:"APP_SESSION_SECRET" default:"engram-local-dev-session-secret"`
 	UIDemoUsername                     string  `envconfig:"UI_DEMO_USERNAME" default:"admin"`
 	UIDemoPassword                     string  `envconfig:"UI_DEMO_PASSWORD" default:"admin123"`
@@ -287,6 +289,8 @@ func settingsMap(settings Settings) map[string]any {
 		"ingestion_max_metadata_json_bytes":       settings.IngestionMaxMetadataJSONBytes,
 		"api_host":                                settings.APIHost,
 		"api_port":                                settings.APIPort,
+		"api_request_log_enabled":                 settings.APIRequestLogEnabled,
+		"api_metrics_enabled":                     settings.APIMetricsEnabled,
 		"app_session_secret":                      settings.AppSessionSecret,
 		"ui_demo_username":                        settings.UIDemoUsername,
 		"ui_demo_password":                        settings.UIDemoPassword,

@@ -69,6 +69,41 @@ func TestVersionEndpoint(t *testing.T) {
 	}
 }
 
+func TestObservabilityMetricsRouteMountedWithRecorder(t *testing.T) {
+	settings := config.Settings{AppSemanticVersion: "1.2.3", AppCommitSHA: "abc1234"}
+	metrics := NewInMemoryRequestMetrics()
+	router := NewRouterWithDependencies(
+		settings,
+		RouterDependencies{
+			RequestMetrics: metrics,
+		},
+	)
+
+	healthRequest := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthResponse := httptest.NewRecorder()
+	router.ServeHTTP(healthResponse, healthRequest)
+	if healthResponse.Code != http.StatusOK {
+		t.Fatalf("expected health status 200, got %d", healthResponse.Code)
+	}
+
+	metricsRequest := httptest.NewRequest(http.MethodGet, "/api/v1/metrics", nil)
+	metricsResponse := httptest.NewRecorder()
+	router.ServeHTTP(metricsResponse, metricsRequest)
+	if metricsResponse.Code != http.StatusOK {
+		t.Fatalf("expected metrics status 200, got %d", metricsResponse.Code)
+	}
+	var payload RequestMetricsSnapshot
+	if err := json.Unmarshal(metricsResponse.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode metrics response: %v", err)
+	}
+	if payload.Totals.Requests < 1 {
+		t.Fatalf("expected at least one recorded request")
+	}
+	if payload.ByRoute["GET /healthz"].Count < 1 {
+		t.Fatalf("expected recorded /healthz route stats")
+	}
+}
+
 func TestMemoryAdminRoutesNotMountedWithoutDependencies(t *testing.T) {
 	settings := config.Settings{AppSemanticVersion: "1.2.3", AppCommitSHA: "abc1234"}
 	router := NewRouter(settings)

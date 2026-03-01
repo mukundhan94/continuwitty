@@ -85,7 +85,7 @@ Phases 0-19 and 29-34 implemented; Phase 20 is in progress. Go migration checkpo
 
 **Completed:** foundation, schema, retrieval, durability, chat continuity, providers (OpenAI/Anthropic/Bedrock), MCP stream, React UI, acceptance testing, theme/UX, MCP developer experience, document ingestion (RAG), memory lifecycle, auto-metadata enrichment, MCP tokens, enterprise memory management.
 
-**Current focus:** Phase 20 production security hardening closeout (OIDC rollout hardening, centralized audit sink, security regression depth) and forward roadmap phases (21+).
+**Current focus:** Phase 20 security closeout and Phase 21 observability kickoff (structured request telemetry + in-process metrics), then Phase 22+ release/eval hardening.
 
 ## Repository Layout
 

@@ -238,6 +238,18 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 21 - Observability and Reliability
 
+### Status
+
+- In progress (2026-03-01 checkpoint).
+- Completed in this phase kickoff:
+  - structured request telemetry middleware with domain/route/status/duration logging.
+  - process-local request metrics aggregation with `/api/v1/metrics` operator endpoint.
+  - router + middleware test coverage for route-level metrics aggregation.
+- Remaining focus:
+  - stream-health and provider-failure category metrics.
+  - tracing hooks for chat/session lifecycle.
+  - provider fallback/circuit-breaker strategy.
+
 ### Goals
 
 - Ensure maintainable operations under load/provider failures.

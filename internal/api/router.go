@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"engram/internal/config"
@@ -34,6 +35,8 @@ type RouterDependencies struct {
 	MCPService          mcp.Service
 	MCPActorResolver    mcp.HTTPActorResolver
 	MCPTransportLimiter MCPTransportRateLimiter
+	RequestLogger       *slog.Logger
+	RequestMetrics      RequestMetricsRecorder
 }
 
 // NewRouterWithDependencies builds the API router and mounts dependency-backed routes.
@@ -42,9 +45,13 @@ func NewRouterWithDependencies(settings config.Settings, dependencies RouterDepe
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
+	if dependencies.RequestLogger != nil || dependencies.RequestMetrics != nil {
+		router.Use(newRequestTelemetryMiddleware(dependencies.RequestLogger, dependencies.RequestMetrics))
+	}
 
 	mountHealthRoute(router)
 	mountVersionRoute(router, settings)
+	mountObservabilityRoutes(router, dependencies)
 	mountDependencyRoutes(router, settings, dependencies)
 	return router
 }
@@ -64,6 +71,15 @@ func mountVersionRoute(router chi.Router, settings config.Settings) {
 				"commit_id":        settings.AppCommitSHA,
 			})
 		})
+	})
+}
+
+func mountObservabilityRoutes(router chi.Router, dependencies RouterDependencies) {
+	if dependencies.RequestMetrics == nil {
+		return
+	}
+	router.Get("/api/v1/metrics", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSON(writer, http.StatusOK, dependencies.RequestMetrics.Snapshot())
 	})
 }
 
