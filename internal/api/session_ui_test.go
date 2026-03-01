@@ -591,6 +591,7 @@ func TestMountSessionUIRoutesLoginFailureWritesAuditLog(t *testing.T) {
 
 type sessionUITestHandlerOptions struct {
 	auditLogPath        string
+	auditLogger         SessionAuditLogger
 	loginAttemptGuard   SessionLoginAttemptGuard
 	userRole            models.UserRole
 	oidcProvider        auth.OIDCLoginProvider
@@ -626,6 +627,10 @@ func buildSessionUITestHandler(
 		lookupByID = handlerOptions.lookupByID
 	}
 	router := chi.NewRouter()
+	auditLogger := handlerOptions.auditLogger
+	if auditLogger == nil {
+		auditLogger = newSessionUITestAuditLogger(handlerOptions.auditLogPath)
+	}
 	dependencies := SessionAuthDependencies{
 		SessionManager:       manager,
 		OIDCProvider:         handlerOptions.oidcProvider,
@@ -634,7 +639,7 @@ func buildSessionUITestHandler(
 		VerifyPassword:       auth.VerifyPassword,
 		GenerateCSRFToken:    auth.GenerateCSRFToken,
 		LoginAttemptGuard:    resolveSessionUITestLoginAttemptGuard(handlerOptions.loginAttemptGuard),
-		LogAuditEvent:        newSessionUITestAuditLogger(handlerOptions.auditLogPath),
+		LogAuditEvent:        auditLogger,
 		CreateTokenForOwner:  handlerOptions.createTokenForOwner,
 		RevokeTokenForOwner:  handlerOptions.revokeTokenForOwner,
 		MCPTokenPepper:       handlerOptions.mcpTokenPepper,

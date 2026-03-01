@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Security follow-up closeout: OIDC rollout validation + centralized audit sink regression)
+
+1. Added explicit OIDC-to-sink integration coverage in `internal/api/session_ui_oidc_test.go`:
+   - new test `TestMountSessionUIRoutesOIDCCallbackFailureEmitsAuditEventToSink`.
+   - validates callback verification failures emit `oidc_login_failed` events to a centralized sink with bearer auth forwarding and expected failure detail (`token_exchange_or_verification_failed`).
+2. Extended session UI test wiring in `internal/api/session_ui_test.go`:
+   - `sessionUITestHandlerOptions` now supports an `auditLogger` override so OIDC/security tests can inject sink-backed audit loggers directly.
+3. Realigned technical-debt tracking docs:
+   - `todo.md`: marked production security follow-up (OIDC rollout validation + centralized audit sink integration) as completed.
+   - `migration/checkpoints/checkpoint.md`: updated technical-debt closeout note to include centralized audit sink validation evidence.
+4. Validation:
+   - `go test ./internal/api -run 'TestMountSessionUIRoutesOIDCCallbackFailureEmitsAuditEventToSink|TestMountSessionUIRoutesOIDCCallbackFailurePaths|TestMountSessionUIRoutesOIDCCallbackRejectsReplayAfterPendingStateConsumed' -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Technical debt closeout: cross-provider engram reuse validation + docs realignment)
 
 1. Expanded cross-provider fallback regression coverage in `internal/chat/service_test.go`:

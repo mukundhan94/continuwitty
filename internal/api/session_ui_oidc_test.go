@@ -4,14 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
+	"engram/internal/audit"
 	"engram/internal/auth"
 	"engram/internal/models"
 )
@@ -313,6 +316,81 @@ func TestMountSessionUIRoutesOIDCCallbackFailurePaths(t *testing.T) {
 	}
 }
 
+func TestMountSessionUIRoutesOIDCCallbackFailureEmitsAuditEventToSink(t *testing.T) {
+	var sinkMu sync.Mutex
+	receivedAuthHeaders := []string{}
+	receivedBodies := []string{}
+	sink := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		payload, _ := io.ReadAll(request.Body)
+		sinkMu.Lock()
+		receivedAuthHeaders = append(receivedAuthHeaders, request.Header.Get("Authorization"))
+		receivedBodies = append(receivedBodies, string(payload))
+		sinkMu.Unlock()
+		writer.WriteHeader(http.StatusAccepted)
+	}))
+	defer sink.Close()
+
+	sinkLogger := audit.NewLogger(audit.LoggerOptions{
+		SinkURL:       sink.URL,
+		SinkAuthToken: "oidc-sink-token",
+		SinkRequired:  true,
+	})
+	oidcProvider := &sessionUITestOIDCProvider{
+		enabled:         true,
+		authURL:         sessionUITestOIDCAuthorizeURL,
+		authenticateErr: errors.New("id token validation failed"),
+	}
+	handler, manager, _ := buildSessionUITestHandler(
+		t,
+		sessionUITestHandlerOptions{
+			oidcProvider: oidcProvider,
+			auditLogger: func(
+				request *http.Request,
+				eventType string,
+				success bool,
+				username string,
+				detail string,
+				metadata map[string]any,
+			) {
+				err := sinkLogger.LogRequestEvent(audit.RequestEvent{
+					Request:   request,
+					EventType: eventType,
+					Success:   success,
+					Username:  username,
+					Detail:    detail,
+					Metadata:  metadata,
+				})
+				if err != nil {
+					t.Fatalf("expected oidc audit sink write to succeed: %v", err)
+				}
+			},
+		},
+	)
+	pendingCookie, pendingState := startOIDCLoginFlow(t, handler, manager)
+	callbackResponse := performOIDCCallbackRequest(handler, pendingCookie, pendingState.OIDCState, "auth-code-1")
+
+	assertRedirect(t, callbackResponse, "/login")
+	assertOIDCCallbackCall(t, oidcProvider, pendingState.OIDCNonce)
+	assertOIDCPendingStateCleared(t, manager, callbackResponse)
+
+	sinkMu.Lock()
+	headers := append([]string(nil), receivedAuthHeaders...)
+	bodies := append([]string(nil), receivedBodies...)
+	sinkMu.Unlock()
+	if len(headers) == 0 {
+		t.Fatalf("expected centralized audit sink to receive oidc events")
+	}
+	if !containsString(headers, "Bearer oidc-sink-token") {
+		t.Fatalf("expected sink auth header to be forwarded")
+	}
+	if !anyStringContains(bodies, "\"event_type\":\"oidc_login_failed\"") {
+		t.Fatalf("expected oidc failure event in sink payloads")
+	}
+	if !anyStringContains(bodies, "\"detail\":\"token_exchange_or_verification_failed\"") {
+		t.Fatalf("expected provider verification failure detail in sink payloads")
+	}
+}
+
 func buildOIDCCallbackFailureCases() []oidcCallbackFailureCase {
 	return []oidcCallbackFailureCase{
 		oidcProviderVerificationFailureCase(),
@@ -598,4 +676,22 @@ func assertAuthenticatedOIDCSessionState(
 	if authenticatedState.CSRFToken == "" {
 		t.Fatalf("expected rotated csrf token in authenticated session")
 	}
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func anyStringContains(values []string, expectedSubstring string) bool {
+	for _, value := range values {
+		if strings.Contains(value, expectedSubstring) {
+			return true
+		}
+	}
+	return false
 }

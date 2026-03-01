@@ -41,7 +41,7 @@
 
 ## Technical Debt
 
-- [ ] Production security hardening follow-up (OIDC provider rollout validation + centralized audit sink integration)
+- [x] Production security hardening follow-up (OIDC provider rollout validation + centralized audit sink integration)
 - [x] Expand auth abuse-path tests (OIDC callback replay after pending-state consumption)
 - [x] Swap local deterministic embeddings for a real embedding model (OpenAI provider path with optional local fallback)
 - [x] Cross-provider engram reuse validation (same stored engram with different LLM providers)
