@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +50,9 @@ func TestCreateEngramLinkReturnsRecord(t *testing.T) {
 	}
 	if db.queryRowArgs[0][3] != string(models.EngramLinkRelationSupports) {
 		t.Fatalf("expected relation arg supports, got %#v", db.queryRowArgs[0][3])
+	}
+	if strings.Contains(db.queryRowSQL[0], "target_engram.project_id = source_engram.project_id") {
+		t.Fatalf("expected create SQL to allow cross-project targets")
 	}
 }
 
@@ -220,6 +224,11 @@ func TestTraverseEngramLinksDepthLimitedAndCycleSafe(t *testing.T) {
 	requireEqual(t, 2, steps[3].Depth)
 	if len(db.queryArgs) != 2 {
 		t.Fatalf("expected two traversal queries, got %d", len(db.queryArgs))
+	}
+	for _, query := range db.querySQL {
+		if strings.Contains(query, "source_engram.project_id = target_engram.project_id") {
+			t.Fatalf("expected traversal SQL to allow cross-project links")
+		}
 	}
 }
 

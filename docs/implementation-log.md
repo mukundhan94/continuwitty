@@ -7,6 +7,24 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 32 extension: federated cross-project link visibility/traversal baseline)
+
+1. Updated link repository SQL in `internal/repository/engram_links.go` to remove same-project-only traversal/read constraints:
+   - removed source/target same-project join requirement from `CreateEngramLink` SQL path.
+   - removed same-project gate from visible link select/traversal SQL builder.
+   - removed same-project gate from link update SQL path while preserving source-project write authorization checks.
+2. Access guardrails remain enforced per node:
+   - source and target engram visibility checks (`buildMembershipReadClause`) are still required for every returned link.
+   - source-project write checks (`buildMembershipWriteClause`) remain in mutation paths.
+3. Added regression assertions in `internal/repository/engram_links_test.go`:
+   - create/traversal SQL no longer embeds same-project-only predicates.
+   - traversal remains depth-limited and cycle-safe.
+4. Validation:
+   - `go test ./internal/repository ./internal/chat ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Phase 32 kickoff: `cw>` query protocol parser + runtime metadata baseline)
 
 1. Added `cw>` parser module in `internal/chat/query_protocol.go`:

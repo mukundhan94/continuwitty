@@ -699,8 +699,9 @@ Build a local-first memory system where agents and humans can:
   - Added runtime integration to strip directives from persisted/context query text while preserving a normalized `cw_plan_applied` plan in send/stream metadata.
   - Extended REST + MCP send-message payload surfaces with additive `cw_plan_applied` metadata in responses.
   - Added parser/runtime regression coverage for directive forms and payload metadata propagation.
+  - Enabled federated cross-project link traversal/read SQL paths with per-node access filters (same-project restriction removed from link visibility/traversal queries).
 - Remaining focus:
-  - access-aware federated cross-project linked retrieval traversal and ranking.
+  - ranking and context-packing fusion tuning for federated traversal candidates.
   - explicit retrieval audit signals for blocked-node filtering and cross-project path usage.
 - This phase introduces a lightweight query protocol for users/agents (`cw>`) and extends linked-memory retrieval to cross-project associations with strict access-aware filtering.
 

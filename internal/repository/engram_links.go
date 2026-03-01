@@ -104,6 +104,7 @@ type EngramLinkTraverseInput struct {
 }
 
 // CreateEngramLink persists a directed link when source/target visibility and write access are satisfied.
+// Cross-project links are allowed when the actor can read both nodes and write in the source project.
 func CreateEngramLink(
 	ctx context.Context,
 	db Queryer,
@@ -390,7 +391,7 @@ func buildCreateEngramLinkSQL() string {
 			$13
 		FROM source_engram
 		JOIN target_engram
-		  ON target_engram.project_id = source_engram.project_id
+		  ON TRUE
 		WHERE %s
 		RETURNING %s
 		`,
@@ -444,7 +445,6 @@ func buildUpdateEngramLinkSQL() string {
 			AND target_engram.engram_id = link.target_engram_id
 			AND source_engram.deleted_at IS NULL
 			AND target_engram.deleted_at IS NULL
-			AND source_engram.project_id = target_engram.project_id
 			AND source_engram.project_id = link.project_id
 			AND %s
 		RETURNING %s
@@ -548,7 +548,6 @@ func buildVisibleEngramLinkSelectSQL(
 	filters := append([]string{
 		"source_engram.deleted_at IS NULL",
 		"target_engram.deleted_at IS NULL",
-		"source_engram.project_id = target_engram.project_id",
 		sourceAccess,
 		targetAccess,
 		fmt.Sprintf("(%s::boolean OR link.status <> 'archived')", includeArchivedPlaceholder),
