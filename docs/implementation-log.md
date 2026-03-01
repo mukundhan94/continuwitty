@@ -7,6 +7,21 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 32 extension: federated ranking/context-packing fusion + rehydration backfill)
+
+1. Tuned linked-context candidate selection in `internal/chat/context_links.go`:
+   - expanded federated linked candidate pool sizing beyond strict final budget to keep fallback options available.
+   - added fused semantic + trace scoring for candidate ranking (`rankEngramContextCandidates`) with depth-aware tie-breaking.
+   - enforced linked-candidate coverage in the active top selection window when federated traces are present.
+2. Updated engram context assembly in `internal/chat/context.go`:
+   - switched to ranked candidate ordering driven by fused semantic + trace signals.
+   - added resilient packing behavior so failed/filtered rehydration lookups backfill from lower-ranked candidates until budget is filled.
+3. Added regression coverage in `internal/chat/context_links_test.go`:
+   - verifies linked candidate coverage in top ranked window under high-seed-score pressure.
+   - verifies fallback packing behavior when a high-ranked linked candidate cannot be rehydrated.
+4. Validation:
+   - `go test ./internal/chat -count=1`
+
 ### 2026-03-01 (Phase 32 extension: federated cross-project link visibility/traversal baseline)
 
 1. Updated link repository SQL in `internal/repository/engram_links.go` to remove same-project-only traversal/read constraints:

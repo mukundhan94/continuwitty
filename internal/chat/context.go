@@ -22,6 +22,7 @@ const (
 	maxLinkRecallDepth             = 3
 	defaultLinkRecallMaxNeighbors  = 8
 	maxLinkRecallMaxNeighbors      = 24
+	maxLinkRecallCandidatePool     = 32
 	defaultLinkNoiseScoreThreshold = 0.30
 
 	engramSourceType   = "engram_source"
@@ -108,6 +109,12 @@ type assembledDocumentContext struct {
 	pinnedChunks         []models.DocumentChunkQueryResult
 	selectedChunks       []models.DocumentChunkQueryResult
 	usedDocumentChunkIDs []uuid.UUID
+}
+
+type rehydrationBundleCollectInput struct {
+	EngramIDs   []uuid.UUID
+	ActorUserID uuid.UUID
+	Limit       int
 }
 
 // DefaultChatContextDependencies maps chat context dependencies to repository operations.
@@ -208,12 +215,22 @@ func assembleEngramContext(
 	if err != nil {
 		return assembledEngramContext{}, err
 	}
-	selectedIDs = mergeContextEngramIDsWithLinked(
+	rankedCandidateIDs := rankEngramContextCandidates(
 		selectedIDs,
 		linkSelection.linkedIDs,
+		seedScores,
+		linkSelection.tracePaths,
 		request.MaxEngrams,
 	)
-	bundles, err := collectRehydrationBundles(ctx, dependencies, selectedIDs, request.ActorUserID)
+	bundles, err := collectRehydrationBundles(
+		ctx,
+		dependencies,
+		rehydrationBundleCollectInput{
+			EngramIDs:   rankedCandidateIDs,
+			ActorUserID: request.ActorUserID,
+			Limit:       request.MaxEngrams,
+		},
+	)
 	if err != nil {
 		return assembledEngramContext{}, err
 	}
@@ -462,12 +479,18 @@ func selectContextEngramIDs(
 func collectRehydrationBundles(
 	ctx context.Context,
 	dependencies ChatContextDependencies,
-	engramIDs []uuid.UUID,
-	actorUserID uuid.UUID,
+	input rehydrationBundleCollectInput,
 ) ([]models.RehydrationBundle, error) {
-	bundles := make([]models.RehydrationBundle, 0, len(engramIDs))
-	for _, engramID := range engramIDs {
-		bundle, err := dependencies.GetRehydrationBundle(ctx, engramID, actorUserID)
+	if input.Limit <= 0 {
+		return []models.RehydrationBundle{}, nil
+	}
+	dedupedEngramIDs := dedupeUUIDsPreserveOrder(input.EngramIDs)
+	bundles := make([]models.RehydrationBundle, 0, min(input.Limit, len(dedupedEngramIDs)))
+	for _, engramID := range dedupedEngramIDs {
+		if len(bundles) >= input.Limit {
+			break
+		}
+		bundle, err := dependencies.GetRehydrationBundle(ctx, engramID, input.ActorUserID)
 		if err != nil {
 			return nil, err
 		}

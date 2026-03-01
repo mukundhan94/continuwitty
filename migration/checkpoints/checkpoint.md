@@ -147,7 +147,7 @@
 - [x] Added additive `cw_plan_applied` metadata in chat send/stream payloads and MCP send responses.
 - [x] Added parser/runtime tests for directive forms and metadata propagation.
 - [x] Added access-aware federated cross-project graph traversal/read baseline in link repository visibility and traversal SQL.
-- [ ] Add ranking/context-packing fusion tuning for federated traversal candidates in retrieval assembly.
+- [x] Added ranking/context-packing fusion tuning for federated traversal candidates with resilient rehydration backfill in retrieval assembly.
 - [ ] Add blocked-node filtering telemetry/audit signals and cross-project integration coverage.
 
 ---
