@@ -20,6 +20,7 @@
 - **Phase 25 completed:** link REST + MCP operations (`create/list/update/archive/suggest/trace`) and hybrid link suggestion pipeline.
 - **Phase 26 completed (backend baseline):** graph-aware chat context assembly with bounded linked recall and trace metadata (`used_engram_link_ids`, `engram_trace_paths`).
 - **Phase 27 completed:** web graph traceability UX with linked-recall controls, linked-memory panel (relation/weight/age), and suggestion accept/reject workflow.
+- **Phase 28 in progress:** temporal decay + reinforcement baseline in chat-linked recall scoring and successful-session link reinforcement updates.
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
@@ -96,6 +97,15 @@
 - [x] Added linked engram relationship panel with relation type, weight, and age.
 - [x] Added link suggestion accept/reject workflow in the web UI.
 - [x] Added richer "this answer used" explainability chain unifying links and citations.
+
+### Phase 28 Progress Tracker
+
+- [x] Added temporal decay to effective link-quality scoring in graph-aware context assembly.
+- [x] Added successful-session link reinforcement (`temporal_weight` boost + `last_reinforced_at` updates).
+- [x] Added suggested-link promotion to `active` when reinforced through successful usage.
+- [ ] Add graph hygiene jobs for duplicate/conflict detection and stale-link archival recommendations.
+- [ ] Add graph-focused eval coverage (`trace correctness`, `relevance impact`, `drift tolerance`).
+- [ ] Add configurable noisy-link suppression thresholds.
 
 ### Phase 31 Progress Tracker
 
@@ -263,7 +273,7 @@
 | 25 | Link APIs, MCP Tools, Suggestion Pipeline | Completed |
 | 26 | Graph-Aware Context Assembly | Completed (backend baseline) |
 | 27 | Memory Graph UX and Traceability | Completed |
-| 28 | Temporal Dynamics and Graph Quality Controls | Planned |
+| 28 | Temporal Dynamics and Graph Quality Controls | In Progress |
 | 32 | ContinuWitty Query Protocol | Planned |
 | 33 | Portable Export/Import Stash | Completed |
 | 34 | Security Audit Remediation Program | Completed |

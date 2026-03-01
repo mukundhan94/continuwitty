@@ -2,7 +2,6 @@ package chat
 
 import (
 	"context"
-	"math"
 	"slices"
 	"time"
 
@@ -263,26 +262,15 @@ func scoreTracePath(seedScore float64, step models.EngramLinkTraversalStep) floa
 }
 
 func scoreLinkQuality(link models.EngramLinkRecord) float64 {
-	recency := scoreLinkRecency(link)
-	score := (0.30 * link.Weight) + (0.25 * link.Confidence) + (0.30 * link.TemporalWeight) + (0.15 * recency)
+	now := time.Now().UTC()
+	recency := scoreLinkRecencyAt(now, link)
+	decayedTemporal := DecayedLinkTemporalWeight(now, link)
+	score := (0.30 * link.Weight) + (0.25 * link.Confidence) + (0.30 * decayedTemporal) + (0.15 * recency)
 	return clampFloat(score, 0.0, 1.0)
 }
 
 func scoreLinkRecency(link models.EngramLinkRecord) float64 {
-	reference := link.CreatedAt
-	if link.LastReinforcedAt != nil && !link.LastReinforcedAt.IsZero() {
-		reference = *link.LastReinforcedAt
-	}
-	if reference.IsZero() {
-		return 0.5
-	}
-	ageHours := time.Since(reference).Hours()
-	if ageHours <= 0 {
-		return 1.0
-	}
-	halfLifeHours := 30.0 * 24.0
-	score := math.Exp(-math.Ln2 * (ageHours / halfLifeHours))
-	return clampFloat(score, 0.0, 1.0)
+	return scoreLinkRecencyAt(time.Now().UTC(), link)
 }
 
 func filterTracePathsForUsedEngrams(

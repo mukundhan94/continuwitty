@@ -43,6 +43,7 @@ func buildChatService(
 		chat.ChatServiceDependencies{
 			Runtime:                        messageRuntime,
 			ResolveProvider:                resolveChatProviderDependency(settings),
+			ReinforceEngramLinks:           reinforceEngramLinksDependency(pool),
 			RunSessionLifecycleMaintenance: runSessionLifecycleMaintenanceDependency(settings, pool),
 			ProviderFallback:               buildProviderFallbackStrategy(settings),
 			CircuitPolicy:                  buildProviderCircuitPolicy(),

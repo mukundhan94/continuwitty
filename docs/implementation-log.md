@@ -7,6 +7,29 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 28 kickoff: temporal decay + reinforcement in graph recall)
+
+1. Added temporal weighting helpers in `internal/chat/link_temporal.go`:
+   - decayed temporal-weight computation with half-life decay.
+   - reinforcement boost computation for links reused in successful sessions.
+   - shared recency scoring helper for link freshness.
+2. Updated graph-aware context scoring in `internal/chat/context_links.go`:
+   - link quality now uses decayed temporal weight instead of raw persisted value.
+3. Added successful-session reinforcement wiring in `internal/chat/service.go`:
+   - send/stream paths now invoke reinforcement hook after successful assistant persistence.
+   - reinforcement failures are non-blocking and traced via lifecycle stage `link_reinforce_failed`.
+4. Added runtime DB dependency wiring in `cmd/api/chat_link_reinforcement.go` + `cmd/api/chat_runtime.go`:
+   - dedupe used link IDs, load links, skip archived/rejected links.
+   - update `temporal_weight`, `last_reinforced_at`, and promote `suggested` links to `active` on reinforcement.
+5. Added/updated tests:
+   - `internal/chat/link_temporal_test.go`
+   - `internal/chat/service_test.go`
+   - `cmd/api/chat_link_reinforcement_test.go`
+6. Validation:
+   - `go test ./internal/chat ./cmd/api -count=1`
+   - `go test ./... -count=1`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`).
+
 ### 2026-03-01 (Phase 27 closeout: linked-memory panel + suggestion workflow)
 
 1. Added dedicated linked-memory panel in `web/src/components/LinkedEngramPanel.tsx`:

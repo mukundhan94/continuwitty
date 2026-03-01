@@ -477,6 +477,18 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 28 - Temporal Dynamics and Graph Quality Controls
 
+### Status
+
+- In progress (2026-03-01).
+- Completed in this checkpoint:
+  - temporal decay now affects effective link quality scoring during graph-aware context assembly.
+  - successful chat send/stream paths now reinforce used links (`last_reinforced_at` + boosted decayed `temporal_weight`).
+  - suggested links that are reinforced through successful usage are promoted to `active`.
+- Remaining focus:
+  - graph hygiene jobs for duplicate/conflict detection and stale-link archival recommendations.
+  - graph-focused eval coverage for trace correctness/relevance/drift tolerance.
+  - optional noisy-link suppression threshold tuning.
+
 ### Goals
 
 - Keep the memory graph high-signal over time via reinforcement/decay and quality maintenance.

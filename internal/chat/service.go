@@ -28,6 +28,8 @@ const (
 	chatTraceProviderOpen  = "provider_circuit_open"
 	chatTracePersistOK     = "persist_success"
 	chatTracePersistFail   = "persist_failed"
+	chatTraceReinforceOK   = "link_reinforce_success"
+	chatTraceReinforceFail = "link_reinforce_failed"
 	chatTraceLifecycleOK   = "lifecycle_success"
 	chatTraceLifecycleFail = "lifecycle_failed"
 )
@@ -53,6 +55,7 @@ type ChatSendResponse struct {
 type ChatServiceDependencies struct {
 	Runtime                        *ChatMessageRuntime
 	ResolveProvider                func(provider models.ChatProvider) (providers.ChatProviderAdapter, error)
+	ReinforceEngramLinks           func(ctx context.Context, actorUserID uuid.UUID, linkIDs []uuid.UUID) error
 	RunSessionLifecycleMaintenance func(ctx context.Context, actorUserID uuid.UUID, session models.ChatSessionRecord) error
 	ProviderFallback               ProviderFallbackStrategy
 	CircuitPolicy                  ProviderCircuitPolicy
@@ -65,6 +68,7 @@ type ChatServiceDependencies struct {
 type ChatService struct {
 	runtime                        *ChatMessageRuntime
 	resolveProvider                func(provider models.ChatProvider) (providers.ChatProviderAdapter, error)
+	reinforceEngramLinks           func(ctx context.Context, actorUserID uuid.UUID, linkIDs []uuid.UUID) error
 	runSessionLifecycleMaintenance func(ctx context.Context, actorUserID uuid.UUID, session models.ChatSessionRecord) error
 	providerFallback               ProviderFallbackStrategy
 	circuitPolicy                  ProviderCircuitPolicy
@@ -73,11 +77,20 @@ type ChatService struct {
 	nowUTC                         func() time.Time
 }
 
+type reinforceTraceInput struct {
+	ActorUserID uuid.UUID
+	Prepared    PreparedGeneration
+	TraceID     string
+	Operation   string
+	Provider    models.ChatProvider
+}
+
 // NewChatService builds a chat service with injected dependencies.
 func NewChatService(dependencies ChatServiceDependencies) *ChatService {
 	service := &ChatService{
 		runtime:                        dependencies.Runtime,
 		resolveProvider:                dependencies.ResolveProvider,
+		reinforceEngramLinks:           dependencies.ReinforceEngramLinks,
 		runSessionLifecycleMaintenance: dependencies.RunSessionLifecycleMaintenance,
 		providerFallback:               dependencies.ProviderFallback,
 		circuitPolicy:                  dependencies.CircuitPolicy,
@@ -89,6 +102,9 @@ func NewChatService(dependencies ChatServiceDependencies) *ChatService {
 		service.runSessionLifecycleMaintenance = func(context.Context, uuid.UUID, models.ChatSessionRecord) error {
 			return nil
 		}
+	}
+	if service.reinforceEngramLinks == nil {
+		service.reinforceEngramLinks = func(context.Context, uuid.UUID, []uuid.UUID) error { return nil }
 	}
 	if service.providerFallback == nil {
 		service.providerFallback = noopProviderFallbackStrategy{}
@@ -146,6 +162,13 @@ func (service *ChatService) SendMessage(
 	if err != nil {
 		return ChatSendResponse{}, err
 	}
+	service.reinforceLinksWithTrace(ctx, reinforceTraceInput{
+		ActorUserID: actorUserID,
+		Prepared:    prepared,
+		TraceID:     traceID,
+		Operation:   chatOperationSend,
+		Provider:    providerCandidate.Provider,
+	})
 	if err := service.runLifecycleWithTrace(
 		ctx,
 		actorUserID,
@@ -189,18 +212,12 @@ func (service *ChatService) StreamMessageEvents(
 		return nil, err
 	}
 	if streamResult.ProviderError != nil {
-		events = append(events, streamProviderErrorEvent(streamResult.ProviderError))
-		service.recordStreamHealth(
-			StreamHealthSample{
-				Provider:   providerCandidate.Provider,
-				Operation:  chatOperationStream,
-				Outcome:    chatStreamOutcomeProviderError,
-				ErrorCode:  streamResult.ProviderError.ErrorCode(),
-				ChunkCount: 0,
-				Duration:   service.nowUTC().Sub(streamStartedAt),
-			},
-		)
-		return events, nil
+		return service.handleStreamProviderFailure(
+			events,
+			streamResult.ProviderError,
+			providerCandidate.Provider,
+			streamStartedAt,
+		), nil
 	}
 	events = append(events, streamResult.Events...)
 
@@ -220,21 +237,25 @@ func (service *ChatService) StreamMessageEvents(
 		providerCandidate.Provider,
 	)
 	if err != nil {
-		if serviceError, ok := err.(*ChatServiceError); ok {
-			events = append(events, streamPersistenceErrorEvent(serviceError))
-			service.recordStreamHealth(
-				StreamHealthSample{
-					Provider:   providerCandidate.Provider,
-					Operation:  chatOperationStream,
-					Outcome:    chatStreamOutcomePersistenceFail,
-					ChunkCount: streamChunkCount(streamResult.Events),
-					Duration:   service.nowUTC().Sub(streamStartedAt),
-				},
-			)
-			return events, nil
+		serviceError, ok := err.(*ChatServiceError)
+		if ok {
+			return service.handleStreamPersistenceFailure(
+				events,
+				serviceError,
+				providerCandidate.Provider,
+				streamResult.Events,
+				streamStartedAt,
+			), nil
 		}
 		return nil, err
 	}
+	service.reinforceLinksWithTrace(ctx, reinforceTraceInput{
+		ActorUserID: actorUserID,
+		Prepared:    prepared,
+		TraceID:     traceID,
+		Operation:   chatOperationStream,
+		Provider:    providerCandidate.Provider,
+	})
 	if err := service.runLifecycleWithTrace(
 		ctx,
 		actorUserID,
@@ -252,16 +273,64 @@ func (service *ChatService) StreamMessageEvents(
 			Payload: BuildStreamDonePayload(prepared, *assistantMessage, streamResult.FullText, nil),
 		},
 	)
+	service.recordStreamCompletion(providerCandidate.Provider, streamResult.Events, streamStartedAt)
+	return events, nil
+}
+
+func (service *ChatService) handleStreamProviderFailure(
+	events []StreamEvent,
+	providerError *ChatProviderExecutionError,
+	provider models.ChatProvider,
+	streamStartedAt time.Time,
+) []StreamEvent {
+	events = append(events, streamProviderErrorEvent(providerError))
 	service.recordStreamHealth(
 		StreamHealthSample{
-			Provider:   providerCandidate.Provider,
+			Provider:   provider,
 			Operation:  chatOperationStream,
-			Outcome:    chatStreamOutcomeCompleted,
-			ChunkCount: streamChunkCount(streamResult.Events),
+			Outcome:    chatStreamOutcomeProviderError,
+			ErrorCode:  providerError.ErrorCode(),
+			ChunkCount: 0,
 			Duration:   service.nowUTC().Sub(streamStartedAt),
 		},
 	)
-	return events, nil
+	return events
+}
+
+func (service *ChatService) handleStreamPersistenceFailure(
+	events []StreamEvent,
+	serviceError *ChatServiceError,
+	provider models.ChatProvider,
+	streamEvents []StreamEvent,
+	streamStartedAt time.Time,
+) []StreamEvent {
+	events = append(events, streamPersistenceErrorEvent(serviceError))
+	service.recordStreamHealth(
+		StreamHealthSample{
+			Provider:   provider,
+			Operation:  chatOperationStream,
+			Outcome:    chatStreamOutcomePersistenceFail,
+			ChunkCount: streamChunkCount(streamEvents),
+			Duration:   service.nowUTC().Sub(streamStartedAt),
+		},
+	)
+	return events
+}
+
+func (service *ChatService) recordStreamCompletion(
+	provider models.ChatProvider,
+	streamEvents []StreamEvent,
+	streamStartedAt time.Time,
+) {
+	service.recordStreamHealth(
+		StreamHealthSample{
+			Provider:   provider,
+			Operation:  chatOperationStream,
+			Outcome:    chatStreamOutcomeCompleted,
+			ChunkCount: streamChunkCount(streamEvents),
+			Duration:   service.nowUTC().Sub(streamStartedAt),
+		},
+	)
 }
 
 func (service *ChatService) prepareGenerationWithTrace(
@@ -331,6 +400,37 @@ func (service *ChatService) runLifecycleWithTrace(
 	}
 	service.recordLifecycleTrace(traceID, operation, chatTraceLifecycleOK, &prepared, provider, "", 0)
 	return nil
+}
+
+func (service *ChatService) reinforceLinksWithTrace(ctx context.Context, input reinforceTraceInput) {
+	if len(input.Prepared.Context.UsedEngramLinkIDs) == 0 {
+		return
+	}
+	if err := service.reinforceEngramLinks(
+		ctx,
+		input.ActorUserID,
+		input.Prepared.Context.UsedEngramLinkIDs,
+	); err != nil {
+		service.recordLifecycleTrace(
+			input.TraceID,
+			input.Operation,
+			chatTraceReinforceFail,
+			&input.Prepared,
+			input.Provider,
+			"link_reinforce_error",
+			0,
+		)
+		return
+	}
+	service.recordLifecycleTrace(
+		input.TraceID,
+		input.Operation,
+		chatTraceReinforceOK,
+		&input.Prepared,
+		input.Provider,
+		"",
+		0,
+	)
 }
 
 func buildChatSendResponse(
