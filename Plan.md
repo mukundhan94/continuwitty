@@ -301,7 +301,7 @@ Build a local-first memory system where agents and humans can:
 - Completed (2026-03-01).
 - Completed deliverables:
   - versioned governance metadata for chat/MCP/eval surfaces (`chat_prompt_policy_version`, `mcp_tool_policy_version`, `eval_suite_version`).
-  - deterministic EvalOps suite in Go for `continuity`, `citation_trust`, and `memory_drift`.
+  - deterministic EvalOps suite in Go for `continuity`, `citation_trust`, and `memory_drift` (extended in Phase 28 with `graph_trace` coverage).
   - release/CI regression delta gate with baseline + previous-run threshold enforcement.
   - historical trend artifacts (`latest.json`, `history.jsonl`, markdown trend report) and operational runbook.
 
@@ -486,8 +486,8 @@ Build a local-first memory system where agents and humans can:
   - suggested links that are reinforced through successful usage are promoted to `active`.
   - graph hygiene recommendation engine now detects duplicate-target links, relation conflicts, and stale low-value links.
   - authenticated hygiene API route is available at `POST /api/v1/engrams/{engram_id}/links/hygiene`.
+  - graph-focused EvalOps coverage now includes `graph_trace` dimension checks (`used_engram_link_count`, `required_trace_targets`) with updated baseline fixtures (8 deterministic cases across 4 dimensions).
 - Remaining focus:
-  - graph-focused eval coverage for trace correctness/relevance/drift tolerance.
   - scheduled hygiene execution/auto-archival policy around recommendation outputs.
   - optional noisy-link suppression threshold tuning and policy controls.
 
@@ -901,8 +901,8 @@ Build a local-first memory system where agents and humans can:
    - Phase 24 (graph foundations) completed on 2026-03-01.
    - Phase 25 (link APIs/MCP + suggestions) completed on 2026-03-01.
    - Phase 26 (graph-aware recall) backend baseline completed on 2026-03-01.
-   - Phase 27 (traceability UX)
-   - Phase 28 (temporal dynamics + graph quality)
+   - Phase 27 (traceability UX) completed on 2026-03-01.
+   - Phase 28 (temporal dynamics + graph quality) in progress: temporal dynamics, hygiene API, and graph-trace eval coverage complete; scheduled hygiene and noisy-link suppression controls remain.
 4. Execute Phase 32 after Phase 24-28 baselines are in place:
    - add `cw>` query protocol
    - enable access-aware federated linked recall across projects

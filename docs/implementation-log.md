@@ -7,6 +7,34 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 28 extension: graph-trace EvalOps coverage + docs realignment)
+
+1. Expanded EvalOps suite contracts in `internal/evalops/types.go`:
+   - added dimension `graph_trace`.
+   - added `EvalCase` graph-trace fields:
+     - `used_engram_link_ids`
+     - `trace_target_ids`
+     - `min_used_engram_link_count`
+     - `required_trace_targets`
+2. Expanded deterministic fixtures in `internal/evalops/fixtures.go`:
+   - refactored fixture groups into helper constructors.
+   - increased baseline fixture set from 6 to 8 cases by adding 2 `graph_trace` cases.
+3. Added graph-trace checks to evaluator in `internal/evalops/runner.go`:
+   - `used_engram_link_count` minimum-count check.
+   - `required_trace_targets` presence check.
+   - shared helper refactor for required-value matching to keep code-health clean.
+4. Updated eval regression expectations:
+   - `internal/evalops/runner_test.go` now expects 8 cases and 4 dimensions.
+   - `evals/baselines/eval-suite-v1.json` updated with `graph_trace` dimension summary and 8-case totals.
+5. Documentation cleanup and alignment:
+   - updated `Plan.md` and `migration/checkpoints/checkpoint.md` for Phase 28 progress and remaining scope.
+   - updated `docs/evalops-governance-v1.md` and `docs/testing-guide.md` with `graph_trace` dimension.
+6. Validation:
+   - `go test ./internal/evalops ./cmd/evalops -count=1`
+   - `go test ./... -count=1`
+   - `make eval` (8/8, delta gate pass)
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Phase 28 extension: graph hygiene recommendation route)
 
 1. Added graph hygiene models and service:
@@ -3083,11 +3111,11 @@
 
 ### Next Immediate Steps (One By One)
 
-1. Phase 31 closeout: update `AGENT.md` + skills with final project-default/soft-delete/collection invariants and MCP organization contracts.
-2. Phase 31 closeout: run/record full acceptance mock execution (`make acceptance-test-mock`) with new admin-memory scenarios.
-3. Phase 18 follow-up: add explicit consolidation merge/grouping event semantics in timeline rendering.
-4. Phase 19 design: implement project membership and scoped sharing/revocation flows with audit trails.
-5. Phase 20 security gate: OIDC integration + distributed rate-limit strategy + production auth hardening tests.
+1. Phase 28: add scheduled hygiene execution and deterministic auto-archival policy wiring from recommendation outputs.
+2. Phase 28: add configurable noisy-link suppression thresholds and operator-facing tuning controls.
+3. Phase 20: complete production security hardening with centralized audit sink rollout contract.
+4. Phase 20: extend OIDC/provider abuse-path and negative acceptance coverage.
+5. Phase 32 prep: finalize remaining Phase 28 controls before cross-project federated query protocol rollout.
 
 ### 2026-02-22 (Phase tracking kickoff - export/import stash + audit remediation)
 

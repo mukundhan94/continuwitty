@@ -4,8 +4,8 @@
   "generated_at": "2026-03-01T00:00:00Z",
   "passed": true,
   "score": 1,
-  "passed_cases": 6,
-  "total_cases": 6,
+  "passed_cases": 8,
+  "total_cases": 8,
   "cases": [],
   "dimensions": [
     {
@@ -22,6 +22,12 @@
     },
     {
       "dimension": "memory_drift",
+      "passed": 2,
+      "total": 2,
+      "score": 1
+    },
+    {
+      "dimension": "graph_trace",
       "passed": 2,
       "total": 2,
       "score": 1

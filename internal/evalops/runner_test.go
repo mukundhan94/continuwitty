@@ -11,14 +11,14 @@ func TestRunDefaultSuitePasses(t *testing.T) {
 	if !summary.Passed {
 		t.Fatalf("expected suite to pass")
 	}
-	if summary.TotalCases != 6 {
-		t.Fatalf("expected 6 cases, got %d", summary.TotalCases)
+	if summary.TotalCases != 8 {
+		t.Fatalf("expected 8 cases, got %d", summary.TotalCases)
 	}
 	if summary.Score != 1 {
 		t.Fatalf("expected perfect score, got %.4f", summary.Score)
 	}
-	if len(summary.Dimensions) != 3 {
-		t.Fatalf("expected 3 dimensions, got %d", len(summary.Dimensions))
+	if len(summary.Dimensions) != 4 {
+		t.Fatalf("expected 4 dimensions, got %d", len(summary.Dimensions))
 	}
 }
 

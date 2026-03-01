@@ -15,12 +15,12 @@
 - **Phase 20 in progress:** production security hardening kickoff with OIDC login/session mapping baseline, OIDC config validation/redaction coverage, and session UI callback tests in Go runtime.
 - **Phase 21 completed:** observability/reliability foundation with request telemetry middleware, expanded `/api/v1/metrics` health categories (provider failures, stream outcomes, lifecycle traces), and provider fallback/circuit strategy.
 - **Phase 22 completed:** release automation and deployment profile hardening with staged CI gates, compose profile matrix (`dev`/`acceptance`/`release-smoke`), and versioned release checklist/rollback runbook.
-- **Phase 23 completed:** EvalOps + governance hardening with versioned prompt/tool/eval metadata, deterministic continuity/citation/memory-drift suite, delta regression gates, and historical trend artifacts.
+- **Phase 23 completed:** EvalOps + governance hardening with versioned prompt/tool/eval metadata, deterministic continuity/citation/memory-drift suite (extended in Phase 28 with `graph_trace`), delta regression gates, and historical trend artifacts.
 - **Phase 24 completed:** graph foundation with `engram_links`/`engram_link_events`, indexed traversal paths, and repository baseline for create/list/update/archive/traversal.
 - **Phase 25 completed:** link REST + MCP operations (`create/list/update/archive/suggest/trace`) and hybrid link suggestion pipeline.
 - **Phase 26 completed (backend baseline):** graph-aware chat context assembly with bounded linked recall and trace metadata (`used_engram_link_ids`, `engram_trace_paths`).
 - **Phase 27 completed:** web graph traceability UX with linked-recall controls, linked-memory panel (relation/weight/age), and suggestion accept/reject workflow.
-- **Phase 28 in progress:** temporal decay/reinforcement baseline plus graph hygiene recommendation API for duplicate/conflict/stale link detection.
+- **Phase 28 in progress:** temporal decay/reinforcement baseline, graph hygiene recommendation API for duplicate/conflict/stale link detection, and graph-trace EvalOps coverage for trace correctness checks.
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
@@ -64,6 +64,7 @@
 - [x] Added baseline + previous-run delta regression gate for eval scores.
 - [x] Added run history persistence and markdown trend reporting.
 - [x] Integrated eval gate into `make check`, `make release-gate`, and CI Go backend checks.
+- [x] Extended EvalOps in Phase 28 with `graph_trace` dimension coverage while preserving v1 governance contracts.
 
 ### Phase 24 Progress Tracker
 
@@ -104,7 +105,7 @@
 - [x] Added successful-session link reinforcement (`temporal_weight` boost + `last_reinforced_at` updates).
 - [x] Added suggested-link promotion to `active` when reinforced through successful usage.
 - [x] Added graph hygiene recommendation engine + route (`/api/v1/engrams/{engram_id}/links/hygiene`) for duplicate/conflict/stale-low-value detection.
-- [ ] Add graph-focused eval coverage (`trace correctness`, `relevance impact`, `drift tolerance`).
+- [x] Added graph-focused eval coverage (`trace correctness`, `relevance impact`, `drift tolerance`) via `graph_trace` fixtures and checks (`used_engram_link_count`, `required_trace_targets`).
 - [ ] Add scheduled hygiene execution/auto-archival policy around recommendation outputs.
 - [ ] Add configurable noisy-link suppression thresholds.
 

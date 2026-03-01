@@ -52,6 +52,7 @@ Deterministic suite dimensions:
 - continuity
 - citation_trust
 - memory_drift
+- graph_trace
 
 Primary commands:
 

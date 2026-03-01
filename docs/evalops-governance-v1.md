@@ -60,6 +60,7 @@ Dimensions:
 - `continuity`
 - `citation_trust`
 - `memory_drift`
+- `graph_trace`
 
 ---
 
@@ -103,4 +104,4 @@ make eval-report
 
 `make release-gate` includes `make check`, which includes `make eval`.
 
-This ensures no release candidate passes deterministic gates when continuity/citation/memory-drift deltas regress beyond thresholds.
+This ensures no release candidate passes deterministic gates when continuity/citation/memory-drift/graph-trace deltas regress beyond thresholds.

@@ -9,12 +9,14 @@ const (
 	DimensionContinuity    Dimension = "continuity"
 	DimensionCitationTrust Dimension = "citation_trust"
 	DimensionMemoryDrift   Dimension = "memory_drift"
+	DimensionGraphTrace    Dimension = "graph_trace"
 )
 
 var defaultDimensionOrder = []Dimension{
 	DimensionContinuity,
 	DimensionCitationTrust,
 	DimensionMemoryDrift,
+	DimensionGraphTrace,
 }
 
 // DefaultDimensionOrder returns the stable ordering used in reports.
@@ -32,18 +34,22 @@ type SourceReference struct {
 
 // EvalCase captures the response sample and quality rules for one deterministic evaluation case.
 type EvalCase struct {
-	ID                  string            `json:"id"`
-	Dimension           Dimension         `json:"dimension"`
-	Prompt              string            `json:"prompt"`
-	OutputText          string            `json:"output_text"`
-	UsedEngramIDs       []string          `json:"used_engram_ids,omitempty"`
-	SourceReferences    []SourceReference `json:"source_references,omitempty"`
-	RequiredTerms       []string          `json:"required_terms,omitempty"`
-	ForbiddenTerms      []string          `json:"forbidden_terms,omitempty"`
-	RequiredSourceURLs  []string          `json:"required_source_urls,omitempty"`
-	MinUsedEngramCount  int               `json:"min_used_engram_count,omitempty"`
-	BaselineAnchorTerms []string          `json:"baseline_anchor_terms,omitempty"`
-	MinAnchorRecall     float64           `json:"min_anchor_recall,omitempty"`
+	ID                     string            `json:"id"`
+	Dimension              Dimension         `json:"dimension"`
+	Prompt                 string            `json:"prompt"`
+	OutputText             string            `json:"output_text"`
+	UsedEngramIDs          []string          `json:"used_engram_ids,omitempty"`
+	UsedEngramLinkIDs      []string          `json:"used_engram_link_ids,omitempty"`
+	TraceTargetIDs         []string          `json:"trace_target_ids,omitempty"`
+	SourceReferences       []SourceReference `json:"source_references,omitempty"`
+	RequiredTerms          []string          `json:"required_terms,omitempty"`
+	ForbiddenTerms         []string          `json:"forbidden_terms,omitempty"`
+	RequiredSourceURLs     []string          `json:"required_source_urls,omitempty"`
+	MinUsedEngramCount     int               `json:"min_used_engram_count,omitempty"`
+	MinUsedEngramLinkCount int               `json:"min_used_engram_link_count,omitempty"`
+	RequiredTraceTargets   []string          `json:"required_trace_targets,omitempty"`
+	BaselineAnchorTerms    []string          `json:"baseline_anchor_terms,omitempty"`
+	MinAnchorRecall        float64           `json:"min_anchor_recall,omitempty"`
 }
 
 // SuiteDefinition captures versioned case fixtures for one run.

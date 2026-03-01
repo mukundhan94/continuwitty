@@ -56,6 +56,8 @@ func evaluateCase(evalCase EvalCase) EvalCaseResult {
 	checks = appendCheckIfDefined(checks, evaluateRequiredTerms(evalCase))
 	checks = appendCheckIfDefined(checks, evaluateForbiddenTerms(evalCase))
 	checks = appendCheckIfDefined(checks, evaluateUsedEngramCount(evalCase))
+	checks = appendCheckIfDefined(checks, evaluateUsedEngramLinkCount(evalCase))
+	checks = appendCheckIfDefined(checks, evaluateRequiredTraceTargets(evalCase))
 	checks = appendCheckIfDefined(checks, evaluateRequiredSourceURLs(evalCase))
 	checks = appendCheckIfDefined(checks, evaluateAnchorRecall(evalCase))
 	if len(checks) == 0 {
@@ -141,54 +143,124 @@ func evaluateForbiddenTerms(evalCase EvalCase) *CheckResult {
 }
 
 func evaluateUsedEngramCount(evalCase EvalCase) *CheckResult {
-	if evalCase.MinUsedEngramCount <= 0 {
+	return evaluateMinimumCountCheck(
+		"used_engram_count",
+		evalCase.MinUsedEngramCount,
+		len(evalCase.UsedEngramIDs),
+	)
+}
+
+func evaluateUsedEngramLinkCount(evalCase EvalCase) *CheckResult {
+	return evaluateMinimumCountCheck(
+		"used_engram_link_count",
+		evalCase.MinUsedEngramLinkCount,
+		len(evalCase.UsedEngramLinkIDs),
+	)
+}
+
+func evaluateMinimumCountCheck(name string, required int, actual int) *CheckResult {
+	if required <= 0 {
 		return nil
 	}
-	count := len(evalCase.UsedEngramIDs)
-	passed := count >= evalCase.MinUsedEngramCount
+	passed := actual >= required
 	score := 0.0
 	if passed {
 		score = 1.0
 	}
 	return &CheckResult{
-		Name:    "used_engram_count",
+		Name:    name,
 		Passed:  passed,
 		Score:   score,
-		Details: fmt.Sprintf("required=%d actual=%d", evalCase.MinUsedEngramCount, count),
+		Details: fmt.Sprintf("required=%d actual=%d", required, actual),
 	}
+}
+
+func evaluateRequiredTraceTargets(evalCase EvalCase) *CheckResult {
+	return evaluateRequiredValuesCheck(
+		requiredValuesCheckInput{
+			Name:      "required_trace_targets",
+			Required:  evalCase.RequiredTraceTargets,
+			Available: evalCase.TraceTargetIDs,
+			Normalize: normalizeText,
+		},
+	)
 }
 
 func evaluateRequiredSourceURLs(evalCase EvalCase) *CheckResult {
 	if len(evalCase.RequiredSourceURLs) == 0 {
 		return nil
 	}
-	available := make(map[string]struct{}, len(evalCase.SourceReferences))
+	available := make([]string, 0, len(evalCase.SourceReferences))
 	for _, source := range evalCase.SourceReferences {
-		normalized := normalizeURL(source.URL)
+		available = append(available, source.URL)
+	}
+	return evaluateRequiredValuesCheck(
+		requiredValuesCheckInput{
+			Name:      "required_source_urls",
+			Required:  evalCase.RequiredSourceURLs,
+			Available: available,
+			Normalize: normalizeURL,
+		},
+	)
+}
+
+type requiredValuesCheckInput struct {
+	Name      string
+	Required  []string
+	Available []string
+	Normalize func(string) string
+}
+
+func evaluateRequiredValuesCheck(
+	input requiredValuesCheckInput,
+) *CheckResult {
+	if len(input.Required) == 0 {
+		return nil
+	}
+	availableSet := buildNormalizedValueSet(input.Available, input.Normalize)
+	matched, missing := matchRequiredValues(input.Required, availableSet, input.Normalize)
+	return &CheckResult{
+		Name:    input.Name,
+		Passed:  len(missing) == 0,
+		Score:   roundScore(averageOrZero(float64(matched), len(input.Required))),
+		Details: joinedListDetail("missing", missing),
+	}
+}
+
+func buildNormalizedValueSet(
+	values []string,
+	normalize func(string) string,
+) map[string]struct{} {
+	normalizedValues := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		normalized := normalize(value)
 		if normalized == "" {
 			continue
 		}
-		available[normalized] = struct{}{}
+		normalizedValues[normalized] = struct{}{}
 	}
+	return normalizedValues
+}
+
+func matchRequiredValues(
+	required []string,
+	availableSet map[string]struct{},
+	normalize func(string) string,
+) (int, []string) {
 	missing := make([]string, 0)
 	matched := 0
-	for _, url := range evalCase.RequiredSourceURLs {
-		normalized := normalizeURL(url)
+	for _, value := range required {
+		normalized := normalize(value)
 		if normalized == "" {
 			continue
 		}
-		if _, exists := available[normalized]; exists {
+		if _, exists := availableSet[normalized]; exists {
 			matched++
 			continue
 		}
-		missing = append(missing, url)
+		missing = append(missing, value)
 	}
-	return &CheckResult{
-		Name:    "required_source_urls",
-		Passed:  len(missing) == 0,
-		Score:   roundScore(averageOrZero(float64(matched), len(evalCase.RequiredSourceURLs))),
-		Details: joinedListDetail("missing", missing),
-	}
+	return matched, missing
 }
 
 func evaluateAnchorRecall(evalCase EvalCase) *CheckResult {
