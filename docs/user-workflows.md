@@ -70,7 +70,11 @@ make api
 ```
 Open `http://localhost:8000/login`, sign in (local credentials or OIDC when enabled), then use `/ui` to run create/list/query/rehydrate from the dashboard.
 For admin role validation, open `http://localhost:8000/ui/admin` and verify user list visibility.
-For observability baseline checks, open `http://localhost:8000/api/v1/metrics` after a few API requests and verify request counters increment.
+For observability baseline checks, open `http://localhost:8000/api/v1/metrics` after a few API requests and chat sends/streams, then verify:
+- request counters increment (`totals`, `by_route`),
+- provider failure categories appear when upstream failures are simulated (`provider_failures`),
+- stream outcomes/chunk counts update after streaming responses (`stream_health`),
+- lifecycle stage counters advance for send/stream paths (`lifecycle_traces`).
 
 Then test durable agent runs:
 

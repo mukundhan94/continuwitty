@@ -18,7 +18,7 @@
 - [x] Phase 34: security audit remediation program (critical defaults, auth/session hardening, MCP/OAuth protections)
 - [x] Phase 19: implement project membership and scoped sharing/revocation flows with audit trails
 - [ ] Phase 20: production security closeout (OIDC rollout hardening + centralized audit sink + auth abuse-path tests)
-- [ ] Phase 21 (in progress): observability and reliability (request telemetry/metrics kickoff complete; stream/provider/tracing slices pending)
+- [x] Phase 21: observability and reliability (request telemetry/metrics, stream/provider health categories, lifecycle tracing hooks, provider fallback/circuit strategy)
 - [ ] Phase 22: release automation and deployment profiles
 - [ ] Phase 23: EvalOps and prompt/policy governance
 

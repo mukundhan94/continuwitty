@@ -7,6 +7,34 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 21 closeout: chat reliability + observability expansion)
+
+1. Added provider reliability primitives:
+   - `internal/chat/provider_circuit.go` implements transient-failure circuit breaker policy (threshold + cooldown).
+   - `internal/chat/provider_fallback.go` implements ordered fallback provider/model candidate strategy.
+2. Wired reliability policies into chat send/stream execution:
+   - `internal/chat/service.go` now executes provider attempts with fallback on transient failures and circuit-open short-circuiting.
+   - persisted assistant metadata now uses actual serving provider/model (`internal/chat/message_runtime.go`).
+3. Added lifecycle trace hooks:
+   - chat service now emits prepare/provider/persist/lifecycle trace samples for send and stream paths.
+   - `internal/chat/observability.go` defines chat observability contracts.
+4. Expanded `/api/v1/metrics` payload:
+   - `internal/api/request_observability.go` now includes:
+     - `provider_failures` counters by operation/provider/error code,
+     - `stream_health` counters and latency/chunk aggregates by operation/provider/outcome,
+     - `lifecycle_traces` counters by operation/stage/error class.
+5. Wired runtime dependencies for both REST and MCP chat paths:
+   - `cmd/api/chat_runtime.go`, `cmd/api/main.go`, `cmd/api/mcp_message_send_adapter.go`.
+6. Added/updated regression tests:
+   - `internal/chat/provider_circuit_test.go`
+   - `internal/chat/provider_fallback_test.go`
+   - `internal/chat/service_test.go`
+   - `internal/api/request_observability_test.go`
+   - `cmd/api/chat_runtime_test.go`
+7. Validation:
+   - `go test ./internal/chat -count=1`
+   - `go test ./cmd/api ./internal/api ./internal/chat -count=1`
+
 ### 2026-02-28 (Phase 19: collaboration, sharing, and membership-safe access)
 
 1. Added collaboration schema and persistence:

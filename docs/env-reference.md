@@ -24,7 +24,7 @@
 | `APP_SEMANTIC_VERSION` | - | Application version string |
 | `APP_COMMIT_SHA` | - | Git commit SHA |
 | `API_REQUEST_LOG_ENABLED` | `true` | Enable structured per-request telemetry logs |
-| `API_METRICS_ENABLED` | `true` | Enable in-process request metrics endpoint (`/api/v1/metrics`) |
+| `API_METRICS_ENABLED` | `true` | Enable in-process observability endpoint (`/api/v1/metrics`) including request/provider/stream/lifecycle counters |
 | `APP_SESSION_SECRET` | - | Session signing secret |
 
 ## Security

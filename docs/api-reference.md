@@ -37,7 +37,7 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/metrics` | Process-local request metrics snapshot (route/domain/status + latency aggregates) |
+| `GET` | `/api/v1/metrics` | Process-local observability snapshot (request, provider, stream, and lifecycle counters) |
 
 ### Engrams
 
@@ -178,6 +178,15 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 ---
 
 ## Examples
+
+### Observability Snapshot
+
+`GET /api/v1/metrics` returns:
+
+- `totals`, `by_status_class`, `by_domain`, `by_route` for request-level telemetry.
+- `provider_failures` keyed by `operation provider error_code`.
+- `stream_health` keyed by `operation provider outcome` with count, chunks, and duration aggregates.
+- `lifecycle_traces` keyed by `operation stage` (or `operation stage error_code` for failure stages).
 
 ### Create Engram
 

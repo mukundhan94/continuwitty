@@ -154,6 +154,8 @@
 | CP184 | 2026-02-28 | Completed | Phase 19 collaboration parity baseline: added `project_members` + `project_audit_events` persistence/read models, membership-gated read predicates across engram/chat/document repositories, project member/audit REST routes, engram share/unshare REST routes, MCP tool parity (`project.member_*`, `engram.share`, `engram.unshare`), chat pin/unpin audit emission, and admin memory UI member/audit controls with targeted Go + web test pass under >9.5 code-health gate |
 | CP185 | 2026-02-28 | Completed | Phase 20 security kickoff baseline: added optional OIDC login provider (`internal/auth/oidc_login.go`), wired `/login/oidc` + `/login/oidc/callback` session mapping routes, extended config/env validation + redaction for `OIDC_*`, and shipped targeted OIDC route/config tests plus full `go test ./...` pass under >9.5 code-health gate |
 | CP186 | 2026-03-01 | Completed | Phase 21 observability kickoff baseline: added request telemetry middleware with structured route/domain/status/duration logging, introduced process-local in-memory request metrics and `/api/v1/metrics` route wiring, extended config/env toggles for request logging/metrics, and shipped router+middleware tests plus full `go test ./...` pass under >9.5 code-health gate |
+| CP187 | 2026-03-01 | Completed | Phase 21 reliability primitives baseline: added provider circuit policy (`internal/chat/provider_circuit.go`) with transient-failure cooldown behavior, added ordered provider fallback strategy (`internal/chat/provider_fallback.go`) with model selection rules, and shipped focused unit coverage for both modules under >9.5 code-health gate |
+| CP188 | 2026-03-01 | Completed | Phase 21 observability/reliability closure: wired fallback+circuit logic into chat send/stream flows, added lifecycle trace hooks and provider/stream observability callbacks, expanded `/api/v1/metrics` snapshot with provider-failure/stream-health/lifecycle counters, wired REST+MCP runtime dependencies, and shipped regression coverage with `go test ./cmd/api ./internal/api ./internal/chat` under >9.5 code-health gate |
 
 ## Checkpoint Details
 
@@ -6512,3 +6514,41 @@
   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
   - result: `quality_gates=passed`
   - findings: none.
+
+### CP187 - Phase 21 Reliability Primitives Baseline
+
+- Added provider circuit policy module:
+  - `internal/chat/provider_circuit.go`
+  - transient failure tracking by provider, threshold-triggered circuit opening, and cooldown-based recovery.
+- Added ordered provider fallback strategy module:
+  - `internal/chat/provider_fallback.go`
+  - deterministic candidate ordering and fallback model resolution behavior.
+- Added focused unit tests:
+  - `internal/chat/provider_circuit_test.go`
+  - `internal/chat/provider_fallback_test.go`.
+- Full verification:
+  - `go test ./internal/chat -count=1`
+  - passed.
+
+### CP188 - Phase 21 Observability/Reliability Closure
+
+- Wired fallback + circuit strategy into chat service execution:
+  - `internal/chat/service.go`
+  - transient provider failures now attempt ordered fallback providers; open circuits short-circuit failed providers.
+- Added lifecycle trace hooks + chat observability contracts:
+  - `internal/chat/observability.go`
+  - lifecycle stages emitted for prepare/provider/persist/lifecycle in both send and stream paths.
+- Expanded `/api/v1/metrics` observability payload:
+  - `internal/api/request_observability.go`
+  - added provider failure categories, stream-health outcomes, and lifecycle trace counters.
+- Wired observability into REST + MCP runtime composition:
+  - `cmd/api/chat_runtime.go`
+  - `cmd/api/main.go`
+  - `cmd/api/mcp_message_send_adapter.go`.
+- Added regression coverage:
+  - `internal/chat/service_test.go`
+  - `internal/api/request_observability_test.go`
+  - `cmd/api/chat_runtime_test.go`.
+- Full verification:
+  - `go test ./cmd/api ./internal/api ./internal/chat -count=1`
+  - passed.

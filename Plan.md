@@ -240,15 +240,14 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress (2026-03-01 checkpoint).
-- Completed in this phase kickoff:
+- Completed (2026-03-01).
+- Completed deliverables:
   - structured request telemetry middleware with domain/route/status/duration logging.
   - process-local request metrics aggregation with `/api/v1/metrics` operator endpoint.
-  - router + middleware test coverage for route-level metrics aggregation.
-- Remaining focus:
-  - stream-health and provider-failure category metrics.
-  - tracing hooks for chat/session lifecycle.
-  - provider fallback/circuit-breaker strategy.
+  - stream-health and provider-failure category metrics in `/api/v1/metrics`.
+  - lifecycle trace hooks for chat prepare/provider/persist/lifecycle stages.
+  - provider fallback strategy with transient-error circuit-breaker protection.
+  - regression coverage for fallback, circuit-open behavior, stream outcomes, and telemetry recording.
 
 ### Goals
 
@@ -823,15 +822,14 @@ Build a local-first memory system where agents and humans can:
 ## Near-Term Execution Order
 
 1. Complete Phase 20 (production security hardening) with centralized audit sink + abuse-path coverage.
-2. Execute Phase 21 (observability and reliability) after Phase 20 gate closes.
-3. Execute Phase 22 (release automation and deployment profiles).
-4. Execute Phase 23 (EvalOps and prompt/policy governance).
-5. After Phase 23, execute link-graph roadmap in order:
+2. Execute Phase 22 (release automation and deployment profiles).
+3. Execute Phase 23 (EvalOps and prompt/policy governance).
+4. After Phase 23, execute link-graph roadmap in order:
    - Phase 24 (graph foundations)
    - Phase 25 (link APIs/MCP + suggestions)
    - Phase 26 (graph-aware recall)
    - Phase 27 (traceability UX)
    - Phase 28 (temporal dynamics + graph quality)
-6. Execute Phase 32 after Phase 24-28 baselines are in place:
+5. Execute Phase 32 after Phase 24-28 baselines are in place:
    - add `cw>` query protocol
    - enable access-aware federated linked recall across projects
