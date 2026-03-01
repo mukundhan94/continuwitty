@@ -57,3 +57,12 @@ func buildMembershipReadClause(
 		ownerlessClause,
 	)
 }
+
+func buildMembershipWriteClause(projectColumn string, actorPlaceholder string) string {
+	return fmt.Sprintf(
+		"(%s OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = %s AND pm.user_id = %s AND pm.revoked_at IS NULL AND pm.role IN ('owner', 'editor')))",
+		actorIsAdminSQL(actorPlaceholder),
+		projectColumn,
+		actorPlaceholder,
+	)
+}

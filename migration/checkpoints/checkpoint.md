@@ -16,6 +16,7 @@
 - **Phase 21 completed:** observability/reliability foundation with request telemetry middleware, expanded `/api/v1/metrics` health categories (provider failures, stream outcomes, lifecycle traces), and provider fallback/circuit strategy.
 - **Phase 22 completed:** release automation and deployment profile hardening with staged CI gates, compose profile matrix (`dev`/`acceptance`/`release-smoke`), and versioned release checklist/rollback runbook.
 - **Phase 23 completed:** EvalOps + governance hardening with versioned prompt/tool/eval metadata, deterministic continuity/citation/memory-drift suite, delta regression gates, and historical trend artifacts.
+- **Phase 24 in progress:** graph foundation kickoff with `engram_links` schema, optional `engram_link_events`, and repository baseline for create/list/update/archive/traversal.
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
@@ -59,6 +60,15 @@
 - [x] Added baseline + previous-run delta regression gate for eval scores.
 - [x] Added run history persistence and markdown trend reporting.
 - [x] Integrated eval gate into `make check`, `make release-gate`, and CI Go backend checks.
+
+### Phase 24 Progress Tracker
+
+- [x] Added `engram_links` table with lifecycle metadata and guardrail constraints.
+- [x] Added optional `engram_link_events` table for link lifecycle/audit transitions.
+- [x] Added project/source/target/status/relation/recency indexes for graph retrieval paths.
+- [x] Added repository baseline methods for create/list/update/archive and depth-limited traversal.
+- [x] Added visibility-safe traversal/list filters and score-aware ordering.
+- [ ] Complete runtime integration proof and phase closeout docs.
 
 ### Phase 31 Progress Tracker
 

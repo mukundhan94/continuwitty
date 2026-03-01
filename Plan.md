@@ -324,6 +324,16 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 24 - Engram Graph Foundations (Link Schema + Repository)
 
+### Status
+
+- In progress (2026-03-01).
+- Completed in kickoff:
+  - `engram_links` + `engram_link_events` schema foundation in `db/init/001_schema.sql`.
+  - repository baseline for create/list/update/archive and depth-limited traversal with visibility-safe filtering.
+  - typed link models (`relation_type`, `origin`, `status`) and unit tests.
+- Remaining focus:
+  - finalize runtime integration proof with phase checkpoint updates.
+
 ### Goals
 
 - Add first-class engram-to-engram links to support traceable, brain-like associative memory.

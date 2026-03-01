@@ -7,6 +7,39 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 24 kickoff: link graph schema + repository foundation)
+
+1. Added graph persistence schema foundation in `db/init/001_schema.sql`:
+   - `engram_links` directed edge table with:
+     - `source_engram_id`, `target_engram_id`, `relation_type`
+     - `weight`, `temporal_weight`, `confidence`
+     - `origin`, `status`, `evidence_json`
+     - `created_by_user_id`, `last_reinforced_at`, timestamps
+   - optional lifecycle/audit table `engram_link_events`.
+2. Added index coverage for graph query paths:
+   - project/status/relation/recency lookup
+   - source-node and target-node weighted traversal ordering
+   - status + reinforcement recency lookups.
+3. Added typed link models in `internal/models/engram_link.go`:
+   - relation type enum + parser
+   - origin enum + parser
+   - status enum + parser
+   - link and traversal record contracts.
+4. Added repository baseline in `internal/repository/engram_links.go`:
+   - `CreateEngramLink`
+   - `ListEngramLinks`
+   - `UpdateEngramLink`
+   - `ArchiveEngramLink`
+   - `TraverseEngramLinks` (depth-limited, cycle-safe expansion)
+5. Added visibility-safe graph access semantics:
+   - source/target engram membership/visibility checks on reads.
+   - write access checks for owner/editor/admin in graph mutations.
+6. Added tests:
+   - `internal/models/engram_link_test.go`
+   - `internal/repository/engram_links_test.go`
+7. Validation:
+   - `go test ./internal/models ./internal/repository -count=1`
+
 ### 2026-03-01 (Phase 23 closeout: EvalOps + prompt/policy governance)
 
 1. Added governance version constants and runtime config:

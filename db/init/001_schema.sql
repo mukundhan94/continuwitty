@@ -180,6 +180,60 @@ CREATE INDEX IF NOT EXISTS project_audit_events_project_created_idx
 CREATE INDEX IF NOT EXISTS project_audit_events_type_created_idx
   ON project_audit_events (event_type, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS engram_links (
+  link_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  source_engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  target_engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  relation_type TEXT NOT NULL CHECK (relation_type IN ('supports', 'depends_on', 'contradicts', 'related_to', 'derived_from')),
+  weight DOUBLE PRECISION NOT NULL DEFAULT 0.5 CHECK (weight >= 0.0 AND weight <= 1.0),
+  temporal_weight DOUBLE PRECISION NOT NULL DEFAULT 0.5 CHECK (temporal_weight >= 0.0 AND temporal_weight <= 1.0),
+  confidence DOUBLE PRECISION NOT NULL DEFAULT 0.5 CHECK (confidence >= 0.0 AND confidence <= 1.0),
+  origin TEXT NOT NULL DEFAULT 'manual' CHECK (origin IN ('manual', 'suggested', 'inferred', 'system')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suggested', 'archived', 'rejected')),
+  evidence_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_by_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  last_reinforced_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (source_engram_id <> target_engram_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS engram_links_source_target_relation_active_uidx
+  ON engram_links (source_engram_id, target_engram_id, relation_type)
+  WHERE status IN ('active', 'suggested');
+
+CREATE INDEX IF NOT EXISTS engram_links_project_status_relation_created_idx
+  ON engram_links (project_id, status, relation_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_links_source_status_weight_idx
+  ON engram_links (source_engram_id, status, weight DESC, confidence DESC);
+
+CREATE INDEX IF NOT EXISTS engram_links_target_status_weight_idx
+  ON engram_links (target_engram_id, status, weight DESC, confidence DESC);
+
+CREATE INDEX IF NOT EXISTS engram_links_status_reinforced_idx
+  ON engram_links (status, last_reinforced_at DESC, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS engram_link_events (
+  event_id UUID PRIMARY KEY,
+  link_id UUID NOT NULL REFERENCES engram_links(link_id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  actor_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS engram_link_events_link_created_idx
+  ON engram_link_events (link_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_link_events_project_created_idx
+  ON engram_link_events (project_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_link_events_type_created_idx
+  ON engram_link_events (event_type, created_at DESC);
+
 INSERT INTO projects (project_id, name, description, owner_user_id, is_archived)
 SELECT
   'engram-vault',
