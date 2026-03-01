@@ -12,7 +12,7 @@
 - **Phase 17 completed:** document ingestion and RAG-ready retrieval, including session-level document pinning.
 - **Phase 18 completed:** memory lifecycle policies (autosave/retention controls, timeline APIs/UI, and explicit consolidation merge/group semantics).
 - **Phase 19 completed:** collaboration + sharing model (project memberships, membership-enforced visibility, share/unshare APIs + MCP tools, and DB-backed audit trail + admin UI controls).
-- **Phase 20 in progress:** production security hardening kickoff with OIDC login/session mapping baseline, OIDC config validation/redaction coverage, and session UI callback tests in Go runtime.
+- **Phase 20 in progress:** OIDC login/session hardening plus centralized audit sink baseline with configurable sink URL/token/timeout/required mode and fail-open delivery defaults.
 - **Phase 21 completed:** observability/reliability foundation with request telemetry middleware, expanded `/api/v1/metrics` health categories (provider failures, stream outcomes, lifecycle traces), and provider fallback/circuit strategy.
 - **Phase 22 completed:** release automation and deployment profile hardening with staged CI gates, compose profile matrix (`dev`/`acceptance`/`release-smoke`), and versioned release checklist/rollback runbook.
 - **Phase 23 completed:** EvalOps + governance hardening with versioned prompt/tool/eval metadata, deterministic continuity/citation/memory-drift suite (extended in Phase 28 with `graph_trace`), delta regression gates, and historical trend artifacts.
@@ -38,7 +38,7 @@
 - [x] Added optional OIDC login/session mapping (`/login/oidc`, `/login/oidc/callback`) with verified ID-token flow in Go runtime.
 - [x] Added OIDC runtime config validation + redaction behavior (`OIDC_*` settings).
 - [x] Added/updated tests for OIDC login start/callback routes and config validation.
-- [ ] Add centralized audit sink strategy and implementation path beyond JSONL/stdout baseline.
+- [x] Added centralized audit sink strategy and implementation path beyond JSONL/stdout baseline.
 - [ ] Extend security regression and acceptance coverage for OIDC/provider negative paths.
 
 #### Phase 20 Implemented So Far
@@ -46,7 +46,8 @@
 1. OIDC runtime provider module with discovery, auth URL generation, code exchange, ID-token validation, nonce enforcement, and claim-to-username mapping.
 2. Session UI OIDC routes with pending state/nonce storage in signed session cookies and final session-authenticated login mapping.
 3. Config and env updates for `OIDC_ENABLED`, issuer/client/redirect/scopes/username-claim controls with validation/redaction coverage.
-4. Route and config test coverage for OIDC happy-path + not-enabled behavior.
+4. Audit runtime supports optional centralized sink delivery with `AUDIT_SINK_URL`, `AUDIT_SINK_AUTH_TOKEN`, `AUDIT_SINK_REQUIRED`, and `AUDIT_SINK_TIMEOUT_SECONDS`.
+5. Route and config test coverage for OIDC happy-path + not-enabled behavior, plus audit sink validation and delivery semantics.
 
 ### Phase 21 Progress Tracker
 

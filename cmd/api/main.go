@@ -362,6 +362,10 @@ func newSessionAuditLogger(settings config.Settings) *audit.Logger {
 		Path:          settings.AuditLogPath,
 		StdoutEnabled: settings.AuditLogStdoutEnabled || config.IsProductionEnv(settings),
 		MaxEventBytes: settings.AuditLogMaxEventBytes,
+		SinkURL:       settings.AuditSinkURL,
+		SinkAuthToken: settings.AuditSinkAuthToken,
+		SinkRequired:  settings.AuditSinkRequired,
+		SinkTimeout:   time.Duration(settings.AuditSinkTimeoutSeconds * float64(time.Second)),
 	})
 }
 
@@ -855,14 +859,14 @@ func auditEventLogger(logger *audit.Logger) internalapi.SessionAuditLogger {
 		detail string,
 		metadata map[string]any,
 	) {
-		_ = logger.LogRequestEvent(
-			request,
-			eventType,
-			success,
-			username,
-			detail,
-			metadata,
-		)
+		_ = logger.LogRequestEvent(audit.RequestEvent{
+			Request:   request,
+			EventType: eventType,
+			Success:   success,
+			Username:  username,
+			Detail:    detail,
+			Metadata:  metadata,
+		})
 	}
 }
 

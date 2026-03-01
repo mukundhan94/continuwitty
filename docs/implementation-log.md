@@ -7,6 +7,29 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 20 extension: centralized audit sink rollout baseline)
+
+1. Extended audit runtime for centralized sink delivery in `internal/audit/audit.go`:
+   - added optional sink transport (`AUDIT_SINK_URL`) with HTTP/HTTPS POST of sanitized JSON events.
+   - added optional bearer auth header support (`AUDIT_SINK_AUTH_TOKEN`).
+   - added required/fail-open behavior control (`AUDIT_SINK_REQUIRED`).
+   - added sink timeout control (`AUDIT_SINK_TIMEOUT_SECONDS`).
+2. Refactored audit logging call contract:
+   - `LogRequestEvent` now accepts typed `audit.RequestEvent` input to reduce primitive-heavy argument usage and improve code health.
+   - updated session auth/runtime audit wiring in `cmd/api/main.go` and test helpers in `internal/api/session_ui_test.go`.
+3. Added config validation and redaction coverage in `internal/config/config.go`:
+   - `ValidateAuditSettings` now validates required sink URL semantics, absolute HTTP/HTTPS URL shape, and positive timeout.
+   - `BuildDebugSettingsSnapshot` redacts `audit_sink_auth_token`.
+4. Added/updated tests:
+   - `internal/audit/audit_test.go` (sink success, fail-open behavior, required sink failure behavior).
+   - `internal/config/config_test.go` (audit sink validation and redaction assertions).
+   - `internal/api/session_ui_test.go` and `cmd/api` wiring tests updated for typed audit events.
+5. Validation:
+   - `go test ./internal/audit ./internal/config ./internal/api ./cmd/api -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Phase 28 closeout: configurable noisy-link suppression controls)
 
 1. Added bounded noisy-link suppression controls in chat context assembly:
@@ -3163,9 +3186,8 @@
 
 ### Next Immediate Steps (One By One)
 
-1. Phase 20: complete production security hardening with centralized audit sink rollout contract.
-2. Phase 20: extend OIDC/provider abuse-path and negative acceptance coverage.
-3. Phase 32 prep: Phase 24-28 graph baseline is complete; begin cross-project federated query protocol rollout.
+1. Phase 20: extend OIDC/provider abuse-path and negative acceptance coverage.
+2. Phase 32 prep: Phase 24-28 graph baseline is complete; begin cross-project federated query protocol rollout.
 
 ### 2026-02-22 (Phase tracking kickoff - export/import stash + audit remediation)
 

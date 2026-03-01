@@ -2,6 +2,7 @@ package audit
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,12 +25,14 @@ func TestLogRequestEventWritesJSONLine(t *testing.T) {
 	request.RemoteAddr = "203.0.113.7:4321"
 
 	if err := logger.LogRequestEvent(
-		request,
-		"login_failed",
-		false,
-		"admin",
-		"invalid username/password",
-		map[string]any{"attempt": 1},
+		RequestEvent{
+			Request:   request,
+			EventType: "login_failed",
+			Success:   false,
+			Username:  "admin",
+			Detail:    "invalid username/password",
+			Metadata:  map[string]any{"attempt": 1},
+		},
 	); err != nil {
 		t.Fatalf("expected audit event logging to succeed: %v", err)
 	}
@@ -67,12 +70,14 @@ func TestLogRequestEventTruncatesOversizedPayload(t *testing.T) {
 	oversized := strings.Repeat("x", 10_000)
 
 	if err := logger.LogRequestEvent(
-		request,
-		"login_failed",
-		false,
-		"admin",
-		oversized,
-		map[string]any{"oversized": oversized},
+		RequestEvent{
+			Request:   request,
+			EventType: "login_failed",
+			Success:   false,
+			Username:  "admin",
+			Detail:    oversized,
+			Metadata:  map[string]any{"oversized": oversized},
+		},
 	); err != nil {
 		t.Fatalf("expected audit event logging to succeed: %v", err)
 	}
@@ -83,5 +88,91 @@ func TestLogRequestEventTruncatesOversizedPayload(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "\"truncated\":true") {
 		t.Fatalf("expected truncated marker in audit payload")
+	}
+}
+
+func TestLogRequestEventPostsToConfiguredSink(t *testing.T) {
+	receivedAuth := ""
+	receivedBody := ""
+	sink := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		receivedAuth = request.Header.Get("Authorization")
+		payload, _ := io.ReadAll(request.Body)
+		receivedBody = string(payload)
+		writer.WriteHeader(http.StatusAccepted)
+	}))
+	defer sink.Close()
+
+	logger := NewLogger(LoggerOptions{
+		SinkURL:       sink.URL,
+		SinkAuthToken: "test-token",
+		SinkRequired:  true,
+	})
+	request := httptest.NewRequest(http.MethodPost, "/login", nil)
+	if err := logger.LogRequestEvent(
+		RequestEvent{
+			Request:   request,
+			EventType: "login_success",
+			Success:   true,
+			Username:  "admin",
+			Detail:    "ok",
+			Metadata:  map[string]any{"channel": "ui"},
+		},
+	); err != nil {
+		t.Fatalf("expected sink emit success, got %v", err)
+	}
+
+	if receivedAuth != "Bearer test-token" {
+		t.Fatalf("expected bearer auth header to be forwarded")
+	}
+	if !strings.Contains(receivedBody, "\"event_type\":\"login_success\"") {
+		t.Fatalf("expected serialized audit payload in sink body, got %q", receivedBody)
+	}
+}
+
+func TestLogRequestEventSinkFailureIsFailOpenWhenNotRequired(t *testing.T) {
+	sink := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer sink.Close()
+
+	logger := NewLogger(LoggerOptions{
+		SinkURL:      sink.URL,
+		SinkRequired: false,
+	})
+	request := httptest.NewRequest(http.MethodPost, "/login", nil)
+	if err := logger.LogRequestEvent(
+		RequestEvent{
+			Request:   request,
+			EventType: "login_failed",
+			Success:   false,
+			Username:  "admin",
+			Detail:    "bad",
+		},
+	); err != nil {
+		t.Fatalf("expected fail-open sink behavior, got %v", err)
+	}
+}
+
+func TestLogRequestEventSinkFailureReturnsErrorWhenRequired(t *testing.T) {
+	sink := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer sink.Close()
+
+	logger := NewLogger(LoggerOptions{
+		SinkURL:      sink.URL,
+		SinkRequired: true,
+	})
+	request := httptest.NewRequest(http.MethodPost, "/login", nil)
+	if err := logger.LogRequestEvent(
+		RequestEvent{
+			Request:   request,
+			EventType: "login_failed",
+			Success:   false,
+			Username:  "admin",
+			Detail:    "bad",
+		},
+	); err == nil {
+		t.Fatalf("expected required sink failures to be returned")
 	}
 }

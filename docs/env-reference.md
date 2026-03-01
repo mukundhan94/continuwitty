@@ -34,6 +34,10 @@
 | `AUDIT_LOG_PATH` | `./data/audit_events.jsonl` | Local audit event log path |
 | `AUDIT_LOG_STDOUT_ENABLED` | `false` | Emit audit events to stdout (production emits to stdout automatically) |
 | `AUDIT_LOG_MAX_EVENT_BYTES` | `32768` | Maximum serialized bytes per audit event before truncation |
+| `AUDIT_SINK_URL` | - | Optional centralized audit sink endpoint (HTTP/HTTPS POST of sanitized JSON events) |
+| `AUDIT_SINK_AUTH_TOKEN` | - | Optional bearer token used for `Authorization` header when sending to `AUDIT_SINK_URL` |
+| `AUDIT_SINK_REQUIRED` | `false` | When `true`, requests fail audit logging if sink delivery fails; otherwise sink delivery is fail-open |
+| `AUDIT_SINK_TIMEOUT_SECONDS` | `2.0` | Timeout for audit sink delivery requests |
 | `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` | `5` | Max failed login attempts before lockout |
 | `LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `300` | Rate-limit sliding window |
 | `LOGIN_LOCKOUT_SECONDS` | `900` | Lockout duration after max attempts |

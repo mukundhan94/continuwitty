@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -18,6 +19,7 @@ const (
 	maxMetadataDepth   = 4
 	minMaxEventBytes   = 1_024
 	defaultMaxEventB   = 32_768
+	defaultSinkTimeout = 2 * time.Second
 )
 
 // LoggerOptions configures the audit logger.
@@ -25,7 +27,16 @@ type LoggerOptions struct {
 	Path          string
 	StdoutEnabled bool
 	MaxEventBytes int
+	SinkURL       string
+	SinkAuthToken string
+	SinkRequired  bool
+	SinkTimeout   time.Duration
+	SinkClient    sinkHTTPClient
 	Now           func() time.Time
+}
+
+type sinkHTTPClient interface {
+	Do(request *http.Request) (*http.Response, error)
 }
 
 // Logger writes sanitized JSONL audit events.
@@ -33,9 +44,23 @@ type Logger struct {
 	path          string
 	stdoutEnabled bool
 	maxEventBytes int
+	sinkURL       string
+	sinkAuthToken string
+	sinkRequired  bool
+	sinkClient    sinkHTTPClient
 	now           func() time.Time
 
 	mutex sync.Mutex
+}
+
+// RequestEvent captures one audit event write request.
+type RequestEvent struct {
+	Request   *http.Request
+	EventType string
+	Success   bool
+	Username  string
+	Detail    string
+	Metadata  map[string]any
 }
 
 // NewLogger creates a request audit logger.
@@ -51,38 +76,57 @@ func NewLogger(options LoggerOptions) *Logger {
 	if maxEventBytes < minMaxEventBytes {
 		maxEventBytes = minMaxEventBytes
 	}
+	sinkClient := options.SinkClient
+	if sinkClient == nil {
+		sinkTimeout := options.SinkTimeout
+		if sinkTimeout <= 0 {
+			sinkTimeout = defaultSinkTimeout
+		}
+		sinkClient = &http.Client{Timeout: sinkTimeout}
+	}
 	return &Logger{
 		path:          strings.TrimSpace(options.Path),
 		stdoutEnabled: options.StdoutEnabled,
 		maxEventBytes: maxEventBytes,
+		sinkURL:       strings.TrimSpace(options.SinkURL),
+		sinkAuthToken: strings.TrimSpace(options.SinkAuthToken),
+		sinkRequired:  options.SinkRequired,
+		sinkClient:    sinkClient,
 		now:           now,
 	}
 }
 
 // LogRequestEvent appends a single event for an HTTP request.
-func (logger *Logger) LogRequestEvent(
-	request *http.Request,
-	eventType string,
-	success bool,
-	username string,
-	detail string,
-	metadata map[string]any,
-) error {
-	if logger == nil || logger.path == "" {
+func (logger *Logger) LogRequestEvent(event RequestEvent) error {
+	if logger == nil || !logger.hasOutputDestination() {
 		return nil
 	}
-	payload := logger.buildPayload(request, eventType, success, username, detail, metadata)
+	payload := logger.buildPayload(
+		event.Request,
+		event.EventType,
+		event.Success,
+		event.Username,
+		event.Detail,
+		event.Metadata,
+	)
 	serialized, err := serializePayload(payload, logger.maxEventBytes)
 	if err != nil {
 		return err
 	}
-	if err := logger.appendLine(serialized); err != nil {
+	if err := logger.writeLocal(serialized); err != nil {
 		return err
 	}
 	if logger.stdoutEnabled {
 		fmt.Println(serialized)
 	}
+	if err := logger.sendToSink(serialized); err != nil && logger.sinkRequired {
+		return err
+	}
 	return nil
+}
+
+func (logger *Logger) hasOutputDestination() bool {
+	return logger.path != "" || logger.stdoutEnabled || logger.sinkURL != ""
 }
 
 func (logger *Logger) buildPayload(
@@ -248,4 +292,35 @@ func (logger *Logger) appendLine(line string) error {
 	defer file.Close()
 	_, err = file.WriteString(line + "\n")
 	return err
+}
+
+func (logger *Logger) writeLocal(line string) error {
+	if logger.path == "" {
+		return nil
+	}
+	return logger.appendLine(line)
+}
+
+func (logger *Logger) sendToSink(line string) error {
+	if logger.sinkURL == "" || logger.sinkClient == nil {
+		return nil
+	}
+	request, err := http.NewRequest(http.MethodPost, logger.sinkURL, bytes.NewBufferString(line))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Engram-Audit-Format", "jsonl-event-v1")
+	if logger.sinkAuthToken != "" {
+		request.Header.Set("Authorization", "Bearer "+logger.sinkAuthToken)
+	}
+	response, err := logger.sinkClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("audit sink returned status %d", response.StatusCode)
+	}
+	return nil
 }

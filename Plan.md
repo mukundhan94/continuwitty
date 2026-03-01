@@ -215,8 +215,8 @@ Build a local-first memory system where agents and humans can:
   - OIDC login/session mapping baseline (`/login/oidc`, `/login/oidc/callback`) with ID-token verification and session-cookie integration.
   - OIDC config validation + redaction wiring (`OIDC_*` settings).
   - OIDC login route coverage in API/session UI tests.
+  - centralized audit sink rollout baseline with configurable sink URL/token/timeout/required mode and fail-open vs required delivery behavior.
 - Remaining focus:
-  - centralized audit sink strategy and rollout contract.
   - security-focused OIDC abuse-path/negative acceptance coverage.
 
 ### Goals
@@ -894,7 +894,7 @@ Build a local-first memory system where agents and humans can:
 
 ## Near-Term Execution Order
 
-1. Complete Phase 20 (production security hardening) with centralized audit sink + abuse-path coverage.
+1. Complete Phase 20 (production security hardening): centralized audit sink baseline is complete; remaining work is OIDC/provider abuse-path and negative acceptance coverage.
 2. Phase 23 (EvalOps and prompt/policy governance) completed on 2026-03-01.
 3. Execute link-graph roadmap in order:
    - Phase 24 (graph foundations) completed on 2026-03-01.

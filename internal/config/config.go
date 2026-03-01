@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"strings"
 
@@ -17,6 +18,7 @@ var (
 		"app_session_secret":         {},
 		"ui_demo_password":           {},
 		"ui_demo_password_hash":      {},
+		"audit_sink_auth_token":      {},
 		"oidc_client_secret":         {},
 		"openai_api_key":             {},
 		"anthropic_api_key":          {},
@@ -100,6 +102,10 @@ type Settings struct {
 	AuditLogPath                       string  `envconfig:"AUDIT_LOG_PATH" default:"./data/audit_events.jsonl"`
 	AuditLogStdoutEnabled              bool    `envconfig:"AUDIT_LOG_STDOUT_ENABLED" default:"false"`
 	AuditLogMaxEventBytes              int     `envconfig:"AUDIT_LOG_MAX_EVENT_BYTES" default:"32768"`
+	AuditSinkURL                       string  `envconfig:"AUDIT_SINK_URL"`
+	AuditSinkAuthToken                 string  `envconfig:"AUDIT_SINK_AUTH_TOKEN"`
+	AuditSinkRequired                  bool    `envconfig:"AUDIT_SINK_REQUIRED" default:"false"`
+	AuditSinkTimeoutSeconds            float64 `envconfig:"AUDIT_SINK_TIMEOUT_SECONDS" default:"2.0"`
 	LoginRateLimitWindowSeconds        int     `envconfig:"LOGIN_RATE_LIMIT_WINDOW_SECONDS" default:"300"`
 	LoginRateLimitMaxAttempts          int     `envconfig:"LOGIN_RATE_LIMIT_MAX_ATTEMPTS" default:"5"`
 	LoginLockoutSeconds                int     `envconfig:"LOGIN_LOCKOUT_SECONDS" default:"900"`
@@ -186,6 +192,9 @@ func LoadSettings() (Settings, error) {
 	if err := ValidateOIDCSettings(settings); err != nil {
 		return Settings{}, err
 	}
+	if err := ValidateAuditSettings(settings); err != nil {
+		return Settings{}, err
+	}
 	if err := ValidateGraphSettings(settings); err != nil {
 		return Settings{}, err
 	}
@@ -217,6 +226,57 @@ func ValidateOIDCSettings(settings Settings) error {
 		return nil
 	}
 	return fmt.Errorf("oidc is enabled but missing required settings: %s", strings.Join(missing, ", "))
+}
+
+// ValidateAuditSettings enforces centralized audit sink configuration semantics.
+func ValidateAuditSettings(settings Settings) error {
+	sinkURL := strings.TrimSpace(settings.AuditSinkURL)
+	if err := validateAuditSinkRequirement(settings.AuditSinkRequired, sinkURL); err != nil {
+		return err
+	}
+	if err := validateAuditSinkURL(sinkURL); err != nil {
+		return err
+	}
+	if err := validateAuditSinkTimeout(settings.AuditSinkTimeoutSeconds); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateAuditSinkRequirement(required bool, sinkURL string) error {
+	if required && sinkURL == "" {
+		return errors.New("AUDIT_SINK_REQUIRED is true but AUDIT_SINK_URL is empty")
+	}
+	return nil
+}
+
+func validateAuditSinkURL(sinkURL string) error {
+	if sinkURL == "" {
+		return nil
+	}
+	parsed, err := url.Parse(sinkURL)
+	if err != nil {
+		return errors.New("AUDIT_SINK_URL must be a valid absolute URL")
+	}
+	if parsed.Scheme == "" {
+		return errors.New("AUDIT_SINK_URL must be a valid absolute URL")
+	}
+	if parsed.Host == "" {
+		return errors.New("AUDIT_SINK_URL must be a valid absolute URL")
+	}
+	switch parsed.Scheme {
+	case "http", "https":
+	default:
+		return errors.New("AUDIT_SINK_URL must use http or https")
+	}
+	return nil
+}
+
+func validateAuditSinkTimeout(timeoutSeconds float64) error {
+	if timeoutSeconds <= 0 {
+		return errors.New("AUDIT_SINK_TIMEOUT_SECONDS must be greater than 0")
+	}
+	return nil
 }
 
 // ValidateGraphSettings enforces graph link-noise suppression tuning bounds.
@@ -323,6 +383,10 @@ func settingsMap(settings Settings) map[string]any {
 		"audit_log_path":                          settings.AuditLogPath,
 		"audit_log_stdout_enabled":                settings.AuditLogStdoutEnabled,
 		"audit_log_max_event_bytes":               settings.AuditLogMaxEventBytes,
+		"audit_sink_url":                          settings.AuditSinkURL,
+		"audit_sink_auth_token":                   settings.AuditSinkAuthToken,
+		"audit_sink_required":                     settings.AuditSinkRequired,
+		"audit_sink_timeout_seconds":              settings.AuditSinkTimeoutSeconds,
 		"login_rate_limit_window_seconds":         settings.LoginRateLimitWindowSeconds,
 		"login_rate_limit_max_attempts":           settings.LoginRateLimitMaxAttempts,
 		"login_lockout_seconds":                   settings.LoginLockoutSeconds,

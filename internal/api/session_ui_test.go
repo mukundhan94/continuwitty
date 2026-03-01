@@ -711,7 +711,14 @@ func newSessionUITestAuditLogger(path string) SessionAuditLogger {
 		detail string,
 		metadata map[string]any,
 	) {
-		_ = logger.LogRequestEvent(request, eventType, success, username, detail, metadata)
+		_ = logger.LogRequestEvent(audit.RequestEvent{
+			Request:   request,
+			EventType: eventType,
+			Success:   success,
+			Username:  username,
+			Detail:    detail,
+			Metadata:  metadata,
+		})
 	}
 }
 

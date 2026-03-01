@@ -13,6 +13,7 @@ func baseSettings() Settings {
 		AppSessionSecret:                  defaultSessionSecret,
 		UIDemoUsername:                    "admin",
 		UIDemoPassword:                    defaultUIDemoPassword,
+		AuditSinkTimeoutSeconds:           2.0,
 		MCPTokenPepper:                    defaultMCPTokenPepper,
 		OAuthClientSecretPepper:           defaultOAuthClientSecret,
 		OAuthRequireProtectedRegistration: true,
@@ -31,6 +32,7 @@ func TestBuildDebugSettingsSnapshotRedactsSecrets(t *testing.T) {
 	settings.AppSessionSecret = "session-secret"
 	settings.UIDemoPassword = "admin123"
 	settings.UIDemoPasswordHash = "hash-value"
+	settings.AuditSinkAuthToken = "audit-sink-token"
 	settings.OIDCClientSecret = "oidc-secret"
 	settings.OpenAIAPIKey = "openai-key"
 	settings.AnthropicAPIKey = "anthropic-key"
@@ -46,6 +48,7 @@ func TestBuildDebugSettingsSnapshotRedactsSecrets(t *testing.T) {
 	assertEqualString(t, snapshot["app_session_secret"], "<redacted>")
 	assertEqualString(t, snapshot["ui_demo_password"], "<redacted>")
 	assertEqualString(t, snapshot["ui_demo_password_hash"], "<redacted>")
+	assertEqualString(t, snapshot["audit_sink_auth_token"], "<redacted>")
 	assertEqualString(t, snapshot["oidc_client_secret"], "<redacted>")
 	assertEqualString(t, snapshot["openai_api_key"], "<redacted>")
 	assertEqualString(t, snapshot["anthropic_api_key"], "<redacted>")
@@ -189,6 +192,46 @@ func TestGraphSettingsAcceptBoundedNoiseThreshold(t *testing.T) {
 	settings.GraphLinkNoiseScoreThreshold = 0.65
 	if err := ValidateGraphSettings(settings); err != nil {
 		t.Fatalf("expected graph settings validation success, got %v", err)
+	}
+}
+
+func TestAuditSettingsRejectRequiredSinkWithoutURL(t *testing.T) {
+	settings := baseSettings()
+	settings.AuditSinkRequired = true
+	settings.AuditSinkURL = ""
+	if err := ValidateAuditSettings(settings); err == nil {
+		t.Fatalf("expected required sink without url to fail validation")
+	}
+}
+
+func TestAuditSettingsRejectInvalidSinkURLAndTimeout(t *testing.T) {
+	settings := baseSettings()
+	settings.AuditSinkURL = "not-a-url"
+	if err := ValidateAuditSettings(settings); err == nil {
+		t.Fatalf("expected invalid sink url to fail validation")
+	}
+
+	settings = baseSettings()
+	settings.AuditSinkURL = "ftp://audit.example.com/ingest"
+	if err := ValidateAuditSettings(settings); err == nil {
+		t.Fatalf("expected non-http sink url to fail validation")
+	}
+
+	settings = baseSettings()
+	settings.AuditSinkURL = "https://audit.example.com/ingest"
+	settings.AuditSinkTimeoutSeconds = 0
+	if err := ValidateAuditSettings(settings); err == nil {
+		t.Fatalf("expected non-positive sink timeout to fail validation")
+	}
+}
+
+func TestAuditSettingsAcceptValidSinkConfiguration(t *testing.T) {
+	settings := baseSettings()
+	settings.AuditSinkURL = "https://audit.example.com/ingest"
+	settings.AuditSinkRequired = true
+	settings.AuditSinkTimeoutSeconds = 3.5
+	if err := ValidateAuditSettings(settings); err != nil {
+		t.Fatalf("expected valid sink configuration to pass: %v", err)
 	}
 }
 
