@@ -131,6 +131,57 @@ func TestListMessagesHandlerUsesDefaultPaging(t *testing.T) {
 	}
 }
 
+func TestSendMessageHandlerForwardsLinkRecallOverrides(t *testing.T) {
+	actorID := uuid.MustParse("00000000-0000-0000-0000-000000000170")
+	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000171")
+	capturedPayload := chat.ChatMessageCreateRequest{}
+	streamService := fakeChatStreamService{
+		sendMessage: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ uuid.UUID,
+			payload chat.ChatMessageCreateRequest,
+		) (chat.ChatSendResponse, error) {
+			capturedPayload = payload
+			return chat.ChatSendResponse{
+				SessionID:            sessionID,
+				MessageID:            uuid.MustParse("00000000-0000-0000-0000-000000000172"),
+				ReplyMessageID:       uuid.MustParse("00000000-0000-0000-0000-000000000173"),
+				AssistantText:        "ok",
+				UsedEngramIDs:        []uuid.UUID{},
+				UsedEngramLinkIDs:    []uuid.UUID{},
+				EngramTracePaths:     []chat.EngramTracePath{},
+				UsedDocumentChunkIDs: []uuid.UUID{},
+				SourceReferences:     []chat.ChatSourceReference{},
+			}, nil
+		},
+	}
+	router := CreateChatRouter(nil, streamService, nil, staticChatActorResolver(actorID))
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/chat/sessions/"+sessionID.String()+"/messages",
+		strings.NewReader(
+			`{"content_text":"Hello world","link_recall_enabled":false,"link_recall_depth":2,"link_recall_max_neighbors":9}`,
+		),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", response.Code)
+	}
+	if capturedPayload.LinkRecallEnabled == nil || *capturedPayload.LinkRecallEnabled {
+		t.Fatalf("expected link_recall_enabled=false to be forwarded")
+	}
+	if capturedPayload.LinkRecallDepth == nil || *capturedPayload.LinkRecallDepth != 2 {
+		t.Fatalf("expected link_recall_depth=2 to be forwarded")
+	}
+	if capturedPayload.LinkRecallMaxNeighbors == nil || *capturedPayload.LinkRecallMaxNeighbors != 9 {
+		t.Fatalf("expected link_recall_max_neighbors=9 to be forwarded")
+	}
+}
+
 func TestListMessagesHandlerRejectsInvalidLimit(t *testing.T) {
 	actorID := uuid.MustParse("00000000-0000-0000-0000-000000000078")
 	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000079")

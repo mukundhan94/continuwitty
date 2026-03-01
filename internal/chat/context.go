@@ -18,6 +18,10 @@ const (
 	defaultChatContextRetrievalTop = 4
 	defaultChatContextDocumentTop  = 4
 	maxChatContextDocumentBudget   = 12
+	defaultLinkRecallDepth         = 1
+	maxLinkRecallDepth             = 3
+	defaultLinkRecallMaxNeighbors  = 8
+	maxLinkRecallMaxNeighbors      = 24
 
 	engramSourceType   = "engram_source"
 	documentSourceType = "document_chunk"
@@ -43,19 +47,34 @@ type ChatSourceReference struct {
 type AssembledChatContext struct {
 	ContextMarkdown      string                `json:"context_markdown"`
 	UsedEngramIDs        []uuid.UUID           `json:"used_engram_ids"`
+	UsedEngramLinkIDs    []uuid.UUID           `json:"used_engram_link_ids"`
+	EngramTracePaths     []EngramTracePath     `json:"engram_trace_paths"`
 	UsedDocumentChunkIDs []uuid.UUID           `json:"used_document_chunk_ids"`
 	SourceReferences     []ChatSourceReference `json:"source_references"`
 }
 
+// EngramTracePath captures one compact root->target trace chain used in context recall.
+type EngramTracePath struct {
+	RootEngramID   uuid.UUID   `json:"root_engram_id"`
+	TargetEngramID uuid.UUID   `json:"target_engram_id"`
+	Depth          int         `json:"depth"`
+	LinkIDs        []uuid.UUID `json:"link_ids"`
+	EngramIDs      []uuid.UUID `json:"engram_ids"`
+	Score          float64     `json:"score"`
+}
+
 // ChatContextRequest captures retrieval inputs used when building chat context.
 type ChatContextRequest struct {
-	Session       models.ChatSessionRecord
-	ActorUserID   uuid.UUID
-	UserQuery     string
-	EmbeddingDim  int
-	MaxEngrams    int
-	RetrievalTopK int
-	DocumentTopK  int
+	Session                models.ChatSessionRecord
+	ActorUserID            uuid.UUID
+	UserQuery              string
+	EmbeddingDim           int
+	MaxEngrams             int
+	RetrievalTopK          int
+	DocumentTopK           int
+	LinkRecallEnabled      *bool
+	LinkRecallDepth        *int
+	LinkRecallMaxNeighbors *int
 }
 
 // ChatContextDependencies captures retrieval operations used by context assembly.
@@ -64,12 +83,22 @@ type ChatContextDependencies struct {
 	ListPinnedDocuments       func(ctx context.Context, sessionID uuid.UUID, actorUserID uuid.UUID) ([]models.PinnedDocumentRecord, error)
 	QueryEngrams              func(ctx context.Context, actorUserID uuid.UUID, request models.EngramQueryRequest, embeddingDim int) ([]models.EngramQueryResult, error)
 	GetRehydrationBundle      func(ctx context.Context, engramID uuid.UUID, actorUserID uuid.UUID) (*models.RehydrationBundle, error)
-	QueryDocumentChunks       func(ctx context.Context, actorUserID uuid.UUID, request models.DocumentChunkQueryRequest, embeddingDim int) ([]models.DocumentChunkQueryResult, error)
+	TraverseEngramLinks       func(
+		ctx context.Context,
+		rootEngramID uuid.UUID,
+		actorUserID uuid.UUID,
+		maxDepth int,
+		maxNeighbors int,
+		includeArchived bool,
+	) ([]models.EngramLinkTraversalStep, error)
+	QueryDocumentChunks func(ctx context.Context, actorUserID uuid.UUID, request models.DocumentChunkQueryRequest, embeddingDim int) ([]models.DocumentChunkQueryResult, error)
 }
 
 type assembledEngramContext struct {
-	bundles      []models.RehydrationBundle
-	usedEngramID []uuid.UUID
+	bundles           []models.RehydrationBundle
+	usedEngramID      []uuid.UUID
+	usedEngramLinkIDs []uuid.UUID
+	tracePaths        []EngramTracePath
 }
 
 type assembledDocumentContext struct {
@@ -81,71 +110,12 @@ type assembledDocumentContext struct {
 // DefaultChatContextDependencies maps chat context dependencies to repository operations.
 func DefaultChatContextDependencies(db repository.Queryer) ChatContextDependencies {
 	return ChatContextDependencies{
-		ListPinnedEngramSummaries: func(
-			ctx context.Context,
-			sessionID uuid.UUID,
-			actorUserID uuid.UUID,
-		) ([]models.EngramSummary, error) {
-			return repository.ListPinnedEngramSummaries(
-				ctx,
-				db,
-				repository.ChatPinnedListInput{SessionID: sessionID, ActorUserID: actorUserID},
-			)
-		},
-		ListPinnedDocuments: func(
-			ctx context.Context,
-			sessionID uuid.UUID,
-			actorUserID uuid.UUID,
-		) ([]models.PinnedDocumentRecord, error) {
-			return repository.ListPinnedDocuments(
-				ctx,
-				db,
-				repository.ChatPinnedListInput{SessionID: sessionID, ActorUserID: actorUserID},
-			)
-		},
-		QueryEngrams: func(
-			ctx context.Context,
-			actorUserID uuid.UUID,
-			request models.EngramQueryRequest,
-			embeddingDim int,
-		) ([]models.EngramQueryResult, error) {
-			queryLiteral, err := repository.BuildLocalQueryLiteral(request.Query, embeddingDim)
-			if err != nil {
-				return nil, err
-			}
-			return repository.QueryEngrams(
-				ctx,
-				db,
-				repository.QueryEngramsInput{
-					Request:      request,
-					QueryLiteral: queryLiteral,
-					ActorUserID:  &actorUserID,
-				},
-			)
-		},
-		GetRehydrationBundle: func(
-			ctx context.Context,
-			engramID uuid.UUID,
-			actorUserID uuid.UUID,
-		) (*models.RehydrationBundle, error) {
-			return repository.GetRehydrationBundle(
-				ctx,
-				db,
-				repository.RehydrationInput{EngramID: engramID, ActorUserID: &actorUserID},
-			)
-		},
-		QueryDocumentChunks: func(
-			ctx context.Context,
-			actorUserID uuid.UUID,
-			request models.DocumentChunkQueryRequest,
-			embeddingDim int,
-		) ([]models.DocumentChunkQueryResult, error) {
-			return repository.QueryDocumentChunks(
-				ctx,
-				db,
-				repository.DocumentChunkQueryInput{ActorUserID: actorUserID, Request: request, EmbeddingDim: embeddingDim},
-			)
-		},
+		ListPinnedEngramSummaries: listPinnedEngramSummariesDependency(db),
+		ListPinnedDocuments:       listPinnedDocumentsDependency(db),
+		QueryEngrams:              queryEngramsDependency(db),
+		GetRehydrationBundle:      getRehydrationBundleDependency(db),
+		TraverseEngramLinks:       traverseEngramLinksDependency(db),
+		QueryDocumentChunks:       queryDocumentChunksDependency(db),
 	}
 }
 
@@ -172,6 +142,8 @@ func AssembleChatContext(
 		return AssembledChatContext{
 			ContextMarkdown:      "",
 			UsedEngramIDs:        engramContext.usedEngramID,
+			UsedEngramLinkIDs:    engramContext.usedEngramLinkIDs,
+			EngramTracePaths:     engramContext.tracePaths,
 			UsedDocumentChunkIDs: documentContext.usedDocumentChunkIDs,
 			SourceReferences:     []ChatSourceReference{},
 		}, nil
@@ -192,6 +164,8 @@ func AssembleChatContext(
 	return AssembledChatContext{
 		ContextMarkdown:      strings.Join(contextSections, "\n\n"),
 		UsedEngramIDs:        engramContext.usedEngramID,
+		UsedEngramLinkIDs:    engramContext.usedEngramLinkIDs,
+		EngramTracePaths:     engramContext.tracePaths,
 		UsedDocumentChunkIDs: documentContext.usedDocumentChunkIDs,
 		SourceReferences:     sourceReferences,
 	}, nil
@@ -220,13 +194,36 @@ func assembleEngramContext(
 		return assembledEngramContext{}, err
 	}
 	selectedIDs := selectContextEngramIDs(request.MaxEngrams, pinned, retrieved)
+	seedScores := buildSeedRelevanceScores(pinned, retrieved)
+	linkSelection, err := selectLinkedEngramContext(
+		ctx,
+		request,
+		dependencies,
+		selectedIDs,
+		seedScores,
+	)
+	if err != nil {
+		return assembledEngramContext{}, err
+	}
+	selectedIDs = mergeContextEngramIDsWithLinked(
+		selectedIDs,
+		linkSelection.linkedIDs,
+		request.MaxEngrams,
+	)
 	bundles, err := collectRehydrationBundles(ctx, dependencies, selectedIDs, request.ActorUserID)
 	if err != nil {
 		return assembledEngramContext{}, err
 	}
+	usedEngramIDs := collectBundleEngramIDs(bundles)
+	filteredTracePaths := filterTracePathsForUsedEngrams(
+		linkSelection.tracePaths,
+		usedEngramIDs,
+	)
 	return assembledEngramContext{
-		bundles:      bundles,
-		usedEngramID: collectBundleEngramIDs(bundles),
+		bundles:           bundles,
+		usedEngramID:      usedEngramIDs,
+		usedEngramLinkIDs: collectUsedLinkIDs(filteredTracePaths),
+		tracePaths:        filteredTracePaths,
 	}, nil
 }
 
@@ -309,6 +306,19 @@ func normalizeChatContextRequest(request ChatContextRequest) ChatContextRequest 
 	if request.DocumentTopK <= 0 {
 		request.DocumentTopK = defaultChatContextDocumentTop
 	}
+	if request.LinkRecallEnabled == nil {
+		request.LinkRecallEnabled = boolPointer(true)
+	}
+	if request.LinkRecallDepth == nil {
+		request.LinkRecallDepth = intPointer(defaultLinkRecallDepth)
+	}
+	depth := clamp(*request.LinkRecallDepth, 1, maxLinkRecallDepth)
+	request.LinkRecallDepth = intPointer(depth)
+	if request.LinkRecallMaxNeighbors == nil {
+		request.LinkRecallMaxNeighbors = intPointer(defaultLinkRecallMaxNeighbors)
+	}
+	maxNeighbors := clamp(*request.LinkRecallMaxNeighbors, 1, maxLinkRecallMaxNeighbors)
+	request.LinkRecallMaxNeighbors = intPointer(maxNeighbors)
 	return request
 }
 
@@ -729,6 +739,16 @@ func splitDocumentChunks(
 }
 
 func uuidPtr(value uuid.UUID) *uuid.UUID {
+	copy := value
+	return &copy
+}
+
+func boolPointer(value bool) *bool {
+	copy := value
+	return &copy
+}
+
+func intPointer(value int) *int {
 	copy := value
 	return &copy
 }

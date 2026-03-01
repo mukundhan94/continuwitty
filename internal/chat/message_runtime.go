@@ -21,7 +21,10 @@ var errMessageRuntimeDependenciesIncomplete = errors.New("chat message runtime d
 
 // ChatMessageCreateRequest captures inbound chat message payloads for runtime preparation.
 type ChatMessageCreateRequest struct {
-	ContentText string `json:"content_text"`
+	ContentText            string `json:"content_text"`
+	LinkRecallEnabled      *bool  `json:"link_recall_enabled,omitempty"`
+	LinkRecallDepth        *int   `json:"link_recall_depth,omitempty"`
+	LinkRecallMaxNeighbors *int   `json:"link_recall_max_neighbors,omitempty"`
 }
 
 // RuntimeMessageMetadata captures optional metadata persisted with a chat message.
@@ -139,7 +142,7 @@ func (runtime *ChatMessageRuntime) PrepareGeneration(
 		ctx,
 		actorUserID,
 		session,
-		payload.ContentText,
+		payload,
 	)
 	if err != nil {
 		return PreparedGeneration{}, err
@@ -231,6 +234,8 @@ func BuildStreamMetaPayload(prepared PreparedGeneration) map[string]any {
 		"message_id":              prepared.UserMessage.MessageID,
 		"prompt_policy_version":   prepared.PromptPolicyVersion,
 		"used_engram_ids":         prepared.Context.UsedEngramIDs,
+		"used_engram_link_ids":    prepared.Context.UsedEngramLinkIDs,
+		"engram_trace_paths":      prepared.Context.EngramTracePaths,
 		"used_document_chunk_ids": prepared.Context.UsedDocumentChunkIDs,
 		"source_references":       prepared.Context.SourceReferences,
 	}
@@ -256,6 +261,8 @@ func BuildStreamDonePayload(
 		"assistant_text":          fullText,
 		"prompt_policy_version":   prepared.PromptPolicyVersion,
 		"used_engram_ids":         prepared.Context.UsedEngramIDs,
+		"used_engram_link_ids":    prepared.Context.UsedEngramLinkIDs,
+		"engram_trace_paths":      prepared.Context.EngramTracePaths,
 		"used_document_chunk_ids": prepared.Context.UsedDocumentChunkIDs,
 		"source_references":       prepared.Context.SourceReferences,
 		"debug_trace":             nil,
@@ -327,16 +334,19 @@ func (runtime *ChatMessageRuntime) prepareChatContext(
 	ctx context.Context,
 	actorUserID uuid.UUID,
 	session models.ChatSessionRecord,
-	contentText string,
+	payload ChatMessageCreateRequest,
 ) (AssembledChatContext, float64, error) {
 	contextStartedAt := time.Now()
 	assembledContext, err := runtime.assembleChatContext(
 		ctx,
 		ChatContextRequest{
-			Session:      session,
-			ActorUserID:  actorUserID,
-			UserQuery:    contentText,
-			EmbeddingDim: runtime.embeddingDim,
+			Session:                session,
+			ActorUserID:            actorUserID,
+			UserQuery:              payload.ContentText,
+			EmbeddingDim:           runtime.embeddingDim,
+			LinkRecallEnabled:      payload.LinkRecallEnabled,
+			LinkRecallDepth:        payload.LinkRecallDepth,
+			LinkRecallMaxNeighbors: payload.LinkRecallMaxNeighbors,
 		},
 	)
 	if err != nil {

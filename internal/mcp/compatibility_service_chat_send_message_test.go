@@ -94,6 +94,41 @@ func TestCompatibilityServiceChatSendMessageUsesDefaultContentText(t *testing.T)
 	}
 }
 
+func TestCompatibilityServiceChatSendMessageForwardsLinkRecallOptions(t *testing.T) {
+	sendService := &fakeMessageSendService{
+		response: &MessageSendResponse{
+			SessionID:      uuid.MustParse("39061000-0000-0000-0000-000000000390"),
+			MessageID:      uuid.MustParse("39061000-0000-0000-0000-000000000391"),
+			ReplyMessageID: uuid.MustParse("39061000-0000-0000-0000-000000000392"),
+		},
+	}
+	frame := runCompatibilityRequestWithService(
+		t,
+		newMessageSendCompatibilityService(sendService),
+		directToolRequest(
+			"39061000-0000-0000-0000-000000000393",
+			"chat.send_message",
+			map[string]any{
+				"session_id":                "39061000-0000-0000-0000-000000000394",
+				"content_text":              "use linked recall",
+				"link_recall_enabled":       false,
+				"link_recall_depth":         2,
+				"link_recall_max_neighbors": 7,
+			},
+		),
+	)
+	_ = messageSendFromFrame(t, frame, false)
+	if sendService.call.LinkRecallEnabled == nil || *sendService.call.LinkRecallEnabled {
+		t.Fatalf("expected link_recall_enabled=false to be forwarded")
+	}
+	if sendService.call.LinkRecallDepth == nil || *sendService.call.LinkRecallDepth != 2 {
+		t.Fatalf("expected link_recall_depth=2 to be forwarded")
+	}
+	if sendService.call.LinkRecallMaxNeighbors == nil || *sendService.call.LinkRecallMaxNeighbors != 7 {
+		t.Fatalf("expected link_recall_max_neighbors=7 to be forwarded")
+	}
+}
+
 func TestCompatibilityServiceChatSendMessageValidationErrors(t *testing.T) {
 	service := newMessageSendCompatibilityService(&fakeMessageSendService{})
 	testCases := []struct {

@@ -122,18 +122,13 @@ func (service *CompatibilityService) streamChatSendMessageFrames(
 	if service.messageStream == nil {
 		return service.nonStreamChatSendMessageFrames(ctx, input)
 	}
-	sessionID, ok := requiredUUIDParam(input.params, "session_id")
-	if !ok {
-		return []Frame{invalidParamErrorFrame(input.requestID, "session_id")}
+	sendRequest, dispatchErr := parseSessionMessageSendRequest(input.actor, input.params)
+	if dispatchErr != nil {
+		return []Frame{errorFrame(input.requestID, dispatchErr.code, dispatchErr.message, dispatchErr.data)}
 	}
-
 	events, err := service.messageStream.StreamMessageEvents(
 		ctx,
-		SessionMessageSendRequest{
-			ActorUserID: input.actor.UserID,
-			SessionID:   sessionID,
-			ContentText: stringParamWithDefault(input.params, "content_text", ""),
-		},
+		sendRequest,
 	)
 	if err != nil {
 		return []Frame{chatSendErrorFrame(input.requestID, err)}
@@ -160,17 +155,13 @@ func (service *CompatibilityService) nonStreamChatSendMessageFrames(
 			),
 		}
 	}
-	sessionID, ok := requiredUUIDParam(input.params, "session_id")
-	if !ok {
-		return []Frame{invalidParamErrorFrame(input.requestID, "session_id")}
+	sendRequest, dispatchErr := parseSessionMessageSendRequest(input.actor, input.params)
+	if dispatchErr != nil {
+		return []Frame{errorFrame(input.requestID, dispatchErr.code, dispatchErr.message, dispatchErr.data)}
 	}
 	response, err := service.messageSend.SendMessage(
 		ctx,
-		SessionMessageSendRequest{
-			ActorUserID: input.actor.UserID,
-			SessionID:   sessionID,
-			ContentText: stringParamWithDefault(input.params, "content_text", ""),
-		},
+		sendRequest,
 	)
 	if err != nil {
 		return []Frame{chatSendErrorFrame(input.requestID, err)}

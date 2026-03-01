@@ -15,17 +15,13 @@ func (service *CompatibilityService) dispatchChatSendMessageTool(
 	if service.messageSend == nil {
 		return nil, false, nil
 	}
-	sessionID, ok := requiredUUIDParam(params, "session_id")
-	if !ok {
-		return nil, true, invalidParamError("session_id")
+	request, dispatchErr := parseSessionMessageSendRequest(actor, params)
+	if dispatchErr != nil {
+		return nil, true, dispatchErr
 	}
 	response, err := service.messageSend.SendMessage(
 		ctx,
-		SessionMessageSendRequest{
-			ActorUserID: actor.UserID,
-			SessionID:   sessionID,
-			ContentText: stringParamWithDefault(params, "content_text", ""),
-		},
+		request,
 	)
 	if err != nil {
 		return nil, true, mapChatSendError(err)

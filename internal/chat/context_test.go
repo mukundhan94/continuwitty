@@ -293,6 +293,155 @@ func TestAssembleChatContextUsesDocumentTopKForRetrieval(t *testing.T) {
 	}
 }
 
+func TestAssembleChatContextIncludesLinkedEngramsAndTraceMetadataByDefault(t *testing.T) {
+	session := contextSessionRecord()
+	rootEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006671")
+	linkedEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006672")
+	linkID := uuid.MustParse("00000000-0000-0000-0000-000000006673")
+	deps := dependenciesForLinkedRecallDefault(rootEngramID, linkedEngramID, linkID)
+	assembled, err := AssembleChatContext(
+		context.Background(),
+		contextRequest(session, "linked recall", 4),
+		deps,
+	)
+	if err != nil {
+		t.Fatalf("assemble chat context: %v", err)
+	}
+	assertLinkedTraceContext(t, assembled, rootEngramID, linkedEngramID, linkID)
+}
+
+func TestAssembleChatContextLinkRecallDisabledSkipsTraversal(t *testing.T) {
+	session := contextSessionRecord()
+	rootEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006681")
+	traversalCalls := 0
+	deps := ChatContextDependencies{
+		ListPinnedEngramSummaries: func(
+			_ context.Context,
+			_ uuid.UUID,
+			actorUserID uuid.UUID,
+		) ([]models.EngramSummary, error) {
+			return []models.EngramSummary{contextEngramSummary(rootEngramID, "Root", actorUserID)}, nil
+		},
+		ListPinnedDocuments: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]models.PinnedDocumentRecord, error) {
+			return []models.PinnedDocumentRecord{}, nil
+		},
+		QueryEngrams: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ models.EngramQueryRequest,
+			_ int,
+		) ([]models.EngramQueryResult, error) {
+			return []models.EngramQueryResult{}, nil
+		},
+		GetRehydrationBundle: func(_ context.Context, engramID uuid.UUID, _ uuid.UUID) (*models.RehydrationBundle, error) {
+			bundle := contextBundle(engramID, "Root", nil)
+			return &bundle, nil
+		},
+		TraverseEngramLinks: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ uuid.UUID,
+			_ int,
+			_ int,
+			_ bool,
+		) ([]models.EngramLinkTraversalStep, error) {
+			traversalCalls++
+			return []models.EngramLinkTraversalStep{}, nil
+		},
+		QueryDocumentChunks: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ models.DocumentChunkQueryRequest,
+			_ int,
+		) ([]models.DocumentChunkQueryResult, error) {
+			return []models.DocumentChunkQueryResult{}, nil
+		},
+	}
+	request := contextRequest(session, "disable linked recall", 4)
+	request.LinkRecallEnabled = boolPtr(false)
+
+	assembled, err := AssembleChatContext(context.Background(), request, deps)
+	if err != nil {
+		t.Fatalf("assemble chat context: %v", err)
+	}
+
+	if traversalCalls != 0 {
+		t.Fatalf("expected traversal not to run when link recall is disabled")
+	}
+	if len(assembled.UsedEngramLinkIDs) != 0 {
+		t.Fatalf("expected no used engram link ids, got %d", len(assembled.UsedEngramLinkIDs))
+	}
+	if len(assembled.EngramTracePaths) != 0 {
+		t.Fatalf("expected no trace paths, got %d", len(assembled.EngramTracePaths))
+	}
+}
+
+func TestAssembleChatContextLinkRecallBoundsTraversalInputs(t *testing.T) {
+	session := contextSessionRecord()
+	rootEngramID := uuid.MustParse("00000000-0000-0000-0000-000000006691")
+	observedDepth := 0
+	observedNeighbors := 0
+	deps := ChatContextDependencies{
+		ListPinnedEngramSummaries: func(
+			_ context.Context,
+			_ uuid.UUID,
+			actorUserID uuid.UUID,
+		) ([]models.EngramSummary, error) {
+			return []models.EngramSummary{contextEngramSummary(rootEngramID, "Root", actorUserID)}, nil
+		},
+		ListPinnedDocuments: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]models.PinnedDocumentRecord, error) {
+			return []models.PinnedDocumentRecord{}, nil
+		},
+		QueryEngrams: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ models.EngramQueryRequest,
+			_ int,
+		) ([]models.EngramQueryResult, error) {
+			return []models.EngramQueryResult{}, nil
+		},
+		GetRehydrationBundle: func(_ context.Context, engramID uuid.UUID, _ uuid.UUID) (*models.RehydrationBundle, error) {
+			bundle := contextBundle(engramID, "Root", nil)
+			return &bundle, nil
+		},
+		TraverseEngramLinks: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ uuid.UUID,
+			maxDepth int,
+			maxNeighbors int,
+			_ bool,
+		) ([]models.EngramLinkTraversalStep, error) {
+			observedDepth = maxDepth
+			observedNeighbors = maxNeighbors
+			return []models.EngramLinkTraversalStep{}, nil
+		},
+		QueryDocumentChunks: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ models.DocumentChunkQueryRequest,
+			_ int,
+		) ([]models.DocumentChunkQueryResult, error) {
+			return []models.DocumentChunkQueryResult{}, nil
+		},
+	}
+	request := contextRequest(session, "bounded traversal", 4)
+	request.LinkRecallDepth = contextIntPtr(99)
+	request.LinkRecallMaxNeighbors = contextIntPtr(999)
+
+	_, err := AssembleChatContext(context.Background(), request, deps)
+	if err != nil {
+		t.Fatalf("assemble chat context: %v", err)
+	}
+
+	if observedDepth != maxLinkRecallDepth {
+		t.Fatalf("expected bounded depth %d, got %d", maxLinkRecallDepth, observedDepth)
+	}
+	if observedNeighbors != maxLinkRecallMaxNeighbors {
+		t.Fatalf("expected bounded max neighbors %d, got %d", maxLinkRecallMaxNeighbors, observedNeighbors)
+	}
+}
+
 func installContextMergeDependencies(t *testing.T, mergeCase contextMergeCase) ChatContextDependencies {
 	t.Helper()
 	return ChatContextDependencies{
@@ -609,6 +758,115 @@ func contextRequest(session models.ChatSessionRecord, query string, documentTopK
 	}
 }
 
+func dependenciesForLinkedRecallDefault(
+	rootEngramID uuid.UUID,
+	linkedEngramID uuid.UUID,
+	linkID uuid.UUID,
+) ChatContextDependencies {
+	return ChatContextDependencies{
+		ListPinnedEngramSummaries: func(
+			_ context.Context,
+			_ uuid.UUID,
+			actorUserID uuid.UUID,
+		) ([]models.EngramSummary, error) {
+			return []models.EngramSummary{contextEngramSummary(rootEngramID, "Root", actorUserID)}, nil
+		},
+		ListPinnedDocuments: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]models.PinnedDocumentRecord, error) {
+			return []models.PinnedDocumentRecord{}, nil
+		},
+		QueryEngrams: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ models.EngramQueryRequest,
+			_ int,
+		) ([]models.EngramQueryResult, error) {
+			return []models.EngramQueryResult{}, nil
+		},
+		GetRehydrationBundle: func(_ context.Context, engramID uuid.UUID, _ uuid.UUID) (*models.RehydrationBundle, error) {
+			title := "Root"
+			if engramID == linkedEngramID {
+				title = "Linked"
+			}
+			bundle := contextBundle(engramID, title, nil)
+			return &bundle, nil
+		},
+		TraverseEngramLinks: func(
+			_ context.Context,
+			rootID uuid.UUID,
+			_ uuid.UUID,
+			_ int,
+			_ int,
+			_ bool,
+		) ([]models.EngramLinkTraversalStep, error) {
+			if rootID != rootEngramID {
+				return []models.EngramLinkTraversalStep{}, nil
+			}
+			return []models.EngramLinkTraversalStep{
+				{
+					Depth: 1,
+					Link:  contextLinkRecord(linkID, rootEngramID, linkedEngramID),
+				},
+			}, nil
+		},
+		QueryDocumentChunks: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ models.DocumentChunkQueryRequest,
+			_ int,
+		) ([]models.DocumentChunkQueryResult, error) {
+			return []models.DocumentChunkQueryResult{}, nil
+		},
+	}
+}
+
+func assertLinkedTraceContext(
+	t *testing.T,
+	assembled AssembledChatContext,
+	rootEngramID uuid.UUID,
+	linkedEngramID uuid.UUID,
+	linkID uuid.UUID,
+) {
+	t.Helper()
+	requireUUIDSliceEqual(t, []uuid.UUID{rootEngramID, linkedEngramID}, assembled.UsedEngramIDs)
+	requireUUIDSliceEqual(t, []uuid.UUID{linkID}, assembled.UsedEngramLinkIDs)
+	if len(assembled.EngramTracePaths) != 1 {
+		t.Fatalf("expected one trace path, got %d", len(assembled.EngramTracePaths))
+	}
+	trace := assembled.EngramTracePaths[0]
+	requireUUIDSliceEqual(t, []uuid.UUID{rootEngramID, linkedEngramID}, trace.EngramIDs)
+	requireUUIDSliceEqual(t, []uuid.UUID{linkID}, trace.LinkIDs)
+	if trace.Depth != 1 {
+		t.Fatalf("expected trace depth 1, got %d", trace.Depth)
+	}
+	requireContains(t, assembled.ContextMarkdown, "Linked summary")
+}
+
+func contextLinkRecord(
+	linkID uuid.UUID,
+	sourceEngramID uuid.UUID,
+	targetEngramID uuid.UUID,
+) models.EngramLinkRecord {
+	now := time.Now().UTC()
+	return models.EngramLinkRecord{
+		LinkID:         linkID,
+		ProjectID:      "project-chat",
+		SourceEngramID: sourceEngramID,
+		TargetEngramID: targetEngramID,
+		RelationType:   models.EngramLinkRelationSupports,
+		Weight:         0.91,
+		TemporalWeight: 0.86,
+		Confidence:     0.88,
+		Origin:         models.EngramLinkOriginManual,
+		Status:         models.EngramLinkStatusActive,
+		EvidenceJSON:   map[string]any{"reason": "linked for continuity"},
+		CreatedByUserID: uuid.MustParse(
+			"00000000-0000-0000-0000-000000006699",
+		),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
 func contextBundle(engramID uuid.UUID, title string, citationURL *string) models.RehydrationBundle {
 	now := time.Now().UTC()
 	url := fmtOrFallbackURL(citationURL, title)
@@ -729,4 +987,14 @@ func requireUUIDSetEqual(t *testing.T, expected []uuid.UUID, actual []uuid.UUID)
 			t.Fatalf("unexpected uuid in set: %s", item)
 		}
 	}
+}
+
+func boolPtr(value bool) *bool {
+	copy := value
+	return &copy
+}
+
+func contextIntPtr(value int) *int {
+	copy := value
+	return &copy
 }

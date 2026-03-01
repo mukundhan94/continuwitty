@@ -38,7 +38,12 @@ func (adapter *mcpMessageSendAdapter) SendMessage(
 		ctx,
 		request.ActorUserID,
 		request.SessionID,
-		chat.ChatMessageCreateRequest{ContentText: request.ContentText},
+		chat.ChatMessageCreateRequest{
+			ContentText:            request.ContentText,
+			LinkRecallEnabled:      request.LinkRecallEnabled,
+			LinkRecallDepth:        request.LinkRecallDepth,
+			LinkRecallMaxNeighbors: request.LinkRecallMaxNeighbors,
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -50,6 +55,8 @@ func (adapter *mcpMessageSendAdapter) SendMessage(
 		AssistantText:        result.AssistantText,
 		PromptPolicyVersion:  result.PromptPolicyVersion,
 		UsedEngramIDs:        append([]uuid.UUID(nil), result.UsedEngramIDs...),
+		UsedEngramLinkIDs:    append([]uuid.UUID(nil), result.UsedEngramLinkIDs...),
+		EngramTracePaths:     result.EngramTracePaths,
 		UsedDocumentChunkIDs: append([]uuid.UUID(nil), result.UsedDocumentChunkIDs...),
 		SourceReferences:     result.SourceReferences,
 		DebugTrace:           mapStringAnyCopy(result.DebugTrace),
@@ -67,7 +74,12 @@ func (adapter *mcpMessageSendAdapter) StreamMessageEvents(
 		ctx,
 		request.ActorUserID,
 		request.SessionID,
-		chat.ChatMessageCreateRequest{ContentText: request.ContentText},
+		chat.ChatMessageCreateRequest{
+			ContentText:            request.ContentText,
+			LinkRecallEnabled:      request.LinkRecallEnabled,
+			LinkRecallDepth:        request.LinkRecallDepth,
+			LinkRecallMaxNeighbors: request.LinkRecallMaxNeighbors,
+		},
 	)
 	if err != nil {
 		return nil, err

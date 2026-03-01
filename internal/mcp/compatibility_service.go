@@ -554,9 +554,12 @@ type MessageListRequest struct {
 
 // SessionMessageSendRequest captures compatibility-level send-message inputs.
 type SessionMessageSendRequest struct {
-	ActorUserID uuid.UUID
-	SessionID   uuid.UUID
-	ContentText string
+	ActorUserID            uuid.UUID
+	SessionID              uuid.UUID
+	ContentText            string
+	LinkRecallEnabled      *bool
+	LinkRecallDepth        *int
+	LinkRecallMaxNeighbors *int
 }
 
 // MessageSendResponse captures send-message outputs.
@@ -567,6 +570,8 @@ type MessageSendResponse struct {
 	AssistantText        string         `json:"assistant_text"`
 	PromptPolicyVersion  string         `json:"prompt_policy_version,omitempty"`
 	UsedEngramIDs        []uuid.UUID    `json:"used_engram_ids"`
+	UsedEngramLinkIDs    []uuid.UUID    `json:"used_engram_link_ids"`
+	EngramTracePaths     any            `json:"engram_trace_paths"`
 	UsedDocumentChunkIDs []uuid.UUID    `json:"used_document_chunk_ids"`
 	SourceReferences     any            `json:"source_references"`
 	DebugTrace           map[string]any `json:"debug_trace,omitempty"`

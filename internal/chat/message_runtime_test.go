@@ -23,6 +23,8 @@ func TestBuildStreamMetaPayloadIncludesContextReferences(t *testing.T) {
 	requireEqualAnyRuntime(t, prepared.UserMessage.MessageID, payload["message_id"])
 	requireEqualAnyRuntime(t, prepared.PromptPolicyVersion, payload["prompt_policy_version"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedEngramIDs, payload["used_engram_ids"])
+	requireEqualAnyRuntime(t, prepared.Context.UsedEngramLinkIDs, payload["used_engram_link_ids"])
+	requireEqualAnyRuntime(t, prepared.Context.EngramTracePaths, payload["engram_trace_paths"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedDocumentChunkIDs, payload["used_document_chunk_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.SourceReferences, payload["source_references"])
 }
@@ -48,6 +50,8 @@ func TestBuildStreamDonePayloadIncludesReplyAndContextFields(t *testing.T) {
 	requireEqualAnyRuntime(t, "answer", payload["assistant_text"])
 	requireEqualAnyRuntime(t, prepared.PromptPolicyVersion, payload["prompt_policy_version"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedEngramIDs, payload["used_engram_ids"])
+	requireEqualAnyRuntime(t, prepared.Context.UsedEngramLinkIDs, payload["used_engram_link_ids"])
+	requireEqualAnyRuntime(t, prepared.Context.EngramTracePaths, payload["engram_trace_paths"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedDocumentChunkIDs, payload["used_document_chunk_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.SourceReferences, payload["source_references"])
 	requireEqualAnyRuntime(t, debugTrace, payload["debug_trace"])
@@ -68,6 +72,56 @@ func TestPrepareGenerationBuildsProviderRequestFromHistoryAndContext(t *testing.
 		t.Fatalf("prepare generation: %v", err)
 	}
 	assertPreparedGenerationRequest(t, prepared, createInputs)
+}
+
+func TestPrepareGenerationForwardsLinkRecallOverrides(t *testing.T) {
+	base := preparedGenerationFixture()
+	requests := make([]ChatContextRequest, 0, 1)
+	runtime := NewChatMessageRuntime(
+		ChatMessageRuntimeDependencies{
+			EmbeddingDim: 256,
+			GetSession: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*models.ChatSessionRecord, error) {
+				session := base.Session
+				return &session, nil
+			},
+			CreateChatMessage: func(_ context.Context, input RuntimeMessageCreateInput) (*models.ChatMessageRecord, error) {
+				record := base.UserMessage
+				record.ContentText = input.ContentText
+				return &record, nil
+			},
+			ListChatMessages: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ int, _ int) ([]models.ChatMessageRecord, error) {
+				return []models.ChatMessageRecord{}, nil
+			},
+			AssembleChatContext: func(_ context.Context, request ChatContextRequest) (AssembledChatContext, error) {
+				requests = append(requests, request)
+				return base.Context, nil
+			},
+		},
+	)
+	enabled := false
+	depth := 2
+	maxNeighbors := 9
+
+	_, err := runtime.PrepareGeneration(
+		context.Background(),
+		base.Session.OwnerUserID,
+		base.Session.SessionID,
+		ChatMessageCreateRequest{
+			ContentText:            "How should we proceed?",
+			LinkRecallEnabled:      &enabled,
+			LinkRecallDepth:        &depth,
+			LinkRecallMaxNeighbors: &maxNeighbors,
+		},
+	)
+	if err != nil {
+		t.Fatalf("prepare generation: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("expected one context assembly request, got %d", len(requests))
+	}
+	requireOptionalBoolRuntime(t, requests[0].LinkRecallEnabled, false, "link_recall_enabled")
+	requireOptionalIntRuntime(t, requests[0].LinkRecallDepth, 2, "link_recall_depth")
+	requireOptionalIntRuntime(t, requests[0].LinkRecallMaxNeighbors, 9, "link_recall_max_neighbors")
 }
 
 func TestPrepareGenerationRejectsEmptyPayload(t *testing.T) {
@@ -180,6 +234,8 @@ func preparedGenerationFixture() PreparedGeneration {
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000007005")
 	documentChunkID := uuid.MustParse("00000000-0000-0000-0000-000000007006")
 	documentID := uuid.MustParse("00000000-0000-0000-0000-000000007007")
+	linkID := uuid.MustParse("00000000-0000-0000-0000-000000007008")
+	linkedEngramID := uuid.MustParse("00000000-0000-0000-0000-000000007009")
 	chunkIndex := 1
 	sourceTitle := "runbook.md"
 	return PreparedGeneration{
@@ -206,8 +262,19 @@ func preparedGenerationFixture() PreparedGeneration {
 			CreatedAt:      now,
 		},
 		Context: AssembledChatContext{
-			ContextMarkdown:      "ctx",
-			UsedEngramIDs:        []uuid.UUID{engramID},
+			ContextMarkdown:   "ctx",
+			UsedEngramIDs:     []uuid.UUID{engramID},
+			UsedEngramLinkIDs: []uuid.UUID{linkID},
+			EngramTracePaths: []EngramTracePath{
+				{
+					RootEngramID:   engramID,
+					TargetEngramID: linkedEngramID,
+					Depth:          1,
+					LinkIDs:        []uuid.UUID{linkID},
+					EngramIDs:      []uuid.UUID{engramID, linkedEngramID},
+					Score:          0.91,
+				},
+			},
 			UsedDocumentChunkIDs: []uuid.UUID{documentChunkID},
 			SourceReferences: []ChatSourceReference{
 				{
@@ -258,6 +325,20 @@ func requireEqualIntRuntime(t *testing.T, expected int, actual int) {
 	t.Helper()
 	if expected != actual {
 		t.Fatalf("expected %d, got %d", expected, actual)
+	}
+}
+
+func requireOptionalBoolRuntime(t *testing.T, value *bool, expected bool, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%v, got %v", field, expected, value)
+	}
+}
+
+func requireOptionalIntRuntime(t *testing.T, value *int, expected int, field string) {
+	t.Helper()
+	if value == nil || *value != expected {
+		t.Fatalf("expected %s=%d, got %v", field, expected, value)
 	}
 }
 

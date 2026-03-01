@@ -113,6 +113,8 @@ func TestSendMessageReturnsUsedEngramIDsAndSources(t *testing.T) {
 	requireEqualAnyRuntime(t, "Proceed with option A.", response.AssistantText)
 	requireEqualAnyRuntime(t, governance.DefaultChatPromptPolicyVersion, response.PromptPolicyVersion)
 	requireEqualAnyRuntime(t, state.context.UsedEngramIDs, response.UsedEngramIDs)
+	requireEqualAnyRuntime(t, state.context.UsedEngramLinkIDs, response.UsedEngramLinkIDs)
+	requireEqualAnyRuntime(t, state.context.EngramTracePaths, response.EngramTracePaths)
 	requireEqualAnyRuntime(t, state.context.UsedDocumentChunkIDs, response.UsedDocumentChunkIDs)
 	requireEqualAnyRuntime(t, state.context.SourceReferences, response.SourceReferences)
 	requireEqualIntRuntime(t, 1, lifecycleCalls)
@@ -412,6 +414,8 @@ func newServiceRuntimeState() serviceRuntimeState {
 	userMessageID := uuid.MustParse("00000000-0000-0000-0000-000000007203")
 	assistantMessageID := uuid.MustParse("00000000-0000-0000-0000-000000007204")
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000007205")
+	linkedEngramID := uuid.MustParse("00000000-0000-0000-0000-000000007206")
+	engramLinkID := uuid.MustParse("00000000-0000-0000-0000-000000007207")
 	sourceTitle := "Source"
 	source := ChatSourceReference{
 		SourceType:  "engram_source",
@@ -455,8 +459,19 @@ func newServiceRuntimeState() serviceRuntimeState {
 			CreatedAt:      now,
 		},
 		context: AssembledChatContext{
-			ContextMarkdown:      "ctx",
-			UsedEngramIDs:        []uuid.UUID{engramID},
+			ContextMarkdown:   "ctx",
+			UsedEngramIDs:     []uuid.UUID{engramID},
+			UsedEngramLinkIDs: []uuid.UUID{engramLinkID},
+			EngramTracePaths: []EngramTracePath{
+				{
+					RootEngramID:   engramID,
+					TargetEngramID: linkedEngramID,
+					Depth:          1,
+					LinkIDs:        []uuid.UUID{engramLinkID},
+					EngramIDs:      []uuid.UUID{engramID, linkedEngramID},
+					Score:          0.82,
+				},
+			},
 			UsedDocumentChunkIDs: []uuid.UUID{},
 			SourceReferences:     []ChatSourceReference{source},
 		},

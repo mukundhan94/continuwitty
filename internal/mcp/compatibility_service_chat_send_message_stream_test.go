@@ -26,8 +26,11 @@ func TestCompatibilityServiceChatSendMessageDirectStreamFrames(t *testing.T) {
 				actorUserID.String(),
 				"chat.send_message",
 				map[string]any{
-					"session_id":   sessionID.String(),
-					"content_text": "hi",
+					"session_id":                sessionID.String(),
+					"content_text":              "hi",
+					"link_recall_enabled":       true,
+					"link_recall_depth":         2,
+					"link_recall_max_neighbors": 6,
 				},
 			),
 		),
@@ -49,6 +52,15 @@ func TestCompatibilityServiceChatSendMessageDirectStreamFrames(t *testing.T) {
 	if streamService.call.ActorUserID != actorUserID || streamService.call.SessionID != sessionID {
 		t.Fatalf("expected actor/session forwarded to stream service")
 	}
+	assertForwardedLinkRecallOptions(
+		t,
+		streamService.call,
+		expectedLinkRecallOptions{
+			enabled:      true,
+			depth:        2,
+			maxNeighbors: 6,
+		},
+	)
 }
 
 func TestCompatibilityServiceToolsCallChatSendMessageStreamsWhenEnabled(t *testing.T) {
@@ -230,6 +242,29 @@ func collectAllFrames(t *testing.T, frames <-chan Frame) []Frame {
 func terminalFrame(t *testing.T, frames []Frame) Frame {
 	t.Helper()
 	return frames[len(frames)-1]
+}
+
+type expectedLinkRecallOptions struct {
+	enabled      bool
+	depth        int
+	maxNeighbors int
+}
+
+func assertForwardedLinkRecallOptions(
+	t *testing.T,
+	request SessionMessageSendRequest,
+	expected expectedLinkRecallOptions,
+) {
+	t.Helper()
+	if request.LinkRecallEnabled == nil || *request.LinkRecallEnabled != expected.enabled {
+		t.Fatalf("expected link_recall_enabled=%v forwarded to stream service", expected.enabled)
+	}
+	if request.LinkRecallDepth == nil || *request.LinkRecallDepth != expected.depth {
+		t.Fatalf("expected link_recall_depth=%d forwarded to stream service", expected.depth)
+	}
+	if request.LinkRecallMaxNeighbors == nil || *request.LinkRecallMaxNeighbors != expected.maxNeighbors {
+		t.Fatalf("expected link_recall_max_neighbors=%d forwarded to stream service", expected.maxNeighbors)
+	}
 }
 
 type fakeMessageStreamService struct {

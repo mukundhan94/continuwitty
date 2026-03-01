@@ -42,6 +42,8 @@ type ChatSendResponse struct {
 	AssistantText        string                `json:"assistant_text"`
 	PromptPolicyVersion  string                `json:"prompt_policy_version,omitempty"`
 	UsedEngramIDs        []uuid.UUID           `json:"used_engram_ids"`
+	UsedEngramLinkIDs    []uuid.UUID           `json:"used_engram_link_ids"`
+	EngramTracePaths     []EngramTracePath     `json:"engram_trace_paths"`
 	UsedDocumentChunkIDs []uuid.UUID           `json:"used_document_chunk_ids"`
 	SourceReferences     []ChatSourceReference `json:"source_references"`
 	DebugTrace           map[string]any        `json:"debug_trace,omitempty"`
@@ -343,6 +345,8 @@ func buildChatSendResponse(
 		AssistantText:        assistantText,
 		PromptPolicyVersion:  prepared.PromptPolicyVersion,
 		UsedEngramIDs:        prepared.Context.UsedEngramIDs,
+		UsedEngramLinkIDs:    prepared.Context.UsedEngramLinkIDs,
+		EngramTracePaths:     prepared.Context.EngramTracePaths,
 		UsedDocumentChunkIDs: prepared.Context.UsedDocumentChunkIDs,
 		SourceReferences:     prepared.Context.SourceReferences,
 		DebugTrace:           nil,

@@ -218,6 +218,17 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 				"stream": map[string]any{
 					"type": "boolean",
 				},
+				"link_recall_enabled": map[string]any{
+					"type": "boolean",
+				},
+				"link_recall_depth": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"link_recall_max_neighbors": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
 			},
 		},
 	},
