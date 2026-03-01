@@ -204,6 +204,44 @@ func TestMountSessionUIRoutesOIDCCallbackAuthenticatesAndRedirects(t *testing.T)
 	assertAuthenticatedOIDCSessionState(t, manager, callbackResponse)
 }
 
+func TestMountSessionUIRoutesOIDCCallbackRejectsReplayAfterPendingStateConsumed(t *testing.T) {
+	auditLogPath := filepath.Join(t.TempDir(), "oidc-callback-replay-audit.log")
+	oidcProvider := &sessionUITestOIDCProvider{
+		enabled: true,
+		authURL: sessionUITestOIDCAuthorizeURL,
+		identity: &auth.OIDCIdentity{
+			Subject:  "subject-2",
+			Username: "admin",
+			Email:    "admin@example.com",
+		},
+	}
+	handler, manager, _ := buildSessionUITestHandler(
+		t,
+		sessionUITestHandlerOptions{
+			oidcProvider: oidcProvider,
+			auditLogPath: auditLogPath,
+		},
+	)
+	pendingCookie, pendingState := startOIDCLoginFlow(t, handler, manager)
+
+	firstCallback := performOIDCCallbackRequest(handler, pendingCookie, pendingState.OIDCState, "auth-code-1")
+	assertRedirect(t, firstCallback, "/ui/admin")
+	assertOIDCCallbackCall(t, oidcProvider, pendingState.OIDCNonce)
+
+	consumedStateCookie := findResponseCookie(firstCallback, manager.CookieName())
+	if consumedStateCookie == nil {
+		t.Fatalf("expected callback response to include authenticated session cookie")
+	}
+	replayCallback := performOIDCCallbackRequest(handler, consumedStateCookie, pendingState.OIDCState, "auth-code-2")
+
+	assertJSONDetail(t, replayCallback, http.StatusForbidden, "invalid oidc state")
+	if len(oidcProvider.authenticateCall) != 1 {
+		t.Fatalf("expected oidc callback exchange to remain single-use for consumed pending state")
+	}
+	assertAuditLogContains(t, auditLogPath, "\"event_type\":\"oidc_login_failed\"")
+	assertAuditLogContains(t, auditLogPath, "\"detail\":\"state_mismatch\"")
+}
+
 func TestMountSessionUIRoutesOIDCCallbackRejectsInvalidRequest(t *testing.T) {
 	testCases := []struct {
 		name                string

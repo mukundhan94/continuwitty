@@ -7,6 +7,18 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Security follow-up: OIDC callback replay abuse-path regression)
+
+1. Added a replay-focused OIDC callback abuse-path test in `internal/api/session_ui_oidc_test.go`:
+   - new test `TestMountSessionUIRoutesOIDCCallbackRejectsReplayAfterPendingStateConsumed`.
+   - validates that once callback state is consumed into an authenticated session cookie, subsequent callback attempts with the consumed cookie are rejected (`403 invalid oidc state`).
+   - asserts failed replay attempts emit `oidc_login_failed` audit logs with `state_mismatch`.
+2. Validation:
+   - `go test ./internal/api -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`).
+
 ### 2026-03-01 (Phase 32 closeout: retrieval-audit telemetry + cross-project usage signals)
 
 1. Added retrieval-audit telemetry to chat context assembly in `internal/chat/context.go`:
