@@ -198,6 +198,9 @@ func LoadSettings() (Settings, error) {
 	if err := ValidateGraphSettings(settings); err != nil {
 		return Settings{}, err
 	}
+	if err := ValidateEmbeddingSettings(settings); err != nil {
+		return Settings{}, err
+	}
 	if err := ValidateProductionSecurity(settings); err != nil {
 		return Settings{}, err
 	}
@@ -283,6 +286,27 @@ func validateAuditSinkTimeout(timeoutSeconds float64) error {
 func ValidateGraphSettings(settings Settings) error {
 	if settings.GraphLinkNoiseScoreThreshold < 0 || settings.GraphLinkNoiseScoreThreshold > 1 {
 		return fmt.Errorf("GRAPH_LINK_NOISE_SCORE_THRESHOLD must be between 0 and 1")
+	}
+	return nil
+}
+
+// ValidateEmbeddingSettings enforces supported provider names and provider-specific requirements.
+func ValidateEmbeddingSettings(settings Settings) error {
+	provider := strings.ToLower(strings.TrimSpace(settings.EmbeddingProvider))
+	if provider == "" {
+		provider = "local"
+	}
+	switch provider {
+	case "local":
+	case "openai":
+		if strings.TrimSpace(settings.OpenAIAPIKey) == "" {
+			return errors.New("EMBEDDING_PROVIDER=openai requires OPENAI_API_KEY")
+		}
+	default:
+		return fmt.Errorf("unsupported EMBEDDING_PROVIDER %q", settings.EmbeddingProvider)
+	}
+	if settings.EmbeddingTimeoutSeconds <= 0 {
+		return errors.New("EMBEDDING_TIMEOUT_SECONDS must be > 0")
 	}
 	return nil
 }

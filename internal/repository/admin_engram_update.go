@@ -16,12 +16,7 @@ import (
 var (
 	nowAdminEngramUTC    = func() time.Time { return time.Now().UTC() }
 	embedAdminEngramText = func(text string, dim int) (embeddings.Result, error) {
-		provider := embeddings.LocalDeterministicEmbeddingProvider{}
-		vector, err := provider.Embed(text, dim)
-		if err != nil {
-			return embeddings.Result{}, err
-		}
-		return embeddings.Result{Vector: vector, ProviderID: provider.ProviderID()}, nil
+		return embeddings.EmbedText(text, dim)
 	}
 	newAdminSourceUUID = uuid.New
 )

@@ -7,6 +7,27 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Embeddings runtime upgrade: OpenAI provider with local fallback)
+
+1. Added a real embedding provider path in `internal/embeddings/`:
+   - introduced `OpenAIEmbeddingProvider` (`openai.go`) with `/v1/embeddings` calls, model/dimensions support, response ordering by index, and provider-error signaling for fallback handling.
+   - introduced runtime embedding configuration (`runtime.go`) with process-wide default service, provider selection (`local` / `openai`), and optional local fallback behavior.
+2. Wired startup provider configuration in `cmd/api/main.go`:
+   - API boot now applies `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_FALLBACK_TO_LOCAL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `EMBEDDING_TIMEOUT_SECONDS` to embedding runtime setup.
+3. Updated repository write-path embedding defaults to runtime-configured providers:
+   - `internal/repository/engram_write.go`
+   - `internal/repository/document.go`
+   - `internal/repository/admin_engram_update.go`
+4. Added validation + tests:
+   - `internal/config/config.go` now validates embedding provider and timeout semantics via `ValidateEmbeddingSettings`.
+   - `internal/config/config_test.go` includes embedding-setting validation coverage.
+   - `internal/embeddings/openai_test.go` and `internal/embeddings/runtime_test.go` validate provider behavior and runtime config rules.
+5. Validation:
+   - `go test ./internal/embeddings ./internal/config ./internal/repository ./cmd/api -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Security follow-up: OIDC callback replay abuse-path regression)
 
 1. Added a replay-focused OIDC callback abuse-path test in `internal/api/session_ui_oidc_test.go`:

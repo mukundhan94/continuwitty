@@ -10,6 +10,8 @@ func baseSettings() Settings {
 		AppEnv:                            "development",
 		LogConfigInDev:                    true,
 		DatabaseURL:                       "postgresql://engram:engram@localhost:5432/engram_vault",
+		EmbeddingProvider:                 "local",
+		EmbeddingTimeoutSeconds:           20.0,
 		AppSessionSecret:                  defaultSessionSecret,
 		UIDemoUsername:                    "admin",
 		UIDemoPassword:                    defaultUIDemoPassword,
@@ -192,6 +194,37 @@ func TestGraphSettingsAcceptBoundedNoiseThreshold(t *testing.T) {
 	settings.GraphLinkNoiseScoreThreshold = 0.65
 	if err := ValidateGraphSettings(settings); err != nil {
 		t.Fatalf("expected graph settings validation success, got %v", err)
+	}
+}
+
+func TestEmbeddingSettingsValidation(t *testing.T) {
+	settings := baseSettings()
+	settings.EmbeddingProvider = "local"
+	settings.OpenAIAPIKey = ""
+	if err := ValidateEmbeddingSettings(settings); err != nil {
+		t.Fatalf("expected local embedding provider validation success: %v", err)
+	}
+
+	settings.EmbeddingProvider = "openai"
+	settings.OpenAIAPIKey = ""
+	if err := ValidateEmbeddingSettings(settings); err == nil {
+		t.Fatalf("expected openai embedding provider without api key to fail")
+	}
+
+	settings.OpenAIAPIKey = "sk-test"
+	if err := ValidateEmbeddingSettings(settings); err != nil {
+		t.Fatalf("expected openai embedding provider with api key to pass: %v", err)
+	}
+
+	settings.EmbeddingProvider = "unsupported-provider"
+	if err := ValidateEmbeddingSettings(settings); err == nil {
+		t.Fatalf("expected unsupported embedding provider to fail")
+	}
+
+	settings = baseSettings()
+	settings.EmbeddingTimeoutSeconds = 0
+	if err := ValidateEmbeddingSettings(settings); err == nil {
+		t.Fatalf("expected non-positive embedding timeout to fail")
 	}
 }
 

@@ -128,24 +128,10 @@ LIMIT %s
 var (
 	nowDocumentUTC    = func() time.Time { return time.Now().UTC() }
 	embedDocumentText = func(text string, dim int) (embeddings.Result, error) {
-		provider := embeddings.LocalDeterministicEmbeddingProvider{}
-		vector, err := provider.Embed(text, dim)
-		if err != nil {
-			return embeddings.Result{}, err
-		}
-		return embeddings.Result{Vector: vector, ProviderID: provider.ProviderID()}, nil
+		return embeddings.EmbedText(text, dim)
 	}
 	embedDocumentMany = func(texts []string, dim int) ([]embeddings.Result, error) {
-		provider := embeddings.LocalDeterministicEmbeddingProvider{}
-		vectors, err := provider.EmbedMany(texts, dim)
-		if err != nil {
-			return nil, err
-		}
-		results := make([]embeddings.Result, 0, len(vectors))
-		for _, vector := range vectors {
-			results = append(results, embeddings.Result{Vector: vector, ProviderID: provider.ProviderID()})
-		}
-		return results, nil
+		return embeddings.EmbedTexts(texts, dim)
 	}
 )
 

@@ -17,6 +17,7 @@ import (
 	"engram/internal/chat"
 	"engram/internal/config"
 	"engram/internal/db"
+	"engram/internal/embeddings"
 	internalexport "engram/internal/export"
 	"engram/internal/graph"
 	"engram/internal/ingestion"
@@ -121,6 +122,7 @@ func buildHandlerOrExit(
 	settings config.Settings,
 	pool *pgxpool.Pool,
 ) http.Handler {
+	configureEmbeddingsOrExit(logger, settings)
 	sessionManager, err := auth.NewSessionManager(settings.AppSessionSecret, auth.DefaultSessionCookieName)
 	if err != nil {
 		logger.Error("failed to initialize session manager", "error", err)
@@ -172,6 +174,23 @@ func buildHandlerOrExit(
 	handler = internalapi.SessionActorMiddleware(sessionManager, lookupSessionUser(pool))(handler)
 	logger.Info("session-authenticated actor context enabled")
 	return handler
+}
+
+func configureEmbeddingsOrExit(logger *slog.Logger, settings config.Settings) {
+	timeout := time.Duration(settings.EmbeddingTimeoutSeconds * float64(time.Second))
+	if err := embeddings.ConfigureDefault(
+		embeddings.RuntimeConfig{
+			Provider:        settings.EmbeddingProvider,
+			Model:           settings.EmbeddingModel,
+			FallbackToLocal: settings.EmbeddingFallbackToLocal,
+			OpenAIAPIKey:    settings.OpenAIAPIKey,
+			OpenAIBaseURL:   settings.OpenAIBaseURL,
+			Timeout:         timeout,
+		},
+	); err != nil {
+		logger.Error("failed to configure embeddings provider", "error", err)
+		os.Exit(1)
+	}
 }
 
 func initializeRuntimeServices(

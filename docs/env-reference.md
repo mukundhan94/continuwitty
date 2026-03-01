@@ -103,6 +103,7 @@
 | `EMBEDDING_PROVIDER` | `local` | Embedding provider (`local` or `openai`) |
 | `EMBEDDING_MODEL` | - | External embedding model name |
 | `EMBEDDING_FALLBACK_TO_LOCAL` | `true` | Fall back to local deterministic embeddings |
+| `EMBEDDING_TIMEOUT_SECONDS` | `20.0` | Timeout for external embedding provider HTTP calls |
 
 ## Ingestion
 

@@ -36,12 +36,7 @@ var (
 	newWriteUUID    = uuid.New
 	nowUTC          = func() time.Time { return time.Now().UTC() }
 	embedEngramText = func(text string, dim int) (embeddings.Result, error) {
-		provider := embeddings.LocalDeterministicEmbeddingProvider{}
-		vector, err := provider.Embed(text, dim)
-		if err != nil {
-			return embeddings.Result{}, err
-		}
-		return embeddings.Result{Vector: vector, ProviderID: provider.ProviderID()}, nil
+		return embeddings.EmbedText(text, dim)
 	}
 	resolveEnrichedPayload = func(
 		payload models.MemoryEngramCreate,
