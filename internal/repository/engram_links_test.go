@@ -103,6 +103,27 @@ func TestListEngramLinksReturnsRows(t *testing.T) {
 	requireEqual(t, 5, db.queryArgs[0][5])
 }
 
+func TestGetEngramLinkReturnsRecord(t *testing.T) {
+	record := sampleEngramLinkRecord(
+		uuid.MustParse("00000000-0000-0000-0000-000000000846"),
+		uuid.MustParse("00000000-0000-0000-0000-000000000847"),
+		uuid.MustParse("00000000-0000-0000-0000-000000000848"),
+	)
+	db := &fakeQueryer{queryRowResult: &fakeRow{values: engramLinkRowValues(record)}}
+	found, err := GetEngramLink(
+		context.Background(),
+		db,
+		EngramLinkGetInput{
+			LinkID:          record.LinkID,
+			ActorUserID:     uuid.MustParse("00000000-0000-0000-0000-000000000849"),
+			IncludeArchived: true,
+		},
+	)
+	requireNoError(t, err)
+	requireNotNil(t, found)
+	requireEqual(t, record.LinkID, found.LinkID)
+}
+
 func TestUpdateEngramLinkRejectsInvalidWeight(t *testing.T) {
 	weight := 1.2
 	_, err := UpdateEngramLink(
@@ -119,19 +140,48 @@ func TestUpdateEngramLinkRejectsInvalidWeight(t *testing.T) {
 	}
 }
 
-func TestArchiveEngramLinkReturnsNilWhenMissing(t *testing.T) {
-	db := &fakeQueryer{queryRowResult: &fakeRow{err: pgx.ErrNoRows}}
-	result, err := ArchiveEngramLink(
-		context.Background(),
-		db,
-		EngramLinkArchiveInput{
-			LinkID:      uuid.MustParse("00000000-0000-0000-0000-000000000861"),
-			ActorUserID: uuid.MustParse("00000000-0000-0000-0000-000000000862"),
+func TestEngramLinkOperationsReturnNilWhenMissing(t *testing.T) {
+	testCases := []struct {
+		name string
+		run  func(context.Context, Queryer) (*models.EngramLinkRecord, error)
+	}{
+		{
+			name: "get",
+			run: func(ctx context.Context, db Queryer) (*models.EngramLinkRecord, error) {
+				return GetEngramLink(
+					ctx,
+					db,
+					EngramLinkGetInput{
+						LinkID:      uuid.MustParse("00000000-0000-0000-0000-00000000084a"),
+						ActorUserID: uuid.MustParse("00000000-0000-0000-0000-00000000084b"),
+					},
+				)
+			},
 		},
-	)
-	requireNoError(t, err)
-	if result != nil {
-		t.Fatalf("expected nil archive result when missing")
+		{
+			name: "archive",
+			run: func(ctx context.Context, db Queryer) (*models.EngramLinkRecord, error) {
+				return ArchiveEngramLink(
+					ctx,
+					db,
+					EngramLinkArchiveInput{
+						LinkID:      uuid.MustParse("00000000-0000-0000-0000-000000000861"),
+						ActorUserID: uuid.MustParse("00000000-0000-0000-0000-000000000862"),
+					},
+				)
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			db := &fakeQueryer{queryRowResult: &fakeRow{err: pgx.ErrNoRows}}
+			result, err := testCase.run(context.Background(), db)
+			requireNoError(t, err)
+			if result != nil {
+				t.Fatalf("expected nil result when query returns no rows")
+			}
+		})
 	}
 }
 

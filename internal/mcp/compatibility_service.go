@@ -249,6 +249,62 @@ type EngramRehydrateService interface {
 	) (*models.RehydrationBundle, error)
 }
 
+// EngramLinkGetService captures single-link lookup behavior used by token project policies.
+type EngramLinkGetService interface {
+	GetEngramLink(
+		ctx context.Context,
+		request EngramLinkGetRequest,
+	) (*models.EngramLinkRecord, error)
+}
+
+// EngramLinkCreateService captures link-create behavior used by MCP engram dispatch.
+type EngramLinkCreateService interface {
+	CreateEngramLink(
+		ctx context.Context,
+		request EngramLinkCreateRequest,
+	) (*models.EngramLinkRecord, error)
+}
+
+// EngramLinkListService captures link-list behavior used by MCP engram dispatch.
+type EngramLinkListService interface {
+	ListEngramLinks(
+		ctx context.Context,
+		request EngramLinkListRequest,
+	) ([]models.EngramLinkRecord, error)
+}
+
+// EngramLinkUpdateService captures link-update behavior used by MCP engram dispatch.
+type EngramLinkUpdateService interface {
+	UpdateEngramLink(
+		ctx context.Context,
+		request EngramLinkUpdateRequest,
+	) (*models.EngramLinkRecord, error)
+}
+
+// EngramLinkArchiveService captures link-archive behavior used by MCP engram dispatch.
+type EngramLinkArchiveService interface {
+	ArchiveEngramLink(
+		ctx context.Context,
+		request EngramLinkArchiveRequest,
+	) (*models.EngramLinkRecord, error)
+}
+
+// EngramLinkSuggestService captures link-suggestion behavior used by MCP engram dispatch.
+type EngramLinkSuggestService interface {
+	SuggestEngramLinks(
+		ctx context.Context,
+		request EngramLinkSuggestRequest,
+	) ([]models.EngramLinkSuggestion, error)
+}
+
+// EngramTracePathService captures traversal/trace behavior used by MCP engram dispatch.
+type EngramTracePathService interface {
+	TraceEngramPath(
+		ctx context.Context,
+		request EngramTracePathRequest,
+	) ([]models.EngramLinkTraversalStep, error)
+}
+
 // EngramCreateService captures engram create behavior used by MCP compatibility engram dispatch.
 type EngramCreateService interface {
 	CreateEngram(
@@ -590,6 +646,75 @@ type EngramRehydrateRequest struct {
 	EngramID    uuid.UUID
 }
 
+// EngramLinkGetRequest captures compatibility-level link lookup inputs.
+type EngramLinkGetRequest struct {
+	ActorUserID     uuid.UUID
+	LinkID          uuid.UUID
+	IncludeArchived bool
+}
+
+// EngramLinkCreateRequest captures compatibility-level link-create inputs.
+type EngramLinkCreateRequest struct {
+	ActorUserID      uuid.UUID
+	SourceEngramID   uuid.UUID
+	TargetEngramID   uuid.UUID
+	RelationType     models.EngramLinkRelationType
+	Weight           float64
+	TemporalWeight   float64
+	Confidence       float64
+	Origin           models.EngramLinkOrigin
+	Status           models.EngramLinkStatus
+	EvidenceJSON     map[string]any
+	LastReinforcedAt *time.Time
+}
+
+// EngramLinkListRequest captures compatibility-level link-list inputs.
+type EngramLinkListRequest struct {
+	ActorUserID     uuid.UUID
+	SourceEngramID  uuid.UUID
+	RelationType    *models.EngramLinkRelationType
+	IncludeArchived bool
+	Limit           int
+	Offset          int
+}
+
+// EngramLinkUpdateRequest captures compatibility-level link-update inputs.
+type EngramLinkUpdateRequest struct {
+	ActorUserID      uuid.UUID
+	LinkID           uuid.UUID
+	Weight           *float64
+	TemporalWeight   *float64
+	Confidence       *float64
+	Status           *models.EngramLinkStatus
+	EvidenceJSON     *map[string]any
+	LastReinforcedAt *time.Time
+}
+
+// EngramLinkArchiveRequest captures compatibility-level link-archive inputs.
+type EngramLinkArchiveRequest struct {
+	ActorUserID uuid.UUID
+	LinkID      uuid.UUID
+}
+
+// EngramLinkSuggestRequest captures compatibility-level link-suggestion inputs.
+type EngramLinkSuggestRequest struct {
+	ActorUserID     uuid.UUID
+	SourceEngramID  uuid.UUID
+	Limit           int
+	MaxCandidates   int
+	MinimumScore    float64
+	IncludeArchived bool
+}
+
+// EngramTracePathRequest captures compatibility-level trace-path inputs.
+type EngramTracePathRequest struct {
+	ActorUserID     uuid.UUID
+	RootEngramID    uuid.UUID
+	MaxDepth        int
+	MaxNeighbors    int
+	IncludeArchived bool
+}
+
 // EngramCreateRequest captures compatibility-level engram create inputs.
 type EngramCreateRequest struct {
 	ActorUserID uuid.UUID
@@ -781,6 +906,13 @@ type CompatibilityServiceDependencies struct {
 	EngramGet                EngramGetService
 	EngramQuery              EngramQueryService
 	EngramRehydrate          EngramRehydrateService
+	EngramLinkGet            EngramLinkGetService
+	EngramLinkCreate         EngramLinkCreateService
+	EngramLinkList           EngramLinkListService
+	EngramLinkUpdate         EngramLinkUpdateService
+	EngramLinkArchive        EngramLinkArchiveService
+	EngramLinkSuggest        EngramLinkSuggestService
+	EngramTracePath          EngramTracePathService
 	EngramCreate             EngramCreateService
 	EngramCreateConversation EngramCreateFromConversationService
 	EngramUpdate             EngramUpdateService
@@ -827,6 +959,13 @@ type CompatibilityService struct {
 	engramGet                EngramGetService
 	engramQuery              EngramQueryService
 	engramRehydrate          EngramRehydrateService
+	engramLinkGet            EngramLinkGetService
+	engramLinkCreate         EngramLinkCreateService
+	engramLinkList           EngramLinkListService
+	engramLinkUpdate         EngramLinkUpdateService
+	engramLinkArchive        EngramLinkArchiveService
+	engramLinkSuggest        EngramLinkSuggestService
+	engramTracePath          EngramTracePathService
 	engramCreate             EngramCreateService
 	engramCreateConversation EngramCreateFromConversationService
 	engramUpdate             EngramUpdateService
@@ -897,6 +1036,13 @@ func NewCompatibilityServiceWithDependencies(
 		engramGet:                dependencies.EngramGet,
 		engramQuery:              dependencies.EngramQuery,
 		engramRehydrate:          dependencies.EngramRehydrate,
+		engramLinkGet:            dependencies.EngramLinkGet,
+		engramLinkCreate:         dependencies.EngramLinkCreate,
+		engramLinkList:           dependencies.EngramLinkList,
+		engramLinkUpdate:         dependencies.EngramLinkUpdate,
+		engramLinkArchive:        dependencies.EngramLinkArchive,
+		engramLinkSuggest:        dependencies.EngramLinkSuggest,
+		engramTracePath:          dependencies.EngramTracePath,
 		engramCreate:             dependencies.EngramCreate,
 		engramCreateConversation: dependencies.EngramCreateConversation,
 		engramUpdate:             dependencies.EngramUpdate,

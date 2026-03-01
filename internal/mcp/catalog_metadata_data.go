@@ -576,6 +576,63 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"engram.trace_path": {
+		description: "Trace depth-limited link paths from a source engram.",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"engram_id",
+			},
+			"properties": map[string]any{
+				"engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"max_depth": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"max_neighbors": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"include_archived": map[string]any{
+					"type": "boolean",
+				},
+			},
+		},
+	},
+	"engram.link_suggest": {
+		description: "Suggest source->target links using semantic/source-overlap heuristics.",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"engram_id",
+			},
+			"properties": map[string]any{
+				"engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"limit": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"max_candidates": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"minimum_score": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"include_archived": map[string]any{
+					"type": "boolean",
+				},
+			},
+		},
+	},
 	"engram.pin_to_session": {
 		description: "Pin an engram to a chat session context chain.",
 		inputSchema: map[string]any{
@@ -982,6 +1039,173 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 							},
 						},
 					},
+				},
+			},
+		},
+	},
+	"engram.link_list": {
+		description: "List outgoing links for one source engram.",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"engram_id",
+			},
+			"properties": map[string]any{
+				"engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"relation_type": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"supports",
+						"depends_on",
+						"contradicts",
+						"related_to",
+						"derived_from",
+					},
+				},
+				"include_archived": map[string]any{
+					"type": "boolean",
+				},
+				"limit": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"offset": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+			},
+		},
+	},
+	"engram.link_create": {
+		description: "Create an engram-to-engram directed link.",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"engram_id",
+				"target_engram_id",
+			},
+			"properties": map[string]any{
+				"engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"target_engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"relation_type": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"supports",
+						"depends_on",
+						"contradicts",
+						"related_to",
+						"derived_from",
+					},
+				},
+				"weight": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"temporal_weight": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"confidence": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"origin": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"manual",
+						"suggested",
+						"inferred",
+						"system",
+					},
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"active",
+						"suggested",
+						"archived",
+						"rejected",
+					},
+				},
+				"evidence_json": map[string]any{
+					"type": "object",
+				},
+				"last_reinforced_at": map[string]any{
+					"type":   "string",
+					"format": "date-time",
+				},
+			},
+		},
+	},
+	"engram.link_update": {
+		description: "Update mutable link fields for one link id.",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"link_id",
+			},
+			"properties": map[string]any{
+				"link_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"weight": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"temporal_weight": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"confidence": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"active",
+						"suggested",
+						"archived",
+						"rejected",
+					},
+				},
+				"evidence_json": map[string]any{
+					"type": "object",
+				},
+				"last_reinforced_at": map[string]any{
+					"type":   "string",
+					"format": "date-time",
+				},
+			},
+		},
+	},
+	"engram.link_archive": {
+		description: "Archive (soft-delete) one engram link.",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"link_id",
+			},
+			"properties": map[string]any{
+				"link_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
 				},
 			},
 		},

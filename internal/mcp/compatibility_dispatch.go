@@ -19,6 +19,9 @@ const (
 	defaultChatProjectDocumentsOffset = 0
 	defaultEngramListLimit            = 200
 	defaultEngramListOffset           = 0
+	defaultEngramLinkListLimit        = 100
+	defaultEngramLinkListOffset       = 0
+	defaultEngramLinkSuggestLimit     = 5
 	defaultCollectionListLimit        = 200
 	defaultCollectionListOffset       = 0
 )

@@ -69,6 +69,13 @@ type EngramLinkListInput struct {
 	Offset          int
 }
 
+// EngramLinkGetInput captures link-lookup requirements.
+type EngramLinkGetInput struct {
+	LinkID          uuid.UUID
+	ActorUserID     uuid.UUID
+	IncludeArchived bool
+}
+
 // EngramLinkUpdateInput captures optional mutable link fields.
 type EngramLinkUpdateInput struct {
 	LinkID           uuid.UUID
@@ -129,6 +136,35 @@ func CreateEngramLink(
 	}
 	if isUniqueViolation(err) {
 		return nil, ErrEngramLinkExists
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
+// GetEngramLink returns one visible link by link id.
+func GetEngramLink(
+	ctx context.Context,
+	db Queryer,
+	input EngramLinkGetInput,
+) (*models.EngramLinkRecord, error) {
+	if input.LinkID == uuid.Nil {
+		return nil, errors.New("link_id is required")
+	}
+	if input.ActorUserID == uuid.Nil {
+		return nil, errors.New("actor_user_id is required")
+	}
+	row := db.QueryRow(
+		ctx,
+		buildGetEngramLinkSQL(),
+		input.LinkID,
+		input.ActorUserID,
+		input.IncludeArchived,
+	)
+	record, err := scanEngramLinkRecord(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
 	}
 	if err != nil {
 		return nil, err
@@ -365,49 +401,26 @@ func buildCreateEngramLinkSQL() string {
 	)
 }
 
+func buildGetEngramLinkSQL() string {
+	return buildVisibleEngramLinkSelectSQL(
+		"$2",
+		"$3",
+		[]string{"link.link_id = $1"},
+		false,
+		"",
+	)
+}
+
 func buildListEngramLinksSQL() string {
-	sourceAccess := buildMembershipReadClause(
-		"source_engram.owner_user_id",
-		"source_engram.visibility_scope",
-		"source_engram.project_id",
+	return buildVisibleEngramLinkSelectSQL(
 		"$2",
+		"$4",
+		[]string{
+			"link.source_engram_id = $1",
+			"($3::text IS NULL OR link.relation_type = $3)",
+		},
 		true,
-	)
-	targetAccess := buildMembershipReadClause(
-		"target_engram.owner_user_id",
-		"target_engram.visibility_scope",
-		"target_engram.project_id",
-		"$2",
-		true,
-	)
-	return fmt.Sprintf(
-		`
-		SELECT %s
-		FROM engram_links link
-		JOIN engrams source_engram
-		  ON source_engram.engram_id = link.source_engram_id
-		JOIN engrams target_engram
-		  ON target_engram.engram_id = link.target_engram_id
-		WHERE
-			link.source_engram_id = $1
-			AND source_engram.deleted_at IS NULL
-			AND target_engram.deleted_at IS NULL
-			AND source_engram.project_id = target_engram.project_id
-			AND %s
-			AND %s
-			AND ($3::text IS NULL OR link.relation_type = $3)
-			AND ($4::boolean OR link.status <> 'archived')
-		ORDER BY
-			link.weight DESC,
-			link.confidence DESC,
-			link.temporal_weight DESC,
-			link.last_reinforced_at DESC NULLS LAST,
-			link.created_at DESC
-		LIMIT $5 OFFSET $6
-		`,
-		engramLinkColumns,
-		sourceAccess,
-		targetAccess,
+		"LIMIT $5 OFFSET $6",
 	)
 }
 
@@ -502,20 +515,58 @@ func listTraversalNeighbors(
 }
 
 func buildTraversalNeighborSQL() string {
+	return buildVisibleEngramLinkSelectSQL(
+		"$2",
+		"$3",
+		[]string{"link.source_engram_id = ANY($1)"},
+		true,
+		"LIMIT $4",
+	)
+}
+
+func buildVisibleEngramLinkSelectSQL(
+	actorPlaceholder string,
+	includeArchivedPlaceholder string,
+	whereClauses []string,
+	includeOrdering bool,
+	limitClause string,
+) string {
 	sourceAccess := buildMembershipReadClause(
 		"source_engram.owner_user_id",
 		"source_engram.visibility_scope",
 		"source_engram.project_id",
-		"$2",
+		actorPlaceholder,
 		true,
 	)
 	targetAccess := buildMembershipReadClause(
 		"target_engram.owner_user_id",
 		"target_engram.visibility_scope",
 		"target_engram.project_id",
-		"$2",
+		actorPlaceholder,
 		true,
 	)
+	filters := append([]string{
+		"source_engram.deleted_at IS NULL",
+		"target_engram.deleted_at IS NULL",
+		"source_engram.project_id = target_engram.project_id",
+		sourceAccess,
+		targetAccess,
+		fmt.Sprintf("(%s::boolean OR link.status <> 'archived')", includeArchivedPlaceholder),
+	}, whereClauses...)
+	orderClause := ""
+	if includeOrdering {
+		orderClause = `
+		ORDER BY
+			link.weight DESC,
+			link.confidence DESC,
+			link.temporal_weight DESC,
+			link.last_reinforced_at DESC NULLS LAST,
+			link.created_at DESC`
+	}
+	limitFragment := strings.TrimSpace(limitClause)
+	if limitFragment != "" {
+		limitFragment = "\n\t\t" + limitFragment
+	}
 	return fmt.Sprintf(
 		`
 		SELECT %s
@@ -525,24 +576,12 @@ func buildTraversalNeighborSQL() string {
 		JOIN engrams target_engram
 		  ON target_engram.engram_id = link.target_engram_id
 		WHERE
-			link.source_engram_id = ANY($1)
-			AND source_engram.deleted_at IS NULL
-			AND target_engram.deleted_at IS NULL
-			AND source_engram.project_id = target_engram.project_id
-			AND %s
-			AND %s
-			AND ($3::boolean OR link.status <> 'archived')
-		ORDER BY
-			link.weight DESC,
-			link.confidence DESC,
-			link.temporal_weight DESC,
-			link.last_reinforced_at DESC NULLS LAST,
-			link.created_at DESC
-		LIMIT $4
+			%s%s%s
 		`,
 		engramLinkColumns,
-		sourceAccess,
-		targetAccess,
+		strings.Join(filters, "\n\t\t\tAND "),
+		orderClause,
+		limitFragment,
 	)
 }
 
