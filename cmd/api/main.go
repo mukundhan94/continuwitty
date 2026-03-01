@@ -18,6 +18,7 @@ import (
 	"engram/internal/config"
 	"engram/internal/db"
 	internalexport "engram/internal/export"
+	"engram/internal/graph"
 	"engram/internal/ingestion"
 	"engram/internal/mcp"
 	"engram/internal/mcptokens"
@@ -382,6 +383,7 @@ func buildSessionAuthDependencies(runtimeDependencies sessionAuthRuntimeDependen
 		ListEngramLinks:          linkAdapter.list,
 		UpdateEngramLink:         linkAdapter.update,
 		ArchiveEngramLink:        linkAdapter.archive,
+		SuggestEngramLinks:       suggestEngramLinksDependency(runtimeDependencies.pool, runtimeDependencies.settings.EmbeddingDim),
 		TraceEngramLinks:         linkAdapter.trace,
 		CreateTokenForOwner:      createMCPTokenForOwnerDependency(runtimeDependencies.mcpTokenService),
 		ListTokenSummaries:       listMCPTokenSummariesDependency(runtimeDependencies.mcpTokenService),
@@ -695,6 +697,35 @@ func (adapter sessionEngramLinkRepositoryAdapter) trace(
 			IncludeArchived: input.IncludeArchived,
 		},
 	)
+}
+
+func suggestEngramLinksDependency(
+	pool repository.Queryer,
+	embeddingDim int,
+) func(
+	ctx context.Context,
+	input internalapi.SessionEngramLinkSuggestInput,
+) ([]models.EngramLinkSuggestion, error) {
+	service := graph.NewLinkSuggestionService(pool, embeddingDim)
+	if service == nil {
+		return nil
+	}
+	return func(
+		ctx context.Context,
+		input internalapi.SessionEngramLinkSuggestInput,
+	) ([]models.EngramLinkSuggestion, error) {
+		return service.SuggestLinks(
+			ctx,
+			graph.LinkSuggestionInput{
+				SourceEngramID:  input.SourceEngramID,
+				ActorUserID:     input.ActorUserID,
+				Limit:           input.Limit,
+				MaxCandidates:   input.MaxCandidates,
+				MinimumScore:    input.MinimumScore,
+				IncludeArchived: input.IncludeArchived,
+			},
+		)
+	}
 }
 
 func createMCPTokenForOwnerDependency(
