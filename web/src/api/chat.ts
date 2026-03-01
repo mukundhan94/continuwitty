@@ -1,4 +1,5 @@
 export type {
+  ChatRecallOptions,
   ChatStreamEvent,
   CreateSessionPayload,
   SaveEngramPayload,

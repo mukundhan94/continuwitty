@@ -442,6 +442,18 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 27 - Memory Graph UX and Traceability
 
+### Status
+
+- In progress (2026-03-01).
+- Completed in current checkpoint:
+  - chat-composer recall controls for linked-memory context (`link recall`, `depth`, `max neighbors`).
+  - transcript trace strip for linked provenance chains from `used_engram_link_ids` and `engram_trace_paths`.
+  - web API/hook typing + state wiring for trace metadata across send/stream flows.
+- Remaining focus:
+  - linked engram relationship panel (relation type/weight/age).
+  - link suggestion accept/reject workflow.
+  - richer "this answer used" explainability chain presentation.
+
 ### Goals
 
 - Make link graph navigation clear in UI so users can understand where responses come from.

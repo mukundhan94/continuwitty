@@ -7,6 +7,29 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 27 UX baseline: linked traceability + recall controls in web chat)
+
+1. Extended web chat API/client contracts for linked trace metadata:
+   - added `EngramTracePath` type.
+   - added `used_engram_link_ids` + `engram_trace_paths` support in send and stream payloads.
+   - added optional per-message recall options (`link_recall_enabled`, `link_recall_depth`, `link_recall_max_neighbors`) in web chat send/stream helpers.
+2. Updated prompt-stream hook wiring in `web/src/hooks/useChatActions.ts`:
+   - propagate recall options on send.
+   - capture/reset linked trace metadata from stream `meta` and `done` events.
+3. Added chat UI explainability baseline in `web/src/components/ChatPanel.tsx`:
+   - chat-composer controls for linked recall enable/depth/max-neighbors.
+   - "Linked trace paths used" transcript strip with compact path rendering and score/depth hints.
+4. Updated `web/src/App.tsx` orchestration:
+   - session-scoped linked trace state reset on session change.
+   - pass recall controls and trace metadata through `ChatPanel` and `usePromptActions`.
+5. Added/updated tests:
+   - `web/src/components/ChatPanel.test.tsx` (trace strip + recall control behavior).
+   - `web/src/hooks/useChatActions.test.ts`
+   - `web/src/api/chat.test.ts`
+6. Validation:
+   - `make web-check`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`).
+
 ### 2026-03-01 (Phase 26 backend baseline: graph-aware context assembly + trace metadata)
 
 1. Upgraded chat context assembly with linked-memory recall:

@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react'
 import { ThemeProvider } from 'styled-components'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { ChatMessage, ChatSession, ChatSourceReference } from '../api/types'
+import type { ChatMessage, ChatSession, ChatSourceReference, EngramTracePath } from '../api/types'
 import { lightTheme } from '../styles/theme'
 import { ChatPanel } from './ChatPanel'
 
@@ -162,6 +162,33 @@ describe('ChatPanel markdown rendering', () => {
     expect(screen.getByText('Debug Trace')).toBeInTheDocument()
     expect(screen.getByText(/Input Tokens:/)).toBeInTheDocument()
     expect(screen.getByText(/Output Tokens:/)).toBeInTheDocument()
+  })
+
+  it('renders linked trace metadata and recall controls', () => {
+    const tracePaths: EngramTracePath[] = [
+      {
+        root_engram_id: 'engram-root-0001',
+        target_engram_id: 'engram-target-0002',
+        depth: 1,
+        link_ids: ['link-1'],
+        engram_ids: ['engram-root-0001', 'engram-target-0002'],
+        score: 0.82,
+      },
+    ]
+    const onDepthChange = vi.fn()
+
+    renderPanel({
+      usedEngramLinkIds: ['link-1'],
+      engramTracePaths: tracePaths,
+      onLinkRecallDepthChange: onDepthChange,
+    })
+
+    expect(screen.getByText('Linked trace paths used:')).toBeInTheDocument()
+    expect(screen.getByTestId('trace-path-strip')).toBeInTheDocument()
+    expect(screen.getByLabelText(/link recall/i)).toBeInTheDocument()
+
+    fireEvent.change(screen.getByTestId('link-recall-depth-input'), { target: { value: '2' } })
+    expect(onDepthChange).toHaveBeenCalledWith(2)
   })
 })
 

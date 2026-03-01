@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -7,6 +7,7 @@ import type {
   ChatDebugTrace,
   ChatSession,
   ChatSourceReference,
+  EngramTracePath,
   ChatTimelineEvent,
   DocumentRecord,
   EngramSummary,
@@ -59,6 +60,31 @@ const RightRail = styled.div`
   }
 `
 
+function useLinkRecallControls() {
+  const [linkRecallEnabled, setLinkRecallEnabled] = useState(true)
+  const [linkRecallDepth, setLinkRecallDepth] = useState(1)
+  const [linkRecallMaxNeighbors, setLinkRecallMaxNeighbors] = useState(8)
+  return {
+    linkRecallEnabled,
+    linkRecallDepth,
+    linkRecallMaxNeighbors,
+    setLinkRecallEnabled,
+    setLinkRecallDepth,
+    setLinkRecallMaxNeighbors,
+  }
+}
+
+function useLinkedTraceState() {
+  const [usedEngramLinkIds, setUsedEngramLinkIds] = useState<string[]>([])
+  const [engramTracePaths, setEngramTracePaths] = useState<EngramTracePath[]>([])
+  return {
+    usedEngramLinkIds,
+    engramTracePaths,
+    setUsedEngramLinkIds,
+    setEngramTracePaths,
+  }
+}
+
 function AppScreen() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -86,8 +112,17 @@ function AppScreen() {
   const [chatError, setChatError] = useState<string | null>(null)
   const [composerText, setComposerText] = useState('')
   const [lastPrompt, setLastPrompt] = useState('')
-
+  const {
+    linkRecallEnabled,
+    linkRecallDepth,
+    linkRecallMaxNeighbors,
+    setLinkRecallEnabled,
+    setLinkRecallDepth,
+    setLinkRecallMaxNeighbors,
+  } = useLinkRecallControls()
   const [sourceReferences, setSourceReferences] = useState<ChatSourceReference[]>([])
+  const { usedEngramLinkIds, engramTracePaths, setUsedEngramLinkIds, setEngramTracePaths } =
+    useLinkedTraceState()
   const [chatDebugTrace, setChatDebugTrace] = useState<ChatDebugTrace | null>(null)
   const [timelineEvents, setTimelineEvents] = useState<ChatTimelineEvent[]>([])
 
@@ -110,37 +145,16 @@ function AppScreen() {
     () => sessions.find((item) => item.session_id === selectedSessionId) || null,
     [selectedSessionId, sessions],
   )
+
+  useEffect(() => {
+    setUsedEngramLinkIds([])
+    setEngramTracePaths([])
+  }, [selectedSessionId, setUsedEngramLinkIds, setEngramTracePaths])
   const defaultSaveAbstract = useMemo(() => buildDefaultSaveAbstract(messages), [messages])
   const isAdmin = user?.role === 'admin'
-  const {
-    adminTokenPanelOpen,
-    adminTokensLoading,
-    adminTokensCreating,
-    adminTokens,
-    adminLatestToken,
-    adminTokenError,
-    adminTokenOptionsLoading,
-    adminAvailableTools,
-    adminAvailableProjects,
-    openAdminTokenPanel,
-    closeAdminTokenPanel,
-    handleRefreshAdminTokenPanel,
-    handleCreateAdminToken,
-    handleRevokeAdminToken,
-    resetAdminTokenState,
-  } = useAdminTokenActions({
-    isAdmin,
-    setNotice,
-    describeError,
-  })
+  const adminTokenActions = useAdminTokenActions({ isAdmin, setNotice, describeError })
 
-  const {
-    loadDefaultProject,
-    loadSessions,
-    loadSessionData,
-    loadProjectDocuments,
-    refreshFromSession,
-  } = useWorkspaceDataLoaders({
+  const workspaceDataLoaders = useWorkspaceDataLoaders({
     projectId,
     normalizeProjectId,
     describeError,
@@ -181,10 +195,10 @@ function AppScreen() {
     setSourceReferences,
     setChatDebugTrace,
     setTimelineEvents,
-    loadDefaultProject,
-    loadSessions,
-    loadProjectDocuments,
-    loadSessionData,
+    loadDefaultProject: workspaceDataLoaders.loadDefaultProject,
+    loadSessions: workspaceDataLoaders.loadSessions,
+    loadProjectDocuments: workspaceDataLoaders.loadProjectDocuments,
+    loadSessionData: workspaceDataLoaders.loadSessionData,
   })
 
   const resetWorkspaceState = useWorkspaceReset({
@@ -202,14 +216,14 @@ function AppScreen() {
     setTimelineEvents,
     setNotice,
     setAuthError,
-    resetAdminTokenState,
+    resetAdminTokenState: adminTokenActions.resetAdminTokenState,
   })
 
   const { handleLogin, handleLogout } = useAuthActions({
     projectId,
-    loadDefaultProject,
-    loadSessions,
-    loadProjectDocuments,
+    loadDefaultProject: workspaceDataLoaders.loadDefaultProject,
+    loadSessions: workspaceDataLoaders.loadSessions,
+    loadProjectDocuments: workspaceDataLoaders.loadProjectDocuments,
     setUser,
     setAuthSubmitting,
     setAuthError,
@@ -238,15 +252,22 @@ function AppScreen() {
     composerText,
     lastPrompt,
     selectedSessionId,
-    refreshFromSession,
+    refreshFromSession: workspaceDataLoaders.refreshFromSession,
     setLastPrompt,
     setPendingUserText,
     setComposerText,
     setStreamingAssistantText,
     setSourceReferences,
+    setUsedEngramLinkIds,
+    setEngramTracePaths,
     setChatDebugTrace,
     setChatError,
     setChatSending,
+    recallOptions: {
+      link_recall_enabled: linkRecallEnabled,
+      link_recall_depth: linkRecallDepth,
+      link_recall_max_neighbors: linkRecallMaxNeighbors,
+    },
     describeError,
   })
 
@@ -257,7 +278,7 @@ function AppScreen() {
     handleUnpinDocument,
   } = usePinActions({
     selectedSessionId,
-    refreshFromSession,
+    refreshFromSession: workspaceDataLoaders.refreshFromSession,
     setNotice,
     setChatError,
     describeError,
@@ -270,7 +291,7 @@ function AppScreen() {
   } = useIngestionActions({
     projectId,
     normalizeProjectId,
-    loadProjectDocuments,
+    loadProjectDocuments: workspaceDataLoaders.loadProjectDocuments,
     setDocumentsSubmitting,
     setDocumentsError,
     setNotice,
@@ -284,7 +305,7 @@ function AppScreen() {
     handleSaveEngram,
   } = useSessionActions({
     selectedSessionId,
-    refreshFromSession,
+    refreshFromSession: workspaceDataLoaders.refreshFromSession,
     setSessions,
     setSelectedSessionId,
     setSaveModalOpen,
@@ -322,8 +343,16 @@ function AppScreen() {
         sending={chatSending}
         error={chatError}
         sourceReferences={sourceReferences}
+        usedEngramLinkIds={usedEngramLinkIds}
+        engramTracePaths={engramTracePaths}
         debugTrace={chatDebugTrace}
         timelineEvents={timelineEvents}
+        linkRecallEnabled={linkRecallEnabled}
+        linkRecallDepth={linkRecallDepth}
+        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
+        onLinkRecallEnabledChange={setLinkRecallEnabled}
+        onLinkRecallDepthChange={setLinkRecallDepth}
+        onLinkRecallMaxNeighborsChange={setLinkRecallMaxNeighbors}
         onComposerChange={setComposerText}
         onSend={handleSend}
         onRetry={handleRetry}
@@ -412,19 +441,19 @@ function AppScreen() {
     }
     return (
       <AdminMcpTokenPanel
-        isOpen={adminTokenPanelOpen}
-        loading={adminTokensLoading}
-        optionsLoading={adminTokenOptionsLoading}
-        creating={adminTokensCreating}
-        tokens={adminTokens}
-        latestToken={adminLatestToken}
-        error={adminTokenError}
-        availableTools={adminAvailableTools}
-        availableProjects={adminAvailableProjects}
-        onClose={closeAdminTokenPanel}
-        onRefresh={handleRefreshAdminTokenPanel}
-        onCreate={handleCreateAdminToken}
-        onRevoke={handleRevokeAdminToken}
+        isOpen={adminTokenActions.adminTokenPanelOpen}
+        loading={adminTokenActions.adminTokensLoading}
+        optionsLoading={adminTokenActions.adminTokenOptionsLoading}
+        creating={adminTokenActions.adminTokensCreating}
+        tokens={adminTokenActions.adminTokens}
+        latestToken={adminTokenActions.adminLatestToken}
+        error={adminTokenActions.adminTokenError}
+        availableTools={adminTokenActions.adminAvailableTools}
+        availableProjects={adminTokenActions.adminAvailableProjects}
+        onClose={adminTokenActions.closeAdminTokenPanel}
+        onRefresh={adminTokenActions.handleRefreshAdminTokenPanel}
+        onCreate={adminTokenActions.handleCreateAdminToken}
+        onRevoke={adminTokenActions.handleRevokeAdminToken}
       />
     )
   }
@@ -449,7 +478,7 @@ function AppScreen() {
         isAdminMemoryRoute={isAdminMemoryRoute}
         isProjectTransferRoute={isProjectTransferRoute}
         mode={mode}
-        onOpenAdminTokenPanel={openAdminTokenPanel}
+        onOpenAdminTokenPanel={adminTokenActions.openAdminTokenPanel}
         onToggleAdminMemoryRoute={() => navigate(isAdminMemoryRoute ? '/' : '/admin/memory')}
         onToggleProjectTransferRoute={() =>
           navigate(isProjectTransferRoute ? '/' : '/projects/transfer')
