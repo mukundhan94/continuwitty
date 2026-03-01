@@ -35,6 +35,24 @@ const engramLinkColumns = `
 	updated_at
 `
 
+const engramLinkColumnsWithAlias = `
+	link.link_id,
+	link.project_id,
+	link.source_engram_id,
+	link.target_engram_id,
+	link.relation_type,
+	link.weight,
+	link.temporal_weight,
+	link.confidence,
+	link.origin,
+	link.status,
+	link.evidence_json,
+	link.created_by_user_id,
+	link.last_reinforced_at,
+	link.created_at,
+	link.updated_at
+`
+
 var (
 	// ErrEngramLinkExists indicates link duplication for active/suggested relation pairs.
 	ErrEngramLinkExists = errors.New("engram link already exists")
@@ -450,7 +468,7 @@ func buildUpdateEngramLinkSQL() string {
 		RETURNING %s
 		`,
 		writeAccess,
-		engramLinkColumns,
+		engramLinkColumnsWithAlias,
 	)
 }
 
@@ -472,7 +490,7 @@ func buildArchiveEngramLinkSQL() string {
 		RETURNING %s
 		`,
 		writeAccess,
-		engramLinkColumns,
+		engramLinkColumnsWithAlias,
 	)
 }
 
@@ -577,7 +595,7 @@ func buildVisibleEngramLinkSelectSQL(
 		WHERE
 			%s%s%s
 		`,
-		engramLinkColumns,
+		engramLinkColumnsWithAlias,
 		strings.Join(filters, "\n\t\t\tAND "),
 		orderClause,
 		limitFragment,

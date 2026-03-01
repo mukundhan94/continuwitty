@@ -229,6 +229,22 @@ func TestTraverseEngramLinksDepthLimitedAndCycleSafe(t *testing.T) {
 		if strings.Contains(query, "source_engram.project_id = target_engram.project_id") {
 			t.Fatalf("expected traversal SQL to allow cross-project links")
 		}
+		if !strings.Contains(query, "link.project_id") {
+			t.Fatalf("expected traversal SQL to qualify link project_id column")
+		}
+	}
+}
+
+func TestEngramLinkSQLUsesQualifiedReturningColumnsInJoinedQueries(t *testing.T) {
+	sqlCases := map[string]string{
+		"list/traversal": buildTraversalNeighborSQL(),
+		"update":         buildUpdateEngramLinkSQL(),
+		"archive":        buildArchiveEngramLinkSQL(),
+	}
+	for name, query := range sqlCases {
+		if !strings.Contains(query, "link.project_id") {
+			t.Fatalf("%s query should qualify project_id with link alias", name)
+		}
 	}
 }
 

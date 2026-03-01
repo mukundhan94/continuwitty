@@ -276,7 +276,7 @@ func pinResourceToSession(
 	config := input.Config
 	resourceAccessClause := config.resourceAccessClause
 	if strings.Contains(resourceAccessClause, "%s") {
-		resourceAccessClause = fmt.Sprintf(resourceAccessClause, pgxPlaceholder(4))
+		resourceAccessClause = replaceAccessClauseActorPlaceholder(resourceAccessClause, pgxPlaceholder(4))
 	}
 	sessionAccessClause := buildMembershipReadClause(
 		"s.owner_user_id",
@@ -408,7 +408,10 @@ func listPinnedResources(
 	params := []any{input.SessionID, input.ActorUserID}
 	resourceAccessClause := config.resourceAccessClause
 	if config.includeActorParam {
-		resourceAccessClause = fmt.Sprintf(resourceAccessClause, pgxPlaceholder(len(params)+1))
+		resourceAccessClause = replaceAccessClauseActorPlaceholder(
+			resourceAccessClause,
+			pgxPlaceholder(len(params)+1),
+		)
 		params = append(params, input.ActorUserID)
 	}
 	sessionAccessClause := buildMembershipReadClause(
@@ -577,6 +580,16 @@ func scanPinnedResourceRow(row interface {
 		return pinnedResourceRow{}, err
 	}
 	return record, nil
+}
+
+func replaceAccessClauseActorPlaceholder(
+	clause string,
+	placeholder string,
+) string {
+	if !strings.Contains(clause, "%s") {
+		return clause
+	}
+	return strings.ReplaceAll(clause, "%s", placeholder)
 }
 
 func emitEngramPinAuditEvent(
