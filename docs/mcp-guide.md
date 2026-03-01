@@ -237,6 +237,12 @@ curl -s -b "$COOKIE_JAR" \
 - `engram.create_from_conversation`
 - `engram.query`
 - `engram.rehydrate`
+- `engram.link_create`
+- `engram.link_list`
+- `engram.link_update`
+- `engram.link_archive`
+- `engram.link_suggest`
+- `engram.trace_path`
 - `engram.pin_to_session`
 - `engram.share`
 - `engram.unshare`
@@ -289,13 +295,16 @@ Note: project audit-event listing is currently REST-only (`GET /api/v1/projects/
   "method": "tools/call",
   "params": {
     "name": "chat.send_message",
-    "arguments": {
-      "session_id": "00000000-0000-0000-0000-000000000000",
-      "content_text": "Summarize the pinned engrams",
-      "stream": true
+      "arguments": {
+        "session_id": "00000000-0000-0000-0000-000000000000",
+        "content_text": "Summarize the pinned engrams",
+        "link_recall_enabled": true,
+        "link_recall_depth": 1,
+        "link_recall_max_neighbors": 8,
+        "stream": true
+      }
     }
   }
-}
 ```
 
 ---
@@ -403,6 +412,9 @@ curl -sN -b "$COOKIE_JAR" \
       "arguments": {
         "session_id": "00000000-0000-0000-0000-000000000000",
         "content_text": "Summarize pinned engrams and list action items.",
+        "link_recall_enabled": true,
+        "link_recall_depth": 1,
+        "link_recall_max_neighbors": 8,
         "stream": true
       }
     }
@@ -440,8 +452,16 @@ curl -sN -b "$COOKIE_JAR" \
 
 - `prompt_policy_version`
 - `used_engram_ids`
+- `used_engram_link_ids`
+- `engram_trace_paths`
 - `used_document_chunk_ids`
 - `source_references`
+
+`chat.send_message` request arguments can also include optional bounded recall controls:
+
+- `link_recall_enabled`
+- `link_recall_depth`
+- `link_recall_max_neighbors`
 
 Document pin/list helpers:
 

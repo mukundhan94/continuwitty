@@ -16,7 +16,9 @@
 - **Phase 21 completed:** observability/reliability foundation with request telemetry middleware, expanded `/api/v1/metrics` health categories (provider failures, stream outcomes, lifecycle traces), and provider fallback/circuit strategy.
 - **Phase 22 completed:** release automation and deployment profile hardening with staged CI gates, compose profile matrix (`dev`/`acceptance`/`release-smoke`), and versioned release checklist/rollback runbook.
 - **Phase 23 completed:** EvalOps + governance hardening with versioned prompt/tool/eval metadata, deterministic continuity/citation/memory-drift suite, delta regression gates, and historical trend artifacts.
-- **Phase 24 in progress:** graph foundation kickoff with `engram_links` schema, optional `engram_link_events`, and repository baseline for create/list/update/archive/traversal.
+- **Phase 24 completed:** graph foundation with `engram_links`/`engram_link_events`, indexed traversal paths, and repository baseline for create/list/update/archive/traversal.
+- **Phase 25 completed:** link REST + MCP operations (`create/list/update/archive/suggest/trace`) and hybrid link suggestion pipeline.
+- **Phase 26 completed (backend baseline):** graph-aware chat context assembly with bounded linked recall and trace metadata (`used_engram_link_ids`, `engram_trace_paths`).
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
@@ -68,7 +70,22 @@
 - [x] Added project/source/target/status/relation/recency indexes for graph retrieval paths.
 - [x] Added repository baseline methods for create/list/update/archive and depth-limited traversal.
 - [x] Added visibility-safe traversal/list filters and score-aware ordering.
-- [ ] Complete runtime integration proof and phase closeout docs.
+- [x] Complete runtime integration proof and phase closeout docs.
+
+### Phase 25 Progress Tracker
+
+- [x] Added session-auth REST link routes (`create/list/update/archive/suggest/trace`).
+- [x] Added MCP link tools (`engram.link_*`, `engram.trace_path`) with token-policy project scoping.
+- [x] Added hybrid suggestion service (semantic + source overlap + lexical continuity + recency).
+- [x] Added regression coverage for REST, MCP dispatch, repository access, and runtime wiring.
+
+### Phase 26 Progress Tracker
+
+- [x] Added graph-aware recall in chat context assembler (default depth `1`, bounded traversal).
+- [x] Added configurable recall controls: `link_recall_enabled`, `link_recall_depth`, `link_recall_max_neighbors`.
+- [x] Added linked-context response metadata: `used_engram_link_ids`, `engram_trace_paths`.
+- [x] Added REST + MCP send-message override support for link-recall controls.
+- [x] Added unit/integration coverage and CodeScene-safe refactors for new graph recall paths.
 
 ### Phase 31 Progress Tracker
 
@@ -149,7 +166,7 @@
 
 ### Milestone 12 — Chat API + Continuity
 - Session/message endpoints, stream endpoint, save-as-engram, continue-session flows
-- Context assembly with `used_engram_ids` and `source_references`
+- Context assembly with `used_engram_ids`, `used_engram_link_ids`, `engram_trace_paths`, and `source_references`
 
 ### Milestone 13 — MCP HTTP Stream
 - JSON-RPC over SSE transport, chat/engram/user tool routing
@@ -232,7 +249,10 @@
 | 21 | Observability and Reliability | Completed |
 | 22 | Release Automation and Deployment Profiles | Completed |
 | 23 | EvalOps and Prompt/Policy Governance | Completed |
-| 24-28 | Engram Link Graph | Planned |
+| 24 | Engram Graph Foundations | Completed |
+| 25 | Link APIs, MCP Tools, Suggestion Pipeline | Completed |
+| 26 | Graph-Aware Context Assembly | Completed (backend baseline) |
+| 27-28 | Graph UX + Temporal Quality Controls | Planned |
 | 32 | ContinuWitty Query Protocol | Planned |
 | 33 | Portable Export/Import Stash | Completed |
 | 34 | Security Audit Remediation Program | Completed |

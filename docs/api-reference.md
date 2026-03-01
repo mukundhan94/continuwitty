@@ -51,6 +51,17 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 | `POST` | `/api/v1/engrams/{engram_id}/share` | Share engram to project-visible scope |
 | `POST` | `/api/v1/engrams/{engram_id}/unshare` | Revert engram visibility to private |
 
+### Engram Links (Graph)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/engrams/{engram_id}/links` | Create directed engram link |
+| `GET` | `/api/v1/engrams/{engram_id}/links` | List links from source engram |
+| `PATCH` | `/api/v1/engrams/links/{link_id}` | Update link weight/confidence/status/evidence |
+| `DELETE` | `/api/v1/engrams/links/{link_id}` | Archive link (soft delete) |
+| `POST` | `/api/v1/engrams/{engram_id}/links/suggest` | Get ranked link suggestions |
+| `POST` | `/api/v1/engrams/{engram_id}/trace` | Traverse linked engrams (depth-limited) |
+
 ### Chat Sessions
 
 | Method | Path | Description |
@@ -194,6 +205,22 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 
 - build metadata: `semantic_version`, `release`, `commit_id`
 - governance metadata: `chat_prompt_policy_version`, `mcp_tool_policy_version`, `eval_suite_version`
+
+### Chat Send Message Controls + Metadata
+
+`POST /api/v1/chat/sessions/{session_id}/messages` and `/messages/stream` support optional graph recall controls:
+
+- `link_recall_enabled` (bool)
+- `link_recall_depth` (int, bounded)
+- `link_recall_max_neighbors` (int, bounded)
+
+Chat send responses and stream `meta`/`done` events include:
+
+- `used_engram_ids`
+- `used_engram_link_ids`
+- `engram_trace_paths`
+- `used_document_chunk_ids`
+- `source_references`
 
 ### Create Engram
 

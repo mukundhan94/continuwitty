@@ -326,13 +326,12 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress (2026-03-01).
-- Completed in kickoff:
+- Completed (2026-03-01).
+- Completed deliverables:
   - `engram_links` + `engram_link_events` schema foundation in `db/init/001_schema.sql`.
   - repository baseline for create/list/update/archive and depth-limited traversal with visibility-safe filtering.
   - typed link models (`relation_type`, `origin`, `status`) and unit tests.
-- Remaining focus:
-  - finalize runtime integration proof with phase checkpoint updates.
+  - runtime integration proof completed via Phase 25/26 REST + MCP + chat-context wiring.
 
 ### Goals
 
@@ -360,6 +359,15 @@ Build a local-first memory system where agents and humans can:
 ---
 
 ### Phase 25 - Link APIs, MCP Tools, and Suggestion Pipeline
+
+### Status
+
+- Completed (2026-03-01).
+- Completed deliverables:
+  - REST link APIs (`create/list/update/archive/suggest/trace`) under `/api/v1/engrams/*`.
+  - MCP link tools (`engram.link_*`, `engram.trace_path`) with scoped token policy integration.
+  - hybrid suggestion service combining semantic overlap, source overlap, lexical continuity, and recency components.
+  - same-project + visibility parity enforcement aligned with existing engram access model.
 
 ### Goals
 
@@ -391,6 +399,20 @@ Build a local-first memory system where agents and humans can:
 ---
 
 ### Phase 26 - Graph-Aware Context Assembly (Configurable Recall Depth)
+
+### Status
+
+- Completed backend baseline (2026-03-01).
+- Completed deliverables:
+  - chat context assembler now includes linked-neighbor recall (default depth `1`) with bounded controls:
+    - `link_recall_enabled`
+    - `link_recall_depth`
+    - `link_recall_max_neighbors`
+  - pruning/ranking policy combines seed relevance, link quality (weight/confidence/temporal), recency, and depth-aware penalties.
+  - chat response + stream metadata now include:
+    - `used_engram_link_ids`
+    - `engram_trace_paths`
+  - REST + MCP `chat.send_message` paths accept optional per-message link recall overrides.
 
 ### Goals
 
@@ -852,9 +874,9 @@ Build a local-first memory system where agents and humans can:
 1. Complete Phase 20 (production security hardening) with centralized audit sink + abuse-path coverage.
 2. Phase 23 (EvalOps and prompt/policy governance) completed on 2026-03-01.
 3. Execute link-graph roadmap in order:
-   - Phase 24 (graph foundations)
-   - Phase 25 (link APIs/MCP + suggestions)
-   - Phase 26 (graph-aware recall)
+   - Phase 24 (graph foundations) completed on 2026-03-01.
+   - Phase 25 (link APIs/MCP + suggestions) completed on 2026-03-01.
+   - Phase 26 (graph-aware recall) backend baseline completed on 2026-03-01.
    - Phase 27 (traceability UX)
    - Phase 28 (temporal dynamics + graph quality)
 4. Execute Phase 32 after Phase 24-28 baselines are in place:

@@ -7,6 +7,61 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 26 backend baseline: graph-aware context assembly + trace metadata)
+
+1. Upgraded chat context assembly with linked-memory recall:
+   - added depth-bounded traversal integration into `internal/chat/context.go`.
+   - default recall depth is `1` with bounded controls for depth and neighbor expansion.
+2. Added configurable recall controls to chat send payloads:
+   - `link_recall_enabled`
+   - `link_recall_depth`
+   - `link_recall_max_neighbors`
+   - wired through REST + MCP send/stream paths into chat context assembly.
+3. Added link-trace metadata in chat outputs:
+   - `used_engram_link_ids`
+   - `engram_trace_paths`
+   - emitted in send responses and stream `meta`/`done` events.
+4. Added graph scoring/pruning policy:
+   - fused seed relevance + link quality (`weight`, `confidence`, `temporal_weight`) + recency + depth penalty.
+   - bounded context merge logic keeps prior `used_engram_ids` behavior backward compatible.
+5. Refactored context dependency wiring for code-health:
+   - extracted dependency builders into `internal/chat/context_dependencies.go`.
+6. Added/updated tests:
+   - `internal/chat/context_test.go`
+   - `internal/chat/message_runtime_test.go`
+   - `internal/chat/service_test.go`
+   - `internal/api/chat_api_messages_test.go`
+   - `internal/mcp/compatibility_service_chat_send_message_test.go`
+   - `internal/mcp/compatibility_service_chat_send_message_stream_test.go`
+7. Validation:
+   - `go test ./... -count=1`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`).
+
+### 2026-03-01 (Phase 25 closeout: link REST/MCP + suggestion pipeline)
+
+1. Added session-auth link REST routes in `internal/api/session_engrams_links.go`:
+   - create/list/update/archive links
+   - suggestion and trace endpoints.
+2. Added MCP link tools and dispatch wiring:
+   - `engram.link_create`, `engram.link_list`, `engram.link_update`
+   - `engram.link_archive`, `engram.link_suggest`, `engram.trace_path`
+   - token project-scope policy support for link resources.
+3. Added hybrid suggestion service in `internal/graph/link_suggestions.go`:
+   - semantic overlap
+   - source overlap
+   - lexical continuity hints
+   - recency-aware scoring.
+4. Added runtime wiring adapters in `cmd/api` for REST + MCP link services.
+5. Added/updated tests:
+   - `internal/api/session_engrams_links_test.go`
+   - `internal/graph/link_suggestions_test.go`
+   - `internal/mcp/compatibility_service_engram_link_test.go`
+   - `internal/mcp/compatibility_service_engram_link_token_scope_test.go`
+   - `internal/repository/engram_links_test.go`
+6. Validation:
+   - `go test ./internal/repository ./internal/graph ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - CodeScene branch safeguard clean after refactors.
+
 ### 2026-03-01 (Phase 24 kickoff: link graph schema + repository foundation)
 
 1. Added graph persistence schema foundation in `db/init/001_schema.sql`:
