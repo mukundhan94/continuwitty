@@ -162,11 +162,13 @@ func (service *ChatService) SendMessage(
 	traceID := service.resolveTraceID(ctx)
 	prepared, err := service.prepareGenerationWithTrace(
 		ctx,
-		actorUserID,
-		sessionID,
-		payload,
-		traceID,
-		chatOperationSend,
+		prepareGenerationInput{
+			ActorUserID: actorUserID,
+			SessionID:   sessionID,
+			Payload:     payload,
+			TraceID:     traceID,
+			Operation:   chatOperationSend,
+		},
 	)
 	if err != nil {
 		return ChatSendResponse{}, err
@@ -177,12 +179,14 @@ func (service *ChatService) SendMessage(
 	}
 	assistantMessage, err := service.persistAssistantReplyWithTrace(
 		ctx,
-		actorUserID,
-		prepared,
-		result,
-		traceID,
-		chatOperationSend,
-		providerCandidate.Provider,
+		persistAssistantInput{
+			ActorUserID: actorUserID,
+			Prepared:    prepared,
+			Result:      result,
+			TraceID:     traceID,
+			Operation:   chatOperationSend,
+			Provider:    providerCandidate.Provider,
+		},
 	)
 	if err != nil {
 		return ChatSendResponse{}, err
@@ -196,11 +200,13 @@ func (service *ChatService) SendMessage(
 	})
 	if err := service.runLifecycleWithTrace(
 		ctx,
-		actorUserID,
-		prepared,
-		traceID,
-		chatOperationSend,
-		providerCandidate.Provider,
+		lifecycleRunInput{
+			ActorUserID: actorUserID,
+			Prepared:    prepared,
+			TraceID:     traceID,
+			Operation:   chatOperationSend,
+			Provider:    providerCandidate.Provider,
+		},
 	); err != nil {
 		return ChatSendResponse{}, err
 	}
@@ -226,11 +232,13 @@ func (service *ChatService) StreamMessageEvents(
 	traceID := service.resolveTraceID(ctx)
 	prepared, err := service.prepareGenerationWithTrace(
 		ctx,
-		actorUserID,
-		sessionID,
-		payload,
-		traceID,
-		chatOperationStream,
+		prepareGenerationInput{
+			ActorUserID: actorUserID,
+			SessionID:   sessionID,
+			Payload:     payload,
+			TraceID:     traceID,
+			Operation:   chatOperationStream,
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -243,341 +251,32 @@ func (service *ChatService) StreamMessageEvents(
 		return nil, err
 	}
 	if streamResult.ProviderError != nil {
-		return service.handleStreamProviderFailure(
-			events,
-			streamResult.ProviderError,
-			providerCandidate.Provider,
-			streamStartedAt,
+		return service.appendStreamFailure(
+			streamFailureInput{
+				Events:          events,
+				Provider:        providerCandidate.Provider,
+				Outcome:         chatStreamOutcomeProviderError,
+				ErrorCode:       streamResult.ProviderError.ErrorCode(),
+				Detail:          streamResult.ProviderError.Detail(),
+				StatusCode:      streamResult.ProviderError.StatusCode(),
+				ChunkCount:      0,
+				StreamStartedAt: streamStartedAt,
+			},
 		), nil
 	}
 	events = append(events, streamResult.Events...)
 	return service.completeStreamSuccess(
 		ctx,
-		actorUserID,
-		traceID,
-		prepared,
-		streamResult,
-		providerCandidate,
-		events,
-		streamStartedAt,
-	)
-}
-
-func (service *ChatService) completeStreamSuccess(
-	ctx context.Context,
-	actorUserID uuid.UUID,
-	traceID string,
-	prepared PreparedGeneration,
-	streamResult StreamChunkResult,
-	providerCandidate ProviderFallbackCandidate,
-	events []StreamEvent,
-	streamStartedAt time.Time,
-) ([]StreamEvent, error) {
-	assistantMessage, err := service.persistAssistantReplyWithTrace(
-		ctx,
-		actorUserID,
-		prepared,
-		streamAssistantResult(providerCandidate, streamResult),
-		traceID,
-		chatOperationStream,
-		providerCandidate.Provider,
-	)
-	if err != nil {
-		return service.mapStreamPersistenceError(
-			err,
-			events,
-			providerCandidate.Provider,
-			streamResult.Events,
-			streamStartedAt,
-		)
-	}
-	service.reinforceLinksWithTrace(ctx, reinforceTraceInput{
-		ActorUserID: actorUserID,
-		Prepared:    prepared,
-		TraceID:     traceID,
-		Operation:   chatOperationStream,
-		Provider:    providerCandidate.Provider,
-	})
-	if err := service.runLifecycleWithTrace(
-		ctx,
-		actorUserID,
-		prepared,
-		traceID,
-		chatOperationStream,
-		providerCandidate.Provider,
-	); err != nil {
-		return nil, err
-	}
-	service.recordEngramAccessWithTrace(ctx, accessTraceInput{
-		Prepared:  prepared,
-		TraceID:   traceID,
-		Operation: chatOperationStream,
-		Provider:  providerCandidate.Provider,
-	})
-	events = append(events, streamDoneEvent(prepared, *assistantMessage, streamResult.FullText))
-	service.recordStreamCompletion(providerCandidate.Provider, streamResult.Events, streamStartedAt)
-	return events, nil
-}
-
-func streamAssistantResult(
-	providerCandidate ProviderFallbackCandidate,
-	streamResult StreamChunkResult,
-) providers.ProviderGenerateResult {
-	return providers.ProviderGenerateResult{
-		Provider:   providerCandidate.Provider,
-		ModelID:    providerCandidate.ModelID,
-		Text:       streamResult.FullText,
-		TokenUsage: map[string]int{},
-	}
-}
-
-func (service *ChatService) mapStreamPersistenceError(
-	err error,
-	events []StreamEvent,
-	provider models.ChatProvider,
-	streamEvents []StreamEvent,
-	streamStartedAt time.Time,
-) ([]StreamEvent, error) {
-	serviceError, ok := err.(*ChatServiceError)
-	if ok {
-		return service.handleStreamPersistenceFailure(
-			events,
-			serviceError,
-			provider,
-			streamEvents,
-			streamStartedAt,
-		), nil
-	}
-	return nil, err
-}
-
-func streamDoneEvent(
-	prepared PreparedGeneration,
-	assistantMessage models.ChatMessageRecord,
-	fullText string,
-) StreamEvent {
-	return StreamEvent{
-		Type:    "done",
-		Payload: BuildStreamDonePayload(prepared, assistantMessage, fullText, nil),
-	}
-}
-
-func (service *ChatService) handleStreamProviderFailure(
-	events []StreamEvent,
-	providerError *ChatProviderExecutionError,
-	provider models.ChatProvider,
-	streamStartedAt time.Time,
-) []StreamEvent {
-	events = append(events, streamProviderErrorEvent(providerError))
-	service.recordStreamHealth(
-		StreamHealthSample{
-			Provider:   provider,
-			Operation:  chatOperationStream,
-			Outcome:    chatStreamOutcomeProviderError,
-			ErrorCode:  providerError.ErrorCode(),
-			ChunkCount: 0,
-			Duration:   service.nowUTC().Sub(streamStartedAt),
+		streamSuccessInput{
+			ActorUserID:       actorUserID,
+			TraceID:           traceID,
+			Prepared:          prepared,
+			StreamResult:      streamResult,
+			ProviderCandidate: providerCandidate,
+			Events:            events,
+			StreamStartedAt:   streamStartedAt,
 		},
 	)
-	return events
-}
-
-func (service *ChatService) handleStreamPersistenceFailure(
-	events []StreamEvent,
-	serviceError *ChatServiceError,
-	provider models.ChatProvider,
-	streamEvents []StreamEvent,
-	streamStartedAt time.Time,
-) []StreamEvent {
-	events = append(events, streamPersistenceErrorEvent(serviceError))
-	service.recordStreamHealth(
-		StreamHealthSample{
-			Provider:   provider,
-			Operation:  chatOperationStream,
-			Outcome:    chatStreamOutcomePersistenceFail,
-			ChunkCount: streamChunkCount(streamEvents),
-			Duration:   service.nowUTC().Sub(streamStartedAt),
-		},
-	)
-	return events
-}
-
-func (service *ChatService) recordStreamCompletion(
-	provider models.ChatProvider,
-	streamEvents []StreamEvent,
-	streamStartedAt time.Time,
-) {
-	service.recordStreamHealth(
-		StreamHealthSample{
-			Provider:   provider,
-			Operation:  chatOperationStream,
-			Outcome:    chatStreamOutcomeCompleted,
-			ChunkCount: streamChunkCount(streamEvents),
-			Duration:   service.nowUTC().Sub(streamStartedAt),
-		},
-	)
-}
-
-func (service *ChatService) prepareGenerationWithTrace(
-	ctx context.Context,
-	actorUserID uuid.UUID,
-	sessionID uuid.UUID,
-	payload ChatMessageCreateRequest,
-	traceID string,
-	operation string,
-) (PreparedGeneration, error) {
-	startedAt := service.nowUTC()
-	service.recordLifecycleTrace(traceID, operation, chatTracePrepareStart, nil, "", "", 0)
-	prepared, err := service.runtime.PrepareGeneration(ctx, actorUserID, sessionID, payload)
-	if err != nil {
-		service.recordLifecycleTrace(
-			traceID,
-			operation,
-			chatTracePrepareFailed,
-			nil,
-			"",
-			"",
-			service.nowUTC().Sub(startedAt),
-		)
-		return PreparedGeneration{}, err
-	}
-	service.recordLifecycleTrace(
-		traceID,
-		operation,
-		chatTracePrepareDone,
-		&prepared,
-		prepared.Session.Provider,
-		"",
-		service.nowUTC().Sub(startedAt),
-	)
-	return prepared, nil
-}
-
-func (service *ChatService) persistAssistantReplyWithTrace(
-	ctx context.Context,
-	actorUserID uuid.UUID,
-	prepared PreparedGeneration,
-	result providers.ProviderGenerateResult,
-	traceID string,
-	operation string,
-	provider models.ChatProvider,
-) (*models.ChatMessageRecord, error) {
-	assistantMessage, err := service.runtime.PersistAssistantReply(ctx, actorUserID, prepared, result)
-	if err != nil {
-		service.recordLifecycleTrace(traceID, operation, chatTracePersistFail, &prepared, provider, "", 0)
-		return nil, err
-	}
-	service.recordLifecycleTrace(traceID, operation, chatTracePersistOK, &prepared, provider, "", 0)
-	return assistantMessage, nil
-}
-
-func (service *ChatService) runLifecycleWithTrace(
-	ctx context.Context,
-	actorUserID uuid.UUID,
-	prepared PreparedGeneration,
-	traceID string,
-	operation string,
-	provider models.ChatProvider,
-) error {
-	if err := service.runSessionLifecycleMaintenance(ctx, actorUserID, prepared.Session); err != nil {
-		service.recordLifecycleTrace(traceID, operation, chatTraceLifecycleFail, &prepared, provider, "", 0)
-		return err
-	}
-	service.recordLifecycleTrace(traceID, operation, chatTraceLifecycleOK, &prepared, provider, "", 0)
-	return nil
-}
-
-func (service *ChatService) reinforceLinksWithTrace(ctx context.Context, input reinforceTraceInput) {
-	if len(input.Prepared.Context.UsedEngramLinkIDs) == 0 {
-		return
-	}
-	if err := service.reinforceEngramLinks(
-		ctx,
-		input.ActorUserID,
-		input.Prepared.Context.UsedEngramLinkIDs,
-	); err != nil {
-		service.recordLifecycleTrace(
-			input.TraceID,
-			input.Operation,
-			chatTraceReinforceFail,
-			&input.Prepared,
-			input.Provider,
-			"link_reinforce_error",
-			0,
-		)
-		return
-	}
-	service.recordLifecycleTrace(
-		input.TraceID,
-		input.Operation,
-		chatTraceReinforceOK,
-		&input.Prepared,
-		input.Provider,
-		"",
-		0,
-	)
-}
-
-func (service *ChatService) recordEngramAccessWithTrace(ctx context.Context, input accessTraceInput) {
-	engramIDs := dedupeUUIDs(input.Prepared.Context.UsedEngramIDs)
-	if len(engramIDs) == 0 {
-		return
-	}
-	accessSource := resolveEngramAccessSource(input.Operation)
-	if err := service.recordEngramAccess(
-		ctx,
-		input.Prepared.Session.SessionID,
-		accessSource,
-		engramIDs,
-	); err != nil {
-		service.recordLifecycleTrace(
-			input.TraceID,
-			input.Operation,
-			chatTraceAccessFail,
-			&input.Prepared,
-			input.Provider,
-			"engram_access_record_error",
-			0,
-		)
-		return
-	}
-	service.recordLifecycleTrace(
-		input.TraceID,
-		input.Operation,
-		chatTraceAccessOK,
-		&input.Prepared,
-		input.Provider,
-		"",
-		0,
-	)
-}
-
-func resolveEngramAccessSource(operation string) string {
-	switch operation {
-	case chatOperationStream:
-		return "chat_stream"
-	default:
-		return "chat_send"
-	}
-}
-
-func dedupeUUIDs(values []uuid.UUID) []uuid.UUID {
-	if len(values) == 0 {
-		return nil
-	}
-	seen := make(map[uuid.UUID]struct{}, len(values))
-	deduped := make([]uuid.UUID, 0, len(values))
-	for _, value := range values {
-		if value == uuid.Nil {
-			continue
-		}
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		deduped = append(deduped, value)
-	}
-	return deduped
 }
 
 func buildChatSendResponse(
@@ -610,263 +309,5 @@ func (service *ChatService) validateDependencies() error {
 		return errChatServiceDependenciesIncomplete
 	default:
 		return nil
-	}
-}
-
-func (service *ChatService) generateWithFallback(
-	ctx context.Context,
-	traceID string,
-	prepared PreparedGeneration,
-) (providers.ProviderGenerateResult, ProviderFallbackCandidate, error) {
-	candidates := service.providerFallback.Candidates(prepared.Session)
-	for index, candidate := range candidates {
-		if !service.circuitPolicy.Allow(candidate.Provider) {
-			providerErr := NewChatProviderExecutionError(
-				"provider circuit is open",
-				503,
-				"provider_circuit_open",
-			)
-			service.recordProviderFailure(candidate.Provider, chatOperationSend, providerErr.ErrorCode())
-			service.recordLifecycleTrace(
-				traceID,
-				chatOperationSend,
-				chatTraceProviderOpen,
-				&prepared,
-				candidate.Provider,
-				providerErr.ErrorCode(),
-				0,
-			)
-			if index == len(candidates)-1 {
-				return providers.ProviderGenerateResult{}, candidate, providerErr
-			}
-			continue
-		}
-		adapter, err := service.resolveProvider(candidate.Provider)
-		if err != nil {
-			return providers.ProviderGenerateResult{}, candidate, err
-		}
-		service.recordLifecycleTrace(
-			traceID,
-			chatOperationSend,
-			chatTraceProviderTry,
-			&prepared,
-			candidate.Provider,
-			"",
-			0,
-		)
-		result, err := adapter.Generate(ctx, service.providerRequestWithCandidate(prepared, candidate))
-		if err == nil {
-			service.circuitPolicy.RecordResult(candidate.Provider, "")
-			result.Provider = candidate.Provider
-			result.ModelID = candidate.ModelID
-			service.recordLifecycleTrace(
-				traceID,
-				chatOperationSend,
-				chatTraceProviderOK,
-				&prepared,
-				candidate.Provider,
-				"",
-				0,
-			)
-			return result, candidate, nil
-		}
-		mapped := MapProviderError(err)
-		providerErr, ok := mapped.(*ChatProviderExecutionError)
-		if !ok {
-			return providers.ProviderGenerateResult{}, candidate, mapped
-		}
-		service.circuitPolicy.RecordResult(candidate.Provider, providerErr.ErrorCode())
-		service.recordProviderFailure(candidate.Provider, chatOperationSend, providerErr.ErrorCode())
-		service.recordLifecycleTrace(
-			traceID,
-			chatOperationSend,
-			chatTraceProviderFail,
-			&prepared,
-			candidate.Provider,
-			providerErr.ErrorCode(),
-			0,
-		)
-		if !isTransientProviderErrorCode(providerErr.ErrorCode()) || index == len(candidates)-1 {
-			return providers.ProviderGenerateResult{}, candidate, providerErr
-		}
-	}
-	return providers.ProviderGenerateResult{}, ProviderFallbackCandidate{}, NewChatProviderExecutionError(
-		"provider execution failed",
-		502,
-		"provider_error",
-	)
-}
-
-func (service *ChatService) streamWithFallback(
-	ctx context.Context,
-	traceID string,
-	prepared PreparedGeneration,
-) (StreamChunkResult, ProviderFallbackCandidate, error) {
-	candidates := service.providerFallback.Candidates(prepared.Session)
-	for index, candidate := range candidates {
-		if !service.circuitPolicy.Allow(candidate.Provider) {
-			providerErr := NewChatProviderExecutionError(
-				"provider circuit is open",
-				503,
-				"provider_circuit_open",
-			)
-			service.recordProviderFailure(candidate.Provider, chatOperationStream, providerErr.ErrorCode())
-			service.recordLifecycleTrace(
-				traceID,
-				chatOperationStream,
-				chatTraceProviderOpen,
-				&prepared,
-				candidate.Provider,
-				providerErr.ErrorCode(),
-				0,
-			)
-			if index == len(candidates)-1 {
-				return StreamChunkResult{ProviderError: providerErr}, candidate, nil
-			}
-			continue
-		}
-		adapter, err := service.resolveProvider(candidate.Provider)
-		if err != nil {
-			return StreamChunkResult{}, candidate, err
-		}
-		service.recordLifecycleTrace(
-			traceID,
-			chatOperationStream,
-			chatTraceProviderTry,
-			&prepared,
-			candidate.Provider,
-			"",
-			0,
-		)
-		candidatePrepared := prepared
-		candidatePrepared.ProviderRequest = service.providerRequestWithCandidate(prepared, candidate)
-		streamResult, err := service.runtime.YieldStreamChunks(
-			ctx,
-			adapter.StreamGenerate,
-			candidatePrepared,
-		)
-		if err != nil {
-			return StreamChunkResult{}, candidate, err
-		}
-		if streamResult.ProviderError == nil {
-			service.circuitPolicy.RecordResult(candidate.Provider, "")
-			service.recordLifecycleTrace(
-				traceID,
-				chatOperationStream,
-				chatTraceProviderOK,
-				&prepared,
-				candidate.Provider,
-				"",
-				0,
-			)
-			return streamResult, candidate, nil
-		}
-		service.circuitPolicy.RecordResult(candidate.Provider, streamResult.ProviderError.ErrorCode())
-		service.recordProviderFailure(candidate.Provider, chatOperationStream, streamResult.ProviderError.ErrorCode())
-		service.recordLifecycleTrace(
-			traceID,
-			chatOperationStream,
-			chatTraceProviderFail,
-			&prepared,
-			candidate.Provider,
-			streamResult.ProviderError.ErrorCode(),
-			0,
-		)
-		if !isTransientProviderErrorCode(streamResult.ProviderError.ErrorCode()) || index == len(candidates)-1 {
-			return streamResult, candidate, nil
-		}
-	}
-	return StreamChunkResult{}, ProviderFallbackCandidate{}, NewChatProviderExecutionError(
-		"provider execution failed",
-		502,
-		"provider_error",
-	)
-}
-
-func (service *ChatService) providerRequestWithCandidate(
-	prepared PreparedGeneration,
-	candidate ProviderFallbackCandidate,
-) providers.ProviderGenerateRequest {
-	request := prepared.ProviderRequest
-	request.ModelID = candidate.ModelID
-	return request
-}
-
-func (service *ChatService) recordProviderFailure(
-	provider models.ChatProvider,
-	operation string,
-	errorCode string,
-) {
-	service.observability.RecordProviderFailure(
-		ProviderFailureSample{
-			Provider:  provider,
-			Operation: operation,
-			ErrorCode: errorCode,
-		},
-	)
-}
-
-func (service *ChatService) recordStreamHealth(sample StreamHealthSample) {
-	service.observability.RecordStreamHealth(sample)
-}
-
-func (service *ChatService) recordLifecycleTrace(
-	traceID string,
-	operation string,
-	stage string,
-	prepared *PreparedGeneration,
-	provider models.ChatProvider,
-	errorCode string,
-	duration time.Duration,
-) {
-	sessionID := uuid.Nil
-	messageID := uuid.Nil
-	if prepared != nil {
-		sessionID = prepared.Session.SessionID
-		messageID = prepared.UserMessage.MessageID
-	}
-	service.observability.RecordLifecycleTrace(
-		LifecycleTraceSample{
-			TraceID:   traceID,
-			Operation: operation,
-			Stage:     stage,
-			Provider:  provider,
-			SessionID: sessionID,
-			MessageID: messageID,
-			ErrorCode: errorCode,
-			Duration:  duration,
-		},
-	)
-}
-
-func streamChunkCount(events []StreamEvent) int {
-	count := 0
-	for _, event := range events {
-		if event.Type == "chunk" {
-			count++
-		}
-	}
-	return count
-}
-
-func streamProviderErrorEvent(providerError *ChatProviderExecutionError) StreamEvent {
-	return StreamEvent{
-		Type: "error",
-		Payload: map[string]any{
-			"detail":      providerError.Detail(),
-			"status_code": providerError.StatusCode(),
-			"error_code":  providerError.ErrorCode(),
-		},
-	}
-}
-
-func streamPersistenceErrorEvent(serviceError *ChatServiceError) StreamEvent {
-	return StreamEvent{
-		Type: "error",
-		Payload: map[string]any{
-			"detail":      serviceError.Detail(),
-			"status_code": serviceError.StatusCode(),
-			"error_code":  "persistence_error",
-		},
 	}
 }

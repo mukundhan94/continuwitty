@@ -937,6 +937,31 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-03-01 (Code health uplift + ContinuWitty target-state guide)
+
+1. Prioritized code-health uplift to `10.0` for active chat service surface:
+   - refactored `internal/chat/service.go` into focused helper modules:
+     - `internal/chat/service_stream_helpers.go`
+     - `internal/chat/service_generation_helpers.go`
+     - `internal/chat/service_fallback_helpers.go`
+     - `internal/chat/service_observability_helpers.go`
+   - kept behavior stable while reducing complexity/duplication and argument-smell hotspots.
+2. Added test-side code-health uplift:
+   - `internal/chat/service_test.go` now uses trace expectation helpers for reduced conditional complexity while preserving assertions.
+3. Added high-priority strategic documentation:
+   - new `docs/continuwitty-target-state.md` describing full-phase end-state value, workflows, role-specific benefits, KPI model, and rollout guidance once the roadmap is complete.
+4. Validation executed:
+   - `go test ./internal/chat`
+   - `go test ./...`
+   - `code_health_review` confirmed `10.0` for:
+     - `internal/chat/service.go`
+     - `internal/chat/service_stream_helpers.go`
+     - `internal/chat/service_generation_helpers.go`
+     - `internal/chat/service_fallback_helpers.go`
+     - `internal/chat/service_observability_helpers.go`
+     - `internal/chat/service_test.go`
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)` => `quality_gates=passed`.
+
 ### 2026-03-01 (Phase 35 kickoff: memory engagement tracking baseline)
 
 1. Roadmap alignment and docs consolidation:

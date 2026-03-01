@@ -410,23 +410,12 @@ func TestSendMessageEmitsLifecycleTraceAndProviderFailureSamples(t *testing.T) {
 	if len(observability.lifecycleTraces) == 0 {
 		t.Fatalf("expected lifecycle traces")
 	}
-	hasPrepare := false
-	hasProviderFail := false
-	hasLifecycleSuccess := false
-	for _, sample := range observability.lifecycleTraces {
-		if sample.Stage == chatTracePrepareDone {
-			hasPrepare = true
-		}
-		if sample.Stage == chatTraceProviderFail && sample.ErrorCode == "provider_rate_limit" {
-			hasProviderFail = true
-		}
-		if sample.Stage == chatTraceLifecycleOK {
-			hasLifecycleSuccess = true
-		}
+	required := []traceExpectation{
+		{stage: chatTracePrepareDone},
+		{stage: chatTraceProviderFail, errorCode: "provider_rate_limit"},
+		{stage: chatTraceLifecycleOK},
 	}
-	if !hasPrepare || !hasProviderFail || !hasLifecycleSuccess {
-		t.Fatalf("missing expected lifecycle trace samples: %+v", observability.lifecycleTraces)
-	}
+	requireLifecycleTraceExpectations(t, observability.lifecycleTraces, required)
 }
 
 func TestSendMessageReinforcesUsedEngramLinks(t *testing.T) {
@@ -647,6 +636,30 @@ func hasLifecycleTrace(samples []LifecycleTraceSample, stage, errorCode string) 
 		}
 	}
 	return false
+}
+
+type traceExpectation struct {
+	stage     string
+	errorCode string
+}
+
+func requireLifecycleTraceExpectations(
+	t *testing.T,
+	samples []LifecycleTraceSample,
+	expectations []traceExpectation,
+) {
+	t.Helper()
+	for _, expectation := range expectations {
+		if hasLifecycleTrace(samples, expectation.stage, expectation.errorCode) {
+			continue
+		}
+		t.Fatalf(
+			"missing lifecycle trace stage %q code %q in samples: %+v",
+			expectation.stage,
+			expectation.errorCode,
+			samples,
+		)
+	}
 }
 
 func runtimeFromServiceState(state *serviceRuntimeState) *ChatMessageRuntime {
