@@ -911,4 +911,4 @@ Build a local-first memory system where agents and humans can:
    - Phase 28 (temporal dynamics + graph quality) completed on 2026-03-01.
 4. Execute Phase 32 after Phase 24-28 baselines are in place:
    - [x] add `cw>` query protocol baseline (parser + runtime metadata)
-   - [ ] enable access-aware federated linked recall across projects
+   - [x] enable access-aware federated linked recall across projects
