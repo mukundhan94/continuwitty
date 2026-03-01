@@ -41,35 +41,13 @@ func parseCWDirective(directive string) (*CWQueryPlan, string) {
 		return plan, ""
 	}
 
-	inlineQueryTokens := make([]string, 0)
-	startIndex := 0
-	if !strings.Contains(tokens[0], "=") {
+	assignmentTokens := tokens
+	if tokenIsCWMode(tokens[0]) {
 		plan.Mode = normalizeCWMode(tokens[0])
-		startIndex = 1
+		assignmentTokens = tokens[1:]
 	}
-
-	for _, token := range tokens[startIndex:] {
-		key, value, hasPair := strings.Cut(token, "=")
-		if !hasPair {
-			inlineQueryTokens = append(inlineQueryTokens, token)
-			continue
-		}
-		normalizedKey := strings.ToLower(strings.TrimSpace(key))
-		normalizedValue := strings.TrimSpace(value)
-		if normalizedKey == "" || normalizedValue == "" {
-			continue
-		}
-		switch normalizedKey {
-		case "mode":
-			plan.Mode = normalizeCWMode(normalizedValue)
-		case "project":
-			plan.Project = normalizedValue
-		case "citations":
-			plan.CitationsRequired = strings.EqualFold(normalizedValue, "required")
-		}
-	}
-
-	return plan, strings.TrimSpace(strings.Join(inlineQueryTokens, " "))
+	inlineQueryTokens := applyCWDirectiveAssignments(plan, assignmentTokens)
+	return plan, joinCWInlineQuery(inlineQueryTokens)
 }
 
 func normalizeCWMode(rawMode string) string {
@@ -78,4 +56,52 @@ func normalizeCWMode(rawMode string) string {
 		return cwModeAuto
 	}
 	return mode
+}
+
+func tokenIsCWMode(token string) bool {
+	return !strings.Contains(token, "=")
+}
+
+func applyCWDirectiveAssignments(plan *CWQueryPlan, tokens []string) []string {
+	inlineQueryTokens := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		if applyCWDirectiveAssignment(plan, token) {
+			continue
+		}
+		inlineQueryTokens = append(inlineQueryTokens, token)
+	}
+	return inlineQueryTokens
+}
+
+func applyCWDirectiveAssignment(plan *CWQueryPlan, token string) bool {
+	normalizedKey, normalizedValue, hasPair := parseCWDirectiveToken(token)
+	if !hasPair {
+		return false
+	}
+	switch normalizedKey {
+	case "mode":
+		plan.Mode = normalizeCWMode(normalizedValue)
+	case "project":
+		plan.Project = normalizedValue
+	case "citations":
+		plan.CitationsRequired = strings.EqualFold(normalizedValue, "required")
+	}
+	return true
+}
+
+func parseCWDirectiveToken(token string) (string, string, bool) {
+	key, value, hasPair := strings.Cut(token, "=")
+	if !hasPair {
+		return "", "", false
+	}
+	normalizedKey := strings.ToLower(strings.TrimSpace(key))
+	normalizedValue := strings.TrimSpace(value)
+	if normalizedKey == "" || normalizedValue == "" {
+		return "", "", false
+	}
+	return normalizedKey, normalizedValue, true
+}
+
+func joinCWInlineQuery(tokens []string) string {
+	return strings.TrimSpace(strings.Join(tokens, " "))
 }

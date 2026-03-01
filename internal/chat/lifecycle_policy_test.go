@@ -21,18 +21,18 @@ func TestNormalizeAutosavePolicyKeepsBackwardCompatibility(t *testing.T) {
 
 func TestIntervalSnapshotTriggerRules(t *testing.T) {
 	now := time.Date(2026, 2, 25, 15, 0, 0, 0, time.UTC)
-	requireTrue(t, ShouldTakeIntervalSnapshot(now, nil, 15))
+	requireTrue(t, ShouldTakeIntervalSnapshot(now, nil, SnapshotIntervalMinutes(15)))
 
 	fiveMinutesAgo := now.Add(-5 * time.Minute)
-	requireFalse(t, ShouldTakeIntervalSnapshot(now, &fiveMinutesAgo, 15))
+	requireFalse(t, ShouldTakeIntervalSnapshot(now, &fiveMinutesAgo, SnapshotIntervalMinutes(15)))
 
 	twentyMinutesAgo := now.Add(-20 * time.Minute)
-	requireTrue(t, ShouldTakeIntervalSnapshot(now, &twentyMinutesAgo, 15))
+	requireTrue(t, ShouldTakeIntervalSnapshot(now, &twentyMinutesAgo, SnapshotIntervalMinutes(15)))
 }
 
 func TestMessageCountSnapshotTriggerRules(t *testing.T) {
-	requireTrue(t, ShouldTakeMessageCountSnapshot(6, 3))
-	requireFalse(t, ShouldTakeMessageCountSnapshot(5, 3))
+	requireTrue(t, ShouldTakeMessageCountSnapshot(SnapshotMessageCount(6), SnapshotMessageWindow(3)))
+	requireFalse(t, ShouldTakeMessageCountSnapshot(SnapshotMessageCount(5), SnapshotMessageWindow(3)))
 }
 
 func TestDuplicateAndLowValueGuards(t *testing.T) {
@@ -60,7 +60,12 @@ func TestRetentionPruningRespectsAgeAndMaxCount(t *testing.T) {
 			},
 		)
 	}
-	pruneIDs := SelectRetentionPruneIDs(snapshots, 2, 3, now)
+	pruneIDs := SelectRetentionPruneIDs(
+		snapshots,
+		SnapshotRetentionDays(2),
+		SnapshotRetentionMaxSnapshots(3),
+		now,
+	)
 	if len(pruneIDs) < 3 {
 		t.Fatalf("expected at least three prune ids, got %d", len(pruneIDs))
 	}

@@ -226,10 +226,12 @@ func runSessionLifecycleMaintenanceDependency(
 	return func(ctx context.Context, actorUserID uuid.UUID, session models.ChatSessionRecord) error {
 		_, err := chat.RunSessionLifecycleMaintenance(
 			ctx,
-			actorUserID,
-			session,
-			settings.EmbeddingDim,
-			lifecycleDependencies,
+			chat.SessionLifecycleRunInput{
+				ActorUserID:  actorUserID,
+				Session:      session,
+				EmbeddingDim: settings.EmbeddingDim,
+				Dependencies: lifecycleDependencies,
+			},
 		)
 		return err
 	}

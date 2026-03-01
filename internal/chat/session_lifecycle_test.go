@@ -50,7 +50,15 @@ func TestRunSessionLifecycleReturnsDisabledWithoutSideEffects(t *testing.T) {
 		},
 	}
 
-	result, err := RunSessionLifecycleMaintenance(context.Background(), actorID, session, 256, dependencies)
+	result, err := RunSessionLifecycleMaintenance(
+		context.Background(),
+		SessionLifecycleRunInput{
+			ActorUserID:  actorID,
+			Session:      session,
+			EmbeddingDim: 256,
+			Dependencies: dependencies,
+		},
+	)
 	requireNoErrorSession(t, err)
 	if result.SnapshotEngramID != nil {
 		t.Fatalf("expected no snapshot id when autosave disabled")
@@ -105,7 +113,15 @@ func TestRunSessionLifecycleSkipsMessageCountThreshold(t *testing.T) {
 		},
 	}
 
-	result, err := RunSessionLifecycleMaintenance(context.Background(), actorID, session, 256, dependencies)
+	result, err := RunSessionLifecycleMaintenance(
+		context.Background(),
+		SessionLifecycleRunInput{
+			ActorUserID:  actorID,
+			Session:      session,
+			EmbeddingDim: 256,
+			Dependencies: dependencies,
+		},
+	)
 	requireNoErrorSession(t, err)
 	if result.SnapshotEngramID != nil {
 		t.Fatalf("expected no snapshot id when threshold not met")
@@ -149,7 +165,15 @@ func TestRunSessionLifecycleCreatesSnapshotWhenThresholdIsMet(t *testing.T) {
 		},
 	}
 
-	result, err := RunSessionLifecycleMaintenance(context.Background(), actorID, session, 256, dependencies)
+	result, err := RunSessionLifecycleMaintenance(
+		context.Background(),
+		SessionLifecycleRunInput{
+			ActorUserID:  actorID,
+			Session:      session,
+			EmbeddingDim: 256,
+			Dependencies: dependencies,
+		},
+	)
 	requireNoErrorSession(t, err)
 	requireEqualStringSession(t, createdID.String(), result.SnapshotEngramID.String())
 	requireEqualIntSession(t, 0, len(result.PrunedEngramIDs))

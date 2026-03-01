@@ -14,6 +14,12 @@ const (
 	consolidationMergedCountTagPrefix = "consolidation_merged_count:"
 )
 
+type SnapshotIntervalMinutes int
+type SnapshotMessageCount int
+type SnapshotMessageWindow int
+type SnapshotRetentionDays int
+type SnapshotRetentionMaxSnapshots int
+
 // SessionLifecyclePolicy captures chat autosave and retention configuration.
 type SessionLifecyclePolicy struct {
 	AutosaveEnabled       bool
@@ -86,22 +92,25 @@ func IsLowValueSnapshotAbstract(value string) bool {
 func ShouldTakeIntervalSnapshot(
 	now time.Time,
 	latestSnapshotCreatedAt *time.Time,
-	intervalMinutes int,
+	intervalMinutes SnapshotIntervalMinutes,
 ) bool {
 	if latestSnapshotCreatedAt == nil {
 		return true
 	}
-	threshold := now.Add(-1 * time.Duration(maxInt(intervalMinutes, 1)) * time.Minute)
+	threshold := now.Add(-1 * time.Duration(maxInt(int(intervalMinutes), 1)) * time.Minute)
 	return !latestSnapshotCreatedAt.After(threshold)
 }
 
 // ShouldTakeMessageCountSnapshot determines whether message-count autosave should trigger.
-func ShouldTakeMessageCountSnapshot(assistantMessageCount int, minMessages int) bool {
+func ShouldTakeMessageCountSnapshot(
+	assistantMessageCount SnapshotMessageCount,
+	minMessages SnapshotMessageWindow,
+) bool {
 	if assistantMessageCount <= 0 {
 		return false
 	}
-	window := maxInt(minMessages, 1)
-	return assistantMessageCount%window == 0
+	window := maxInt(int(minMessages), 1)
+	return int(assistantMessageCount)%window == 0
 }
 
 // DuplicateSnapshotExists detects whether an abstract already exists in snapshots.
@@ -122,8 +131,8 @@ func DuplicateSnapshotExists(abstract string, existingSnapshots []models.EngramS
 // SelectRetentionPruneIDs determines which snapshot ids should be pruned by retention rules.
 func SelectRetentionPruneIDs(
 	snapshots []models.EngramSummary,
-	retentionDays int,
-	retentionMaxSnapshots int,
+	retentionDays SnapshotRetentionDays,
+	retentionMaxSnapshots SnapshotRetentionMaxSnapshots,
 	now time.Time,
 ) []uuid.UUID {
 	if len(snapshots) == 0 {
@@ -213,8 +222,12 @@ func parseInt(value string) (int, error) {
 	return parsed, nil
 }
 
-func retentionThresholds(reference time.Time, retentionDays int, retentionMaxSnapshots int) (time.Time, int) {
-	return reference.AddDate(0, 0, -maxInt(retentionDays, 1)), maxInt(retentionMaxSnapshots, 1)
+func retentionThresholds(
+	reference time.Time,
+	retentionDays SnapshotRetentionDays,
+	retentionMaxSnapshots SnapshotRetentionMaxSnapshots,
+) (time.Time, int) {
+	return reference.AddDate(0, 0, -maxInt(int(retentionDays), 1)), maxInt(int(retentionMaxSnapshots), 1)
 }
 
 func collectKeepSnapshotIDs(
