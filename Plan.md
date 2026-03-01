@@ -888,6 +888,111 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Memory Improvements Alignment (docs/memory-improvements.md)
+
+### Status
+
+- Aligned on 2026-03-01 so execution tracking lives in one canonical roadmap.
+- `docs/memory-improvements.md` remains the detailed blueprint.
+- `Plan.md` is the implementation contract and phase gate source.
+
+### Mapping
+
+1. Blueprint Phase 1 (Foundation) maps to:
+   - Phase 35: engagement/access tracking baseline.
+   - Phase 36: feedback loop + relevance/freshness scoring.
+   - Phase 37: time-decay and consolidation suggestions.
+2. Blueprint Phase 2 (LLM safety/intelligence) maps to:
+   - Phase 38: contradiction detection and warning flows.
+   - Phase 39: temporal query extensions + cost-aware context assembly.
+3. Blueprint Phase 3 (autonomous intelligence) maps to:
+   - Phase 40: autonomous memory suggestions and action workflows.
+
+---
+
+### Phase 35 - Memory Engagement Tracking Baseline
+
+### Status
+
+- In Progress (2026-03-01).
+- Scope is intentionally limited to telemetry + counters that can be safely integrated into existing chat send/stream paths.
+
+### Goals
+
+1. Track when engrams are used during successful chat responses.
+2. Persist durable access events suitable for future scoring/feedback features.
+3. Add forward-compatible schema fields required by the memory-improvements foundation.
+
+### Deliverables
+
+1. Schema:
+   - add `engram` engagement counters (`access_count`, `last_accessed_at`) and forward-compatible aggregates (`useful_count`, `contradiction_count`).
+   - add `engram_access_events` with retrieval-safe indexes.
+2. Repository:
+   - add write path to append access events and update engram aggregate counters atomically per event.
+3. Chat runtime:
+   - record used engram access on successful `chat.send_message` and successful stream completion.
+   - preserve non-blocking behavior (access telemetry failures must not fail chat response generation).
+4. Tests:
+   - repository tests for event persistence + aggregate updates.
+   - chat service tests for send/stream access recording and failure isolation.
+
+### Exit Criteria
+
+1. Every successful chat response with `used_engram_ids` records access events.
+2. Access counters are monotonically updated and queryable for ranking inputs.
+3. Regression tests cover send, stream, and recorder-failure cases.
+
+---
+
+### Phase 36 - Feedback Loop + Relevance Scoring
+
+### Status
+
+- Planned.
+
+### Goals
+
+1. Capture explicit memory usefulness/contradiction feedback.
+2. Extend retrieval ranking beyond dense+lexical with engagement + freshness factors.
+
+### Deliverables
+
+1. `engram_feedback` storage and aggregation paths.
+2. feedback MCP/API surfaces.
+3. composite scoring rollout with deterministic weighting + tests.
+
+### Exit Criteria
+
+1. Feedback updates aggregate counters deterministically.
+2. Relevance scoring remains stable and benchmarked under current latency targets.
+
+---
+
+### Phase 37 - Time-Decay + Consolidation Suggestions
+
+### Status
+
+- Planned.
+
+### Goals
+
+1. Introduce freshness decay and maintenance heuristics for stale/redundant memory.
+2. Generate deterministic consolidation suggestions with operator-safe review workflows.
+
+### Deliverables
+
+1. freshness score maintenance job + repository updates.
+2. consolidation suggestion schema/services + MCP/API tooling.
+3. acceptance and precision/recall benchmark coverage for duplicate/theme grouping.
+
+### Exit Criteria
+
+1. Stale memory receives updated freshness scores over time.
+2. Consolidation candidates are generated with test-covered deterministic criteria.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -912,3 +1017,7 @@ Build a local-first memory system where agents and humans can:
 4. Execute Phase 32 after Phase 24-28 baselines are in place:
    - [x] add `cw>` query protocol baseline (parser + runtime metadata)
    - [x] enable access-aware federated linked recall across projects
+5. Execute memory-intelligence foundation in order:
+   - [ ] Phase 35: memory engagement tracking baseline.
+   - [ ] Phase 36: feedback loop + relevance/freshness scoring.
+   - [ ] Phase 37: time-decay + consolidation suggestions.
