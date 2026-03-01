@@ -18,6 +18,7 @@ import { AdminMemoryPage } from './components/AdminMemoryPage'
 import { AdminMcpTokenPanel } from './components/AdminMcpTokenPanel'
 import { ChatPanel } from './components/ChatPanel'
 import { DocumentIngestionPanel } from './components/DocumentIngestionPanel'
+import { LinkedEngramPanel } from './components/LinkedEngramPanel'
 import { LoginView } from './components/LoginView'
 import { PinnedEngramPanel } from './components/PinnedEngramPanel'
 import { ProjectTransferPage } from './components/ProjectTransferPage'
@@ -41,6 +42,7 @@ import { useSessionActions } from './hooks/useSessionActions'
 import { useWorkspaceDataLoaders } from './hooks/useWorkspaceDataLoaders'
 import { useWorkspaceLifecycle } from './hooks/useWorkspaceLifecycle'
 import { useWorkspaceActions } from './hooks/useWorkspaceActions'
+import { useLinkedEngramInsights } from './hooks/useLinkedEngramInsights'
 import { buildDefaultSaveAbstract } from './utils/chat'
 import { describeError } from './utils/errors'
 import {
@@ -52,7 +54,7 @@ import {
 const RightRail = styled.div`
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(12rem, 0.65fr) minmax(0, 1.35fr);
+  grid-template-rows: minmax(10rem, 0.6fr) minmax(10rem, 0.7fr) minmax(0, 1.2fr);
   gap: 0.9rem;
 
   @media (max-width: 1180px) {
@@ -75,11 +77,14 @@ function useLinkRecallControls() {
 }
 
 function useLinkedTraceState() {
+  const [usedEngramIds, setUsedEngramIds] = useState<string[]>([])
   const [usedEngramLinkIds, setUsedEngramLinkIds] = useState<string[]>([])
   const [engramTracePaths, setEngramTracePaths] = useState<EngramTracePath[]>([])
   return {
+    usedEngramIds,
     usedEngramLinkIds,
     engramTracePaths,
+    setUsedEngramIds,
     setUsedEngramLinkIds,
     setEngramTracePaths,
   }
@@ -121,8 +126,14 @@ function AppScreen() {
     setLinkRecallMaxNeighbors,
   } = useLinkRecallControls()
   const [sourceReferences, setSourceReferences] = useState<ChatSourceReference[]>([])
-  const { usedEngramLinkIds, engramTracePaths, setUsedEngramLinkIds, setEngramTracePaths } =
-    useLinkedTraceState()
+  const {
+    usedEngramIds,
+    usedEngramLinkIds,
+    engramTracePaths,
+    setUsedEngramIds,
+    setUsedEngramLinkIds,
+    setEngramTracePaths,
+  } = useLinkedTraceState()
   const [chatDebugTrace, setChatDebugTrace] = useState<ChatDebugTrace | null>(null)
   const [timelineEvents, setTimelineEvents] = useState<ChatTimelineEvent[]>([])
 
@@ -147,9 +158,10 @@ function AppScreen() {
   )
 
   useEffect(() => {
+    setUsedEngramIds([])
     setUsedEngramLinkIds([])
     setEngramTracePaths([])
-  }, [selectedSessionId, setUsedEngramLinkIds, setEngramTracePaths])
+  }, [selectedSessionId, setUsedEngramIds, setUsedEngramLinkIds, setEngramTracePaths])
   const defaultSaveAbstract = useMemo(() => buildDefaultSaveAbstract(messages), [messages])
   const isAdmin = user?.role === 'admin'
   const adminTokenActions = useAdminTokenActions({ isAdmin, setNotice, describeError })
@@ -258,6 +270,7 @@ function AppScreen() {
     setComposerText,
     setStreamingAssistantText,
     setSourceReferences,
+    setUsedEngramIds,
     setUsedEngramLinkIds,
     setEngramTracePaths,
     setChatDebugTrace,
@@ -268,6 +281,26 @@ function AppScreen() {
       link_recall_depth: linkRecallDepth,
       link_recall_max_neighbors: linkRecallMaxNeighbors,
     },
+    describeError,
+  })
+
+  const {
+    sourceEngramIds: linkedSourceEngramIds,
+    links: linkedEngramLinks,
+    suggestions: linkedEngramSuggestions,
+    loading: linkedEngramLoading,
+    error: linkedEngramError,
+    pendingSuggestionKeys,
+    refreshLinkInsights,
+    handleAcceptSuggestion,
+    handleRejectSuggestion,
+  } = useLinkedEngramInsights({
+    selectedSessionId,
+    usedEngramIds,
+    usedEngramLinkIds,
+    engramTracePaths,
+    setNotice,
+    setChatError,
     describeError,
   })
 
@@ -374,6 +407,22 @@ function AppScreen() {
           onIngestFile={handleIngestFile}
           onPinDocument={handlePinDocument}
           onUnpinDocument={handleUnpinDocument}
+        />
+
+        <LinkedEngramPanel
+          selectedSessionId={selectedSessionId}
+          loading={linkedEngramLoading}
+          error={linkedEngramError}
+          sourceEngramIds={linkedSourceEngramIds}
+          links={linkedEngramLinks}
+          suggestions={linkedEngramSuggestions}
+          pendingSuggestionKeys={pendingSuggestionKeys}
+          availableEngrams={availableEngrams}
+          sourceReferences={sourceReferences}
+          tracePaths={engramTracePaths}
+          onRefresh={refreshLinkInsights}
+          onAcceptSuggestion={handleAcceptSuggestion}
+          onRejectSuggestion={handleRejectSuggestion}
         />
 
         <PinnedEngramPanel

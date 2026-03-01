@@ -19,7 +19,7 @@
 - **Phase 24 completed:** graph foundation with `engram_links`/`engram_link_events`, indexed traversal paths, and repository baseline for create/list/update/archive/traversal.
 - **Phase 25 completed:** link REST + MCP operations (`create/list/update/archive/suggest/trace`) and hybrid link suggestion pipeline.
 - **Phase 26 completed (backend baseline):** graph-aware chat context assembly with bounded linked recall and trace metadata (`used_engram_link_ids`, `engram_trace_paths`).
-- **Phase 27 in progress:** web traceability baseline with linked-recall composer controls and transcript trace-path surfacing from graph metadata.
+- **Phase 27 completed:** web graph traceability UX with linked-recall controls, linked-memory panel (relation/weight/age), and suggestion accept/reject workflow.
 - **Phase 29 completed:** optional deterministic auto-metadata enrichment and MCP conversation-only persistence path.
 - **Phase 30 completed:** MCP PAT lifecycle APIs/UI plus scoped bearer authorization for external agents.
 - **Phase 31 completed:** project defaults + enterprise memory management + MCP organization (backend/API/MCP/web/tests/docs/skills complete with acceptance mock validation).
@@ -93,9 +93,9 @@
 - [x] Added chat-composer linked-recall controls (enable toggle, depth, max neighbors).
 - [x] Added transcript traceability strip from `used_engram_link_ids` + `engram_trace_paths`.
 - [x] Added web API/client/hook typing and state propagation for linked trace metadata in send/stream flows.
-- [ ] Add linked engram relationship panel with relation type, weight, and age.
-- [ ] Add link suggestion accept/reject workflow in the web UI.
-- [ ] Add richer "this answer used" explainability chain unifying links and citations.
+- [x] Added linked engram relationship panel with relation type, weight, and age.
+- [x] Added link suggestion accept/reject workflow in the web UI.
+- [x] Added richer "this answer used" explainability chain unifying links and citations.
 
 ### Phase 31 Progress Tracker
 
@@ -262,7 +262,7 @@
 | 24 | Engram Graph Foundations | Completed |
 | 25 | Link APIs, MCP Tools, Suggestion Pipeline | Completed |
 | 26 | Graph-Aware Context Assembly | Completed (backend baseline) |
-| 27 | Memory Graph UX and Traceability | In Progress |
+| 27 | Memory Graph UX and Traceability | Completed |
 | 28 | Temporal Dynamics and Graph Quality Controls | Planned |
 | 32 | ContinuWitty Query Protocol | Planned |
 | 33 | Portable Export/Import Stash | Completed |

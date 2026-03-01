@@ -126,6 +126,53 @@ export interface EngramTracePath {
   score: number
 }
 
+export type EngramLinkRelationType =
+  | 'supports'
+  | 'depends_on'
+  | 'contradicts'
+  | 'related_to'
+  | 'derived_from'
+
+export type EngramLinkOrigin = 'manual' | 'suggested' | 'inferred' | 'system'
+
+export type EngramLinkStatus = 'active' | 'suggested' | 'archived' | 'rejected'
+
+export interface EngramLinkRecord {
+  link_id: string
+  project_id: string
+  source_engram_id: string
+  target_engram_id: string
+  relation_type: EngramLinkRelationType
+  weight: number
+  temporal_weight: number
+  confidence: number
+  origin: EngramLinkOrigin
+  status: EngramLinkStatus
+  evidence_json: Record<string, unknown>
+  created_by_user_id: string
+  last_reinforced_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface EngramLinkSuggestion {
+  source_engram_id: string
+  target_engram_id: string
+  project_id: string
+  target_title: string
+  target_abstract: string
+  target_created_at: string
+  relation_type: EngramLinkRelationType
+  weight: number
+  temporal_weight: number
+  confidence: number
+  score: number
+  origin: EngramLinkOrigin
+  status: EngramLinkStatus
+  reasons: string[]
+  evidence_json: Record<string, unknown>
+}
+
 export interface ChatDebugEmbeddingCall {
   operation: string
   provider_id: string

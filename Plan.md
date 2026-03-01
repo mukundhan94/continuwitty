@@ -444,15 +444,13 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress (2026-03-01).
-- Completed in current checkpoint:
+- Completed (2026-03-01).
+- Completed deliverables in this phase:
   - chat-composer recall controls for linked-memory context (`link recall`, `depth`, `max neighbors`).
-  - transcript trace strip for linked provenance chains from `used_engram_link_ids` and `engram_trace_paths`.
-  - web API/hook typing + state wiring for trace metadata across send/stream flows.
-- Remaining focus:
-  - linked engram relationship panel (relation type/weight/age).
-  - link suggestion accept/reject workflow.
-  - richer "this answer used" explainability chain presentation.
+  - transcript trace strip and compact provenance chain rendering from `used_engram_link_ids` and `engram_trace_paths`.
+  - linked-memory panel showing relation type, weight/confidence, status/origin, and freshness/age cues.
+  - suggestion queue UX with accept/reject actions backed by link create mutations (`active`/`rejected` status paths).
+  - explainability summary cards unifying seed-engram count, trace-path count, linked-edge count, and citation count.
 
 ### Goals
 

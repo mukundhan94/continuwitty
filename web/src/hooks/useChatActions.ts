@@ -24,6 +24,7 @@ interface PromptActionsConfig {
   setComposerText: (value: string) => void
   setStreamingAssistantText: Dispatch<SetStateAction<string>>
   setSourceReferences: Dispatch<SetStateAction<ChatSourceReference[]>>
+  setUsedEngramIds?: Dispatch<SetStateAction<string[]>>
   setUsedEngramLinkIds?: Dispatch<SetStateAction<string[]>>
   setEngramTracePaths?: Dispatch<SetStateAction<EngramTracePath[]>>
   setChatDebugTrace: Dispatch<SetStateAction<ChatDebugTrace | null>>
@@ -73,6 +74,7 @@ function beginPromptStreaming(config: PromptActionsConfig, content: string): voi
   config.setComposerText('')
   config.setStreamingAssistantText('')
   config.setSourceReferences([])
+  config.setUsedEngramIds?.([])
   config.setUsedEngramLinkIds?.([])
   config.setEngramTracePaths?.([])
   config.setChatDebugTrace(null)
@@ -81,6 +83,7 @@ function beginPromptStreaming(config: PromptActionsConfig, content: string): voi
 }
 
 function applyPromptMetaEvent(config: PromptActionsConfig, payload: StreamMetaPayload): void {
+  config.setUsedEngramIds?.(payload.used_engram_ids)
   config.setSourceReferences(payload.source_references)
   config.setUsedEngramLinkIds?.(payload.used_engram_link_ids ?? [])
   config.setEngramTracePaths?.(payload.engram_trace_paths ?? [])
@@ -91,6 +94,7 @@ function applyPromptMetaEvent(config: PromptActionsConfig, payload: StreamMetaPa
 
 function applyPromptDoneEvent(config: PromptActionsConfig, payload: StreamDonePayload): void {
   config.setStreamingAssistantText(payload.assistant_text)
+  config.setUsedEngramIds?.(payload.used_engram_ids)
   config.setSourceReferences(payload.source_references)
   config.setUsedEngramLinkIds?.(payload.used_engram_link_ids ?? [])
   config.setEngramTracePaths?.(payload.engram_trace_paths ?? [])
@@ -129,6 +133,7 @@ function finalizePromptStreamError(
   config.setComposerText(content)
   config.setPendingUserText(null)
   config.setStreamingAssistantText('')
+  config.setUsedEngramIds?.([])
   config.setUsedEngramLinkIds?.([])
   config.setEngramTracePaths?.([])
   config.setChatDebugTrace(null)

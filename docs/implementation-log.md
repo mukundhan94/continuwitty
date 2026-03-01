@@ -7,6 +7,33 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 27 closeout: linked-memory panel + suggestion workflow)
+
+1. Added dedicated linked-memory panel in `web/src/components/LinkedEngramPanel.tsx`:
+   - relation-aware edge cards with weight/confidence and freshness-age display.
+   - explainability summary chips for seed engrams, trace paths, linked edges, and citations.
+2. Added suggestion queue UX:
+   - accept/reject actions on scored candidates.
+   - pending-action disabling and deterministic source-target keying.
+3. Added typed engram-link API client module in `web/src/api/engramLinks.ts`:
+   - `createEngramLink`
+   - `listEngramLinks`
+   - `suggestEngramLinks`
+4. Added linked-insight orchestration hook in `web/src/hooks/useLinkedEngramInsights.ts`:
+   - source engram derivation from trace roots + used engram ids.
+   - bounded per-source fetch, dedupe, recency/weight ordering, and used-link prioritization.
+   - accept/reject mutation bridge with panel refresh and notice/error reporting.
+5. Wired app integration in `web/src/App.tsx`:
+   - added linked-insight panel in right rail.
+   - propagated `used_engram_ids` state through stream metadata handling to insight loaders.
+6. Added/updated tests:
+   - `web/src/components/LinkedEngramPanel.test.tsx`
+   - `web/src/hooks/useLinkedEngramInsights.test.ts`
+   - `web/src/api/engramLinks.test.ts`
+7. Validation:
+   - `make web-check`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`).
+
 ### 2026-03-01 (Phase 27 UX baseline: linked traceability + recall controls in web chat)
 
 1. Extended web chat API/client contracts for linked trace metadata:
