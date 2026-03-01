@@ -7,6 +7,32 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 20 closeout: OIDC abuse-path coverage + callback hardening)
+
+1. Hardened OIDC callback state handling in `internal/api/session_auth.go`:
+   - callbacks now consume pending OIDC state/nonce/next values once callback request validation succeeds.
+   - this prevents reuse of pending callback state after provider exchange or identity-to-user mapping failures.
+2. Extended OIDC failure auditing in `internal/api/session_auth.go`:
+   - identity-to-user mapping failures now emit `oidc_login_failed` audit entries with explicit details:
+     - `identity_missing_username`
+     - `user_lookup_not_configured`
+     - `user_lookup_error`
+     - `user_not_authorized`
+3. Expanded OIDC negative-path test coverage in `internal/api/session_ui_oidc_test.go`:
+   - unsafe next-path sanitization test coverage for OIDC start.
+   - callback request rejection coverage (`state_mismatch`, `missing_code`) with audit assertions.
+   - provider failure and identity mapping failure coverage (missing username, unmapped user, inactive user) with audit assertions.
+   - pending OIDC state-consumption assertions for validated callback attempts.
+4. Test harness extension in `internal/api/session_ui_test.go`:
+   - added optional lookup overrides in `sessionUITestHandlerOptions` for targeted OIDC authorization edge-case simulation.
+5. Documentation realignment:
+   - updated `Plan.md` and `migration/checkpoints/checkpoint.md` to mark Phase 20 completed and align remaining execution order.
+6. Validation:
+   - `go test ./internal/api -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Phase 20 extension: centralized audit sink rollout baseline)
 
 1. Extended audit runtime for centralized sink delivery in `internal/audit/audit.go`:

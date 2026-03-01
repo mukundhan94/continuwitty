@@ -417,6 +417,9 @@ func (dependencies sessionAuthDependencies) handleOIDCCallback(writer http.Respo
 	if !ok {
 		return
 	}
+	if !dependencies.consumeOIDCPendingState(writer, decodedState) {
+		return
+	}
 	identity, err := dependencies.oidcProvider.AuthenticateCode(request.Context(), code, decodedState.OIDCNonce)
 	if err != nil {
 		dependencies.logOIDCFailure(
@@ -428,8 +431,21 @@ func (dependencies sessionAuthDependencies) handleOIDCCallback(writer http.Respo
 		)
 		return
 	}
-	record, ok := dependencies.lookupAuthenticatedOIDCUser(writer, request, identity.Username)
+	record, failureDetail, ok := dependencies.lookupAuthenticatedOIDCUser(writer, request, identity.Username)
 	if !ok {
+		dependencies.logAuditEventRequest(
+			request,
+			sessionAuditEvent{
+				eventType: "oidc_login_failed",
+				success:   false,
+				username:  strings.TrimSpace(identity.Username),
+				detail:    failureDetail,
+				metadata: map[string]any{
+					"subject": identity.Subject,
+					"email":   identity.Email,
+				},
+			},
+		)
 		return
 	}
 	dependencies.logAuditEventRequest(
@@ -559,6 +575,16 @@ func (dependencies sessionAuthDependencies) issueOIDCPendingState(
 	return oidcState, oidcNonce, true
 }
 
+func (dependencies sessionAuthDependencies) consumeOIDCPendingState(
+	writer http.ResponseWriter,
+	state auth.SessionState,
+) bool {
+	state.OIDCState = ""
+	state.OIDCNonce = ""
+	state.OIDCNext = ""
+	return dependencies.writeSessionCookie(writer, state)
+}
+
 func (dependencies sessionAuthDependencies) decodeLoginRequest(writer http.ResponseWriter, request *http.Request) (sessionLoginRequest, bool) {
 	var payload sessionLoginRequest
 	if !decodeJSONAllowEmpty(writer, request, &payload) {
@@ -602,26 +628,26 @@ func (dependencies sessionAuthDependencies) lookupAuthenticatedOIDCUser(
 	writer http.ResponseWriter,
 	request *http.Request,
 	username string,
-) (*models.UserAuthRecord, bool) {
+) (*models.UserAuthRecord, string, bool) {
 	if dependencies.lookupUserByUsername == nil {
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "oidc user lookup is not configured"})
-		return nil, false
+		return nil, "user_lookup_not_configured", false
 	}
 	normalizedUsername := strings.TrimSpace(username)
 	if normalizedUsername == "" {
 		writeJSON(writer, http.StatusUnauthorized, map[string]string{"detail": "oidc identity missing username"})
-		return nil, false
+		return nil, "identity_missing_username", false
 	}
 	record, err := dependencies.lookupUserByUsername(request.Context(), normalizedUsername)
 	if err != nil {
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
-		return nil, false
+		return nil, "user_lookup_error", false
 	}
 	if record == nil || !record.IsActive {
 		writeJSON(writer, http.StatusForbidden, map[string]string{"detail": "oidc user is not authorized"})
-		return nil, false
+		return nil, "user_not_authorized", false
 	}
-	return record, true
+	return record, "", true
 }
 
 func buildAuthenticatedSessionState(record *models.UserAuthRecord, csrfToken string) auth.SessionState {

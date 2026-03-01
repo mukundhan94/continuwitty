@@ -12,7 +12,7 @@
 - **Phase 17 completed:** document ingestion and RAG-ready retrieval, including session-level document pinning.
 - **Phase 18 completed:** memory lifecycle policies (autosave/retention controls, timeline APIs/UI, and explicit consolidation merge/group semantics).
 - **Phase 19 completed:** collaboration + sharing model (project memberships, membership-enforced visibility, share/unshare APIs + MCP tools, and DB-backed audit trail + admin UI controls).
-- **Phase 20 in progress:** OIDC login/session hardening plus centralized audit sink baseline with configurable sink URL/token/timeout/required mode and fail-open delivery defaults.
+- **Phase 20 completed:** OIDC login/session hardening plus centralized audit sink baseline, callback-state consumption hardening, and expanded OIDC/provider negative-path audit coverage.
 - **Phase 21 completed:** observability/reliability foundation with request telemetry middleware, expanded `/api/v1/metrics` health categories (provider failures, stream outcomes, lifecycle traces), and provider fallback/circuit strategy.
 - **Phase 22 completed:** release automation and deployment profile hardening with staged CI gates, compose profile matrix (`dev`/`acceptance`/`release-smoke`), and versioned release checklist/rollback runbook.
 - **Phase 23 completed:** EvalOps + governance hardening with versioned prompt/tool/eval metadata, deterministic continuity/citation/memory-drift suite (extended in Phase 28 with `graph_trace`), delta regression gates, and historical trend artifacts.
@@ -39,7 +39,7 @@
 - [x] Added OIDC runtime config validation + redaction behavior (`OIDC_*` settings).
 - [x] Added/updated tests for OIDC login start/callback routes and config validation.
 - [x] Added centralized audit sink strategy and implementation path beyond JSONL/stdout baseline.
-- [ ] Extend security regression and acceptance coverage for OIDC/provider negative paths.
+- [x] Extend security regression and acceptance coverage for OIDC/provider negative paths.
 
 #### Phase 20 Implemented So Far
 
@@ -48,6 +48,7 @@
 3. Config and env updates for `OIDC_ENABLED`, issuer/client/redirect/scopes/username-claim controls with validation/redaction coverage.
 4. Audit runtime supports optional centralized sink delivery with `AUDIT_SINK_URL`, `AUDIT_SINK_AUTH_TOKEN`, `AUDIT_SINK_REQUIRED`, and `AUDIT_SINK_TIMEOUT_SECONDS`.
 5. Route and config test coverage for OIDC happy-path + not-enabled behavior, plus audit sink validation and delivery semantics.
+6. OIDC callback hardening now consumes pending nonce/state on validated callback attempts and records explicit failure audits for provider verification and identity-to-user mapping failures.
 
 ### Phase 21 Progress Tracker
 
@@ -176,9 +177,9 @@
 ### Milestone 8 — Memory Maintenance
 - Background consolidation jobs
 
-### Milestone 9 — Security Baseline (In Progress)
+### Milestone 9 — Security Baseline (Completed)
 - Completed: local audit event logging, login rate limiting + lockout guard
-- Remaining: OIDC, centralized audit pipeline, distributed auth rate limits
+- Completed in later phases: OIDC, centralized audit pipeline, distributed auth rate limits
 
 ### Milestone 10 — Schema + Repository Layer
 - Chat/session/pinning tables, engram ownership/visibility fields, visibility-aware repository filtering
@@ -244,9 +245,8 @@
 - DB-backed audit events for member changes, share/unshare, and chat pin/unpin.
 - Admin memory page member management + audit timeline panels.
 
-### Milestone 20 — Production Security (In Progress)
-- Completed kickoff: OIDC login/session mapping baseline, OIDC config validation/redaction coverage.
-- Remaining: centralized audit sink and expanded security abuse-path coverage.
+### Milestone 20 — Production Security (Completed)
+- Completed: OIDC login/session mapping baseline, OIDC config validation/redaction coverage, centralized audit sink rollout, and expanded security abuse-path coverage.
 
 ---
 
@@ -268,7 +268,7 @@
 | 30 | MCP Personal Access Tokens | Completed |
 | 31 | Enterprise Memory Management | Completed |
 | 19 | Collaboration + Sharing | Completed |
-| 20 | Production Security | In Progress |
+| 20 | Production Security | Completed |
 | 21 | Observability and Reliability | Completed |
 | 22 | Release Automation and Deployment Profiles | Completed |
 | 23 | EvalOps and Prompt/Policy Governance | Completed |

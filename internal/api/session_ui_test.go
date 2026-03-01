@@ -594,6 +594,8 @@ type sessionUITestHandlerOptions struct {
 	loginAttemptGuard   SessionLoginAttemptGuard
 	userRole            models.UserRole
 	oidcProvider        auth.OIDCLoginProvider
+	lookupByUsername    SessionUserByUsernameLookup
+	lookupByID          SessionUserLookup
 	createTokenForOwner func(
 		ctx context.Context,
 		ownerUserID uuid.UUID,
@@ -617,6 +619,12 @@ func buildSessionUITestHandler(
 	manager := newSessionUITestSessionManager(t)
 	record := newSessionUITestUserRecord(t, handlerOptions.userRole)
 	lookupByUsername, lookupByID := newSessionUITestLookups(record)
+	if handlerOptions.lookupByUsername != nil {
+		lookupByUsername = handlerOptions.lookupByUsername
+	}
+	if handlerOptions.lookupByID != nil {
+		lookupByID = handlerOptions.lookupByID
+	}
 	router := chi.NewRouter()
 	dependencies := SessionAuthDependencies{
 		SessionManager:       manager,

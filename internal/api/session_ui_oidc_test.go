@@ -2,19 +2,28 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"engram/internal/auth"
+	"engram/internal/models"
 )
+
+const sessionUITestOIDCAuthorizeURL = "https://accounts.example.com/oauth/authorize?client_id=engram-web"
 
 type sessionUITestOIDCProvider struct {
 	enabled          bool
 	authURL          string
+	authURLError     error
 	identity         *auth.OIDCIdentity
+	authenticateErr  error
 	authURLCalls     []sessionUITestOIDCAuthURLCall
 	authenticateCall []sessionUITestOIDCAuthenticateCall
 }
@@ -29,6 +38,27 @@ type sessionUITestOIDCAuthenticateCall struct {
 	Nonce string
 }
 
+type oidcCallbackFailureCase struct {
+	name                string
+	provider            *sessionUITestOIDCProvider
+	lookupByUsername    SessionUserByUsernameLookup
+	expectedStatus      int
+	expectedDetail      string
+	expectedRedirect    string
+	expectedAuditDetail string
+}
+
+type oidcIdentityFailureSpec struct {
+	name                string
+	subject             string
+	username            string
+	email               string
+	lookupByUsername    SessionUserByUsernameLookup
+	expectedStatus      int
+	expectedDetail      string
+	expectedAuditDetail string
+}
+
 func (provider *sessionUITestOIDCProvider) Enabled() bool {
 	return provider != nil && provider.enabled
 }
@@ -38,6 +68,9 @@ func (provider *sessionUITestOIDCProvider) AuthCodeURL(state string, nonce strin
 		State: state,
 		Nonce: nonce,
 	})
+	if provider.authURLError != nil {
+		return "", provider.authURLError
+	}
 	if provider.authURL == "" {
 		return "https://accounts.example.com/oauth/authorize", nil
 	}
@@ -53,6 +86,9 @@ func (provider *sessionUITestOIDCProvider) AuthenticateCode(
 		Code:  code,
 		Nonce: nonce,
 	})
+	if provider.authenticateErr != nil {
+		return nil, provider.authenticateErr
+	}
 	if provider.identity != nil {
 		return provider.identity, nil
 	}
@@ -84,10 +120,52 @@ func TestMountSessionUIRoutesLoginPageShowsOIDCLinkWhenEnabled(t *testing.T) {
 	}
 }
 
-func TestMountSessionUIRoutesOIDCStartRedirectsAndStoresPendingState(t *testing.T) {
+func TestMountSessionUIRoutesOIDCStartStoresPendingState(t *testing.T) {
+	testCases := []struct {
+		name             string
+		path             string
+		expectedNextPath string
+	}{
+		{
+			name:             "safe next path",
+			path:             "/login/oidc?next=%2Fui%2Fadmin",
+			expectedNextPath: "/ui/admin",
+		},
+		{
+			name:             "unsafe external next path",
+			path:             "/login/oidc?next=https%3A%2F%2Fevil.example%2Fsteal",
+			expectedNextPath: "/ui",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			oidcProvider := &sessionUITestOIDCProvider{
+				enabled: true,
+				authURL: sessionUITestOIDCAuthorizeURL,
+			}
+			handler, manager, _ := buildSessionUITestHandler(
+				t,
+				sessionUITestHandlerOptions{oidcProvider: oidcProvider},
+			)
+			_, loginCookie := fetchLoginCSRFTokenAndCookie(t, handler, manager, nil)
+
+			request := httptest.NewRequest(http.MethodGet, testCase.path, nil)
+			request.AddCookie(loginCookie)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			assertRedirect(t, response, oidcProvider.authURL)
+			assertOIDCStartCall(t, oidcProvider)
+			assertPendingOIDCSessionState(t, manager, response, testCase.expectedNextPath)
+		})
+	}
+}
+
+func TestMountSessionUIRoutesOIDCStartReturnsInternalErrorWhenProviderFails(t *testing.T) {
 	oidcProvider := &sessionUITestOIDCProvider{
-		enabled: true,
-		authURL: "https://accounts.example.com/oauth/authorize?client_id=engram-web",
+		enabled:      true,
+		authURLError: errors.New("provider unavailable"),
 	}
 	handler, manager, _ := buildSessionUITestHandler(
 		t,
@@ -95,20 +173,18 @@ func TestMountSessionUIRoutesOIDCStartRedirectsAndStoresPendingState(t *testing.
 	)
 	_, loginCookie := fetchLoginCSRFTokenAndCookie(t, handler, manager, nil)
 
-	request := httptest.NewRequest(http.MethodGet, "/login/oidc?next=%2Fui%2Fadmin", nil)
+	request := httptest.NewRequest(http.MethodGet, "/login/oidc", nil)
 	request.AddCookie(loginCookie)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	assertRedirect(t, response, oidcProvider.authURL)
 
-	assertOIDCStartCall(t, oidcProvider)
-	assertPendingOIDCSessionState(t, manager, response, "/ui/admin")
+	assertJSONDetail(t, response, http.StatusInternalServerError, "failed to start oidc login")
 }
 
 func TestMountSessionUIRoutesOIDCCallbackAuthenticatesAndRedirects(t *testing.T) {
 	oidcProvider := &sessionUITestOIDCProvider{
 		enabled: true,
-		authURL: "https://accounts.example.com/oauth/authorize?client_id=engram-web",
+		authURL: sessionUITestOIDCAuthorizeURL,
 		identity: &auth.OIDCIdentity{
 			Subject:  "subject-2",
 			Username: "admin",
@@ -121,15 +197,184 @@ func TestMountSessionUIRoutesOIDCCallbackAuthenticatesAndRedirects(t *testing.T)
 	)
 	pendingCookie, pendingState := startOIDCLoginFlow(t, handler, manager)
 
-	callbackPath := "/login/oidc/callback?state=" + url.QueryEscape(pendingState.OIDCState) + "&code=auth-code-1"
-	callbackRequest := httptest.NewRequest(http.MethodGet, callbackPath, nil)
-	callbackRequest.AddCookie(pendingCookie)
-	callbackResponse := httptest.NewRecorder()
-	handler.ServeHTTP(callbackResponse, callbackRequest)
+	callbackResponse := performOIDCCallbackRequest(handler, pendingCookie, pendingState.OIDCState, "auth-code-1")
 
 	assertRedirect(t, callbackResponse, "/ui/admin")
 	assertOIDCCallbackCall(t, oidcProvider, pendingState.OIDCNonce)
 	assertAuthenticatedOIDCSessionState(t, manager, callbackResponse)
+}
+
+func TestMountSessionUIRoutesOIDCCallbackRejectsInvalidRequest(t *testing.T) {
+	testCases := []struct {
+		name                string
+		providerState       string
+		usePendingState     bool
+		authorizationCode   string
+		expectedStatus      int
+		expectedDetail      string
+		expectedAuditDetail string
+	}{
+		{
+			name:                "state mismatch",
+			providerState:       "invalid-state",
+			authorizationCode:   "auth-code-1",
+			expectedStatus:      http.StatusForbidden,
+			expectedDetail:      "invalid oidc state",
+			expectedAuditDetail: "state_mismatch",
+		},
+		{
+			name:                "missing authorization code",
+			usePendingState:     true,
+			authorizationCode:   "",
+			expectedStatus:      http.StatusBadRequest,
+			expectedDetail:      "missing oidc authorization code",
+			expectedAuditDetail: "missing_code",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			auditLogPath := filepath.Join(t.TempDir(), "oidc-invalid-request-audit.log")
+			oidcProvider := &sessionUITestOIDCProvider{
+				enabled: true,
+				authURL: sessionUITestOIDCAuthorizeURL,
+			}
+			handler, manager, _ := buildSessionUITestHandler(
+				t,
+				sessionUITestHandlerOptions{
+					oidcProvider: oidcProvider,
+					auditLogPath: auditLogPath,
+				},
+			)
+			pendingCookie, pendingState := startOIDCLoginFlow(t, handler, manager)
+			providerState := testCase.providerState
+			if testCase.usePendingState {
+				providerState = pendingState.OIDCState
+			}
+
+			callbackResponse := performOIDCCallbackRequest(
+				handler,
+				pendingCookie,
+				providerState,
+				testCase.authorizationCode,
+			)
+
+			assertJSONDetail(t, callbackResponse, testCase.expectedStatus, testCase.expectedDetail)
+			assertOIDCCallbackNotCalled(t, oidcProvider)
+			assertAuditLogContains(t, auditLogPath, "\"event_type\":\"oidc_login_failed\"")
+			assertAuditLogContains(t, auditLogPath, "\"detail\":\""+testCase.expectedAuditDetail+"\"")
+		})
+	}
+}
+
+func TestMountSessionUIRoutesOIDCCallbackFailurePaths(t *testing.T) {
+	for _, testCase := range buildOIDCCallbackFailureCases() {
+		t.Run(testCase.name, func(t *testing.T) {
+			runOIDCCallbackFailureCase(t, testCase)
+		})
+	}
+}
+
+func buildOIDCCallbackFailureCases() []oidcCallbackFailureCase {
+	return []oidcCallbackFailureCase{
+		oidcProviderVerificationFailureCase(),
+		oidcIdentityFailureCase(oidcIdentityFailureSpec{
+			name:                "identity without username",
+			subject:             "subject-identity-missing-username",
+			username:            "",
+			email:               "missing@example.com",
+			expectedStatus:      http.StatusUnauthorized,
+			expectedDetail:      "oidc identity missing username",
+			expectedAuditDetail: "identity_missing_username",
+		}),
+		oidcIdentityFailureCase(oidcIdentityFailureSpec{
+			name:                "unmapped user",
+			subject:             "subject-unknown-user",
+			username:            "ghost-user",
+			email:               "ghost@example.com",
+			expectedStatus:      http.StatusForbidden,
+			expectedDetail:      "oidc user is not authorized",
+			expectedAuditDetail: "user_not_authorized",
+		}),
+		oidcIdentityFailureCase(oidcIdentityFailureSpec{
+			name:                "inactive mapped user",
+			subject:             "subject-inactive-user",
+			username:            "admin",
+			email:               "admin@example.com",
+			lookupByUsername:    oidcInactiveUserLookup,
+			expectedStatus:      http.StatusForbidden,
+			expectedDetail:      "oidc user is not authorized",
+			expectedAuditDetail: "user_not_authorized",
+		}),
+	}
+}
+
+func oidcProviderVerificationFailureCase() oidcCallbackFailureCase {
+	return oidcCallbackFailureCase{
+		name: "provider verification failure",
+		provider: &sessionUITestOIDCProvider{
+			enabled:         true,
+			authURL:         sessionUITestOIDCAuthorizeURL,
+			authenticateErr: errors.New("id token validation failed"),
+		},
+		expectedRedirect:    "/login",
+		expectedAuditDetail: "token_exchange_or_verification_failed",
+	}
+}
+
+func oidcIdentityFailureCase(spec oidcIdentityFailureSpec) oidcCallbackFailureCase {
+	return oidcCallbackFailureCase{
+		name: spec.name,
+		provider: &sessionUITestOIDCProvider{
+			enabled: true,
+			authURL: sessionUITestOIDCAuthorizeURL,
+			identity: &auth.OIDCIdentity{
+				Subject:  spec.subject,
+				Username: spec.username,
+				Email:    spec.email,
+			},
+		},
+		lookupByUsername:    spec.lookupByUsername,
+		expectedStatus:      spec.expectedStatus,
+		expectedDetail:      spec.expectedDetail,
+		expectedAuditDetail: spec.expectedAuditDetail,
+	}
+}
+
+func oidcInactiveUserLookup(_ context.Context, username string) (*models.UserAuthRecord, error) {
+	if username != "admin" {
+		return nil, nil
+	}
+	return &models.UserAuthRecord{
+		Username: "admin",
+		Role:     models.UserRoleAdmin,
+		IsActive: false,
+	}, nil
+}
+
+func runOIDCCallbackFailureCase(t *testing.T, testCase oidcCallbackFailureCase) {
+	t.Helper()
+	auditLogPath := filepath.Join(t.TempDir(), "oidc-callback-failure-audit.log")
+	handler, manager, _ := buildSessionUITestHandler(
+		t,
+		sessionUITestHandlerOptions{
+			oidcProvider:     testCase.provider,
+			lookupByUsername: testCase.lookupByUsername,
+			auditLogPath:     auditLogPath,
+		},
+	)
+	pendingCookie, pendingState := startOIDCLoginFlow(t, handler, manager)
+	callbackResponse := performOIDCCallbackRequest(handler, pendingCookie, pendingState.OIDCState, "auth-code-1")
+
+	if testCase.expectedRedirect != "" {
+		assertRedirect(t, callbackResponse, testCase.expectedRedirect)
+	} else {
+		assertJSONDetail(t, callbackResponse, testCase.expectedStatus, testCase.expectedDetail)
+	}
+	assertOIDCCallbackCall(t, testCase.provider, pendingState.OIDCNonce)
+	assertOIDCPendingStateCleared(t, manager, callbackResponse)
+	assertAuditLogContains(t, auditLogPath, "\"event_type\":\"oidc_login_failed\"")
+	assertAuditLogContains(t, auditLogPath, "\"detail\":\""+testCase.expectedAuditDetail+"\"")
 }
 
 func TestMountSessionUIRoutesOIDCStartReturnsNotFoundWhenDisabled(t *testing.T) {
@@ -156,7 +401,7 @@ func startOIDCLoginFlow(
 	startRequest.AddCookie(loginCookie)
 	startResponse := httptest.NewRecorder()
 	handler.ServeHTTP(startResponse, startRequest)
-	assertRedirect(t, startResponse, "https://accounts.example.com/oauth/authorize?client_id=engram-web")
+	assertRedirect(t, startResponse, sessionUITestOIDCAuthorizeURL)
 	pendingCookie := findResponseCookie(startResponse, manager.CookieName())
 	if pendingCookie == nil {
 		t.Fatalf("expected pending session cookie after oidc start")
@@ -166,6 +411,24 @@ func startOIDCLoginFlow(
 		t.Fatalf("expected pending state to decode: %v", err)
 	}
 	return pendingCookie, pendingState
+}
+
+func performOIDCCallbackRequest(
+	handler http.Handler,
+	pendingCookie *http.Cookie,
+	state string,
+	code string,
+) *httptest.ResponseRecorder {
+	values := url.Values{}
+	values.Set("state", state)
+	if strings.TrimSpace(code) != "" {
+		values.Set("code", code)
+	}
+	callbackRequest := httptest.NewRequest(http.MethodGet, "/login/oidc/callback?"+values.Encode(), nil)
+	callbackRequest.AddCookie(pendingCookie)
+	callbackResponse := httptest.NewRecorder()
+	handler.ServeHTTP(callbackResponse, callbackRequest)
+	return callbackResponse
 }
 
 func assertOIDCStartCall(t *testing.T, provider *sessionUITestOIDCProvider) {
@@ -212,6 +475,68 @@ func assertOIDCCallbackCall(
 	}
 	if provider.authenticateCall[0].Nonce != expectedNonce {
 		t.Fatalf("expected oidc nonce to match pending state")
+	}
+}
+
+func assertOIDCCallbackNotCalled(t *testing.T, provider *sessionUITestOIDCProvider) {
+	t.Helper()
+	if len(provider.authenticateCall) != 0 {
+		t.Fatalf("expected oidc authenticate not to be called")
+	}
+}
+
+func assertJSONDetail(
+	t *testing.T,
+	response *httptest.ResponseRecorder,
+	expectedStatus int,
+	expectedDetail string,
+) {
+	t.Helper()
+	if response.Code != expectedStatus {
+		t.Fatalf("expected status %d, got %d", expectedStatus, response.Code)
+	}
+	var payload map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected JSON response payload: %v", err)
+	}
+	if payload["detail"] != expectedDetail {
+		t.Fatalf("expected detail %q, got %q", expectedDetail, payload["detail"])
+	}
+}
+
+func assertOIDCPendingStateCleared(
+	t *testing.T,
+	manager *auth.SessionManager,
+	response *httptest.ResponseRecorder,
+) {
+	t.Helper()
+	sessionCookie := findResponseCookie(response, manager.CookieName())
+	if sessionCookie == nil {
+		t.Fatalf("expected callback response to include a session cookie")
+	}
+	state, err := manager.Decode(sessionCookie.Value)
+	if err != nil {
+		t.Fatalf("expected callback cookie to decode: %v", err)
+	}
+	if state.OIDCState != "" {
+		t.Fatalf("expected oidc state to be cleared")
+	}
+	if state.OIDCNonce != "" {
+		t.Fatalf("expected oidc nonce to be cleared")
+	}
+	if state.OIDCNext != "" {
+		t.Fatalf("expected oidc next path to be cleared")
+	}
+}
+
+func assertAuditLogContains(t *testing.T, auditLogPath string, expected string) {
+	t.Helper()
+	content, err := os.ReadFile(auditLogPath)
+	if err != nil {
+		t.Fatalf("expected audit log to be readable: %v", err)
+	}
+	if !strings.Contains(string(content), expected) {
+		t.Fatalf("expected audit log to contain %q", expected)
 	}
 }
 
