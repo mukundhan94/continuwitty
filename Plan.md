@@ -487,8 +487,8 @@ Build a local-first memory system where agents and humans can:
   - graph hygiene recommendation engine now detects duplicate-target links, relation conflicts, and stale low-value links.
   - authenticated hygiene API route is available at `POST /api/v1/engrams/{engram_id}/links/hygiene`.
   - graph-focused EvalOps coverage now includes `graph_trace` dimension checks (`used_engram_link_count`, `required_trace_targets`) with updated baseline fixtures (8 deterministic cases across 4 dimensions).
+  - scheduled hygiene execution now runs on successful link reinforcement with per-source cadence, and stale/low-value recommendations are auto-archived from hygiene outputs.
 - Remaining focus:
-  - scheduled hygiene execution/auto-archival policy around recommendation outputs.
   - optional noisy-link suppression threshold tuning and policy controls.
 
 ### Goals
@@ -902,7 +902,7 @@ Build a local-first memory system where agents and humans can:
    - Phase 25 (link APIs/MCP + suggestions) completed on 2026-03-01.
    - Phase 26 (graph-aware recall) backend baseline completed on 2026-03-01.
    - Phase 27 (traceability UX) completed on 2026-03-01.
-   - Phase 28 (temporal dynamics + graph quality) in progress: temporal dynamics, hygiene API, and graph-trace eval coverage complete; scheduled hygiene and noisy-link suppression controls remain.
+   - Phase 28 (temporal dynamics + graph quality) in progress: temporal dynamics, hygiene API, graph-trace eval coverage, and scheduled hygiene auto-archival are complete; noisy-link suppression controls remain.
 4. Execute Phase 32 after Phase 24-28 baselines are in place:
    - add `cw>` query protocol
    - enable access-aware federated linked recall across projects

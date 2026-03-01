@@ -7,6 +7,25 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Phase 28 extension: scheduled hygiene execution + auto-archival baseline)
+
+1. Extended successful link reinforcement runtime in `cmd/api/chat_link_reinforcement.go`:
+   - added per-source hygiene cadence tracker (`linkHygieneRunTracker`) with interval-based due checks.
+   - added scheduled hygiene executor that reuses `internal/graph` recommendations.
+   - integrated automatic archival for recommendation-driven stale/low-value links (`archive_stale_low_value` action).
+2. Kept hygiene execution non-blocking for chat completion semantics:
+   - reinforcement and scheduled hygiene continue to run after successful assistant persistence.
+   - failures still surface through existing reinforcement lifecycle tracing/error path without breaking persistence logic.
+3. Added unit coverage for scheduled hygiene behavior in `cmd/api/chat_link_reinforcement_test.go`:
+   - cadence interval gating
+   - recommendation-action filtering + dedupe for auto-archive candidates
+   - due/not-due execution cycle assertions.
+4. Validation:
+   - `go test ./cmd/api ./internal/chat -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Phase 28 extension: graph-trace EvalOps coverage + docs realignment)
 
 1. Expanded EvalOps suite contracts in `internal/evalops/types.go`:
@@ -3111,11 +3130,10 @@
 
 ### Next Immediate Steps (One By One)
 
-1. Phase 28: add scheduled hygiene execution and deterministic auto-archival policy wiring from recommendation outputs.
-2. Phase 28: add configurable noisy-link suppression thresholds and operator-facing tuning controls.
-3. Phase 20: complete production security hardening with centralized audit sink rollout contract.
-4. Phase 20: extend OIDC/provider abuse-path and negative acceptance coverage.
-5. Phase 32 prep: finalize remaining Phase 28 controls before cross-project federated query protocol rollout.
+1. Phase 28: add configurable noisy-link suppression thresholds and operator-facing tuning controls.
+2. Phase 20: complete production security hardening with centralized audit sink rollout contract.
+3. Phase 20: extend OIDC/provider abuse-path and negative acceptance coverage.
+4. Phase 32 prep: finalize remaining Phase 28 controls before cross-project federated query protocol rollout.
 
 ### 2026-02-22 (Phase tracking kickoff - export/import stash + audit remediation)
 
