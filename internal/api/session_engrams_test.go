@@ -66,6 +66,30 @@ type sessionEngramRoutesHandlerOptions struct {
 		actorRole models.UserRole,
 		engramID uuid.UUID,
 	) (*models.EngramVisibilityRecord, error)
+	createEngramLink func(
+		ctx context.Context,
+		input SessionEngramLinkCreateInput,
+	) (*models.EngramLinkRecord, error)
+	listEngramLinks func(
+		ctx context.Context,
+		input SessionEngramLinkListInput,
+	) ([]models.EngramLinkRecord, error)
+	updateEngramLink func(
+		ctx context.Context,
+		input SessionEngramLinkUpdateInput,
+	) (*models.EngramLinkRecord, error)
+	archiveEngramLink func(
+		ctx context.Context,
+		input SessionEngramLinkArchiveInput,
+	) (*models.EngramLinkRecord, error)
+	suggestEngramLinks func(
+		ctx context.Context,
+		input SessionEngramLinkSuggestInput,
+	) ([]models.EngramLinkSuggestion, error)
+	traceEngramLinks func(
+		ctx context.Context,
+		input SessionEngramTraceInput,
+	) ([]models.EngramLinkTraversalStep, error)
 }
 
 type sessionEngramLoginCredentials struct {
@@ -600,6 +624,12 @@ func buildSessionEngramRoutesTestHandler(
 			GetEngramSources:         options.getEngramSources,
 			ShareEngram:              options.shareEngram,
 			UnshareEngram:            options.unshareEngram,
+			CreateEngramLink:         options.createEngramLink,
+			ListEngramLinks:          options.listEngramLinks,
+			UpdateEngramLink:         options.updateEngramLink,
+			ArchiveEngramLink:        options.archiveEngramLink,
+			SuggestEngramLinks:       options.suggestEngramLinks,
+			TraceEngramLinks:         options.traceEngramLinks,
 		},
 	)
 	return SessionActorMiddleware(manager, lookupByID)(router), manager

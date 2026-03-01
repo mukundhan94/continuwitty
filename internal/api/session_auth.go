@@ -94,6 +94,30 @@ type SessionAuthDependencies struct {
 		actorRole models.UserRole,
 		engramID uuid.UUID,
 	) (*models.EngramVisibilityRecord, error)
+	CreateEngramLink func(
+		ctx context.Context,
+		input SessionEngramLinkCreateInput,
+	) (*models.EngramLinkRecord, error)
+	ListEngramLinks func(
+		ctx context.Context,
+		input SessionEngramLinkListInput,
+	) ([]models.EngramLinkRecord, error)
+	UpdateEngramLink func(
+		ctx context.Context,
+		input SessionEngramLinkUpdateInput,
+	) (*models.EngramLinkRecord, error)
+	ArchiveEngramLink func(
+		ctx context.Context,
+		input SessionEngramLinkArchiveInput,
+	) (*models.EngramLinkRecord, error)
+	SuggestEngramLinks func(
+		ctx context.Context,
+		input SessionEngramLinkSuggestInput,
+	) ([]models.EngramLinkSuggestion, error)
+	TraceEngramLinks func(
+		ctx context.Context,
+		input SessionEngramTraceInput,
+	) ([]models.EngramLinkTraversalStep, error)
 	CreateTokenForOwner func(
 		ctx context.Context,
 		ownerUserID uuid.UUID,
@@ -174,6 +198,30 @@ type sessionAuthDependencies struct {
 		actorRole models.UserRole,
 		engramID uuid.UUID,
 	) (*models.EngramVisibilityRecord, error)
+	createEngramLink func(
+		ctx context.Context,
+		input SessionEngramLinkCreateInput,
+	) (*models.EngramLinkRecord, error)
+	listEngramLinks func(
+		ctx context.Context,
+		input SessionEngramLinkListInput,
+	) ([]models.EngramLinkRecord, error)
+	updateEngramLink func(
+		ctx context.Context,
+		input SessionEngramLinkUpdateInput,
+	) (*models.EngramLinkRecord, error)
+	archiveEngramLink func(
+		ctx context.Context,
+		input SessionEngramLinkArchiveInput,
+	) (*models.EngramLinkRecord, error)
+	suggestEngramLinks func(
+		ctx context.Context,
+		input SessionEngramLinkSuggestInput,
+	) ([]models.EngramLinkSuggestion, error)
+	traceEngramLinks func(
+		ctx context.Context,
+		input SessionEngramTraceInput,
+	) ([]models.EngramLinkTraversalStep, error)
 	createTokenForOwner func(
 		ctx context.Context,
 		ownerUserID uuid.UUID,
@@ -235,6 +283,12 @@ func newSessionAuthDependencies(dependencies SessionAuthDependencies) sessionAut
 		getEngramSources:         dependencies.GetEngramSources,
 		shareEngram:              dependencies.ShareEngram,
 		unshareEngram:            dependencies.UnshareEngram,
+		createEngramLink:         dependencies.CreateEngramLink,
+		listEngramLinks:          dependencies.ListEngramLinks,
+		updateEngramLink:         dependencies.UpdateEngramLink,
+		archiveEngramLink:        dependencies.ArchiveEngramLink,
+		suggestEngramLinks:       dependencies.SuggestEngramLinks,
+		traceEngramLinks:         dependencies.TraceEngramLinks,
 		createTokenForOwner:      dependencies.CreateTokenForOwner,
 		listTokenSummaries:       dependencies.ListTokenSummaries,
 		revokeTokenForOwner:      dependencies.RevokeTokenForOwner,
@@ -267,6 +321,12 @@ func MountSessionAuthRoutes(router chi.Router, dependencies SessionAuthDependenc
 	router.Get("/api/v1/engrams/{engram_id}/rehydrate", deps.handleRehydrateEngram)
 	router.Post("/api/v1/engrams/{engram_id}/share", deps.handleShareEngram)
 	router.Post("/api/v1/engrams/{engram_id}/unshare", deps.handleUnshareEngram)
+	router.Post("/api/v1/engrams/{engram_id}/links", deps.handleCreateEngramLink)
+	router.Get("/api/v1/engrams/{engram_id}/links", deps.handleListEngramLinks)
+	router.Patch("/api/v1/engrams/links/{link_id}", deps.handleUpdateEngramLink)
+	router.Delete("/api/v1/engrams/links/{link_id}", deps.handleArchiveEngramLink)
+	router.Post("/api/v1/engrams/{engram_id}/links/suggest", deps.handleSuggestEngramLinks)
+	router.Post("/api/v1/engrams/{engram_id}/trace", deps.handleTraceEngramLinks)
 }
 
 func (dependencies sessionAuthDependencies) handleCSRF(writer http.ResponseWriter, request *http.Request) {

@@ -358,6 +358,7 @@ func newSessionAuditLogger(settings config.Settings) *audit.Logger {
 }
 
 func buildSessionAuthDependencies(runtimeDependencies sessionAuthRuntimeDependencies) internalapi.SessionAuthDependencies {
+	linkAdapter := newSessionEngramLinkRepositoryAdapter(runtimeDependencies.pool)
 	return internalapi.SessionAuthDependencies{
 		SessionManager:           runtimeDependencies.sessionManager,
 		OIDCProvider:             runtimeDependencies.oidcProvider,
@@ -377,6 +378,11 @@ func buildSessionAuthDependencies(runtimeDependencies sessionAuthRuntimeDependen
 		GetEngramSources:         getEngramSourcesDependency(runtimeDependencies.pool),
 		ShareEngram:              shareEngramDependency(runtimeDependencies.projectService),
 		UnshareEngram:            unshareEngramDependency(runtimeDependencies.projectService),
+		CreateEngramLink:         linkAdapter.create,
+		ListEngramLinks:          linkAdapter.list,
+		UpdateEngramLink:         linkAdapter.update,
+		ArchiveEngramLink:        linkAdapter.archive,
+		TraceEngramLinks:         linkAdapter.trace,
 		CreateTokenForOwner:      createMCPTokenForOwnerDependency(runtimeDependencies.mcpTokenService),
 		ListTokenSummaries:       listMCPTokenSummariesDependency(runtimeDependencies.mcpTokenService),
 		RevokeTokenForOwner:      revokeMCPTokenForOwnerDependency(runtimeDependencies.mcpTokenService),
@@ -545,22 +551,31 @@ func shareEngramDependency(
 	actorRole models.UserRole,
 	engramID uuid.UUID,
 ) (*models.EngramVisibilityRecord, error) {
-	concreteService, ok := projectService.(*projects.Service)
-	if !ok || concreteService == nil {
-		return nil
-	}
-	return func(
-		ctx context.Context,
-		actorUserID uuid.UUID,
-		actorRole models.UserRole,
-		engramID uuid.UUID,
-	) (*models.EngramVisibilityRecord, error) {
-		return concreteService.ShareEngram(ctx, actorUserID, actorRole, engramID)
-	}
+	return buildEngramVisibilityDependency(projectService, (*projects.Service).ShareEngram)
 }
 
 func unshareEngramDependency(
 	projectService projectResolutionService,
+) func(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	actorRole models.UserRole,
+	engramID uuid.UUID,
+) (*models.EngramVisibilityRecord, error) {
+	return buildEngramVisibilityDependency(projectService, (*projects.Service).UnshareEngram)
+}
+
+type engramVisibilityMutation func(
+	service *projects.Service,
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	actorRole models.UserRole,
+	engramID uuid.UUID,
+) (*models.EngramVisibilityRecord, error)
+
+func buildEngramVisibilityDependency(
+	projectService projectResolutionService,
+	mutation engramVisibilityMutation,
 ) func(
 	ctx context.Context,
 	actorUserID uuid.UUID,
@@ -577,8 +592,109 @@ func unshareEngramDependency(
 		actorRole models.UserRole,
 		engramID uuid.UUID,
 	) (*models.EngramVisibilityRecord, error) {
-		return concreteService.UnshareEngram(ctx, actorUserID, actorRole, engramID)
+		return mutation(concreteService, ctx, actorUserID, actorRole, engramID)
 	}
+}
+
+type sessionEngramLinkRepositoryAdapter struct {
+	pool repository.Queryer
+}
+
+func newSessionEngramLinkRepositoryAdapter(pool repository.Queryer) sessionEngramLinkRepositoryAdapter {
+	return sessionEngramLinkRepositoryAdapter{pool: pool}
+}
+
+func (adapter sessionEngramLinkRepositoryAdapter) create(
+	ctx context.Context,
+	input internalapi.SessionEngramLinkCreateInput,
+) (*models.EngramLinkRecord, error) {
+	return repository.CreateEngramLink(
+		ctx,
+		adapter.pool,
+		repository.EngramLinkCreateInput{
+			SourceEngramID:   input.SourceEngramID,
+			TargetEngramID:   input.TargetEngramID,
+			RelationType:     input.RelationType,
+			Weight:           input.Weight,
+			TemporalWeight:   input.TemporalWeight,
+			Confidence:       input.Confidence,
+			Origin:           input.Origin,
+			Status:           input.Status,
+			EvidenceJSON:     input.EvidenceJSON,
+			CreatedByUserID:  input.CreatedByUserID,
+			ActorUserID:      input.ActorUserID,
+			LastReinforcedAt: input.LastReinforcedAt,
+		},
+	)
+}
+
+func (adapter sessionEngramLinkRepositoryAdapter) list(
+	ctx context.Context,
+	input internalapi.SessionEngramLinkListInput,
+) ([]models.EngramLinkRecord, error) {
+	return repository.ListEngramLinks(
+		ctx,
+		adapter.pool,
+		repository.EngramLinkListInput{
+			SourceEngramID:  input.SourceEngramID,
+			ActorUserID:     input.ActorUserID,
+			RelationType:    input.RelationType,
+			IncludeArchived: input.IncludeArchived,
+			Limit:           input.Limit,
+			Offset:          input.Offset,
+		},
+	)
+}
+
+func (adapter sessionEngramLinkRepositoryAdapter) update(
+	ctx context.Context,
+	input internalapi.SessionEngramLinkUpdateInput,
+) (*models.EngramLinkRecord, error) {
+	return repository.UpdateEngramLink(
+		ctx,
+		adapter.pool,
+		repository.EngramLinkUpdateInput{
+			LinkID:           input.LinkID,
+			ActorUserID:      input.ActorUserID,
+			Weight:           input.Weight,
+			TemporalWeight:   input.TemporalWeight,
+			Confidence:       input.Confidence,
+			Status:           input.Status,
+			EvidenceJSON:     input.EvidenceJSON,
+			LastReinforcedAt: input.LastReinforcedAt,
+		},
+	)
+}
+
+func (adapter sessionEngramLinkRepositoryAdapter) archive(
+	ctx context.Context,
+	input internalapi.SessionEngramLinkArchiveInput,
+) (*models.EngramLinkRecord, error) {
+	return repository.ArchiveEngramLink(
+		ctx,
+		adapter.pool,
+		repository.EngramLinkArchiveInput{
+			LinkID:      input.LinkID,
+			ActorUserID: input.ActorUserID,
+		},
+	)
+}
+
+func (adapter sessionEngramLinkRepositoryAdapter) trace(
+	ctx context.Context,
+	input internalapi.SessionEngramTraceInput,
+) ([]models.EngramLinkTraversalStep, error) {
+	return repository.TraverseEngramLinks(
+		ctx,
+		adapter.pool,
+		repository.EngramLinkTraverseInput{
+			RootEngramID:    input.RootEngramID,
+			ActorUserID:     input.ActorUserID,
+			MaxDepth:        input.MaxDepth,
+			MaxNeighbors:    input.MaxNeighbors,
+			IncludeArchived: input.IncludeArchived,
+		},
+	)
 }
 
 func createMCPTokenForOwnerDependency(
