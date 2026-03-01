@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +30,8 @@ type serviceAdapterStub struct {
 	generateErr  error
 	streamParts  []string
 	streamErr    error
+	generateReqs []providers.ProviderGenerateRequest
+	streamReqs   []providers.ProviderGenerateRequest
 }
 
 type serviceObservabilityRecorderStub struct {
@@ -54,6 +57,10 @@ func (adapter *serviceAdapterStub) Provider() models.ChatProvider {
 }
 
 func (adapter *serviceAdapterStub) Generate(_ context.Context, request providers.ProviderGenerateRequest) (providers.ProviderGenerateResult, error) {
+	adapter.generateReqs = append(
+		adapter.generateReqs,
+		cloneProviderGenerateRequest(request),
+	)
 	if adapter.generateErr != nil {
 		return providers.ProviderGenerateResult{}, adapter.generateErr
 	}
@@ -65,7 +72,11 @@ func (adapter *serviceAdapterStub) Generate(_ context.Context, request providers
 	}, nil
 }
 
-func (adapter *serviceAdapterStub) StreamGenerate(_ context.Context, _ providers.ProviderGenerateRequest) (<-chan string, error) {
+func (adapter *serviceAdapterStub) StreamGenerate(_ context.Context, request providers.ProviderGenerateRequest) (<-chan string, error) {
+	adapter.streamReqs = append(
+		adapter.streamReqs,
+		cloneProviderGenerateRequest(request),
+	)
 	if adapter.streamErr != nil {
 		return nil, adapter.streamErr
 	}
@@ -193,6 +204,14 @@ func TestSendMessageFallsBackToSecondaryProviderOnTransientFailure(t *testing.T)
 	state := newServiceRuntimeState()
 	state.session.ModelID = "primary-model"
 	state.session.Provider = models.ChatProviderOpenAI
+	primaryAdapter := &serviceAdapterStub{
+		provider:    models.ChatProviderOpenAI,
+		generateErr: providers.NewProviderRateLimitError("too many requests"),
+	}
+	fallbackAdapter := &serviceAdapterStub{
+		provider:     models.ChatProviderAnthropic,
+		generateText: "fallback response",
+	}
 	runtime := runtimeFromServiceState(&state)
 	service := NewChatService(
 		ChatServiceDependencies{
@@ -200,17 +219,11 @@ func TestSendMessageFallsBackToSecondaryProviderOnTransientFailure(t *testing.T)
 			ResolveProvider: func(provider models.ChatProvider) (providers.ChatProviderAdapter, error) {
 				switch provider {
 				case models.ChatProviderOpenAI:
-					return &serviceAdapterStub{
-						provider:    provider,
-						generateErr: providers.NewProviderRateLimitError("too many requests"),
-					}, nil
+					return primaryAdapter, nil
 				case models.ChatProviderAnthropic:
-					return &serviceAdapterStub{
-						provider:     provider,
-						generateText: "fallback response",
-					}, nil
+					return fallbackAdapter, nil
 				default:
-					return nil, nil
+					return nil, errors.New("unexpected provider in fallback test")
 				}
 			},
 			ProviderFallback: NewStaticProviderFallbackStrategy(
@@ -237,8 +250,20 @@ func TestSendMessageFallsBackToSecondaryProviderOnTransientFailure(t *testing.T)
 	if assistantInput.Metadata == nil || assistantInput.Metadata.Provider == nil {
 		t.Fatalf("expected assistant provider metadata")
 	}
+	requireEqualAnyRuntime(t, state.context.UsedEngramIDs, assistantInput.Metadata.UsedEngramIDs)
 	requireEqualAnyRuntime(t, string(models.ChatProviderAnthropic), *assistantInput.Metadata.Provider)
 	requireEqualAnyRuntime(t, "fallback-model", *assistantInput.Metadata.ModelID)
+
+	primaryRequest := requireSingleProviderRequest(t, primaryAdapter.generateReqs)
+	fallbackRequest := requireSingleProviderRequest(t, fallbackAdapter.generateReqs)
+	requireEqualAnyRuntime(t, "primary-model", primaryRequest.ModelID)
+	requireEqualAnyRuntime(t, "fallback-model", fallbackRequest.ModelID)
+	requireEqualAnyRuntime(t, primaryRequest.Messages, fallbackRequest.Messages)
+	requireEqualAnyRuntime(t, primaryRequest.SystemPrompt, fallbackRequest.SystemPrompt)
+	if !strings.Contains(fallbackRequest.SystemPrompt, "ctx") {
+		t.Fatalf("expected fallback prompt to reuse assembled engram context")
+	}
+	requireEqualAnyRuntime(t, state.context.UsedEngramIDs, response.UsedEngramIDs)
 }
 
 func TestSendMessageReturnsCircuitOpenWhenNoFallbackCandidateAvailable(t *testing.T) {
@@ -282,15 +307,27 @@ func TestSendMessageReturnsCircuitOpenWhenNoFallbackCandidateAvailable(t *testin
 
 func TestStreamMessageEventsFallsBackAfterTransientProviderFailure(t *testing.T) {
 	state := newServiceRuntimeState()
+	state.session.ModelID = "primary-model"
+	primaryAdapter := &serviceAdapterStub{
+		provider:  models.ChatProviderOpenAI,
+		streamErr: providers.NewProviderRateLimitError("throttled"),
+	}
+	fallbackAdapter := &serviceAdapterStub{
+		provider:    models.ChatProviderAnthropic,
+		streamParts: []string{"fallback ", "stream"},
+	}
 	runtime := runtimeFromServiceState(&state)
 	service := NewChatService(
 		ChatServiceDependencies{
 			Runtime: runtime,
 			ResolveProvider: func(provider models.ChatProvider) (providers.ChatProviderAdapter, error) {
 				if provider == models.ChatProviderOpenAI {
-					return &serviceAdapterStub{provider: provider, streamErr: providers.NewProviderRateLimitError("throttled")}, nil
+					return primaryAdapter, nil
 				}
-				return &serviceAdapterStub{provider: provider, streamParts: []string{"fallback ", "stream"}}, nil
+				if provider == models.ChatProviderAnthropic {
+					return fallbackAdapter, nil
+				}
+				return nil, errors.New("unexpected provider in stream fallback test")
 			},
 			ProviderFallback: NewStaticProviderFallbackStrategy(
 				ProviderFallbackStrategyOptions{
@@ -314,6 +351,21 @@ func TestStreamMessageEventsFallsBackAfterTransientProviderFailure(t *testing.T)
 	requireEqualAnyRuntime(t, []string{"meta", "chunk", "chunk", "done"}, eventKinds(events))
 	donePayload := events[len(events)-1].Payload
 	requireEqualAnyRuntime(t, "fallback stream", donePayload["assistant_text"])
+	requireEqualAnyRuntime(t, state.context.UsedEngramIDs, donePayload["used_engram_ids"])
+	requireEqualAnyRuntime(t, state.context.UsedEngramLinkIDs, donePayload["used_engram_link_ids"])
+	requireEqualAnyRuntime(t, state.context.EngramTracePaths, donePayload["engram_trace_paths"])
+	requireEqualAnyRuntime(t, state.context.RetrievalAudit, donePayload["retrieval_audit"])
+	requireEqualAnyRuntime(t, state.context.UsedEngramIDs, state.createInputs[len(state.createInputs)-1].Metadata.UsedEngramIDs)
+
+	primaryRequest := requireSingleProviderRequest(t, primaryAdapter.streamReqs)
+	fallbackRequest := requireSingleProviderRequest(t, fallbackAdapter.streamReqs)
+	requireEqualAnyRuntime(t, "primary-model", primaryRequest.ModelID)
+	requireEqualAnyRuntime(t, "fallback-model", fallbackRequest.ModelID)
+	requireEqualAnyRuntime(t, primaryRequest.Messages, fallbackRequest.Messages)
+	requireEqualAnyRuntime(t, primaryRequest.SystemPrompt, fallbackRequest.SystemPrompt)
+	if !strings.Contains(fallbackRequest.SystemPrompt, "ctx") {
+		t.Fatalf("expected fallback stream prompt to reuse assembled engram context")
+	}
 }
 
 func TestSendMessageEmitsLifecycleTraceAndProviderFailureSamples(t *testing.T) {
@@ -596,4 +648,23 @@ func requireEqualAnyService(t *testing.T, expected any, actual any) {
 	if !reflect.DeepEqual(expected, actual) {
 		t.Fatalf("expected %v, got %v", expected, actual)
 	}
+}
+
+func requireSingleProviderRequest(
+	t *testing.T,
+	requests []providers.ProviderGenerateRequest,
+) providers.ProviderGenerateRequest {
+	t.Helper()
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 provider request, got %d", len(requests))
+	}
+	return requests[0]
+}
+
+func cloneProviderGenerateRequest(
+	request providers.ProviderGenerateRequest,
+) providers.ProviderGenerateRequest {
+	cloned := request
+	cloned.Messages = append([]providers.ProviderMessage(nil), request.Messages...)
+	return cloned
 }

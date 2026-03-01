@@ -7,6 +7,23 @@
 
 ## Implementation Log
 
+### 2026-03-01 (Technical debt closeout: cross-provider engram reuse validation + docs realignment)
+
+1. Expanded cross-provider fallback regression coverage in `internal/chat/service_test.go`:
+   - fallback adapter stubs now capture provider requests so primary and fallback request payloads can be compared directly.
+   - `TestSendMessageFallsBackToSecondaryProviderOnTransientFailure` now asserts:
+     - primary and fallback requests reuse the same message history and assembled engram-context system prompt.
+     - only provider/model changes (`primary-model` -> `fallback-model`), while response/persistence still carry the same `UsedEngramIDs`.
+   - `TestStreamMessageEventsFallsBackAfterTransientProviderFailure` now asserts fallback stream provenance parity (`used_engram_ids`, `used_engram_link_ids`, `engram_trace_paths`, `retrieval_audit`) and assistant persistence metadata reuse.
+2. Consolidated roadmap tracking docs to stay in sync with runtime state:
+   - `todo.md`: marked cross-provider engram reuse validation as completed.
+   - `migration/checkpoints/checkpoint.md`: updated Phase 32 timeline status to `Completed` and added a current-state note for cross-provider reuse validation coverage.
+3. Validation:
+   - `go test ./internal/chat -run 'TestSendMessageFallsBackToSecondaryProviderOnTransientFailure|TestStreamMessageEventsFallsBackAfterTransientProviderFailure|TestSendMessageReturnsUsedEngramIDsAndSources' -count=1`
+   - `go test ./... -count=1`
+   - `make eval`
+   - CodeScene pre-commit safeguard (`quality_gates=passed`; MCP server update notice only).
+
 ### 2026-03-01 (Embeddings runtime upgrade: OpenAI provider with local fallback)
 
 1. Added a real embedding provider path in `internal/embeddings/`:
