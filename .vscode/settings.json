@@ -25,5 +25,8 @@
                 "copilot/grok-code-fast-1"
             ]
         }
-    }
+    },
+    "codescene.enableReviewCodeLenses": true,
+    "codescene.enableAutoRefactor": true,
+    "codescene.enableTelemetry": false
 }
