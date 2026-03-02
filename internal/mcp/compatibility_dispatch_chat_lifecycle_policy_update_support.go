@@ -14,47 +14,11 @@ func (service *CompatibilityService) dispatchChatUpdateLifecyclePolicyTool(
 	if service.lifecyclePolicyUpdate == nil {
 		return nil, false, nil
 	}
-	sessionID, ok := requiredUUIDParam(params, "session_id")
-	if !ok {
-		return nil, true, invalidParamError("session_id")
+	updateRequest, dispatchErr := parseLifecyclePolicyUpdateRequest(actor, params)
+	if dispatchErr != nil {
+		return nil, true, dispatchErr
 	}
-	autosaveEnabled, ok := optionalBoolPointerParam(params, "autosave_enabled")
-	if !ok {
-		return nil, true, invalidParamError("autosave_enabled")
-	}
-	autosaveStrategy, ok := optionalAutosaveStrategyPointerParam(params, "autosave_strategy")
-	if !ok {
-		return nil, true, invalidParamError("autosave_strategy")
-	}
-	autosaveIntervalMinutes, ok := optionalIntPointerParam(params, "autosave_interval_minutes")
-	if !ok {
-		return nil, true, invalidParamError("autosave_interval_minutes")
-	}
-	autosaveMinMessages, ok := optionalIntPointerParam(params, "autosave_min_messages")
-	if !ok {
-		return nil, true, invalidParamError("autosave_min_messages")
-	}
-	retentionDays, ok := optionalIntPointerParam(params, "retention_days")
-	if !ok {
-		return nil, true, invalidParamError("retention_days")
-	}
-	retentionMaxSnapshots, ok := optionalIntPointerParam(params, "retention_max_snapshots")
-	if !ok {
-		return nil, true, invalidParamError("retention_max_snapshots")
-	}
-	updated, err := service.lifecyclePolicyUpdate.UpdateLifecyclePolicy(
-		ctx,
-		SessionLifecyclePolicyUpdateRequest{
-			ActorUserID:             actor.UserID,
-			SessionID:               sessionID,
-			AutosaveEnabled:         autosaveEnabled,
-			AutosaveStrategy:        autosaveStrategy,
-			AutosaveIntervalMinutes: autosaveIntervalMinutes,
-			AutosaveMinMessages:     autosaveMinMessages,
-			RetentionDays:           retentionDays,
-			RetentionMaxSnapshots:   retentionMaxSnapshots,
-		},
-	)
+	updated, err := service.lifecyclePolicyUpdate.UpdateLifecyclePolicy(ctx, updateRequest)
 	if err != nil {
 		return nil, true, internalToolDispatchError()
 	}
@@ -62,6 +26,50 @@ func (service *CompatibilityService) dispatchChatUpdateLifecyclePolicyTool(
 		return nil, true, invalidParamsWithStatus(404, "Chat session not found")
 	}
 	return map[string]any{"lifecycle_policy": lifecyclePolicyPayload(*updated)}, true, nil
+}
+
+func parseLifecyclePolicyUpdateRequest(
+	actor Actor,
+	params map[string]any,
+) (SessionLifecyclePolicyUpdateRequest, *toolDispatchError) {
+	sessionID, ok := requiredUUIDParam(params, "session_id")
+	if !ok {
+		return SessionLifecyclePolicyUpdateRequest{}, invalidParamError("session_id")
+	}
+	autosaveEnabled, ok := optionalBoolPointerParam(params, "autosave_enabled")
+	if !ok {
+		return SessionLifecyclePolicyUpdateRequest{}, invalidParamError("autosave_enabled")
+	}
+	autosaveStrategy, ok := optionalAutosaveStrategyPointerParam(params, "autosave_strategy")
+	if !ok {
+		return SessionLifecyclePolicyUpdateRequest{}, invalidParamError("autosave_strategy")
+	}
+	autosaveIntervalMinutes, ok := optionalIntPointerParam(params, "autosave_interval_minutes")
+	if !ok {
+		return SessionLifecyclePolicyUpdateRequest{}, invalidParamError("autosave_interval_minutes")
+	}
+	autosaveMinMessages, ok := optionalIntPointerParam(params, "autosave_min_messages")
+	if !ok {
+		return SessionLifecyclePolicyUpdateRequest{}, invalidParamError("autosave_min_messages")
+	}
+	retentionDays, ok := optionalIntPointerParam(params, "retention_days")
+	if !ok {
+		return SessionLifecyclePolicyUpdateRequest{}, invalidParamError("retention_days")
+	}
+	retentionMaxSnapshots, ok := optionalIntPointerParam(params, "retention_max_snapshots")
+	if !ok {
+		return SessionLifecyclePolicyUpdateRequest{}, invalidParamError("retention_max_snapshots")
+	}
+	return SessionLifecyclePolicyUpdateRequest{
+		ActorUserID:             actor.UserID,
+		SessionID:               sessionID,
+		AutosaveEnabled:         autosaveEnabled,
+		AutosaveStrategy:        autosaveStrategy,
+		AutosaveIntervalMinutes: autosaveIntervalMinutes,
+		AutosaveMinMessages:     autosaveMinMessages,
+		RetentionDays:           retentionDays,
+		RetentionMaxSnapshots:   retentionMaxSnapshots,
+	}, nil
 }
 
 func optionalBoolPointerParam(params map[string]any, key string) (*bool, bool) {
