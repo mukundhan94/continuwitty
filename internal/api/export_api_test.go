@@ -27,9 +27,7 @@ func TestMountExportRoutesJSONResponse(t *testing.T) {
 			_ context.Context,
 			request internalexport.ExportProjectRequest,
 		) (internalexport.ProjectExportBundle, error) {
-			if request.ActorUserID != actorID || !request.IncludeEmbeddings || len(request.CollectionIDs) != 1 || request.CollectionIDs[0] != collectionID {
-				t.Fatalf("unexpected export request: %#v", request)
-			}
+			assertExportRequestMatches(t, request, actorID, collectionID)
 			return testExportBundle(), nil
 		},
 	}
@@ -53,6 +51,27 @@ func TestMountExportRoutesJSONResponse(t *testing.T) {
 	}
 	if !strings.Contains(response.Header().Get("Content-Disposition"), "engram-export-project-one.json") {
 		t.Fatalf("expected json export filename, got %q", response.Header().Get("Content-Disposition"))
+	}
+}
+
+func assertExportRequestMatches(
+	t *testing.T,
+	request internalexport.ExportProjectRequest,
+	expectedActorID uuid.UUID,
+	expectedCollectionID uuid.UUID,
+) {
+	t.Helper()
+	if request.ActorUserID != expectedActorID {
+		t.Fatalf("unexpected actor user id in request: %#v", request)
+	}
+	if !request.IncludeEmbeddings {
+		t.Fatalf("expected include_embeddings=true in request: %#v", request)
+	}
+	if len(request.CollectionIDs) != 1 {
+		t.Fatalf("expected one collection id in request: %#v", request)
+	}
+	if request.CollectionIDs[0] != expectedCollectionID {
+		t.Fatalf("unexpected collection id in request: %#v", request)
 	}
 }
 
