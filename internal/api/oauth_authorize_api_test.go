@@ -98,19 +98,7 @@ func TestOAuthAuthorizeRouteHandlesServiceResult(t *testing.T) {
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, request)
 
-			if response.Code != testCase.expectedStatus {
-				t.Fatalf("expected status %d, got %d", testCase.expectedStatus, response.Code)
-			}
-			if testCase.expectedLocation != "" {
-				if response.Header().Get("Location") != testCase.expectedLocation {
-					t.Fatalf("unexpected redirect location %q", response.Header().Get("Location"))
-				}
-				return
-			}
-			payload := decodeOAuthAuthorizeResponseMap(t, response)
-			if payload["error"] != testCase.expectedErrorCode {
-				t.Fatalf("expected oauth error code %q, got %#v", testCase.expectedErrorCode, payload["error"])
-			}
+			assertOAuthAuthorizeTestCaseResponse(t, response, testCase)
 		})
 	}
 }
@@ -232,4 +220,49 @@ func decodeOAuthAuthorizeResponseMap(
 		t.Fatalf("decode response: %v", err)
 	}
 	return payload
+}
+
+func assertOAuthAuthorizeTestCaseResponse(
+	t *testing.T,
+	response *httptest.ResponseRecorder,
+	testCase struct {
+		name              string
+		serviceResult     internaloauth.AuthorizationResult
+		expectedStatus    int
+		expectedLocation  string
+		expectedErrorCode string
+	},
+) {
+	t.Helper()
+	if response.Code != testCase.expectedStatus {
+		t.Fatalf("expected status %d, got %d", testCase.expectedStatus, response.Code)
+	}
+	if testCase.expectedLocation != "" {
+		assertOAuthRedirectLocation(t, response, testCase.expectedLocation)
+		return
+	}
+	assertOAuthErrorCode(t, response, testCase.expectedErrorCode)
+}
+
+func assertOAuthRedirectLocation(
+	t *testing.T,
+	response *httptest.ResponseRecorder,
+	expectedLocation string,
+) {
+	t.Helper()
+	if response.Header().Get("Location") != expectedLocation {
+		t.Fatalf("unexpected redirect location %q", response.Header().Get("Location"))
+	}
+}
+
+func assertOAuthErrorCode(
+	t *testing.T,
+	response *httptest.ResponseRecorder,
+	expectedErrorCode string,
+) {
+	t.Helper()
+	payload := decodeOAuthAuthorizeResponseMap(t, response)
+	if payload["error"] != expectedErrorCode {
+		t.Fatalf("expected oauth error code %q, got %#v", expectedErrorCode, payload["error"])
+	}
 }
