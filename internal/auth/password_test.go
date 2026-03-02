@@ -72,51 +72,51 @@ func TestVerifyPasswordRejectsInvalidEncodings(t *testing.T) {
 
 func TestGenerateCSRFTokenIsURLSafeAndRandom(t *testing.T) {
 	first, err := GenerateCSRFToken()
-	requireNoError(t, err, "expected first csrf token generation to succeed")
+	requireNoError(t, err)
 	second, err := GenerateCSRFToken()
-	requireNoError(t, err, "expected second csrf token generation to succeed")
-	requireNotEmpty(t, first, "expected first csrf token to be non-empty")
-	requireNotEmpty(t, second, "expected second csrf token to be non-empty")
+	requireNoError(t, err)
+	requireNotEmpty(t, first)
+	requireNotEmpty(t, second)
 
 	re := regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
-	requireMatch(t, re, first, "expected first token to be URL-safe")
-	requireMatch(t, re, second, "expected second token to be URL-safe")
-	requireNoPadding(t, first, "expected first token to have no base64 padding")
-	requireNoPadding(t, second, "expected second token to have no base64 padding")
-	requireDifferent(t, first, second, "expected csrf tokens to differ")
+	requireMatch(t, re, first)
+	requireMatch(t, re, second)
+	requireNoPadding(t, first)
+	requireNoPadding(t, second)
+	requireDifferent(t, first, second)
 }
 
-func requireNoError(t *testing.T, err error, message string) {
+func requireNoError(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
-		t.Fatalf("%s: %v", message, err)
+		t.Fatalf("expected operation to succeed: %v", err)
 	}
 }
 
-func requireNotEmpty(t *testing.T, value, message string) {
+func requireNotEmpty(t *testing.T, value string) {
 	t.Helper()
 	if value == "" {
-		t.Fatalf("%s", message)
+		t.Fatalf("expected value to be non-empty")
 	}
 }
 
-func requireMatch(t *testing.T, pattern *regexp.Regexp, value, message string) {
+func requireMatch(t *testing.T, pattern *regexp.Regexp, value string) {
 	t.Helper()
 	if !pattern.MatchString(value) {
-		t.Fatalf("%s", message)
+		t.Fatalf("expected value to match pattern")
 	}
 }
 
-func requireNoPadding(t *testing.T, value, message string) {
+func requireNoPadding(t *testing.T, value string) {
 	t.Helper()
 	if strings.Contains(value, "=") {
-		t.Fatalf("%s", message)
+		t.Fatalf("expected token to have no base64 padding")
 	}
 }
 
-func requireDifferent(t *testing.T, first, second, message string) {
+func requireDifferent(t *testing.T, first string, second string) {
 	t.Helper()
 	if first == second {
-		t.Fatalf("%s", message)
+		t.Fatalf("expected csrf tokens to differ")
 	}
 }
