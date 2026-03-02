@@ -44,6 +44,14 @@ type adminEngramUpdateFields struct {
 	VisibilityScope         models.VisibilityScope
 }
 
+type adminEngramRecordUpdateInput struct {
+	AdminInput    AdminEngramUpdateInput
+	UpdateFields  adminEngramUpdateFields
+	RetrievalText string
+	Embedding     embeddings.Result
+	EngramJSON    string
+}
+
 // UpdateAdminEngram updates mutable engram fields and optionally replaces sources.
 func UpdateAdminEngram(
 	ctx context.Context,
@@ -69,7 +77,17 @@ func UpdateAdminEngram(
 		return nil, err
 	}
 
-	updated, err := updateAdminEngramRecord(ctx, db, input, updateFields, retrievalText, embedding, engramJSON)
+	updated, err := updateAdminEngramRecord(
+		ctx,
+		db,
+		adminEngramRecordUpdateInput{
+			AdminInput:    input,
+			UpdateFields:  updateFields,
+			RetrievalText: retrievalText,
+			Embedding:     embedding,
+			EngramJSON:    engramJSON,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -87,11 +105,7 @@ func UpdateAdminEngram(
 func updateAdminEngramRecord(
 	ctx context.Context,
 	db Queryer,
-	input AdminEngramUpdateInput,
-	updateFields adminEngramUpdateFields,
-	retrievalText string,
-	embedding embeddings.Result,
-	engramJSON string,
+	input adminEngramRecordUpdateInput,
 ) (bool, error) {
 	row := db.QueryRow(
 		ctx,
@@ -115,18 +129,18 @@ func updateAdminEngramRecord(
 			AND deleted_at IS NULL
 		RETURNING engram_id
 		`,
-		updateFields.Title,
-		updateFields.Abstract,
-		updateFields.DetailedSummaryMarkdown,
-		updateFields.Tags,
-		updateFields.Keywords,
-		string(updateFields.VisibilityScope),
-		retrievalText,
-		embedding.ProviderID,
-		vectorLiteral(embedding.Vector),
-		engramJSON,
-		input.ActorUserID,
-		input.EngramID,
+		input.UpdateFields.Title,
+		input.UpdateFields.Abstract,
+		input.UpdateFields.DetailedSummaryMarkdown,
+		input.UpdateFields.Tags,
+		input.UpdateFields.Keywords,
+		string(input.UpdateFields.VisibilityScope),
+		input.RetrievalText,
+		input.Embedding.ProviderID,
+		vectorLiteral(input.Embedding.Vector),
+		input.EngramJSON,
+		input.AdminInput.ActorUserID,
+		input.AdminInput.EngramID,
 	)
 	var updatedID uuid.UUID
 	err := row.Scan(&updatedID)

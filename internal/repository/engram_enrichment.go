@@ -42,9 +42,16 @@ var (
 )
 
 type rankedKeyword struct {
-	token string
+	token enrichmentToken
 	count int
 	index int
+}
+
+type enrichmentText string
+type enrichmentToken string
+
+func (text enrichmentText) String() string {
+	return string(text)
 }
 
 func enrichEngramPayloadIfMissing(
@@ -60,7 +67,7 @@ func enrichEngramPayloadIfMissing(
 
 	if abstractMissing {
 		derived, source := deriveAbstractFromMarkdownOrRetrieval(
-			payload.DetailedSummaryMarkdown,
+			enrichmentText(payload.DetailedSummaryMarkdown),
 			payload.RetrievalText,
 		)
 		resolved.Abstract = derived
@@ -79,7 +86,7 @@ func enrichEngramPayloadIfMissing(
 	)
 
 	if keywordsMissing {
-		keywords := extractKeywords(sourceText, maxEnrichmentKeywords)
+		keywords := extractKeywords(enrichmentText(sourceText), maxEnrichmentKeywords)
 		resolved.Keywords = keywords
 		report["keywords_derived"] = true
 		report["auto_keywords"] = append([]string(nil), keywords...)
@@ -105,25 +112,25 @@ func enrichEngramPayloadIfMissing(
 	return resolved, report
 }
 
-func deriveAbstractFromMarkdownOrRetrieval(markdown string, retrievalText *string) (string, string) {
-	trimmedMarkdown := strings.TrimSpace(markdown)
+func deriveAbstractFromMarkdownOrRetrieval(markdown enrichmentText, retrievalText *string) (string, string) {
+	trimmedMarkdown := strings.TrimSpace(markdown.String())
 	if trimmedMarkdown != "" {
-		if assistantSection := firstAssistantSection(trimmedMarkdown); assistantSection != "" {
+		if assistantSection := firstAssistantSection(enrichmentText(trimmedMarkdown)); assistantSection != "" {
 			return truncateWithEllipsis(assistantSection, maxEnrichmentAbstractChars), "assistant_section"
 		}
-		if paragraph := firstSignalParagraph(trimmedMarkdown); paragraph != "" {
+		if paragraph := firstSignalParagraph(enrichmentText(trimmedMarkdown)); paragraph != "" {
 			return truncateWithEllipsis(paragraph, maxEnrichmentAbstractChars), "first_signal_paragraph"
 		}
 	}
-	retrieval := normalizeEnrichmentSpaces(stringPointerValue(retrievalText))
+	retrieval := normalizeEnrichmentSpaces(enrichmentText(stringPointerValue(retrievalText)))
 	if retrieval != "" {
 		return truncateWithEllipsis(retrieval, maxEnrichmentAbstractChars), "retrieval_text"
 	}
 	return defaultEngramAbstract, "fallback"
 }
 
-func firstAssistantSection(markdown string) string {
-	lines := strings.Split(markdown, "\n")
+func firstAssistantSection(markdown enrichmentText) enrichmentText {
+	lines := strings.Split(markdown.String(), "\n")
 	capturing := false
 	buffer := make([]string, 0, len(lines))
 	for _, rawLine := range lines {
@@ -143,29 +150,55 @@ func firstAssistantSection(markdown string) string {
 			buffer = append(buffer, rawLine)
 		}
 	}
-	return stripMarkdownNoise(strings.Join(buffer, "\n"))
+	return stripMarkdownNoise(enrichmentText(strings.Join(buffer, "\n")))
 }
 
-func firstSignalParagraph(markdown string) string {
-	paragraphs := enrichmentParagraphSplit.Split(strings.TrimSpace(markdown), -1)
+func firstSignalParagraph(markdown enrichmentText) enrichmentText {
+	paragraphs := enrichmentParagraphSplit.Split(strings.TrimSpace(markdown.String()), -1)
 	for _, paragraph := range paragraphs {
-		cleaned := stripMarkdownNoise(paragraph)
-		if len(cleaned) >= 36 && len(strings.Fields(cleaned)) >= 7 {
+		cleaned := stripMarkdownNoise(enrichmentText(paragraph))
+		if len(cleaned) >= 36 && len(strings.Fields(cleaned.String())) >= 7 {
 			return cleaned
 		}
 	}
-	return ""
+	return enrichmentText("")
 }
 
-func extractKeywords(sourceText string, maxKeywords int) []string {
-	lowered := strings.ToLower(sourceText)
+func extractKeywords(sourceText enrichmentText, maxKeywords int) []string {
+	lowered := strings.ToLower(sourceText.String())
 	matches := enrichmentTokenPattern.FindAllString(lowered, -1)
 	if len(matches) == 0 {
 		return []string{}
 	}
 
-	counts := map[string]int{}
-	firstIndex := map[string]int{}
+	counts, firstIndex := collectKeywordStats(toEnrichmentTokens(matches))
+	if len(counts) == 0 {
+		return []string{}
+	}
+
+	ranked := rankKeywordCounts(counts, firstIndex)
+	limit := clampKeywordLimit(maxKeywords, len(ranked))
+	keywords := make([]string, 0, limit)
+	for _, item := range ranked {
+		if len(keywords) >= limit {
+			break
+		}
+		keywords = append(keywords, item.token.String())
+	}
+	return keywords
+}
+
+func toEnrichmentTokens(values []string) []enrichmentToken {
+	tokens := make([]enrichmentToken, 0, len(values))
+	for _, value := range values {
+		tokens = append(tokens, enrichmentToken(value))
+	}
+	return tokens
+}
+
+func collectKeywordStats(matches []enrichmentToken) (map[enrichmentToken]int, map[enrichmentToken]int) {
+	counts := map[enrichmentToken]int{}
+	firstIndex := map[enrichmentToken]int{}
 	for _, token := range matches {
 		if !isKeywordCandidate(token) {
 			continue
@@ -175,10 +208,13 @@ func extractKeywords(sourceText string, maxKeywords int) []string {
 			firstIndex[token] = len(firstIndex)
 		}
 	}
-	if len(counts) == 0 {
-		return []string{}
-	}
+	return counts, firstIndex
+}
 
+func rankKeywordCounts(
+	counts map[enrichmentToken]int,
+	firstIndex map[enrichmentToken]int,
+) []rankedKeyword {
 	ranked := make([]rankedKeyword, 0, len(counts))
 	for token, count := range counts {
 		ranked = append(ranked, rankedKeyword{
@@ -196,22 +232,18 @@ func extractKeywords(sourceText string, maxKeywords int) []string {
 		}
 		return ranked[left].token < ranked[right].token
 	})
+	return ranked
+}
 
+func clampKeywordLimit(maxKeywords int, available int) int {
 	limit := maxKeywords
 	if limit < 1 {
 		limit = 1
 	}
-	if len(ranked) < limit {
-		limit = len(ranked)
+	if available < limit {
+		return available
 	}
-	keywords := make([]string, 0, limit)
-	for _, item := range ranked {
-		if len(keywords) >= limit {
-			break
-		}
-		keywords = append(keywords, item.token)
-	}
-	return keywords
+	return limit
 }
 
 func mapKeywordsToTags(keywords []string, maxTags int) []string {
@@ -253,18 +285,24 @@ func hasKeywordOverlap(
 	return false
 }
 
-func isKeywordCandidate(token string) bool {
-	if _, stopword := enrichmentStopwords[token]; stopword {
+func isKeywordCandidate(token enrichmentToken) bool {
+	if _, stopword := enrichmentStopwords[token.String()]; stopword {
 		return false
 	}
-	hasLetter := false
+	return token.hasLetter()
+}
+
+func (token enrichmentToken) String() string {
+	return string(token)
+}
+
+func (token enrichmentToken) hasLetter() bool {
 	for _, char := range token {
 		if char >= 'a' && char <= 'z' {
-			hasLetter = true
-			break
+			return true
 		}
 	}
-	return hasLetter
+	return false
 }
 
 func nonEmptyTrimmedStrings(values []string) []string {
@@ -279,25 +317,25 @@ func nonEmptyTrimmedStrings(values []string) []string {
 	return trimmed
 }
 
-func stripMarkdownNoise(value string) string {
-	return normalizeEnrichmentSpaces(enrichmentMarkdownCleaner.Replace(value))
+func stripMarkdownNoise(value enrichmentText) enrichmentText {
+	return normalizeEnrichmentSpaces(enrichmentText(enrichmentMarkdownCleaner.Replace(value.String())))
 }
 
-func normalizeEnrichmentSpaces(value string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
+func normalizeEnrichmentSpaces(value enrichmentText) enrichmentText {
+	return enrichmentText(strings.Join(strings.Fields(strings.TrimSpace(value.String())), " "))
 }
 
-func truncateWithEllipsis(value string, maxChars int) string {
+func truncateWithEllipsis(value enrichmentText, maxChars int) string {
 	if maxChars <= 0 {
 		return ""
 	}
 	if len(value) <= maxChars {
-		return value
+		return value.String()
 	}
 	if maxChars <= 3 {
-		return value[:maxChars]
+		return value.String()[:maxChars]
 	}
-	return strings.TrimSpace(value[:maxChars-3]) + "..."
+	return strings.TrimSpace(value.String()[:maxChars-3]) + "..."
 }
 
 func stringPointerValue(value *string) string {

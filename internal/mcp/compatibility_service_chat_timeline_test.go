@@ -13,6 +13,40 @@ import (
 )
 
 func TestCompatibilityServiceChatListTimelineParity(t *testing.T) {
+	actorUserID, sessionID, sessionGetService, timelineService := newTimelineParityFixtures()
+	for _, testCase := range newTimelineParityCases(actorUserID, sessionID) {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			assertTimelineParityCase(
+				t,
+				timelineParityRunInput{
+					service:         newChatTimelineCompatibilityService(sessionGetService, timelineService),
+					timelineService: timelineService,
+					testCase:        testCase,
+					expectedCall: timelineListExpectation{
+						actorUserID: actorUserID,
+						sessionID:   sessionID,
+						limit:       9,
+						offset:      4,
+					},
+				},
+			)
+		})
+	}
+}
+
+type timelineParityCase struct {
+	name            string
+	request         StreamCallRequest
+	asToolsCallPath bool
+}
+
+func newTimelineParityFixtures() (
+	uuid.UUID,
+	uuid.UUID,
+	*fakeSessionGetService,
+	*fakeTimelineListService,
+) {
 	actorUserID := uuid.MustParse("30000000-0000-0000-0000-000000000300")
 	sessionID := uuid.MustParse("30000000-0000-0000-0000-000000000301")
 	sessionGetService := &fakeSessionGetService{
@@ -35,12 +69,11 @@ func TestCompatibilityServiceChatListTimelineParity(t *testing.T) {
 			},
 		},
 	}
+	return actorUserID, sessionID, sessionGetService, timelineService
+}
 
-	testCases := []struct {
-		name            string
-		request         StreamCallRequest
-		asToolsCallPath bool
-	}{
+func newTimelineParityCases(actorUserID uuid.UUID, sessionID uuid.UUID) []timelineParityCase {
+	return []timelineParityCase{
 		{
 			name: "direct",
 			request: directToolRequest(
@@ -68,31 +101,26 @@ func TestCompatibilityServiceChatListTimelineParity(t *testing.T) {
 			asToolsCallPath: true,
 		},
 	}
+}
 
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			frame := runCompatibilityRequestWithService(
-				t,
-				newChatTimelineCompatibilityService(sessionGetService, timelineService),
-				testCase.request,
-			)
-			events := chatTimelineFromFrame(t, frame, testCase.asToolsCallPath)
-			if !reflect.DeepEqual(timelineService.events, events) {
-				t.Fatalf("expected events payload to match service output")
-			}
-			assertTimelineListCall(
-				t,
-				timelineService.call,
-				timelineListExpectation{
-					actorUserID: actorUserID,
-					sessionID:   sessionID,
-					limit:       9,
-					offset:      4,
-				},
-			)
-		})
+type timelineParityRunInput struct {
+	service         Service
+	timelineService *fakeTimelineListService
+	testCase        timelineParityCase
+	expectedCall    timelineListExpectation
+}
+
+func assertTimelineParityCase(
+	t *testing.T,
+	input timelineParityRunInput,
+) {
+	t.Helper()
+	frame := runCompatibilityRequestWithService(t, input.service, input.testCase.request)
+	events := chatTimelineFromFrame(t, frame, input.testCase.asToolsCallPath)
+	if !reflect.DeepEqual(input.timelineService.events, events) {
+		t.Fatalf("expected events payload to match service output")
 	}
+	assertTimelineListCall(t, input.timelineService.call, input.expectedCall)
 }
 
 func TestCompatibilityServiceChatListTimelineUsesDefaults(t *testing.T) {

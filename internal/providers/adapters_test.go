@@ -180,13 +180,7 @@ func TestBedrockProviderReportsMissingCredentials(t *testing.T) {
 }
 
 func TestBedrockProviderMapsClientErrors(t *testing.T) {
-	testCases := []struct {
-		name           string
-		errorCode      string
-		message        string
-		expectedType   string
-		expectedDetail []string
-	}{
+	testCases := []bedrockClientErrorCase{
 		{
 			name:         "validation",
 			errorCode:    "ValidationException",
@@ -220,29 +214,46 @@ func TestBedrockProviderMapsClientErrors(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
-			provider := NewBedrockProvider(
-				AWSRuntimeCredentials{RegionName: "us-east-1"},
-				&dummyBedrockClient{
-					err: fakeBedrockClientError{
-						code:    testCase.errorCode,
-						message: testCase.message,
-					},
-				},
-			)
-
-			_, err := provider.Generate(context.Background(), providerTestRequest())
-			if err == nil {
-				t.Fatalf("expected provider error")
-			}
-			if !matchesProviderErrorType(err, testCase.expectedType) {
-				t.Fatalf("expected provider error type %q, got %T", testCase.expectedType, err)
-			}
-			for _, detail := range testCase.expectedDetail {
-				if !strings.Contains(err.Error(), detail) {
-					t.Fatalf("expected detail %q in %q", detail, err.Error())
-				}
-			}
+			assertBedrockClientErrorCase(t, testCase)
 		})
+	}
+}
+
+type bedrockClientErrorCase struct {
+	name           string
+	errorCode      string
+	message        string
+	expectedType   string
+	expectedDetail []string
+}
+
+func assertBedrockClientErrorCase(t *testing.T, testCase bedrockClientErrorCase) {
+	t.Helper()
+	provider := NewBedrockProvider(
+		AWSRuntimeCredentials{RegionName: "us-east-1"},
+		&dummyBedrockClient{
+			err: fakeBedrockClientError{
+				code:    testCase.errorCode,
+				message: testCase.message,
+			},
+		},
+	)
+	_, err := provider.Generate(context.Background(), providerTestRequest())
+	if err == nil {
+		t.Fatalf("expected provider error")
+	}
+	if !matchesProviderErrorType(err, testCase.expectedType) {
+		t.Fatalf("expected provider error type %q, got %T", testCase.expectedType, err)
+	}
+	assertErrorContainsDetails(t, err, testCase.expectedDetail)
+}
+
+func assertErrorContainsDetails(t *testing.T, err error, details []string) {
+	t.Helper()
+	for _, detail := range details {
+		if !strings.Contains(err.Error(), detail) {
+			t.Fatalf("expected detail %q in %q", detail, err.Error())
+		}
 	}
 }
 

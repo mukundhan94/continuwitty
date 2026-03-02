@@ -38,6 +38,13 @@ type LinkHygieneService struct {
 	nowUTC func() time.Time
 }
 
+type staleLowValueInput struct {
+	SourceEngramID    uuid.UUID
+	Now               time.Time
+	StaleAfterDays    int
+	LowValueThreshold float64
+}
+
 // NewLinkHygieneService builds repository-backed link hygiene recommendations.
 func NewLinkHygieneService(db repository.Queryer) *LinkHygieneService {
 	if db == nil {
@@ -85,28 +92,54 @@ func (service *LinkHygieneService) Recommend(
 	if len(links) == 0 {
 		return []models.EngramLinkHygieneRecommendation{}, nil
 	}
+	recommendations := recommendByTargetGroup(input.SourceEngramID, groupLinksByTarget(links))
+	recommendations = append(
+		recommendations,
+		recommendStaleLowValueLinks(
+			links,
+			staleLowValueInput{
+				SourceEngramID:    input.SourceEngramID,
+				Now:               service.nowUTC(),
+				StaleAfterDays:    staleAfterDays,
+				LowValueThreshold: lowValueThreshold,
+			},
+		)...,
+	)
+	sortLinkHygieneRecommendations(recommendations)
+	return recommendations, nil
+}
+
+func recommendByTargetGroup(
+	sourceEngramID uuid.UUID,
+	grouped map[uuid.UUID][]models.EngramLinkRecord,
+) []models.EngramLinkHygieneRecommendation {
 	recommendations := make([]models.EngramLinkHygieneRecommendation, 0)
-	grouped := groupLinksByTarget(links)
 	for _, targetLinks := range grouped {
 		recommendations = append(
 			recommendations,
-			buildDuplicateTargetRecommendations(input.SourceEngramID, targetLinks)...,
+			buildDuplicateTargetRecommendations(sourceEngramID, targetLinks)...,
 		)
-		if conflictRecommendation := buildConflictRecommendation(input.SourceEngramID, targetLinks); conflictRecommendation != nil {
+		if conflictRecommendation := buildConflictRecommendation(sourceEngramID, targetLinks); conflictRecommendation != nil {
 			recommendations = append(recommendations, *conflictRecommendation)
 		}
 	}
+	return recommendations
+}
+
+func recommendStaleLowValueLinks(
+	links []models.EngramLinkRecord,
+	input staleLowValueInput,
+) []models.EngramLinkHygieneRecommendation {
+	recommendations := make([]models.EngramLinkHygieneRecommendation, 0)
 	for _, link := range links {
-		if staleRecommendation := buildStaleLowValueRecommendation(
-			input.SourceEngramID,
-			link,
-			service.nowUTC(),
-			staleAfterDays,
-			lowValueThreshold,
-		); staleRecommendation != nil {
+		if staleRecommendation := buildStaleLowValueRecommendation(link, input); staleRecommendation != nil {
 			recommendations = append(recommendations, *staleRecommendation)
 		}
 	}
+	return recommendations
+}
+
+func sortLinkHygieneRecommendations(recommendations []models.EngramLinkHygieneRecommendation) {
 	sort.SliceStable(recommendations, func(left, right int) bool {
 		if severityRank(recommendations[left].Severity) != severityRank(recommendations[right].Severity) {
 			return severityRank(recommendations[left].Severity) > severityRank(recommendations[right].Severity)
@@ -119,7 +152,6 @@ func (service *LinkHygieneService) Recommend(
 		}
 		return recommendations[left].Category < recommendations[right].Category
 	})
-	return recommendations, nil
 }
 
 func validateLinkHygieneInput(input LinkHygieneInput) error {
@@ -212,28 +244,11 @@ func buildConflictRecommendation(
 	if len(targetLinks) <= 1 {
 		return nil
 	}
-	hasContradicts := false
-	hasSupportiveRelation := false
-	linkIDs := make([]uuid.UUID, 0, len(targetLinks))
-	for _, link := range targetLinks {
-		linkIDs = append(linkIDs, link.LinkID)
-		if link.RelationType == models.EngramLinkRelationContradicts {
-			hasContradicts = true
-			continue
-		}
-		if link.RelationType == models.EngramLinkRelationSupports ||
-			link.RelationType == models.EngramLinkRelationDependsOn ||
-			link.RelationType == models.EngramLinkRelationDerivedFrom {
-			hasSupportiveRelation = true
-		}
-	}
-	if !hasContradicts || !hasSupportiveRelation {
+	hasConflict, linkIDs := hasConflictingRelations(targetLinks)
+	if !hasConflict {
 		return nil
 	}
-	lowestStrength := 1.0
-	for _, link := range targetLinks {
-		lowestStrength = min(lowestStrength, linkStrength(link))
-	}
+	lowestStrength := lowestLinkStrength(targetLinks)
 	return &models.EngramLinkHygieneRecommendation{
 		Category:        models.EngramLinkHygieneCategoryConflictRelation,
 		Severity:        "high",
@@ -246,12 +261,43 @@ func buildConflictRecommendation(
 	}
 }
 
+func hasConflictingRelations(targetLinks []models.EngramLinkRecord) (bool, []uuid.UUID) {
+	hasContradicts := false
+	hasSupportiveRelation := false
+	linkIDs := make([]uuid.UUID, 0, len(targetLinks))
+	for _, link := range targetLinks {
+		linkIDs = append(linkIDs, link.LinkID)
+		if link.RelationType == models.EngramLinkRelationContradicts {
+			hasContradicts = true
+			continue
+		}
+		if isSupportiveRelation(link.RelationType) {
+			hasSupportiveRelation = true
+		}
+	}
+	return hasContradicts && hasSupportiveRelation, linkIDs
+}
+
+func isSupportiveRelation(relation models.EngramLinkRelationType) bool {
+	switch relation {
+	case models.EngramLinkRelationSupports, models.EngramLinkRelationDependsOn, models.EngramLinkRelationDerivedFrom:
+		return true
+	default:
+		return false
+	}
+}
+
+func lowestLinkStrength(targetLinks []models.EngramLinkRecord) float64 {
+	lowestStrength := 1.0
+	for _, link := range targetLinks {
+		lowestStrength = min(lowestStrength, linkStrength(link))
+	}
+	return lowestStrength
+}
+
 func buildStaleLowValueRecommendation(
-	sourceEngramID uuid.UUID,
 	link models.EngramLinkRecord,
-	now time.Time,
-	staleAfterDays int,
-	lowValueThreshold float64,
+	input staleLowValueInput,
 ) *models.EngramLinkHygieneRecommendation {
 	if link.Status == models.EngramLinkStatusArchived || link.Status == models.EngramLinkStatusRejected {
 		return nil
@@ -263,15 +309,15 @@ func buildStaleLowValueRecommendation(
 	if reference.IsZero() {
 		return nil
 	}
-	ageDays := now.Sub(reference).Hours() / 24.0
+	ageDays := input.Now.Sub(reference).Hours() / 24.0
 	score := linkStrength(link)
-	if ageDays < float64(staleAfterDays) || score >= lowValueThreshold {
+	if ageDays < float64(input.StaleAfterDays) || score >= input.LowValueThreshold {
 		return nil
 	}
 	return &models.EngramLinkHygieneRecommendation{
 		Category:        models.EngramLinkHygieneCategoryStaleLowValue,
 		Severity:        "low",
-		SourceEngramID:  sourceEngramID,
+		SourceEngramID:  input.SourceEngramID,
 		TargetEngramID:  link.TargetEngramID,
 		LinkIDs:         []uuid.UUID{link.LinkID},
 		Detail:          "Link has low confidence/weight and has not been reinforced recently.",

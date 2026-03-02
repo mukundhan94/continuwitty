@@ -233,14 +233,29 @@ func assertConsumeAllowed(t *testing.T, limiter *RequestRateLimiter, key string,
 	}
 }
 
-func assertConsumeBlocked(t *testing.T, limiter *RequestRateLimiter, key string, maxRetryAfter int, contextMessage string) {
+type consumeBlockExpectation struct {
+	maxRetryAfter int
+	context       string
+}
+
+func assertConsumeBlocked(
+	t *testing.T,
+	limiter *RequestRateLimiter,
+	key string,
+	expectation consumeBlockExpectation,
+) {
 	t.Helper()
 	allowed, retryAfter := limiter.Consume(key)
 	if allowed {
-		t.Fatalf("%s: expected request to be blocked", contextMessage)
+		t.Fatalf("%s: expected request to be blocked", expectation.context)
 	}
-	if retryAfter < 1 || retryAfter > maxRetryAfter {
-		t.Fatalf("%s: expected retry_after between 1 and %d, got %d", contextMessage, maxRetryAfter, retryAfter)
+	if retryAfter < 1 || retryAfter > expectation.maxRetryAfter {
+		t.Fatalf(
+			"%s: expected retry_after between 1 and %d, got %d",
+			expectation.context,
+			expectation.maxRetryAfter,
+			retryAfter,
+		)
 	}
 }
 
@@ -260,7 +275,10 @@ func runRequestRateLimiterThresholdCase(t *testing.T, testCase requestRateLimitC
 	if testCase.maxRequests > 1 {
 		assertConsumeAllowed(t, limiter, key, "second request")
 	}
-	assertConsumeBlocked(t, limiter, key, testCase.maxRetryAfter, "threshold request")
+	assertConsumeBlocked(t, limiter, key, consumeBlockExpectation{
+		maxRetryAfter: testCase.maxRetryAfter,
+		context:       "threshold request",
+	})
 
 	clock.current = clock.current.Add(time.Duration(testCase.waitSeconds) * time.Second)
 	assertConsumeAllowed(t, limiter, key, "post-wait request")
@@ -303,7 +321,10 @@ func TestRequestRateLimiterDistributedStateSharedAcrossInstances(t *testing.T) {
 	key := "127.0.0.1:session"
 
 	assertConsumeAllowed(t, limiterPrimary, key, "distributed first request")
-	assertConsumeBlocked(t, limiterSecondary, key, 15, "distributed threshold request")
+	assertConsumeBlocked(t, limiterSecondary, key, consumeBlockExpectation{
+		maxRetryAfter: 15,
+		context:       "distributed threshold request",
+	})
 }
 
 func TestRequestRateLimiterFallsBackToLocalStateWhenDistributedStoreFails(t *testing.T) {
@@ -315,5 +336,8 @@ func TestRequestRateLimiterFallsBackToLocalStateWhenDistributedStoreFails(t *tes
 	key := "127.0.0.1:session"
 
 	assertConsumeAllowed(t, limiter, key, "fallback first request")
-	assertConsumeBlocked(t, limiter, key, 10, "fallback threshold request")
+	assertConsumeBlocked(t, limiter, key, consumeBlockExpectation{
+		maxRetryAfter: 10,
+		context:       "fallback threshold request",
+	})
 }

@@ -63,19 +63,7 @@ func ListAdminSessions(
 	db Queryer,
 	input AdminSessionListInput,
 ) ([]models.AdminChatSessionRecord, error) {
-	whereClauses := []string{"1=1"}
-	params := make([]any, 0)
-	if !input.IncludeDeleted {
-		whereClauses = append(whereClauses, "deleted_at IS NULL")
-	}
-	if input.ProjectID != nil && *input.ProjectID != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("project_id = %s", pgxPlaceholder(len(params)+1)))
-		params = append(params, *input.ProjectID)
-	}
-	if input.OwnerUserID != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("owner_user_id = %s", pgxPlaceholder(len(params)+1)))
-		params = append(params, *input.OwnerUserID)
-	}
+	whereClauses, params := buildAdminSessionListFilters(input)
 
 	sql := fmt.Sprintf(
 		`
@@ -98,6 +86,27 @@ func ListAdminSessions(
 	}
 	defer rows.Close()
 
+	return collectAdminSessionRows(rows)
+}
+
+func buildAdminSessionListFilters(input AdminSessionListInput) ([]string, []any) {
+	whereClauses := []string{"1=1"}
+	params := make([]any, 0)
+	if !input.IncludeDeleted {
+		whereClauses = append(whereClauses, "deleted_at IS NULL")
+	}
+	if input.ProjectID != nil && *input.ProjectID != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("project_id = %s", pgxPlaceholder(len(params)+1)))
+		params = append(params, *input.ProjectID)
+	}
+	if input.OwnerUserID != nil {
+		whereClauses = append(whereClauses, fmt.Sprintf("owner_user_id = %s", pgxPlaceholder(len(params)+1)))
+		params = append(params, *input.OwnerUserID)
+	}
+	return whereClauses, params
+}
+
+func collectAdminSessionRows(rows pgx.Rows) ([]models.AdminChatSessionRecord, error) {
 	records := make([]models.AdminChatSessionRecord, 0)
 	for rows.Next() {
 		record, scanErr := scanAdminSessionRecord(rows)

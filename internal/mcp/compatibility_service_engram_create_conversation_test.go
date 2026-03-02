@@ -39,19 +39,23 @@ func TestCompatibilityServiceEngramCreateFromConversationParity(t *testing.T) {
 		t,
 		service,
 		response,
-		"direct",
-		directToolRequest(actorUserID.String(), "engram.create_from_conversation", params),
-		false,
-		expectedCreateConversationCall(actorUserID, models.UserRoleViewer, sourceSessionID),
+		createConversationParityCase{
+			name:            "direct",
+			request:         directToolRequest(actorUserID.String(), "engram.create_from_conversation", params),
+			asToolsCallPath: false,
+			expectedCall:    expectedCreateConversationCall(actorUserID, models.UserRoleViewer, sourceSessionID),
+		},
 	)
 	assertCreateConversationParityCase(
 		t,
 		service,
 		response,
-		"tools call",
-		toolsCallRequest(actorUserID.String(), "engram_create_from_conversation", params),
-		true,
-		expectedCreateConversationCall(actorUserID, models.UserRoleAnalyst, sourceSessionID),
+		createConversationParityCase{
+			name:            "tools call",
+			request:         toolsCallRequest(actorUserID.String(), "engram_create_from_conversation", params),
+			asToolsCallPath: true,
+			expectedCall:    expectedCreateConversationCall(actorUserID, models.UserRoleAnalyst, sourceSessionID),
+		},
 	)
 }
 
@@ -214,29 +218,33 @@ func expectedCreateConversationCall(
 	}
 }
 
+type createConversationParityCase struct {
+	name            string
+	request         StreamCallRequest
+	asToolsCallPath bool
+	expectedCall    engramCreateConversationExpectation
+}
+
 func assertCreateConversationParityCase(
 	t *testing.T,
 	service *fakeEngramCreateConversationService,
 	response *EngramCreateFromConversationResponse,
-	name string,
-	request StreamCallRequest,
-	asToolsCallPath bool,
-	expectedCall engramCreateConversationExpectation,
+	testCase createConversationParityCase,
 ) {
-	t.Run(name, func(t *testing.T) {
+	t.Run(testCase.name, func(t *testing.T) {
 		frame := runCompatibilityRequestWithService(
 			t,
 			newEngramCreateConversationCompatibilityService(service),
-			request,
+			testCase.request,
 		)
-		createdEngram, report := engramCreateConversationFromFrame(t, frame, asToolsCallPath)
+		createdEngram, report := engramCreateConversationFromFrame(t, frame, testCase.asToolsCallPath)
 		if !reflect.DeepEqual(response.Engram, createdEngram) {
 			t.Fatalf("expected create response engram payload")
 		}
 		if !reflect.DeepEqual(response.EnrichmentReport, report) {
 			t.Fatalf("expected create response enrichment report")
 		}
-		assertEngramCreateConversationCall(t, service.call, expectedCall)
+		assertEngramCreateConversationCall(t, service.call, testCase.expectedCall)
 	})
 }
 

@@ -80,7 +80,7 @@ func TestCompatibilityServiceProjectMemberAddParity(t *testing.T) {
 	}
 }
 
-func TestCompatibilityServiceProjectMemberListAndRemove(t *testing.T) {
+func TestCompatibilityServiceProjectMemberListUsesRepository(t *testing.T) {
 	actorUserID := uuid.MustParse("50020000-0000-0000-0000-000000000501")
 	memberUserID := uuid.MustParse("50020000-0000-0000-0000-000000000502")
 	service := &fakeProjectMembershipService{
@@ -111,10 +111,21 @@ func TestCompatibilityServiceProjectMemberListAndRemove(t *testing.T) {
 	if len(members) != 1 || members[0].Role != models.ProjectMemberRoleEditor {
 		t.Fatalf("expected listed members")
 	}
-	if service.listCall.projectID != "engram-vault" || service.listCall.limit != 12 || service.listCall.offset != 3 {
-		t.Fatalf("expected member-list paging and project inputs to be forwarded")
-	}
+	assertProjectMemberListCall(
+		t,
+		service.listCall,
+		projectMemberListCallExpectation{
+			projectID: "engram-vault",
+			limit:     12,
+			offset:    3,
+		},
+	)
+}
 
+func TestCompatibilityServiceProjectMemberRemoveUsesRepository(t *testing.T) {
+	actorUserID := uuid.MustParse("50020000-0000-0000-0000-000000000501")
+	memberUserID := uuid.MustParse("50020000-0000-0000-0000-000000000502")
+	service := &fakeProjectMembershipService{}
 	removeFrame := runCompatibilityRequestWithService(
 		t,
 		newProjectDefaultCompatibilityService(service),
@@ -260,6 +271,52 @@ type projectMemberMutateCall[T any] struct {
 	request     T
 }
 
+type projectMemberListCallExpectation struct {
+	projectID string
+	limit     int
+	offset    int
+}
+
+func assertProjectMemberListCall(
+	t *testing.T,
+	call projectMemberListCall,
+	expected projectMemberListCallExpectation,
+) {
+	t.Helper()
+	if call.projectID != expected.projectID {
+		t.Fatalf("expected project id %q, got %q", expected.projectID, call.projectID)
+	}
+	if call.limit != expected.limit {
+		t.Fatalf("expected limit %d, got %d", expected.limit, call.limit)
+	}
+	if call.offset != expected.offset {
+		t.Fatalf("expected offset %d, got %d", expected.offset, call.offset)
+	}
+}
+
+func assignProjectMemberMutateCall[T any](
+	call *projectMemberMutateCall[T],
+	actorUserID uuid.UUID,
+	actorRole models.UserRole,
+	request T,
+) {
+	*call = projectMemberMutateCall[T]{
+		actorUserID: actorUserID,
+		actorRole:   actorRole,
+		request:     request,
+	}
+}
+
+func projectMemberMutateResult(
+	result *models.ProjectMemberRecord,
+	err error,
+) (*models.ProjectMemberRecord, error) {
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 type fakeProjectMembershipService struct {
 	fakeProjectListService
 	listResult   []models.ProjectMemberRecord
@@ -300,15 +357,8 @@ func (service *fakeProjectMembershipService) AddProjectMember(
 	actorRole models.UserRole,
 	request projects.ProjectMemberCreateRequest,
 ) (*models.ProjectMemberRecord, error) {
-	service.addCall = projectMemberMutateCall[projects.ProjectMemberCreateRequest]{
-		actorUserID: actorUserID,
-		actorRole:   actorRole,
-		request:     request,
-	}
-	if service.addErr != nil {
-		return nil, service.addErr
-	}
-	return service.addResult, nil
+	assignProjectMemberMutateCall(&service.addCall, actorUserID, actorRole, request)
+	return projectMemberMutateResult(service.addResult, service.addErr)
 }
 
 func (service *fakeProjectMembershipService) UpdateProjectMember(
@@ -317,15 +367,8 @@ func (service *fakeProjectMembershipService) UpdateProjectMember(
 	actorRole models.UserRole,
 	request projects.ProjectMemberUpdateRequest,
 ) (*models.ProjectMemberRecord, error) {
-	service.updateCall = projectMemberMutateCall[projects.ProjectMemberUpdateRequest]{
-		actorUserID: actorUserID,
-		actorRole:   actorRole,
-		request:     request,
-	}
-	if service.updateErr != nil {
-		return nil, service.updateErr
-	}
-	return service.updateResult, nil
+	assignProjectMemberMutateCall(&service.updateCall, actorUserID, actorRole, request)
+	return projectMemberMutateResult(service.updateResult, service.updateErr)
 }
 
 func (service *fakeProjectMembershipService) RemoveProjectMember(
@@ -334,10 +377,6 @@ func (service *fakeProjectMembershipService) RemoveProjectMember(
 	actorRole models.UserRole,
 	request projects.ProjectMemberRemoveRequest,
 ) error {
-	service.removeCall = projectMemberMutateCall[projects.ProjectMemberRemoveRequest]{
-		actorUserID: actorUserID,
-		actorRole:   actorRole,
-		request:     request,
-	}
+	assignProjectMemberMutateCall(&service.removeCall, actorUserID, actorRole, request)
 	return service.removeErr
 }
