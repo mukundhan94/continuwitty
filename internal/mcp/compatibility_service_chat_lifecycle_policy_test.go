@@ -58,30 +58,8 @@ func TestCompatibilityServiceChatGetLifecyclePolicyParity(t *testing.T) {
 				testCase.request,
 			)
 			policy := lifecyclePolicyFromFrame(t, frame, testCase.asToolsCallPath)
-			if policy["autosave_enabled"] != true {
-				t.Fatalf("expected autosave_enabled to be forwarded")
-			}
-			if policy["autosave_strategy"] != models.ChatAutosaveStrategyMessageCount {
-				t.Fatalf("expected autosave_strategy to be forwarded")
-			}
-			if policy["autosave_interval_minutes"] != 30 {
-				t.Fatalf("expected autosave_interval_minutes to be forwarded")
-			}
-			if policy["autosave_min_messages"] != 12 {
-				t.Fatalf("expected autosave_min_messages to be forwarded")
-			}
-			if policy["retention_days"] != 14 {
-				t.Fatalf("expected retention_days to be forwarded")
-			}
-			if policy["retention_max_snapshots"] != 40 {
-				t.Fatalf("expected retention_max_snapshots to be forwarded")
-			}
-			if service.call.actorUserID != actorUserID {
-				t.Fatalf("expected actor user id forwarded")
-			}
-			if service.call.sessionID != sessionID {
-				t.Fatalf("expected session id forwarded")
-			}
+			assertLifecyclePolicyValues(t, policy)
+			assertLifecyclePolicyRequestCall(t, service.call, actorUserID, sessionID)
 		})
 	}
 }
@@ -155,4 +133,36 @@ func lifecyclePolicyFromFrame(
 		t.Fatalf("expected lifecycle_policy payload")
 	}
 	return policy
+}
+
+func assertLifecyclePolicyValues(t *testing.T, policy map[string]any) {
+	t.Helper()
+	expected := map[string]any{
+		"autosave_enabled":          true,
+		"autosave_strategy":         models.ChatAutosaveStrategyMessageCount,
+		"autosave_interval_minutes": 30,
+		"autosave_min_messages":     12,
+		"retention_days":            14,
+		"retention_max_snapshots":   40,
+	}
+	for key, value := range expected {
+		if policy[key] != value {
+			t.Fatalf("expected %s to be forwarded", key)
+		}
+	}
+}
+
+func assertLifecyclePolicyRequestCall(
+	t *testing.T,
+	call sessionGetCall,
+	expectedActorUserID uuid.UUID,
+	expectedSessionID uuid.UUID,
+) {
+	t.Helper()
+	if call.actorUserID != expectedActorUserID {
+		t.Fatalf("expected actor user id forwarded")
+	}
+	if call.sessionID != expectedSessionID {
+		t.Fatalf("expected session id forwarded")
+	}
 }
