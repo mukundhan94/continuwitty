@@ -154,13 +154,13 @@ func TestAssembleChatContextUsesAllPinnedDocuments(t *testing.T) {
 	pinnedDocumentB := uuid.MustParse("00000000-0000-0000-0000-000000006632")
 	chunkA := uuid.MustParse("00000000-0000-0000-0000-000000006633")
 	chunkB := uuid.MustParse("00000000-0000-0000-0000-000000006634")
-	deps := dependenciesForAllPinnedDocuments(
-		session.SessionID,
-		pinnedDocumentA,
-		pinnedDocumentB,
-		chunkA,
-		chunkB,
-	)
+	deps := dependenciesForAllPinnedDocuments(allPinnedDocumentFixture{
+		sessionID:       session.SessionID,
+		pinnedDocumentA: pinnedDocumentA,
+		pinnedDocumentB: pinnedDocumentB,
+		chunkA:          chunkA,
+		chunkB:          chunkB,
+	})
 
 	assembled, err := AssembleChatContext(
 		context.Background(),
@@ -307,7 +307,11 @@ func TestAssembleChatContextIncludesLinkedEngramsAndTraceMetadataByDefault(t *te
 	if err != nil {
 		t.Fatalf("assemble chat context: %v", err)
 	}
-	assertLinkedTraceContext(t, assembled, rootEngramID, linkedEngramID, linkID)
+	assertLinkedTraceContext(t, assembled, linkedTraceExpectation{
+		rootEngramID:   rootEngramID,
+		linkedEngramID: linkedEngramID,
+		linkID:         linkID,
+	})
 }
 
 func TestAssembleChatContextSuppressesNoisyLinkedPaths(t *testing.T) {
@@ -348,7 +352,11 @@ func TestAssembleChatContextNoiseSuppressionPolicyAllowsOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("assemble chat context: %v", err)
 	}
-	assertLinkedTraceContext(t, assembled, rootEngramID, linkedEngramID, linkID)
+	assertLinkedTraceContext(t, assembled, linkedTraceExpectation{
+		rootEngramID:   rootEngramID,
+		linkedEngramID: linkedEngramID,
+		linkID:         linkID,
+	})
 }
 
 func TestAssembleChatContextLinkRecallDisabledSkipsTraversal(t *testing.T) {
@@ -589,13 +597,15 @@ func duplicateDocumentChunks(sharedDocumentID uuid.UUID) []models.DocumentChunkQ
 	}
 }
 
-func dependenciesForAllPinnedDocuments(
-	sessionID uuid.UUID,
-	pinnedDocumentA uuid.UUID,
-	pinnedDocumentB uuid.UUID,
-	chunkA uuid.UUID,
-	chunkB uuid.UUID,
-) ChatContextDependencies {
+type allPinnedDocumentFixture struct {
+	sessionID       uuid.UUID
+	pinnedDocumentA uuid.UUID
+	pinnedDocumentB uuid.UUID
+	chunkA          uuid.UUID
+	chunkB          uuid.UUID
+}
+
+func dependenciesForAllPinnedDocuments(fixture allPinnedDocumentFixture) ChatContextDependencies {
 	return ChatContextDependencies{
 		ListPinnedEngramSummaries: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]models.EngramSummary, error) {
 			return []models.EngramSummary{}, nil
@@ -605,7 +615,12 @@ func dependenciesForAllPinnedDocuments(
 			_ uuid.UUID,
 			actorUserID uuid.UUID,
 		) ([]models.PinnedDocumentRecord, error) {
-			return pinnedDocumentsForSession(sessionID, actorUserID, pinnedDocumentA, pinnedDocumentB), nil
+			return pinnedDocumentsForSession(
+				fixture.sessionID,
+				actorUserID,
+				fixture.pinnedDocumentA,
+				fixture.pinnedDocumentB,
+			), nil
 		},
 		QueryEngrams: func(
 			_ context.Context,
@@ -624,7 +639,7 @@ func dependenciesForAllPinnedDocuments(
 			request models.DocumentChunkQueryRequest,
 			_ int,
 		) ([]models.DocumentChunkQueryResult, error) {
-			return pinnedDocumentChunkResults(request, pinnedDocumentA, pinnedDocumentB, chunkA, chunkB), nil
+			return pinnedDocumentChunkResults(request, fixture), nil
 		},
 	}
 }
@@ -644,20 +659,17 @@ func pinnedDocumentsForSession(
 
 func pinnedDocumentChunkResults(
 	request models.DocumentChunkQueryRequest,
-	pinnedDocumentA uuid.UUID,
-	pinnedDocumentB uuid.UUID,
-	chunkA uuid.UUID,
-	chunkB uuid.UUID,
+	fixture allPinnedDocumentFixture,
 ) []models.DocumentChunkQueryResult {
 	now := time.Now().UTC()
 	sourceA := "doc-a.md"
 	sourceB := "doc-b.md"
 	switch {
-	case reflect.DeepEqual(request.DocumentIDs, []uuid.UUID{pinnedDocumentA}):
+	case reflect.DeepEqual(request.DocumentIDs, []uuid.UUID{fixture.pinnedDocumentA}):
 		return []models.DocumentChunkQueryResult{
 			{
-				ChunkID:         chunkA,
-				DocumentID:      pinnedDocumentA,
+				ChunkID:         fixture.chunkA,
+				DocumentID:      fixture.pinnedDocumentA,
 				ProjectID:       "project-chat",
 				Title:           "Doc A",
 				SourceName:      &sourceA,
@@ -668,11 +680,11 @@ func pinnedDocumentChunkResults(
 				Distance:        0.3,
 			},
 		}
-	case reflect.DeepEqual(request.DocumentIDs, []uuid.UUID{pinnedDocumentB}):
+	case reflect.DeepEqual(request.DocumentIDs, []uuid.UUID{fixture.pinnedDocumentB}):
 		return []models.DocumentChunkQueryResult{
 			{
-				ChunkID:         chunkB,
-				DocumentID:      pinnedDocumentB,
+				ChunkID:         fixture.chunkB,
+				DocumentID:      fixture.pinnedDocumentB,
 				ProjectID:       "project-chat",
 				Title:           "Doc B",
 				SourceName:      &sourceB,
@@ -860,22 +872,26 @@ func dependenciesForLinkedRecallDefault(
 	}
 }
 
+type linkedTraceExpectation struct {
+	rootEngramID   uuid.UUID
+	linkedEngramID uuid.UUID
+	linkID         uuid.UUID
+}
+
 func assertLinkedTraceContext(
 	t *testing.T,
 	assembled AssembledChatContext,
-	rootEngramID uuid.UUID,
-	linkedEngramID uuid.UUID,
-	linkID uuid.UUID,
+	expectation linkedTraceExpectation,
 ) {
 	t.Helper()
-	requireUUIDSliceEqual(t, []uuid.UUID{rootEngramID, linkedEngramID}, assembled.UsedEngramIDs)
-	requireUUIDSliceEqual(t, []uuid.UUID{linkID}, assembled.UsedEngramLinkIDs)
+	requireUUIDSliceEqual(t, []uuid.UUID{expectation.rootEngramID, expectation.linkedEngramID}, assembled.UsedEngramIDs)
+	requireUUIDSliceEqual(t, []uuid.UUID{expectation.linkID}, assembled.UsedEngramLinkIDs)
 	if len(assembled.EngramTracePaths) != 1 {
 		t.Fatalf("expected one trace path, got %d", len(assembled.EngramTracePaths))
 	}
 	trace := assembled.EngramTracePaths[0]
-	requireUUIDSliceEqual(t, []uuid.UUID{rootEngramID, linkedEngramID}, trace.EngramIDs)
-	requireUUIDSliceEqual(t, []uuid.UUID{linkID}, trace.LinkIDs)
+	requireUUIDSliceEqual(t, []uuid.UUID{expectation.rootEngramID, expectation.linkedEngramID}, trace.EngramIDs)
+	requireUUIDSliceEqual(t, []uuid.UUID{expectation.linkID}, trace.LinkIDs)
 	if trace.Depth != 1 {
 		t.Fatalf("expected trace depth 1, got %d", trace.Depth)
 	}

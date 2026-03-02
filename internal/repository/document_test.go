@@ -43,7 +43,13 @@ func TestUpsertDocumentWithChunksPersistsDocumentAndChunks(t *testing.T) {
 	}
 	setDocumentNow(t, createdAt)
 	stubTwoChunkDocumentEmbeddings(t, 8)
-	payload := buildDocumentUpsertPayloadForPersistenceTest(documentID, sourceName, mimeType, chunkA, chunkB)
+	payload := buildDocumentUpsertPayloadForPersistenceTest(documentUpsertPayloadBuildInput{
+		documentID: documentID,
+		sourceName: sourceName,
+		mimeType:   mimeType,
+		chunkA:     chunkA,
+		chunkB:     chunkB,
+	})
 	record, err := UpsertDocumentWithChunks(
 		context.Background(),
 		db,
@@ -53,7 +59,10 @@ func TestUpsertDocumentWithChunksPersistsDocumentAndChunks(t *testing.T) {
 			Payload:      payload,
 		},
 	)
-	assertDocumentUpsertPersistenceResult(t, err, record, db, documentID)
+	assertDocumentUpsertPersistenceResult(t, err, record, documentUpsertPersistenceAssertion{
+		db:         db,
+		documentID: documentID,
+	})
 }
 
 func TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch(t *testing.T) {
@@ -209,7 +218,11 @@ func TestQueryDocumentChunksBuildsQueryAndReranks(t *testing.T) {
 		},
 	)
 	assertDocumentChunkQueryResult(t, err, results, chunkB)
-	assertDocumentChunkQuerySQLAndArgs(t, db, actorUserID, projectID, documentIDs)
+	assertDocumentChunkQuerySQLAndArgs(t, db, documentChunkQueryAssertion{
+		actorUserID: actorUserID,
+		projectID:   projectID,
+		documentIDs: documentIDs,
+	})
 }
 
 func TestBuildDocumentChunkWhereDefaultsToActorScopeOnly(t *testing.T) {
@@ -292,27 +305,29 @@ func stubTwoChunkDocumentEmbeddings(t *testing.T, expectedDim int) {
 	t.Cleanup(func() { embedDocumentMany = originalEmbedMany })
 }
 
-func buildDocumentUpsertPayloadForPersistenceTest(
-	documentID uuid.UUID,
-	sourceName string,
-	mimeType string,
-	chunkA uuid.UUID,
-	chunkB uuid.UUID,
-) DocumentUpsertPayload {
+type documentUpsertPayloadBuildInput struct {
+	documentID uuid.UUID
+	sourceName string
+	mimeType   string
+	chunkA     uuid.UUID
+	chunkB     uuid.UUID
+}
+
+func buildDocumentUpsertPayloadForPersistenceTest(input documentUpsertPayloadBuildInput) DocumentUpsertPayload {
 	return DocumentUpsertPayload{
-		DocumentID:      documentID,
+		DocumentID:      input.documentID,
 		ProjectID:       "project-docs",
 		Title:           "Runbook",
 		SourceType:      models.DocumentSourceTypeText,
-		SourceName:      &sourceName,
-		MimeType:        &mimeType,
+		SourceName:      &input.sourceName,
+		MimeType:        &input.mimeType,
 		VisibilityScope: models.VisibilityScopeProject,
 		ContentText:     "queue depth exceeded",
 		ContentHash:     "hash-value",
 		Metadata:        map[string]any{"owner": "ops"},
 		Chunks: []DocumentChunkDraft{
 			{
-				ChunkID:       chunkA,
+				ChunkID:       input.chunkA,
 				ChunkIndex:    0,
 				ChunkText:     "queue depth exceeded",
 				Snippet:       "queue depth exceeded",
@@ -322,7 +337,7 @@ func buildDocumentUpsertPayloadForPersistenceTest(
 				Metadata:      map[string]any{"chunk": 0},
 			},
 			{
-				ChunkID:       chunkB,
+				ChunkID:       input.chunkB,
 				ChunkIndex:    1,
 				ChunkText:     "retry worker burst",
 				Snippet:       "retry worker burst",
@@ -335,29 +350,33 @@ func buildDocumentUpsertPayloadForPersistenceTest(
 	}
 }
 
+type documentUpsertPersistenceAssertion struct {
+	db         *fakeQueryer
+	documentID uuid.UUID
+}
+
 func assertDocumentUpsertPersistenceResult(
 	t *testing.T,
 	err error,
 	record *models.DocumentRecord,
-	db *fakeQueryer,
-	documentID uuid.UUID,
+	assertion documentUpsertPersistenceAssertion,
 ) {
 	t.Helper()
 	requireNoError(t, err)
 	requireNotNil(t, record)
-	requireEqual(t, documentID, record.DocumentID)
+	requireEqual(t, assertion.documentID, record.DocumentID)
 	requireEqual(t, models.DocumentSourceTypeText, record.SourceType)
 	requireEqual(t, models.VisibilityScopeProject, record.VisibilityScope)
-	requireEqual(t, 1, len(db.querySQL))
-	if !strings.Contains(db.querySQL[0], "DELETE FROM document_chunks") {
-		t.Fatalf("expected delete old chunks query, got %q", db.querySQL[0])
+	requireEqual(t, 1, len(assertion.db.querySQL))
+	if !strings.Contains(assertion.db.querySQL[0], "DELETE FROM document_chunks") {
+		t.Fatalf("expected delete old chunks query, got %q", assertion.db.querySQL[0])
 	}
-	requireEqual(t, 3, len(db.queryRowArgs))
-	if gotMetadata, ok := db.queryRowArgs[0][10].(string); !ok || !strings.Contains(gotMetadata, "\"owner\":\"ops\"") {
-		t.Fatalf("expected document metadata json arg, got %#v", db.queryRowArgs[0][10])
+	requireEqual(t, 3, len(assertion.db.queryRowArgs))
+	if gotMetadata, ok := assertion.db.queryRowArgs[0][10].(string); !ok || !strings.Contains(gotMetadata, "\"owner\":\"ops\"") {
+		t.Fatalf("expected document metadata json arg, got %#v", assertion.db.queryRowArgs[0][10])
 	}
-	if gotVector, ok := db.queryRowArgs[1][10].(string); !ok || gotVector != "[0.100000,0.200000]" {
-		t.Fatalf("expected first chunk vector literal, got %#v", db.queryRowArgs[1][10])
+	if gotVector, ok := assertion.db.queryRowArgs[1][10].(string); !ok || gotVector != "[0.100000,0.200000]" {
+		t.Fatalf("expected first chunk vector literal, got %#v", assertion.db.queryRowArgs[1][10])
 	}
 }
 
@@ -385,12 +404,16 @@ func assertDocumentChunkQueryResult(
 	requireEqual(t, models.VisibilityScopeProject, results[0].VisibilityScope)
 }
 
+type documentChunkQueryAssertion struct {
+	actorUserID uuid.UUID
+	projectID   string
+	documentIDs []uuid.UUID
+}
+
 func assertDocumentChunkQuerySQLAndArgs(
 	t *testing.T,
 	db *fakeQueryer,
-	actorUserID uuid.UUID,
-	projectID string,
-	documentIDs []uuid.UUID,
+	assertion documentChunkQueryAssertion,
 ) {
 	t.Helper()
 	query := db.querySQL[0]
@@ -405,9 +428,9 @@ func assertDocumentChunkQuerySQLAndArgs(
 	}
 	expectedArgs := []any{
 		"[0.400000,0.600000]",
-		actorUserID,
-		projectID,
-		documentIDs,
+		assertion.actorUserID,
+		assertion.projectID,
+		assertion.documentIDs,
 		4,
 	}
 	if !reflect.DeepEqual(expectedArgs, db.queryArgs[0]) {
