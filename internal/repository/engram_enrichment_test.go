@@ -20,34 +20,7 @@ func TestEnrichEngramPayloadIfMissingDerivesMissingMetadata(t *testing.T) {
 	}
 
 	resolved, report := enrichEngramPayloadIfMissing(payload, "mcp.engram.create_from_conversation")
-
-	if strings.TrimSpace(resolved.Abstract) == "" {
-		t.Fatalf("expected derived abstract")
-	}
-	if len(resolved.Tags) == 0 {
-		t.Fatalf("expected derived tags")
-	}
-	if len(resolved.Keywords) == 0 {
-		t.Fatalf("expected derived keywords")
-	}
-	if report["enrichment_applied"] != true {
-		t.Fatalf("expected enrichment_applied=true")
-	}
-	if report["abstract_derived"] != true {
-		t.Fatalf("expected abstract_derived=true")
-	}
-	if report["tags_derived"] != true {
-		t.Fatalf("expected tags_derived=true")
-	}
-	if report["keywords_derived"] != true {
-		t.Fatalf("expected keywords_derived=true")
-	}
-	if _, ok := report["auto_tags"].([]string); !ok {
-		t.Fatalf("expected auto_tags []string report payload")
-	}
-	if _, ok := report["auto_keywords"].([]string); !ok {
-		t.Fatalf("expected auto_keywords []string report payload")
-	}
+	assertDerivedMetadata(t, resolved, report)
 }
 
 func TestEnrichEngramPayloadIfMissingPreservesExplicitMetadata(t *testing.T) {
@@ -62,32 +35,78 @@ func TestEnrichEngramPayloadIfMissingPreservesExplicitMetadata(t *testing.T) {
 	}
 
 	resolved, report := enrichEngramPayloadIfMissing(payload, "mcp.engram.create_from_conversation")
+	assertPreservedMetadata(t, resolved, report)
+}
 
+func assertDerivedMetadata(
+	t *testing.T,
+	resolved models.MemoryEngramCreate,
+	report map[string]any,
+) {
+	t.Helper()
+	if strings.TrimSpace(resolved.Abstract) == "" {
+		t.Fatalf("expected derived abstract")
+	}
+	if len(resolved.Tags) == 0 {
+		t.Fatalf("expected derived tags")
+	}
+	if len(resolved.Keywords) == 0 {
+		t.Fatalf("expected derived keywords")
+	}
+	assertEnrichmentFlags(t, report, true)
+	assertReportListType(t, report, "auto_tags")
+	assertReportListType(t, report, "auto_keywords")
+}
+
+func assertPreservedMetadata(
+	t *testing.T,
+	resolved models.MemoryEngramCreate,
+	report map[string]any,
+) {
+	t.Helper()
 	if resolved.Abstract != "Manual abstract" {
 		t.Fatalf("expected abstract to remain unchanged")
 	}
-	if len(resolved.Tags) != 1 || resolved.Tags[0] != "manual-tag" {
-		t.Fatalf("expected tags to remain unchanged")
+	assertSingleValueSlice(t, resolved.Tags, "manual-tag", "tags")
+	assertSingleValueSlice(t, resolved.Keywords, "manual-keyword", "keywords")
+	assertEnrichmentFlags(t, report, false)
+	assertEmptyReportList(t, report, "auto_tags")
+	assertEmptyReportList(t, report, "auto_keywords")
+}
+
+func assertEnrichmentFlags(t *testing.T, report map[string]any, expected bool) {
+	t.Helper()
+	assertReportBoolean(t, report, "enrichment_applied", expected)
+	assertReportBoolean(t, report, "abstract_derived", expected)
+	assertReportBoolean(t, report, "tags_derived", expected)
+	assertReportBoolean(t, report, "keywords_derived", expected)
+}
+
+func assertReportBoolean(t *testing.T, report map[string]any, key string, expected bool) {
+	t.Helper()
+	if report[key] != expected {
+		t.Fatalf("expected %s=%v", key, expected)
 	}
-	if len(resolved.Keywords) != 1 || resolved.Keywords[0] != "manual-keyword" {
-		t.Fatalf("expected keywords to remain unchanged")
+}
+
+func assertSingleValueSlice(t *testing.T, values []string, expected string, field string) {
+	t.Helper()
+	if len(values) != 1 || values[0] != expected {
+		t.Fatalf("expected %s to remain unchanged", field)
 	}
-	if report["enrichment_applied"] != false {
-		t.Fatalf("expected enrichment_applied=false")
+}
+
+func assertReportListType(t *testing.T, report map[string]any, key string) {
+	t.Helper()
+	if _, ok := report[key].([]string); !ok {
+		t.Fatalf("expected %s []string report payload", key)
 	}
-	if report["abstract_derived"] != false {
-		t.Fatalf("expected abstract_derived=false")
-	}
-	if report["tags_derived"] != false {
-		t.Fatalf("expected tags_derived=false")
-	}
-	if report["keywords_derived"] != false {
-		t.Fatalf("expected keywords_derived=false")
-	}
-	if autoTags, ok := report["auto_tags"].([]string); !ok || len(autoTags) != 0 {
-		t.Fatalf("expected empty auto_tags report payload")
-	}
-	if autoKeywords, ok := report["auto_keywords"].([]string); !ok || len(autoKeywords) != 0 {
-		t.Fatalf("expected empty auto_keywords report payload")
+}
+
+func assertEmptyReportList(t *testing.T, report map[string]any, key string) {
+	t.Helper()
+	values, ok := report[key].([]string)
+	if !ok || len(values) != 0 {
+		t.Fatalf("expected empty %s report payload", key)
 	}
 }
