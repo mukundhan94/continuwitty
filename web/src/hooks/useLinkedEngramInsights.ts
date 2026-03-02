@@ -31,6 +31,12 @@ interface SourceLoadResult {
   suggestions: EngramLinkSuggestion[]
 }
 
+interface LinkedInsightsStateSetters {
+  setLinks: (value: EngramLinkRecord[]) => void
+  setSuggestions: (value: EngramLinkSuggestion[]) => void
+  setError: (value: string | null) => void
+}
+
 function uniqueOrdered(values: string[]): string[] {
   const seen = new Set<string>()
   const ordered: string[] = []
@@ -57,11 +63,15 @@ function buildSourceEngramIds(
   return uniqueOrdered([...rootsFromTrace, ...usedEngramIds]).slice(0, MAX_SOURCE_ENGRAMS)
 }
 
-function recencyUnix(value: string | null | undefined): number {
-  if (!value) {
+interface RecencyUnixInput {
+  value: string | null | undefined
+}
+
+function recencyUnix(input: RecencyUnixInput): number {
+  if (!input.value) {
     return 0
   }
-  const parsed = Date.parse(value)
+  const parsed = Date.parse(input.value)
   if (!Number.isFinite(parsed)) {
     return 0
   }
@@ -71,14 +81,14 @@ function recencyUnix(value: string | null | undefined): number {
 function sortLinksByFreshnessAndWeight(records: EngramLinkRecord[]): EngramLinkRecord[] {
   return [...records].sort((left, right) => {
     const leftRecency = Math.max(
-      recencyUnix(left.last_reinforced_at),
-      recencyUnix(left.updated_at),
-      recencyUnix(left.created_at),
+      recencyUnix({ value: left.last_reinforced_at }),
+      recencyUnix({ value: left.updated_at }),
+      recencyUnix({ value: left.created_at }),
     )
     const rightRecency = Math.max(
-      recencyUnix(right.last_reinforced_at),
-      recencyUnix(right.updated_at),
-      recencyUnix(right.created_at),
+      recencyUnix({ value: right.last_reinforced_at }),
+      recencyUnix({ value: right.updated_at }),
+      recencyUnix({ value: right.created_at }),
     )
     if (leftRecency !== rightRecency) {
       return rightRecency - leftRecency
@@ -128,7 +138,7 @@ function mergeAndSelectSuggestions(
     if (left.score !== right.score) {
       return right.score - left.score
     }
-    return recencyUnix(right.target_created_at) - recencyUnix(left.target_created_at)
+    return recencyUnix({ value: right.target_created_at }) - recencyUnix({ value: left.target_created_at })
   })
   return ordered.slice(0, MAX_PANEL_SUGGESTIONS)
 }
@@ -150,8 +160,70 @@ async function loadInsightsForSource(sourceEngramId: string): Promise<SourceLoad
   return { links, suggestions }
 }
 
-function removePendingKey(current: string[], key: string): string[] {
-  return current.filter((item) => item !== key)
+interface RemovePendingKeyInput {
+  current: string[]
+  key: string
+}
+
+function removePendingKey(input: RemovePendingKeyInput): string[] {
+  return input.current.filter((item) => item !== input.key)
+}
+
+interface IdsFromSignatureInput {
+  signature: string
+}
+
+function idsFromSignature(input: IdsFromSignatureInput): string[] {
+  return input.signature ? input.signature.split('|') : []
+}
+
+function clearLinkedInsights(state: LinkedInsightsStateSetters): void {
+  state.setLinks([])
+  state.setSuggestions([])
+  state.setError(null)
+}
+
+async function loadMergedInsightsForSources(input: {
+  sourceIds: string[]
+  usedLinkIds: string[]
+}): Promise<SourceLoadResult> {
+  const loaded = await Promise.all(input.sourceIds.map(loadInsightsForSource))
+  return {
+    links: mergeAndSelectLinks(
+      loaded.flatMap((result) => result.links),
+      input.usedLinkIds,
+    ),
+    suggestions: mergeAndSelectSuggestions(
+      loaded.flatMap((result) => result.suggestions),
+    ),
+  }
+}
+
+interface SuggestionNoticeInput {
+  status: EngramLinkStatus
+  targetTitle: string
+}
+
+function noticeForSuggestionStatus(input: SuggestionNoticeInput): string {
+  return input.status === 'active'
+    ? `Accepted link suggestion to ${input.targetTitle}`
+    : `Rejected link suggestion to ${input.targetTitle}`
+}
+
+function buildSuggestionCreatePayload(
+  suggestion: EngramLinkSuggestion,
+  status: EngramLinkStatus,
+) {
+  return {
+    target_engram_id: suggestion.target_engram_id,
+    relation_type: suggestion.relation_type,
+    weight: suggestion.weight,
+    temporal_weight: suggestion.temporal_weight,
+    confidence: suggestion.confidence,
+    origin: 'suggested' as const,
+    status,
+    evidence_json: suggestion.evidence_json,
+  }
 }
 
 export function useLinkedEngramInsights(config: LinkedEngramInsightsConfig) {
@@ -160,16 +232,8 @@ export function useLinkedEngramInsights(config: LinkedEngramInsightsConfig) {
     usedEngramIds,
     usedEngramLinkIds,
     engramTracePaths,
-    setNotice,
-    setChatError,
     describeError,
   } = config
-
-  const [links, setLinks] = useState<EngramLinkRecord[]>([])
-  const [suggestions, setSuggestions] = useState<EngramLinkSuggestion[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [pendingSuggestionKeys, setPendingSuggestionKeys] = useState<string[]>([])
 
   const sourceEngramIdsSignature = useMemo(
     () => joinedSignature(buildSourceEngramIds(engramTracePaths, usedEngramIds)),
@@ -187,73 +251,122 @@ export function useLinkedEngramInsights(config: LinkedEngramInsightsConfig) {
     [usedEngramLinkIds],
   )
 
+  const {
+    links,
+    suggestions,
+    loading,
+    error,
+    refreshLinkInsights,
+  } = useLinkedEngramLoader({
+    selectedSessionId,
+    sourceEngramIdsSignature,
+    usedEngramLinkIdsSignature,
+    describeError,
+  })
+  const {
+    pendingSuggestionKeys,
+    handleAcceptSuggestion,
+    handleRejectSuggestion,
+  } = useLinkedEngramSuggestionActions({
+    describeError,
+    refreshLinkInsights,
+    setChatError: config.setChatError,
+    setNotice: config.setNotice,
+  })
+
+  return {
+    sourceEngramIds,
+    links,
+    suggestions,
+    loading,
+    error,
+    pendingSuggestionKeys,
+    refreshLinkInsights,
+    handleAcceptSuggestion,
+    handleRejectSuggestion,
+  }
+}
+
+interface LinkedEngramLoaderConfig {
+  selectedSessionId: string | null
+  sourceEngramIdsSignature: string
+  usedEngramLinkIdsSignature: string
+  describeError: (error: unknown) => string
+}
+
+function useLinkedEngramLoader(config: LinkedEngramLoaderConfig) {
+  const [links, setLinks] = useState<EngramLinkRecord[]>([])
+  const [suggestions, setSuggestions] = useState<EngramLinkSuggestion[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
   const refreshLinkInsights = useCallback(async () => {
-    const sourceIds = sourceEngramIdsSignature
-      ? sourceEngramIdsSignature.split('|')
-      : []
-    if (!selectedSessionId || sourceIds.length === 0) {
-      setLinks([])
-      setSuggestions([])
-      setError(null)
+    const sourceIds = idsFromSignature({ signature: config.sourceEngramIdsSignature })
+    if (!config.selectedSessionId || sourceIds.length === 0) {
+      clearLinkedInsights({
+        setLinks,
+        setSuggestions,
+        setError,
+      })
       return
     }
     setLoading(true)
     try {
-      const loaded = await Promise.all(sourceIds.map(loadInsightsForSource))
-      const mergedLinks = mergeAndSelectLinks(
-        loaded.flatMap((result) => result.links),
-        usedEngramLinkIdsSignature ? usedEngramLinkIdsSignature.split('|') : [],
-      )
-      const mergedSuggestions = mergeAndSelectSuggestions(
-        loaded.flatMap((result) => result.suggestions),
-      )
-      setLinks(mergedLinks)
-      setSuggestions(mergedSuggestions)
+      const merged = await loadMergedInsightsForSources({
+        sourceIds,
+        usedLinkIds: idsFromSignature({ signature: config.usedEngramLinkIdsSignature }),
+      })
+      setLinks(merged.links)
+      setSuggestions(merged.suggestions)
       setError(null)
     } catch (nextError) {
-      setError(describeError(nextError))
+      setError(config.describeError(nextError))
     } finally {
       setLoading(false)
     }
-  }, [
-    describeError,
-    selectedSessionId,
-    sourceEngramIdsSignature,
-    usedEngramLinkIdsSignature,
-  ])
+  }, [config.describeError, config.selectedSessionId, config.sourceEngramIdsSignature, config.usedEngramLinkIdsSignature])
 
   useEffect(() => {
     void refreshLinkInsights()
   }, [refreshLinkInsights])
+
+  return {
+    links,
+    suggestions,
+    loading,
+    error,
+    refreshLinkInsights,
+  }
+}
+
+interface LinkedEngramSuggestionActionsConfig {
+  describeError: (error: unknown) => string
+  refreshLinkInsights: () => Promise<void>
+  setChatError: (value: string | null) => void
+  setNotice: (value: string | null) => void
+}
+
+function useLinkedEngramSuggestionActions(config: LinkedEngramSuggestionActionsConfig) {
+  const [pendingSuggestionKeys, setPendingSuggestionKeys] = useState<string[]>([])
 
   const runSuggestionMutation = useCallback(
     async (suggestion: EngramLinkSuggestion, status: EngramLinkStatus) => {
       const key = suggestionKey(suggestion)
       setPendingSuggestionKeys((current) => [...current, key])
       try {
-        await createEngramLink(suggestion.source_engram_id, {
-          target_engram_id: suggestion.target_engram_id,
-          relation_type: suggestion.relation_type,
-          weight: suggestion.weight,
-          temporal_weight: suggestion.temporal_weight,
-          confidence: suggestion.confidence,
-          origin: 'suggested',
-          status,
-          evidence_json: suggestion.evidence_json,
-        })
-        setNotice(
-          status === 'active'
-            ? `Accepted link suggestion to ${suggestion.target_title}`
-            : `Rejected link suggestion to ${suggestion.target_title}`,
+        await createEngramLink(
+          suggestion.source_engram_id,
+          buildSuggestionCreatePayload(suggestion, status),
         )
-        await refreshLinkInsights()
+        config.setNotice(noticeForSuggestionStatus({ status, targetTitle: suggestion.target_title }))
+        await config.refreshLinkInsights()
       } catch (nextError) {
-        setChatError(describeError(nextError))
+        config.setChatError(config.describeError(nextError))
       } finally {
-        setPendingSuggestionKeys((current) => removePendingKey(current, key))
+        setPendingSuggestionKeys((current) => removePendingKey({ current, key }))
       }
     },
-    [describeError, refreshLinkInsights, setChatError, setNotice],
+    [config],
   )
 
   const handleAcceptSuggestion = useCallback(
@@ -271,13 +384,7 @@ export function useLinkedEngramInsights(config: LinkedEngramInsightsConfig) {
   )
 
   return {
-    sourceEngramIds,
-    links,
-    suggestions,
-    loading,
-    error,
     pendingSuggestionKeys,
-    refreshLinkInsights,
     handleAcceptSuggestion,
     handleRejectSuggestion,
   }
