@@ -38,6 +38,29 @@ type LinkSuggestionInput struct {
 	IncludeArchived bool
 }
 
+type suggestionBounds struct {
+	limit         int
+	maxCandidates int
+}
+
+type relationSignal struct {
+	semantic   float64
+	shared     float64
+	continuity float64
+}
+
+type suggestionReasonsInput struct {
+	signal        relationSignal
+	sharedSources []string
+}
+
+type suggestionSourceContext struct {
+	bundle          *models.RehydrationBundle
+	projectID       string
+	sourceSources   []models.EngramSourceRecord
+	existingTargets map[uuid.UUID]struct{}
+}
+
 // LinkSuggestionService ranks candidate source->target edges for user confirmation.
 type LinkSuggestionService struct {
 	getRehydrationBundle func(
@@ -131,16 +154,87 @@ func (service *LinkSuggestionService) SuggestLinks(
 	if service == nil {
 		return []models.EngramLinkSuggestion{}, nil
 	}
-	limit := normalizeSuggestionLimit(input.Limit)
-	maxCandidates := normalizeSuggestionMaxCandidates(input.MaxCandidates, limit)
+	bounds := resolveSuggestionBounds(input)
+	sourceContext, err := service.loadSuggestionSourceContext(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	if sourceContext == nil {
+		return []models.EngramLinkSuggestion{}, nil
+	}
 
+	queryText := buildSuggestionQueryText(sourceContext.bundle)
+	results, err := service.queryEngrams(
+		ctx,
+		models.EngramQueryRequest{
+			Query:     queryText,
+			TopK:      bounds.maxCandidates,
+			ProjectID: &sourceContext.projectID,
+			Tags:      []string{},
+			Keywords:  []string{},
+		},
+		input.ActorUserID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	suggestions, err := service.rankSuggestions(
+		ctx,
+		rankSuggestionsInput{
+			sourceEngramID:  input.SourceEngramID,
+			sourceBundle:    sourceContext.bundle,
+			sourceSources:   sourceContext.sourceSources,
+			results:         results,
+			actorUserID:     input.ActorUserID,
+			existingTargets: sourceContext.existingTargets,
+			minimumScore:    input.MinimumScore,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(suggestions) > bounds.limit {
+		return suggestions[:bounds.limit], nil
+	}
+	return suggestions, nil
+}
+
+func resolveSuggestionBounds(input LinkSuggestionInput) suggestionBounds {
+	limit := input.Limit
+	if limit <= 0 {
+		limit = defaultSuggestionLimit
+	}
+	if limit > maxSuggestionCandidates {
+		limit = maxSuggestionCandidates
+	}
+	maxCandidates := input.MaxCandidates
+	if maxCandidates <= 0 {
+		maxCandidates = defaultSuggestionMaxCandidates
+	}
+	if maxCandidates < limit {
+		maxCandidates = limit
+	}
+	if maxCandidates > maxSuggestionCandidates {
+		maxCandidates = maxSuggestionCandidates
+	}
+	return suggestionBounds{limit: limit, maxCandidates: maxCandidates}
+}
+
+func (service *LinkSuggestionService) loadSuggestionSourceContext(
+	ctx context.Context,
+	input LinkSuggestionInput,
+) (*suggestionSourceContext, error) {
 	sourceBundle, err := service.getRehydrationBundle(ctx, input.SourceEngramID, input.ActorUserID)
-	if err != nil || sourceBundle == nil {
-		return []models.EngramLinkSuggestion{}, err
+	if err != nil {
+		return nil, err
+	}
+	if sourceBundle == nil {
+		return nil, nil
 	}
 	projectID := strings.TrimSpace(sourceBundle.ProjectID)
 	if projectID == "" {
-		return []models.EngramLinkSuggestion{}, nil
+		return nil, nil
 	}
 	sourceSources, err := service.getEngramSources(
 		ctx,
@@ -160,42 +254,12 @@ func (service *LinkSuggestionService) SuggestLinks(
 	if err != nil {
 		return nil, err
 	}
-
-	queryText := buildSuggestionQueryText(sourceBundle)
-	results, err := service.queryEngrams(
-		ctx,
-		models.EngramQueryRequest{
-			Query:     queryText,
-			TopK:      maxCandidates,
-			ProjectID: &projectID,
-			Tags:      []string{},
-			Keywords:  []string{},
-		},
-		input.ActorUserID,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	suggestions, err := service.rankSuggestions(
-		ctx,
-		rankSuggestionsInput{
-			sourceEngramID:  input.SourceEngramID,
-			sourceBundle:    sourceBundle,
-			sourceSources:   sourceSources,
-			results:         results,
-			actorUserID:     input.ActorUserID,
-			existingTargets: existingTargets,
-			minimumScore:    input.MinimumScore,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	if len(suggestions) > limit {
-		return suggestions[:limit], nil
-	}
-	return suggestions, nil
+	return &suggestionSourceContext{
+		bundle:          sourceBundle,
+		projectID:       projectID,
+		sourceSources:   sourceSources,
+		existingTargets: existingTargets,
+	}, nil
 }
 
 type rankSuggestionsInput struct {
@@ -294,29 +358,6 @@ func validateLinkSuggestionInput(input LinkSuggestionInput) error {
 	return nil
 }
 
-func normalizeSuggestionLimit(value int) int {
-	if value <= 0 {
-		return defaultSuggestionLimit
-	}
-	if value > maxSuggestionCandidates {
-		return maxSuggestionCandidates
-	}
-	return value
-}
-
-func normalizeSuggestionMaxCandidates(value int, limit int) int {
-	if value <= 0 {
-		value = defaultSuggestionMaxCandidates
-	}
-	if value < limit {
-		value = limit
-	}
-	if value > maxSuggestionCandidates {
-		return maxSuggestionCandidates
-	}
-	return value
-}
-
 func buildSuggestionQueryText(bundle *models.RehydrationBundle) string {
 	parts := []string{
 		strings.TrimSpace(bundle.Title),
@@ -362,11 +403,21 @@ func buildLinkSuggestion(input buildLinkSuggestionInput) models.EngramLinkSugges
 	sharedScore, sharedSources := sharedSourceScore(input.sourceSources, input.candidateSources)
 	continuity := lexicalContinuityScore(input.sourceText, buildCandidateText(input.candidate))
 	temporal := temporalRecencyScore(input.now, input.candidate.CreatedAt)
+	signal := relationSignal{
+		semantic:   semantic,
+		shared:     sharedScore,
+		continuity: continuity,
+	}
 	score := clampScore((semantic * 0.5) + (sharedScore * 0.25) + (continuity * 0.15) + (temporal * 0.1))
 	weight := clampScore((semantic * 0.45) + (sharedScore * 0.2) + (continuity * 0.25) + (temporal * 0.1))
 	confidence := clampScore((semantic * 0.4) + (sharedScore * 0.3) + (continuity * 0.2) + (temporal * 0.1))
-	relationType := suggestRelationType(sharedScore, semantic, continuity)
-	reasons := buildSuggestionReasons(semantic, sharedSources, continuity)
+	relationType := suggestRelationType(signal)
+	reasons := buildSuggestionReasons(
+		suggestionReasonsInput{
+			signal:        signal,
+			sharedSources: sharedSources,
+		},
+	)
 	return models.EngramLinkSuggestion{
 		SourceEngramID:  input.sourceEngramID,
 		TargetEngramID:  input.candidate.EngramID,
@@ -482,35 +533,27 @@ func temporalRecencyScore(now time.Time, createdAt time.Time) float64 {
 	return clampScore(1 / (1 + (ageDays / 90)))
 }
 
-func suggestRelationType(
-	sharedScore float64,
-	semantic float64,
-	continuity float64,
-) models.EngramLinkRelationType {
+func suggestRelationType(signal relationSignal) models.EngramLinkRelationType {
 	switch {
-	case sharedScore >= 0.66:
+	case signal.shared >= 0.66:
 		return models.EngramLinkRelationDerivedFrom
-	case semantic >= 0.75 && continuity >= 0.35:
+	case signal.semantic >= 0.75 && signal.continuity >= 0.35:
 		return models.EngramLinkRelationSupports
 	default:
 		return models.EngramLinkRelationRelatedTo
 	}
 }
 
-func buildSuggestionReasons(
-	semantic float64,
-	sharedSources []string,
-	continuity float64,
-) []string {
+func buildSuggestionReasons(input suggestionReasonsInput) []string {
 	reasons := make([]string, 0, 3)
-	if semantic >= 0.5 {
-		reasons = append(reasons, fmt.Sprintf("semantic_overlap=%.2f", semantic))
+	if input.signal.semantic >= 0.5 {
+		reasons = append(reasons, fmt.Sprintf("semantic_overlap=%.2f", input.signal.semantic))
 	}
-	if len(sharedSources) > 0 {
-		reasons = append(reasons, fmt.Sprintf("shared_sources=%d", len(sharedSources)))
+	if len(input.sharedSources) > 0 {
+		reasons = append(reasons, fmt.Sprintf("shared_sources=%d", len(input.sharedSources)))
 	}
-	if continuity >= 0.2 {
-		reasons = append(reasons, fmt.Sprintf("continuity_overlap=%.2f", continuity))
+	if input.signal.continuity >= 0.2 {
+		reasons = append(reasons, fmt.Sprintf("continuity_overlap=%.2f", input.signal.continuity))
 	}
 	if len(reasons) == 0 {
 		return []string{"low_signal_candidate"}
