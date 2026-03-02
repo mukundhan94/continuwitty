@@ -137,7 +137,7 @@ func newHybridLinkSuggestionService(
 		queryEngrams:         buildHybridQueryEngramsLookup(t, fixture),
 		getEngramSources:     buildHybridSourceLookup(t, fixture),
 		listEngramLinks:      buildHybridLinkListLookup(t, fixture),
-		now: func() time.Time { return fixture.now },
+		now:                  func() time.Time { return fixture.now },
 	}
 }
 

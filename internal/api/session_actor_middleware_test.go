@@ -149,9 +149,9 @@ func assertLookupRan(t *testing.T, lookupCalled bool) {
 }
 
 type sessionActorMiddlewareCase struct {
-	sessionUserID     uuid.UUID
-	lookupFn          func(context.Context, uuid.UUID) (*models.UserAuthRecord, error)
-	assertRequestFn   func(*testing.T, *http.Request)
+	sessionUserID      uuid.UUID
+	lookupFn           func(context.Context, uuid.UUID) (*models.UserAuthRecord, error)
+	assertRequestFn    func(*testing.T, *http.Request)
 	expectLookupCalled bool
 }
 

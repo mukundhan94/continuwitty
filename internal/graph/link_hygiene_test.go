@@ -19,7 +19,7 @@ func TestLinkHygieneServiceRecommendDetectsDuplicateConflictAndStale(t *testing.
 	targetConflict := uuid.MustParse("00000000-0000-0000-0000-00000000a004")
 	targetStale := uuid.MustParse("00000000-0000-0000-0000-00000000a005")
 	links := buildHygieneLinksFixture(hygieneLinkFixtureInput{
-		sourceEngramID: sourceEngramID,
+		sourceEngramID:  sourceEngramID,
 		targetDuplicate: targetDuplicate,
 		targetConflict:  targetConflict,
 		targetStale:     targetStale,

@@ -21,8 +21,8 @@ func TestCompatibilityServiceEngramListParity(t *testing.T) {
 	service := newFakeEngramListService(projectID)
 
 	runEngramListParityCase(t, service, engramListParityCase{
-		name:           "direct",
-		request:        directToolRequest(actorUserID.String(), "engram.list", params),
+		name:            "direct",
+		request:         directToolRequest(actorUserID.String(), "engram.list", params),
 		asToolsCallPath: false,
 		expectedCall: EngramListRequest{
 			ActorUserID:    actorUserID,
@@ -36,8 +36,8 @@ func TestCompatibilityServiceEngramListParity(t *testing.T) {
 		},
 	})
 	runEngramListParityCase(t, service, engramListParityCase{
-		name:           "tools call",
-		request:        toolsCallRequest(actorUserID.String(), "engram_list", params),
+		name:            "tools call",
+		request:         toolsCallRequest(actorUserID.String(), "engram_list", params),
 		asToolsCallPath: true,
 		expectedCall: EngramListRequest{
 			ActorUserID:    actorUserID,

@@ -1163,9 +1163,9 @@ func (service *CompatibilityService) dispatchToolsCall(input toolsCallInput) Fra
 		authorizedToolDispatchInput{
 			ctx:              input.ctx,
 			requestID:        input.requestID,
-				policyToolName:   dottedName.String(),
-				responseToolName: name,
-				canonicalMethod:  canonicalToolName(dottedName).String(),
+			policyToolName:   dottedName.String(),
+			responseToolName: name,
+			canonicalMethod:  canonicalToolName(dottedName).String(),
 			actor:            input.actor,
 			params:           arguments,
 			tokenAuth:        input.tokenAuth,
@@ -1192,8 +1192,8 @@ func (service *CompatibilityService) dispatchDirectToolMethod(input directToolCa
 		authorizedToolDispatchInput{
 			ctx:             input.ctx,
 			requestID:       input.requestID,
-				policyToolName:  dottedMethod.String(),
-				canonicalMethod: canonicalToolName(dottedMethod).String(),
+			policyToolName:  dottedMethod.String(),
+			canonicalMethod: canonicalToolName(dottedMethod).String(),
 			actor:           input.actor,
 			params:          input.params,
 			tokenAuth:       input.tokenAuth,
