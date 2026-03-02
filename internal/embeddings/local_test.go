@@ -3,26 +3,12 @@ package embeddings
 import "testing"
 
 func TestEmbedTextLocalIsDeterministicAndFixedDim(t *testing.T) {
-	first, err := EmbedTextLocal("hello world", 16)
-	if err != nil {
-		t.Fatalf("expected first embedding to succeed: %v", err)
-	}
-	second, err := EmbedTextLocal("hello world", 16)
-	if err != nil {
-		t.Fatalf("expected second embedding to succeed: %v", err)
-	}
-
-	if len(first) != 16 || len(second) != 16 {
-		t.Fatalf("expected fixed embedding dimension 16")
-	}
-	for index, value := range first {
-		if value < -1.0 || value > 1.0 {
-			t.Fatalf("expected value at index %d to be within [-1,1], got %v", index, value)
-		}
-		if value != second[index] {
-			t.Fatalf("expected deterministic output at index %d", index)
-		}
-	}
+	first := mustEmbedLocal(t, "hello world", 16, "first")
+	second := mustEmbedLocal(t, "hello world", 16, "second")
+	assertVectorDimension(t, first, 16)
+	assertVectorDimension(t, second, 16)
+	assertVectorValuesInRange(t, first)
+	assertVectorsMatch(t, first, second)
 }
 
 func TestEmbedTextLocalHandlesEmptyText(t *testing.T) {
@@ -39,5 +25,39 @@ func TestEmbedTextLocalRejectsInvalidDim(t *testing.T) {
 	_, err := EmbedTextLocal("abc", 0)
 	if err == nil {
 		t.Fatalf("expected invalid dim to fail")
+	}
+}
+
+func mustEmbedLocal(t *testing.T, text string, dim int, label string) []float64 {
+	t.Helper()
+	vector, err := EmbedTextLocal(text, dim)
+	if err != nil {
+		t.Fatalf("expected %s embedding to succeed: %v", label, err)
+	}
+	return vector
+}
+
+func assertVectorDimension(t *testing.T, vector []float64, expected int) {
+	t.Helper()
+	if len(vector) != expected {
+		t.Fatalf("expected dimension %d, got %d", expected, len(vector))
+	}
+}
+
+func assertVectorValuesInRange(t *testing.T, vector []float64) {
+	t.Helper()
+	for index, value := range vector {
+		if value < -1.0 || value > 1.0 {
+			t.Fatalf("expected value at index %d to be within [-1,1], got %v", index, value)
+		}
+	}
+}
+
+func assertVectorsMatch(t *testing.T, expected []float64, actual []float64) {
+	t.Helper()
+	for index, value := range expected {
+		if value != actual[index] {
+			t.Fatalf("expected deterministic output at index %d", index)
+		}
 	}
 }
