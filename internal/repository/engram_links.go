@@ -121,6 +121,27 @@ type EngramLinkTraverseInput struct {
 	IncludeArchived bool
 }
 
+type traversalQueryInput struct {
+	SourceEngramIDs []uuid.UUID
+	ActorUserID     uuid.UUID
+	IncludeArchived bool
+	Limit           int
+}
+
+type visibleEngramLinkSelectSpec struct {
+	ActorPlaceholder           string
+	IncludeArchivedPlaceholder string
+	WhereClauses               []string
+	IncludeOrdering            bool
+	LimitClause                string
+}
+
+type traversalState struct {
+	visitedEngrams map[uuid.UUID]struct{}
+	seenLinks      map[uuid.UUID]struct{}
+	steps          []models.EngramLinkTraversalStep
+}
+
 // CreateEngramLink persists a directed link when source/target visibility and write access are satisfied.
 // Cross-project links are allowed when the actor can read both nodes and write in the source project.
 func CreateEngramLink(
@@ -299,45 +320,25 @@ func TraverseEngramLinks(
 ) ([]models.EngramLinkTraversalStep, error) {
 	maxDepth := normalizeMaxDepth(input.MaxDepth)
 	maxNeighbors := normalizeLimit(input.MaxNeighbors, 30)
-	visitedEngrams := map[uuid.UUID]struct{}{input.RootEngramID: {}}
-	seenLinks := make(map[uuid.UUID]struct{})
+	state := newTraversalState(input.RootEngramID)
 	frontier := []uuid.UUID{input.RootEngramID}
-	steps := make([]models.EngramLinkTraversalStep, 0)
-
 	for depth := 1; depth <= maxDepth && len(frontier) > 0; depth++ {
 		neighbors, err := listTraversalNeighbors(
 			ctx,
 			db,
-			frontier,
-			input.ActorUserID,
-			input.IncludeArchived,
-			maxNeighbors,
+			traversalQueryInput{
+				SourceEngramIDs: frontier,
+				ActorUserID:     input.ActorUserID,
+				IncludeArchived: input.IncludeArchived,
+				Limit:           maxNeighbors,
+			},
 		)
 		if err != nil {
 			return nil, err
 		}
-		nextFrontier := make([]uuid.UUID, 0)
-		for _, link := range neighbors {
-			if _, exists := seenLinks[link.LinkID]; exists {
-				continue
-			}
-			seenLinks[link.LinkID] = struct{}{}
-			steps = append(
-				steps,
-				models.EngramLinkTraversalStep{
-					Depth: depth,
-					Link:  link,
-				},
-			)
-			if _, exists := visitedEngrams[link.TargetEngramID]; exists {
-				continue
-			}
-			visitedEngrams[link.TargetEngramID] = struct{}{}
-			nextFrontier = append(nextFrontier, link.TargetEngramID)
-		}
-		frontier = nextFrontier
+		frontier = state.collectNextFrontier(depth, neighbors)
 	}
-	return steps, nil
+	return state.steps, nil
 }
 
 func buildCreateEngramLinkSQL() string {
@@ -421,26 +422,24 @@ func buildCreateEngramLinkSQL() string {
 }
 
 func buildGetEngramLinkSQL() string {
-	return buildVisibleEngramLinkSelectSQL(
-		"$2",
-		"$3",
-		[]string{"link.link_id = $1"},
-		false,
-		"",
-	)
+	return buildVisibleEngramLinkSelectSQL(visibleEngramLinkSelectSpec{
+		ActorPlaceholder:           "$2",
+		IncludeArchivedPlaceholder: "$3",
+		WhereClauses:               []string{"link.link_id = $1"},
+	})
 }
 
 func buildListEngramLinksSQL() string {
-	return buildVisibleEngramLinkSelectSQL(
-		"$2",
-		"$4",
-		[]string{
+	return buildVisibleEngramLinkSelectSQL(visibleEngramLinkSelectSpec{
+		ActorPlaceholder:           "$2",
+		IncludeArchivedPlaceholder: "$4",
+		WhereClauses: []string{
 			"link.source_engram_id = $1",
 			"($3::text IS NULL OR link.relation_type = $3)",
 		},
-		true,
-		"LIMIT $5 OFFSET $6",
-	)
+		IncludeOrdering: true,
+		LimitClause:     "LIMIT $5 OFFSET $6",
+	})
 }
 
 func buildUpdateEngramLinkSQL() string {
@@ -497,21 +496,18 @@ func buildArchiveEngramLinkSQL() string {
 func listTraversalNeighbors(
 	ctx context.Context,
 	db Queryer,
-	sourceEngramIDs []uuid.UUID,
-	actorUserID uuid.UUID,
-	includeArchived bool,
-	limit int,
+	input traversalQueryInput,
 ) ([]models.EngramLinkRecord, error) {
-	if len(sourceEngramIDs) == 0 {
+	if len(input.SourceEngramIDs) == 0 {
 		return []models.EngramLinkRecord{}, nil
 	}
 	rows, err := db.Query(
 		ctx,
 		buildTraversalNeighborSQL(),
-		sourceEngramIDs,
-		actorUserID,
-		includeArchived,
-		limit,
+		input.SourceEngramIDs,
+		input.ActorUserID,
+		input.IncludeArchived,
+		input.Limit,
 	)
 	if err != nil {
 		return nil, err
@@ -532,35 +528,75 @@ func listTraversalNeighbors(
 	return records, nil
 }
 
+func newTraversalState(rootEngramID uuid.UUID) traversalState {
+	return traversalState{
+		visitedEngrams: map[uuid.UUID]struct{}{rootEngramID: {}},
+		seenLinks:      make(map[uuid.UUID]struct{}),
+		steps:          make([]models.EngramLinkTraversalStep, 0),
+	}
+}
+
+func (state *traversalState) collectNextFrontier(
+	depth int,
+	neighbors []models.EngramLinkRecord,
+) []uuid.UUID {
+	nextFrontier := make([]uuid.UUID, 0)
+	for _, link := range neighbors {
+		if state.hasSeenLink(link.LinkID) {
+			continue
+		}
+		state.seenLinks[link.LinkID] = struct{}{}
+		state.steps = append(
+			state.steps,
+			models.EngramLinkTraversalStep{
+				Depth: depth,
+				Link:  link,
+			},
+		)
+		if state.hasVisitedEngram(link.TargetEngramID) {
+			continue
+		}
+		state.visitedEngrams[link.TargetEngramID] = struct{}{}
+		nextFrontier = append(nextFrontier, link.TargetEngramID)
+	}
+	return nextFrontier
+}
+
+func (state traversalState) hasSeenLink(linkID uuid.UUID) bool {
+	_, exists := state.seenLinks[linkID]
+	return exists
+}
+
+func (state traversalState) hasVisitedEngram(engramID uuid.UUID) bool {
+	_, exists := state.visitedEngrams[engramID]
+	return exists
+}
+
 func buildTraversalNeighborSQL() string {
-	return buildVisibleEngramLinkSelectSQL(
-		"$2",
-		"$3",
-		[]string{"link.source_engram_id = ANY($1)"},
-		true,
-		"LIMIT $4",
-	)
+	return buildVisibleEngramLinkSelectSQL(visibleEngramLinkSelectSpec{
+		ActorPlaceholder:           "$2",
+		IncludeArchivedPlaceholder: "$3",
+		WhereClauses:               []string{"link.source_engram_id = ANY($1)"},
+		IncludeOrdering:            true,
+		LimitClause:                "LIMIT $4",
+	})
 }
 
 func buildVisibleEngramLinkSelectSQL(
-	actorPlaceholder string,
-	includeArchivedPlaceholder string,
-	whereClauses []string,
-	includeOrdering bool,
-	limitClause string,
+	spec visibleEngramLinkSelectSpec,
 ) string {
 	sourceAccess := buildMembershipReadClause(
 		"source_engram.owner_user_id",
 		"source_engram.visibility_scope",
 		"source_engram.project_id",
-		actorPlaceholder,
+		spec.ActorPlaceholder,
 		true,
 	)
 	targetAccess := buildMembershipReadClause(
 		"target_engram.owner_user_id",
 		"target_engram.visibility_scope",
 		"target_engram.project_id",
-		actorPlaceholder,
+		spec.ActorPlaceholder,
 		true,
 	)
 	filters := append([]string{
@@ -568,19 +604,19 @@ func buildVisibleEngramLinkSelectSQL(
 		"target_engram.deleted_at IS NULL",
 		sourceAccess,
 		targetAccess,
-		fmt.Sprintf("(%s::boolean OR link.status <> 'archived')", includeArchivedPlaceholder),
-	}, whereClauses...)
+		fmt.Sprintf("(%s::boolean OR link.status <> 'archived')", spec.IncludeArchivedPlaceholder),
+	}, spec.WhereClauses...)
 	orderClause := ""
-	if includeOrdering {
+	if spec.IncludeOrdering {
 		orderClause = `
-		ORDER BY
-			link.weight DESC,
-			link.confidence DESC,
-			link.temporal_weight DESC,
-			link.last_reinforced_at DESC NULLS LAST,
-			link.created_at DESC`
+			ORDER BY
+				link.weight DESC,
+				link.confidence DESC,
+				link.temporal_weight DESC,
+				link.last_reinforced_at DESC NULLS LAST,
+				link.created_at DESC`
 	}
-	limitFragment := strings.TrimSpace(limitClause)
+	limitFragment := strings.TrimSpace(spec.LimitClause)
 	if limitFragment != "" {
 		limitFragment = "\n\t\t" + limitFragment
 	}
@@ -689,18 +725,38 @@ func unmarshalMapJSON(encoded []byte) (map[string]any, error) {
 }
 
 func validateCreateEngramLinkInput(input EngramLinkCreateInput) error {
-	if input.SourceEngramID == uuid.Nil {
-		return errors.New("source_engram_id is required")
+	validators := []func(EngramLinkCreateInput) error{
+		validateCreateEngramLinkRequiredFields,
+		validateCreateEngramLinkEnums,
+		validateCreateEngramLinkScores,
 	}
-	if input.TargetEngramID == uuid.Nil {
-		return errors.New("target_engram_id is required")
+	for _, validator := range validators {
+		if err := validator(input); err != nil {
+			return err
+		}
 	}
-	if input.CreatedByUserID == uuid.Nil {
-		return errors.New("created_by_user_id is required")
+	return nil
+}
+
+func validateCreateEngramLinkRequiredFields(input EngramLinkCreateInput) error {
+	requiredUUIDs := []struct {
+		name  string
+		value uuid.UUID
+	}{
+		{name: "source_engram_id", value: input.SourceEngramID},
+		{name: "target_engram_id", value: input.TargetEngramID},
+		{name: "created_by_user_id", value: input.CreatedByUserID},
+		{name: "actor_user_id", value: input.ActorUserID},
 	}
-	if input.ActorUserID == uuid.Nil {
-		return errors.New("actor_user_id is required")
+	for _, required := range requiredUUIDs {
+		if required.value == uuid.Nil {
+			return fmt.Errorf("%s is required", required.name)
+		}
 	}
+	return nil
+}
+
+func validateCreateEngramLinkEnums(input EngramLinkCreateInput) error {
 	if _, err := models.ParseEngramLinkRelationType(string(input.RelationType)); err != nil {
 		return err
 	}
@@ -710,14 +766,22 @@ func validateCreateEngramLinkInput(input EngramLinkCreateInput) error {
 	if _, err := models.ParseEngramLinkStatus(string(input.Status)); err != nil {
 		return err
 	}
-	if err := validateNormalizedScore("weight", input.Weight); err != nil {
-		return err
+	return nil
+}
+
+func validateCreateEngramLinkScores(input EngramLinkCreateInput) error {
+	scoreFields := []struct {
+		name  string
+		value float64
+	}{
+		{name: "weight", value: input.Weight},
+		{name: "temporal_weight", value: input.TemporalWeight},
+		{name: "confidence", value: input.Confidence},
 	}
-	if err := validateNormalizedScore("temporal_weight", input.TemporalWeight); err != nil {
-		return err
-	}
-	if err := validateNormalizedScore("confidence", input.Confidence); err != nil {
-		return err
+	for _, score := range scoreFields {
+		if err := validateNormalizedScore(score.name, score.value); err != nil {
+			return err
+		}
 	}
 	return nil
 }

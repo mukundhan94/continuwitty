@@ -45,6 +45,20 @@ type DocumentIngestFileRequest struct {
 	Metadata          map[string]any
 }
 
+func (request DocumentIngestTextRequest) chunkShape() chunkShape {
+	return chunkShape{
+		sizeChars:    request.ChunkSizeChars,
+		overlapChars: request.ChunkOverlapChars,
+	}
+}
+
+func (request DocumentIngestFileRequest) chunkShape() chunkShape {
+	return chunkShape{
+		sizeChars:    request.ChunkSizeChars,
+		overlapChars: request.ChunkOverlapChars,
+	}
+}
+
 // BlendedRetrievalQueryRequest captures blended retrieval query values.
 type BlendedRetrievalQueryRequest struct {
 	Query              string
@@ -80,6 +94,22 @@ type chunkBuildRequest struct {
 	chunkSizeChars    int
 	chunkOverlapChars int
 	emptyChunksDetail string
+}
+
+type chunkShape struct {
+	sizeChars    int
+	overlapChars int
+}
+
+type fileTitleInput struct {
+	requestedTitle *string
+	filename       string
+}
+
+type fileMetadataDetails struct {
+	filename string
+	mimeType *string
+	byteSize int
 }
 
 type serviceDeps struct {
@@ -137,7 +167,7 @@ func (service *Service) IngestText(
 	actorUserID uuid.UUID,
 	payload DocumentIngestTextRequest,
 ) (DocumentIngestResponse, error) {
-	if err := validateChunkShape(payload.ChunkSizeChars, payload.ChunkOverlapChars); err != nil {
+	if err := validateChunkShape(payload.chunkShape()); err != nil {
 		return DocumentIngestResponse{}, err
 	}
 	normalizedText := NormalizeDocumentText(payload.Text)
@@ -198,14 +228,17 @@ func (service *Service) IngestFile(
 	payload DocumentIngestFileRequest,
 	fileRequest FileIngestRequest,
 ) (DocumentIngestResponse, error) {
-	if err := validateChunkShape(payload.ChunkSizeChars, payload.ChunkOverlapChars); err != nil {
+	if err := validateChunkShape(payload.chunkShape()); err != nil {
 		return DocumentIngestResponse{}, err
 	}
 	normalizedText, err := service.validateFileInput(fileRequest)
 	if err != nil {
 		return DocumentIngestResponse{}, err
 	}
-	resolvedTitle := resolveFileTitle(payload.Title, fileRequest.Filename)
+	resolvedTitle := resolveFileTitle(fileTitleInput{
+		requestedTitle: payload.Title,
+		filename:       fileRequest.Filename,
+	})
 	contentHash, documentID, chunks, err := service.buildChunksForDocument(
 		ctx,
 		chunkBuildRequest{
@@ -238,12 +271,11 @@ func (service *Service) IngestFile(
 				VisibilityScope: normalizeVisibilityScope(payload.VisibilityScope),
 				ContentText:     normalizedText,
 				ContentHash:     contentHash,
-				Metadata: mergeFileMetadata(
-					payload.Metadata,
-					fileRequest.Filename,
-					fileRequest.MimeType,
-					len(fileRequest.ContentBytes),
-				),
+				Metadata: mergeFileMetadata(payload.Metadata, fileMetadataDetails{
+					filename: fileRequest.Filename,
+					mimeType: fileRequest.MimeType,
+					byteSize: len(fileRequest.ContentBytes),
+				}),
 				Chunks: toRepositoryChunks(chunks),
 			},
 		},
@@ -334,8 +366,8 @@ func (service *Service) QueryBlended(
 	return BlendedRetrievalQueryResponse{Engrams: engrams, DocumentChunks: documentChunks}, nil
 }
 
-func validateChunkShape(chunkSizeChars int, chunkOverlapChars int) error {
-	if chunkOverlapChars >= chunkSizeChars {
+func validateChunkShape(shape chunkShape) error {
+	if shape.overlapChars >= shape.sizeChars {
 		return invalidChunkShapeError()
 	}
 	return nil
@@ -407,12 +439,12 @@ func normalizeOptionalString(value *string) string {
 	return strings.TrimSpace(strings.ToLower(*value))
 }
 
-func resolveFileTitle(requestedTitle *string, filename string) string {
-	normalizedRequestedTitle := normalizeOptionalRequestedTitle(requestedTitle)
+func resolveFileTitle(input fileTitleInput) string {
+	normalizedRequestedTitle := normalizeOptionalRequestedTitle(input.requestedTitle)
 	if normalizedRequestedTitle != "" {
 		return normalizedRequestedTitle
 	}
-	filenameStem := extractFilenameStem(filename)
+	filenameStem := extractFilenameStem(input.filename)
 	if filenameStem != "" {
 		return filenameStem
 	}
@@ -437,15 +469,15 @@ func extractFilenameStem(filename string) string {
 	return strings.TrimSpace(filenameStem)
 }
 
-func mergeFileMetadata(metadata map[string]any, filename string, mimeType *string, byteSize int) map[string]any {
+func mergeFileMetadata(metadata map[string]any, details fileMetadataDetails) map[string]any {
 	merged := cloneMetadata(metadata)
-	merged["filename"] = filename
-	if mimeType != nil {
-		merged["mime_type"] = *mimeType
+	merged["filename"] = details.filename
+	if details.mimeType != nil {
+		merged["mime_type"] = *details.mimeType
 	} else {
 		merged["mime_type"] = nil
 	}
-	merged["byte_size"] = byteSize
+	merged["byte_size"] = details.byteSize
 	return merged
 }
 
