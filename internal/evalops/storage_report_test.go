@@ -61,7 +61,13 @@ func TestWriteTrendReportIncludesGateStatus(t *testing.T) {
 			{Message: "overall score delta vs baseline -0.1000 is below threshold -0.0300"},
 		},
 	}
-	if err := WriteTrendReport(reportPath, history, &history[0], gate, time.Date(2026, 3, 1, 11, 0, 0, 0, time.UTC)); err != nil {
+	if err := WriteTrendReport(TrendReportWriteInput{
+		Path:        reportPath,
+		History:     history,
+		Baseline:    &history[0],
+		Gate:        gate,
+		GeneratedAt: time.Date(2026, 3, 1, 11, 0, 0, 0, time.UTC),
+	}); err != nil {
 		t.Fatalf("write report: %v", err)
 	}
 	body, err := os.ReadFile(reportPath)

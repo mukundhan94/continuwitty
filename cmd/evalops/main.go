@@ -148,13 +148,13 @@ func evaluateDeltaGate(
 func writeEvalTrendReport(
 	input trendReportInput,
 ) error {
-	if err := evalops.WriteTrendReport(
-		input.options.trendReportPath,
-		input.history,
-		input.baseline,
-		input.gate,
-		input.startedAt,
-	); err != nil {
+	if err := evalops.WriteTrendReport(evalops.TrendReportWriteInput{
+		Path:        input.options.trendReportPath,
+		History:     input.history,
+		Baseline:    input.baseline,
+		Gate:        input.gate,
+		GeneratedAt: input.startedAt,
+	}); err != nil {
 		return fmt.Errorf("write eval trend report: %w", err)
 	}
 	return nil
