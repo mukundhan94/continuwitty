@@ -26,7 +26,7 @@ func NewService(primary Provider, fallback Provider) *Service {
 }
 
 func (service *Service) Embed(text string, dim int) (Result, error) {
-	cleaned := cleanedText(text)
+	cleaned := cleanedText(cleanedTextInput{text: text})
 	vector, providerID, err := service.embedWithFallback(cleaned, dim)
 	if err != nil {
 		return Result{}, err
@@ -37,7 +37,7 @@ func (service *Service) Embed(text string, dim int) (Result, error) {
 func (service *Service) EmbedMany(texts []string, dim int) ([]Result, error) {
 	cleaned := make([]string, 0, len(texts))
 	for _, text := range texts {
-		cleaned = append(cleaned, cleanedText(text))
+		cleaned = append(cleaned, cleanedText(cleanedTextInput{text: text}))
 	}
 
 	vectors, providerID, err := service.embedManyWithFallback(cleaned, dim)
@@ -93,11 +93,15 @@ func callWithFallback[T any](
 	return fallbackValue, fallback.ProviderID(), nil
 }
 
-func cleanedText(text string) string {
-	if text == "" {
+type cleanedTextInput struct {
+	text string
+}
+
+func cleanedText(input cleanedTextInput) string {
+	if input.text == "" {
 		return " "
 	}
-	return text
+	return input.text
 }
 
 func isProviderError(err error) bool {
