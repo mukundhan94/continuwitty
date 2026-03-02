@@ -56,10 +56,10 @@ func LoadHistory(path string) ([]SuiteRun, error) {
 		return []SuiteRun{}, nil
 	}
 	file, err := os.Open(trimmed)
+	if os.IsNotExist(err) {
+		return []SuiteRun{}, nil
+	}
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []SuiteRun{}, nil
-		}
 		return nil, err
 	}
 	defer file.Close()
