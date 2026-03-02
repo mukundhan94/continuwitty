@@ -6,7 +6,13 @@ import (
 	"engram/internal/models"
 )
 
-var readToolNames = map[string]struct{}{
+type toolIdentifier string
+
+func (name toolIdentifier) String() string {
+	return string(name)
+}
+
+var readToolNames = map[toolIdentifier]struct{}{
 	"chat.list_sessions":          {},
 	"chat.get_session":            {},
 	"chat.get_lifecycle_policy":   {},
@@ -31,7 +37,7 @@ var readToolNames = map[string]struct{}{
 	"user.list_projects":          {},
 }
 
-var writeToolNames = map[string]struct{}{
+var writeToolNames = map[toolIdentifier]struct{}{
 	"chat.create_session":             {},
 	"chat.update_lifecycle_policy":    {},
 	"chat.send_message":               {},
@@ -68,11 +74,11 @@ var writeToolNames = map[string]struct{}{
 	"engram.collection_remove_items":  {},
 }
 
-var toolAliases = map[string]string{
+var toolAliases = map[toolIdentifier]toolIdentifier{
 	"engram.pin_to_session": "chat.pin_engram",
 }
 
-var toolCatalogOrder = []string{
+var toolCatalogOrder = []toolIdentifier{
 	"chat.create_session",
 	"chat.list_sessions",
 	"chat.get_session",
@@ -133,38 +139,39 @@ var toolCatalogOrder = []string{
 
 var toolNamespacePrefixes = []string{"chat", "engram", "project", "user"}
 
-func toPublicToolName(canonical string) string {
-	return strings.ReplaceAll(canonical, ".", "_")
+func toPublicToolName(canonical toolIdentifier) string {
+	return strings.ReplaceAll(canonical.String(), ".", "_")
 }
 
-func toDottedToolName(raw string) string {
-	if strings.Contains(raw, ".") {
+func toDottedToolName(raw toolIdentifier) toolIdentifier {
+	rawString := raw.String()
+	if strings.Contains(rawString, ".") {
 		return raw
 	}
 	for _, namespace := range toolNamespacePrefixes {
 		prefix := namespace + "_"
-		if strings.HasPrefix(raw, prefix) {
-			return namespace + "." + raw[len(prefix):]
+		if strings.HasPrefix(rawString, prefix) {
+			return toolIdentifier(namespace + "." + rawString[len(prefix):])
 		}
 	}
 	return raw
 }
 
-func canonicalToolName(raw string) string {
-	dotted := toDottedToolName(strings.TrimSpace(raw))
+func canonicalToolName(raw toolIdentifier) toolIdentifier {
+	dotted := toDottedToolName(toolIdentifier(strings.TrimSpace(raw.String())))
 	if alias, ok := toolAliases[dotted]; ok {
 		return alias
 	}
 	return dotted
 }
 
-func toolExists(name string) bool {
+func toolExists(name toolIdentifier) bool {
 	_, isRead := readToolNames[name]
 	_, isWrite := writeToolNames[name]
 	return isRead || isWrite
 }
 
-func requiresWriteScope(name string) bool {
+func requiresWriteScope(name toolIdentifier) bool {
 	_, isWrite := writeToolNames[name]
 	return isWrite
 }
@@ -176,7 +183,7 @@ func buildVisiblePublicToolCatalog(tokenAuth *models.MCPTokenAuthContext) []map[
 		if !toolVisibleForToken(toolName, tokenAuth, allowedTools) {
 			continue
 		}
-		entry := resolvedCatalogEntry(toolName)
+		entry := resolvedCatalogEntry(toolName.String())
 		tools = append(tools, map[string]any{
 			"name":        toPublicToolName(toolName),
 			"description": entry.description,
@@ -187,9 +194,9 @@ func buildVisiblePublicToolCatalog(tokenAuth *models.MCPTokenAuthContext) []map[
 }
 
 func toolVisibleForToken(
-	toolName string,
+	toolName toolIdentifier,
 	tokenAuth *models.MCPTokenAuthContext,
-	allowedTools map[string]struct{},
+	allowedTools map[toolIdentifier]struct{},
 ) bool {
 	if tokenAuth == nil {
 		return true
@@ -204,13 +211,13 @@ func toolVisibleForToken(
 	return exists
 }
 
-func canonicalAllowedTools(tokenAuth *models.MCPTokenAuthContext) map[string]struct{} {
+func canonicalAllowedTools(tokenAuth *models.MCPTokenAuthContext) map[toolIdentifier]struct{} {
 	if tokenAuth == nil || len(tokenAuth.AllowedTools) == 0 {
 		return nil
 	}
-	allowed := make(map[string]struct{}, len(tokenAuth.AllowedTools))
+	allowed := make(map[toolIdentifier]struct{}, len(tokenAuth.AllowedTools))
 	for _, item := range tokenAuth.AllowedTools {
-		canonical := canonicalToolName(item)
+		canonical := canonicalToolName(toolIdentifier(item))
 		if canonical == "" {
 			continue
 		}
@@ -225,7 +232,7 @@ type toolPolicyError struct {
 	data    map[string]any
 }
 
-func authorizeToolCall(toolName string, tokenAuth *models.MCPTokenAuthContext) *toolPolicyError {
+func authorizeToolCall(toolName toolIdentifier, tokenAuth *models.MCPTokenAuthContext) *toolPolicyError {
 	if tokenAuth == nil {
 		return nil
 	}
@@ -239,7 +246,7 @@ func authorizeToolCall(toolName string, tokenAuth *models.MCPTokenAuthContext) *
 			code:    -32003,
 			message: "Insufficient token scope",
 			data: map[string]any{
-				"tool":           toolName,
+				"tool":           toolName.String(),
 				"required_scope": "write",
 				"token_scope":    string(tokenAuth.Scope),
 			},
@@ -256,7 +263,7 @@ func authorizeToolCall(toolName string, tokenAuth *models.MCPTokenAuthContext) *
 		code:    -32003,
 		message: "Tool not allowed by token policy",
 		data: map[string]any{
-			"tool":        toolName,
+			"tool":        toolName.String(),
 			"token_scope": string(tokenAuth.Scope),
 		},
 	}

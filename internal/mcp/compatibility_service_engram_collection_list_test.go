@@ -15,7 +15,42 @@ import (
 func TestCompatibilityServiceEngramCollectionListParity(t *testing.T) {
 	actorUserID := uuid.MustParse("39400000-0000-0000-0000-000000000394")
 	projectID := "proj-alpha"
-	service := &fakeEngramCollectionListService{
+	service := newCollectionListParityService(actorUserID, projectID)
+	for _, testCase := range newCollectionListParityCases(actorUserID, projectID) {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			assertCollectionListParityCase(
+				t,
+				collectionListParityInput{
+					service:     newEngramCollectionListCompatibilityService(service),
+					listService: service,
+					testCase:    testCase,
+					expectedCall: collectionListExpectation{
+						actorUserID:    actorUserID,
+						actorRole:      testCase.expectedRole,
+						projectID:      &projectID,
+						includeDeleted: true,
+						limit:          10,
+						offset:         1,
+					},
+				},
+			)
+		})
+	}
+}
+
+type collectionListParityCase struct {
+	name            string
+	request         StreamCallRequest
+	asToolsCallPath bool
+	expectedRole    models.UserRole
+}
+
+func newCollectionListParityService(
+	actorUserID uuid.UUID,
+	projectID string,
+) *fakeEngramCollectionListService {
+	return &fakeEngramCollectionListService{
 		collections: []models.EngramCollectionRecord{
 			{
 				CollectionID: uuid.MustParse("39400000-0000-0000-0000-000000000395"),
@@ -28,13 +63,13 @@ func TestCompatibilityServiceEngramCollectionListParity(t *testing.T) {
 			},
 		},
 	}
+}
 
-	testCases := []struct {
-		name            string
-		request         StreamCallRequest
-		asToolsCallPath bool
-		expectedRole    models.UserRole
-	}{
+func newCollectionListParityCases(
+	actorUserID uuid.UUID,
+	projectID string,
+) []collectionListParityCase {
+	return []collectionListParityCase{
 		{
 			name: "direct",
 			request: directToolRequest(
@@ -66,33 +101,23 @@ func TestCompatibilityServiceEngramCollectionListParity(t *testing.T) {
 			expectedRole:    models.UserRoleAnalyst,
 		},
 	}
+}
 
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			frame := runCompatibilityRequestWithService(
-				t,
-				newEngramCollectionListCompatibilityService(service),
-				testCase.request,
-			)
-			collections := collectionsFromFrame(t, frame, testCase.asToolsCallPath)
-			if !reflect.DeepEqual(service.collections, collections) {
-				t.Fatalf("expected collections payload to match service output")
-			}
-			assertCollectionListCall(
-				t,
-				service.call,
-				collectionListExpectation{
-					actorUserID:    actorUserID,
-					actorRole:      testCase.expectedRole,
-					projectID:      &projectID,
-					includeDeleted: true,
-					limit:          10,
-					offset:         1,
-				},
-			)
-		})
+type collectionListParityInput struct {
+	service      Service
+	listService  *fakeEngramCollectionListService
+	testCase     collectionListParityCase
+	expectedCall collectionListExpectation
+}
+
+func assertCollectionListParityCase(t *testing.T, input collectionListParityInput) {
+	t.Helper()
+	frame := runCompatibilityRequestWithService(t, input.service, input.testCase.request)
+	collections := collectionsFromFrame(t, frame, input.testCase.asToolsCallPath)
+	if !reflect.DeepEqual(input.listService.collections, collections) {
+		t.Fatalf("expected collections payload to match service output")
 	}
+	assertCollectionListCall(t, input.listService.call, input.expectedCall)
 }
 
 func TestCompatibilityServiceEngramCollectionListUsesDefaults(t *testing.T) {

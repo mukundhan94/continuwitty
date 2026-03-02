@@ -80,17 +80,17 @@ func (service *CompatibilityService) enforceTokenProjectPolicy(input tokenProjec
 	if !hasTokenProjectAllowlist(input.tokenAuth) {
 		return nil
 	}
-	canonicalTool := canonicalToolName(input.toolName)
+	canonicalTool := canonicalToolName(toolIdentifier(input.toolName))
 	if policyError := service.enforceResolvedTokenProjectPolicy(
 		input,
-		canonicalTool,
+		canonicalTool.String(),
 		service.resolveProjectIDForTokenPolicy,
 	); policyError != nil {
 		return policyError
 	}
 	return service.enforceResolvedTokenProjectPolicy(
 		input,
-		canonicalTool,
+		canonicalTool.String(),
 		service.resolveSecondaryProjectIDForTokenPolicy,
 	)
 }

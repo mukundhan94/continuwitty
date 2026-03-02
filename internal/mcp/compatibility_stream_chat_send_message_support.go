@@ -52,7 +52,7 @@ func (service *CompatibilityService) streamDirectChatSendMessageFrames(
 	if method == "" || method == "tools/call" {
 		return nil, false
 	}
-	dottedMethod := toDottedToolName(method)
+	dottedMethod := toDottedToolName(toolIdentifier(method))
 	if canonicalToolName(dottedMethod) != "chat.send_message" {
 		return nil, false
 	}
@@ -88,7 +88,7 @@ func (service *CompatibilityService) streamToolsCallChatSendMessageFrames(
 	if !ok {
 		return nil, false
 	}
-	dottedName := toDottedToolName(name)
+	dottedName := toDottedToolName(toolIdentifier(name))
 	if canonicalToolName(dottedName) != "chat.send_message" {
 		return nil, false
 	}

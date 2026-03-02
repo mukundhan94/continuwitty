@@ -19,27 +19,24 @@ func TestListAdminSessionsBuildsFiltersAndParsesEnums(t *testing.T) {
 	createdAt := time.Date(2026, 2, 22, 17, 0, 0, 0, time.UTC)
 	db := &fakeQueryer{
 		queryRowsResult: &fakeRows{values: [][]any{
-			adminSessionRowValues(
-				sessionID,
-				ownerUserID,
-				"project-docs",
-				"Admin session",
-				"openai",
-				"gpt-4o-mini",
-				"",
-				"private",
-				false,
-				"off",
-				30,
-				6,
-				30,
-				60,
-				createdAt,
-				createdAt,
-				nil,
-				nil,
-				nil,
-			),
+			adminSessionRowValues(adminSessionRowFixture{
+				sessionID:              sessionID,
+				ownerUserID:            ownerUserID,
+				projectID:              "project-docs",
+				title:                  "Admin session",
+				provider:               "openai",
+				modelID:                "gpt-4o-mini",
+				systemPrompt:           "",
+				visibilityScope:        "private",
+				autosaveEnabled:        false,
+				autosaveStrategy:       "off",
+				autosaveIntervalMinute: 30,
+				autosaveMinMessages:    6,
+				retentionDays:          30,
+				retentionMaxSnapshots:  60,
+				createdAt:              createdAt,
+				updatedAt:              createdAt,
+			}),
 		}},
 	}
 	projectID := "project-docs"
@@ -99,27 +96,27 @@ func TestSoftDeleteSessionReturnsRecord(t *testing.T) {
 	deletedAt := time.Date(2026, 2, 22, 17, 10, 0, 0, time.UTC)
 	reason := "cleanup"
 	db := &fakeQueryer{
-		queryRowResult: &fakeRow{values: adminSessionRowValues(
-			sessionID,
-			ownerUserID,
-			"project-docs",
-			"Admin session",
-			"openai",
-			"gpt-4o-mini",
-			"",
-			"private",
-			false,
-			"off",
-			30,
-			6,
-			30,
-			60,
-			createdAt,
-			createdAt,
-			&deletedAt,
-			&deletedByUserID,
-			&reason,
-		)},
+		queryRowResult: &fakeRow{values: adminSessionRowValues(adminSessionRowFixture{
+			sessionID:              sessionID,
+			ownerUserID:            ownerUserID,
+			projectID:              "project-docs",
+			title:                  "Admin session",
+			provider:               "openai",
+			modelID:                "gpt-4o-mini",
+			systemPrompt:           "",
+			visibilityScope:        "private",
+			autosaveEnabled:        false,
+			autosaveStrategy:       "off",
+			autosaveIntervalMinute: 30,
+			autosaveMinMessages:    6,
+			retentionDays:          30,
+			retentionMaxSnapshots:  60,
+			createdAt:              createdAt,
+			updatedAt:              createdAt,
+			deletedAt:              &deletedAt,
+			deletedByUserID:        &deletedByUserID,
+			deleteReason:           &reason,
+		})},
 	}
 
 	record, err := SoftDeleteSession(
@@ -184,56 +181,58 @@ func TestSoftDeleteLinkedEngramsReturnsCount(t *testing.T) {
 	}
 }
 
-func adminSessionRowValues(
-	sessionID uuid.UUID,
-	ownerUserID uuid.UUID,
-	projectID string,
-	title string,
-	provider string,
-	modelID string,
-	systemPrompt string,
-	visibilityScope string,
-	autosaveEnabled bool,
-	autosaveStrategy string,
-	autosaveIntervalMinutes int,
-	autosaveMinMessages int,
-	retentionDays int,
-	retentionMaxSnapshots int,
-	createdAt time.Time,
-	updatedAt time.Time,
-	deletedAt *time.Time,
-	deletedByUserID *uuid.UUID,
-	deleteReason *string,
-) []any {
+type adminSessionRowFixture struct {
+	sessionID              uuid.UUID
+	ownerUserID            uuid.UUID
+	projectID              string
+	title                  string
+	provider               string
+	modelID                string
+	systemPrompt           string
+	visibilityScope        string
+	autosaveEnabled        bool
+	autosaveStrategy       string
+	autosaveIntervalMinute int
+	autosaveMinMessages    int
+	retentionDays          int
+	retentionMaxSnapshots  int
+	createdAt              time.Time
+	updatedAt              time.Time
+	deletedAt              *time.Time
+	deletedByUserID        *uuid.UUID
+	deleteReason           *string
+}
+
+func adminSessionRowValues(fixture adminSessionRowFixture) []any {
 	var deletedAtValue any
-	if deletedAt != nil {
-		deletedAtValue = *deletedAt
+	if fixture.deletedAt != nil {
+		deletedAtValue = *fixture.deletedAt
 	}
 	var deletedByUserIDValue any
-	if deletedByUserID != nil {
-		deletedByUserIDValue = *deletedByUserID
+	if fixture.deletedByUserID != nil {
+		deletedByUserIDValue = *fixture.deletedByUserID
 	}
 	var deleteReasonValue any
-	if deleteReason != nil {
-		deleteReasonValue = *deleteReason
+	if fixture.deleteReason != nil {
+		deleteReasonValue = *fixture.deleteReason
 	}
 	return []any{
-		sessionID,
-		ownerUserID,
-		projectID,
-		title,
-		provider,
-		modelID,
-		systemPrompt,
-		visibilityScope,
-		autosaveEnabled,
-		autosaveStrategy,
-		autosaveIntervalMinutes,
-		autosaveMinMessages,
-		retentionDays,
-		retentionMaxSnapshots,
-		createdAt,
-		updatedAt,
+		fixture.sessionID,
+		fixture.ownerUserID,
+		fixture.projectID,
+		fixture.title,
+		fixture.provider,
+		fixture.modelID,
+		fixture.systemPrompt,
+		fixture.visibilityScope,
+		fixture.autosaveEnabled,
+		fixture.autosaveStrategy,
+		fixture.autosaveIntervalMinute,
+		fixture.autosaveMinMessages,
+		fixture.retentionDays,
+		fixture.retentionMaxSnapshots,
+		fixture.createdAt,
+		fixture.updatedAt,
 		deletedAtValue,
 		deletedByUserIDValue,
 		deleteReasonValue,

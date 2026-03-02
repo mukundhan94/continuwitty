@@ -54,6 +54,37 @@ type chunkDraftBuildInput struct {
 	snippetChars      int
 }
 
+type snippetBuildInput struct {
+	chunkText    string
+	snippetChars int
+}
+
+type nextChunkStartInput struct {
+	currentStart     int
+	end              int
+	chunkOverlapChar int
+}
+
+type chunkEndPickInput struct {
+	runes          []rune
+	start          int
+	hardEnd        int
+	chunkSizeChars int
+}
+
+type tokenSearchInput struct {
+	runes []rune
+	token []rune
+	start int
+	end   int
+}
+
+type tokenAtInput struct {
+	runes []rune
+	index int
+	token []rune
+}
+
 // NormalizeDocumentText normalizes whitespace/newlines to keep hashing and chunk IDs deterministic.
 func NormalizeDocumentText(text string) string {
 	normalized := strings.ReplaceAll(text, "\r\n", "\n")
@@ -98,7 +129,12 @@ func ChunkDocumentText(input ChunkDocumentInput) []ChunkDraft {
 
 	for start < len(runes) {
 		hardEnd := minInt(start+input.ChunkSizeChars, len(runes))
-		end := pickChunkEnd(runes, start, hardEnd, input.ChunkSizeChars)
+		end := pickChunkEnd(chunkEndPickInput{
+			runes:          runes,
+			start:          start,
+			hardEnd:        hardEnd,
+			chunkSizeChars: input.ChunkSizeChars,
+		})
 		chunkText := strings.TrimSpace(string(runes[start:end]))
 		if chunkText != "" {
 			chunks = append(chunks, buildChunkDraft(chunkDraftBuildInput{
@@ -116,7 +152,11 @@ func ChunkDocumentText(input ChunkDocumentInput) []ChunkDraft {
 		if end >= len(runes) {
 			break
 		}
-		start = nextChunkStart(start, end, chunkOverlap)
+		start = nextChunkStart(nextChunkStartInput{
+			currentStart:     start,
+			end:              end,
+			chunkOverlapChar: chunkOverlap,
+		})
 	}
 	return chunks
 }
@@ -127,10 +167,13 @@ func buildChunkDraft(input chunkDraftBuildInput) ChunkDraft {
 		[]byte(fmt.Sprintf("%s:%d:%d:%d", input.contentHash, input.chunkIndex, input.charStart, input.charEnd)),
 	)
 	return ChunkDraft{
-		ChunkID:       chunkID,
-		ChunkIndex:    input.chunkIndex,
-		ChunkText:     input.chunkText,
-		Snippet:       buildSnippet(input.chunkText, input.snippetChars),
+		ChunkID:    chunkID,
+		ChunkIndex: input.chunkIndex,
+		ChunkText:  input.chunkText,
+		Snippet: buildSnippet(snippetBuildInput{
+			chunkText:    input.chunkText,
+			snippetChars: input.snippetChars,
+		}),
 		CharStart:     input.charStart,
 		CharEnd:       input.charEnd,
 		TokenEstimate: EstimateTokenCount(input.chunkText),
@@ -144,9 +187,9 @@ func buildChunkDraft(input chunkDraftBuildInput) ChunkDraft {
 	}
 }
 
-func buildSnippet(chunkText string, snippetChars int) string {
-	chunkRunes := []rune(chunkText)
-	snippetEnd := minInt(snippetChars, len(chunkRunes))
+func buildSnippet(input snippetBuildInput) string {
+	chunkRunes := []rune(input.chunkText)
+	snippetEnd := minInt(input.snippetChars, len(chunkRunes))
 	snippet := string(chunkRunes[:snippetEnd])
 	snippet = strings.ReplaceAll(snippet, "\n", " ")
 	return strings.TrimSpace(snippet)
@@ -166,57 +209,67 @@ func normalizeSnippetSize(snippetChars int) int {
 	return snippetChars
 }
 
-func nextChunkStart(currentStart int, end int, chunkOverlapChars int) int {
-	nextStart := maxInt(0, end-chunkOverlapChars)
-	if nextStart <= currentStart {
-		return end
+func nextChunkStart(input nextChunkStartInput) int {
+	nextStart := maxInt(0, input.end-input.chunkOverlapChar)
+	if nextStart <= input.currentStart {
+		return input.end
 	}
 	return nextStart
 }
 
-func pickChunkEnd(runes []rune, start int, hardEnd int, chunkSizeChars int) int {
-	if hardEnd >= len(runes) {
-		return len(runes)
+func pickChunkEnd(input chunkEndPickInput) int {
+	if input.hardEnd >= len(input.runes) {
+		return len(input.runes)
 	}
-	searchStart := start + int(float64(chunkSizeChars)*minBreakFraction)
-	if searchStart >= hardEnd {
-		return hardEnd
+	searchStart := input.start + int(float64(input.chunkSizeChars)*minBreakFraction)
+	if searchStart >= input.hardEnd {
+		return input.hardEnd
 	}
 
 	chosen := maxInt(
-		findLastTokenIndex(runes, doubleNewlineRune, searchStart, hardEnd),
+		findLastTokenIndex(tokenSearchInput{
+			runes: input.runes, token: doubleNewlineRune, start: searchStart, end: input.hardEnd,
+		}),
 		maxInt(
-			findLastTokenIndex(runes, singleNewlineRune, searchStart, hardEnd),
-			findLastTokenIndex(runes, spaceRune, searchStart, hardEnd),
+			findLastTokenIndex(tokenSearchInput{
+				runes: input.runes, token: singleNewlineRune, start: searchStart, end: input.hardEnd,
+			}),
+			findLastTokenIndex(tokenSearchInput{
+				runes: input.runes, token: spaceRune, start: searchStart, end: input.hardEnd,
+			}),
 		),
 	)
-	if chosen <= start {
-		return hardEnd
+	if chosen <= input.start {
+		return input.hardEnd
 	}
-	if hasTokenAt(runes, chosen, doubleNewlineRune) {
+	if hasTokenAt(tokenAtInput{
+		runes: input.runes, index: chosen, token: doubleNewlineRune,
+	}) {
 		return chosen
 	}
 	return chosen + 1
 }
 
-func findLastTokenIndex(runes []rune, token []rune, start int, end int) int {
-	if len(token) == 0 || end-start < len(token) {
+func findLastTokenIndex(input tokenSearchInput) int {
+	if len(input.token) == 0 || input.end-input.start < len(input.token) {
 		return -1
 	}
-	for index := end - len(token); index >= start; index-- {
-		if hasTokenAt(runes, index, token) {
+	for index := input.end - len(input.token); index >= input.start; index-- {
+		if hasTokenAt(tokenAtInput{
+			runes: input.runes, index: index, token: input.token,
+		}) {
 			return index
 		}
 	}
 	return -1
 }
 
-func hasTokenAt(runes []rune, index int, token []rune) bool {
-	if index < 0 || index+len(token) > len(runes) {
+func hasTokenAt(input tokenAtInput) bool {
+	if input.index < 0 || input.index+len(input.token) > len(input.runes) {
 		return false
 	}
-	for tokenIndex := 0; tokenIndex < len(token); tokenIndex++ {
-		if runes[index+tokenIndex] != token[tokenIndex] {
+	for tokenIndex := 0; tokenIndex < len(input.token); tokenIndex++ {
+		if input.runes[input.index+tokenIndex] != input.token[tokenIndex] {
 			return false
 		}
 	}

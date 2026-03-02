@@ -164,30 +164,51 @@ func (provider *BedrockProvider) mapInvocationError(err error) error {
 	if err == nil {
 		return nil
 	}
+	if credentialError := mapBedrockCredentialError(err); credentialError != nil {
+		return credentialError
+	}
+	errorCode, errorMessage, ok := extractBedrockErrorCodeAndMessage(err)
+	if !ok {
+		return NewProviderAPIError(fmt.Sprintf("Bedrock invocation failed: %v", err))
+	}
+	return mapBedrockErrorCode(errorCode, errorMessage)
+}
+
+func mapBedrockCredentialError(err error) error {
 	switch {
 	case errors.Is(err, ErrNoAWSCredentials):
 		return NewProviderAuthError("Bedrock credentials not found in environment or AWS profile")
 	case errors.Is(err, ErrPartialAWSCredentials):
 		return NewProviderAuthError("Bedrock credentials are incomplete")
+	default:
+		return nil
 	}
+}
+
+func extractBedrockErrorCodeAndMessage(err error) (string, string, bool) {
 	var codedError BedrockErrorCodeCarrier
 	if !errors.As(err, &codedError) {
-		return NewProviderAPIError(fmt.Sprintf("Bedrock invocation failed: %v", err))
+		return "", "", false
 	}
 	errorCode := strings.TrimSpace(codedError.ErrorCode())
 	errorMessage := strings.TrimSpace(codedError.ErrorMessage())
 	if errorMessage == "" {
 		errorMessage = codedError.Error()
 	}
+	return errorCode, errorMessage, true
+}
+
+func mapBedrockErrorCode(errorCode string, errorMessage string) error {
+	formatted := fmt.Sprintf("Bedrock %s: %s", errorCode, errorMessage)
 	switch {
 	case inCodeSet(awsRateLimitErrorCodes, errorCode):
-		return NewProviderRateLimitError(fmt.Sprintf("Bedrock %s: %s", errorCode, errorMessage))
+		return NewProviderRateLimitError(formatted)
 	case inCodeSet(awsRequestErrorCodes, errorCode):
-		return NewProviderRequestError(fmt.Sprintf("Bedrock %s: %s", errorCode, errorMessage))
+		return NewProviderRequestError(formatted)
 	case inCodeSet(awsAuthErrorCodes, errorCode):
-		return NewProviderAuthError(fmt.Sprintf("Bedrock %s: %s", errorCode, errorMessage))
+		return NewProviderAuthError(formatted)
 	default:
-		return NewProviderAPIError(fmt.Sprintf("Bedrock %s: %s", errorCode, errorMessage))
+		return NewProviderAPIError(formatted)
 	}
 }
 

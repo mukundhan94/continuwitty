@@ -29,15 +29,7 @@ func TestBuildProjectExportBundleCollectionFilter(t *testing.T) {
 		_ projects.ActorContext,
 		request projects.ProjectGetRequest,
 	) (*models.ProjectRecord, error) {
-		return &models.ProjectRecord{
-			ProjectID:   request.ProjectID,
-			Name:        "Alpha",
-			Description: "",
-			OwnerUserID: actorID,
-			IsArchived:  false,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		}, nil
+		return projectRecordForExport(request.ProjectID, actorID, now), nil
 	}
 	memoryService.listCollectionsFn = func(
 		_ context.Context,
@@ -87,16 +79,15 @@ func TestBuildProjectExportBundleCollectionFilter(t *testing.T) {
 		},
 	)
 	requireNoError(t, err)
-	requireEqual(t, "1.0", bundle.SchemaVersion)
-	requireEqual(t, now, bundle.ExportedAt)
-	requireEqual(t, true, bundle.IncludeEmbeddings)
-	requireEqual(t, []uuid.UUID{collectionAID}, bundle.SelectedCollectionIDs)
-	requireEqual(t, 1, len(bundle.Collections))
-	requireEqual(t, collectionAID, bundle.Collections[0].CollectionID)
-	requireEqual(t, 1, len(bundle.CollectionItems))
-	requireEqual(t, []uuid.UUID{engramAID}, bundle.CollectionItems[0].EngramIDs)
-	requireEqual(t, 1, len(bundle.Engrams))
-	requireEqual(t, engramAID, bundle.Engrams[0].EngramID)
+	assertCollectionFilterBundle(
+		t,
+		bundle,
+		collectionFilterExpectation{
+			exportedAt:   now,
+			collectionID: collectionAID,
+			engramID:     engramAID,
+		},
+	)
 }
 
 func TestBuildProjectExportBundleWithoutCollectionFilterAttachesSources(t *testing.T) {
@@ -113,15 +104,7 @@ func TestBuildProjectExportBundleWithoutCollectionFilterAttachesSources(t *testi
 		_ projects.ActorContext,
 		request projects.ProjectGetRequest,
 	) (*models.ProjectRecord, error) {
-		return &models.ProjectRecord{
-			ProjectID:   request.ProjectID,
-			Name:        "Alpha",
-			Description: "",
-			OwnerUserID: actorID,
-			IsArchived:  false,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		}, nil
+		return projectRecordForExport(request.ProjectID, actorID, now), nil
 	}
 	memoryService.listCollectionsFn = func(
 		_ context.Context,
@@ -179,16 +162,52 @@ func TestBuildProjectExportBundleWithoutCollectionFilterAttachesSources(t *testi
 	requireEqual(t, sourceID, bundle.Engrams[0].Sources[0].SourceID)
 }
 
+type collectionFilterExpectation struct {
+	exportedAt   time.Time
+	collectionID uuid.UUID
+	engramID     uuid.UUID
+}
+
+func projectRecordForExport(projectID string, ownerUserID uuid.UUID, now time.Time) *models.ProjectRecord {
+	return &models.ProjectRecord{
+		ProjectID:   projectID,
+		Name:        "Alpha",
+		Description: "",
+		OwnerUserID: ownerUserID,
+		IsArchived:  false,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+}
+
+func assertCollectionFilterBundle(
+	t *testing.T,
+	bundle ProjectExportBundle,
+	expectation collectionFilterExpectation,
+) {
+	t.Helper()
+	requireEqual(t, "1.0", bundle.SchemaVersion)
+	requireEqual(t, expectation.exportedAt, bundle.ExportedAt)
+	requireEqual(t, true, bundle.IncludeEmbeddings)
+	requireEqual(t, []uuid.UUID{expectation.collectionID}, bundle.SelectedCollectionIDs)
+	requireEqual(t, 1, len(bundle.Collections))
+	requireEqual(t, expectation.collectionID, bundle.Collections[0].CollectionID)
+	requireEqual(t, 1, len(bundle.CollectionItems))
+	requireEqual(t, []uuid.UUID{expectation.engramID}, bundle.CollectionItems[0].EngramIDs)
+	requireEqual(t, 1, len(bundle.Engrams))
+	requireEqual(t, expectation.engramID, bundle.Engrams[0].EngramID)
+}
+
 func TestBuildProjectExportBundleValidationErrors(t *testing.T) {
 	t.Run("project not found", func(t *testing.T) {
 		service, projectService, _ := newTestExportService()
-			projectService.getProjectFn = func(
-				_ context.Context,
-				_ projects.ActorContext,
-				_ projects.ProjectGetRequest,
-			) (*models.ProjectRecord, error) {
-				return nil, nil
-			}
+		projectService.getProjectFn = func(
+			_ context.Context,
+			_ projects.ActorContext,
+			_ projects.ProjectGetRequest,
+		) (*models.ProjectRecord, error) {
+			return nil, nil
+		}
 
 		_, err := service.BuildProjectExportBundle(
 			context.Background(),
@@ -205,16 +224,16 @@ func TestBuildProjectExportBundleValidationErrors(t *testing.T) {
 
 	t.Run("collection not found for project", func(t *testing.T) {
 		service, projectService, memoryService := newTestExportService()
-			projectService.getProjectFn = func(
-				_ context.Context,
-				_ projects.ActorContext,
-				request projects.ProjectGetRequest,
-			) (*models.ProjectRecord, error) {
-				return &models.ProjectRecord{
-					ProjectID:   request.ProjectID,
-					OwnerUserID: uuid.MustParse("00000000-0000-0000-0000-000000000c21"),
-				}, nil
-			}
+		projectService.getProjectFn = func(
+			_ context.Context,
+			_ projects.ActorContext,
+			request projects.ProjectGetRequest,
+		) (*models.ProjectRecord, error) {
+			return &models.ProjectRecord{
+				ProjectID:   request.ProjectID,
+				OwnerUserID: uuid.MustParse("00000000-0000-0000-0000-000000000c21"),
+			}, nil
+		}
 		memoryService.listCollectionsFn = func(
 			_ context.Context,
 			_ admin.MemoryAdminListRequest,

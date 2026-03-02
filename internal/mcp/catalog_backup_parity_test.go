@@ -20,7 +20,7 @@ func TestGoCatalogIncludesAllBackupTools(t *testing.T) {
 	catalogText := readBackupCatalog(t)
 	backupNames := extractPatternMatches(catalogText, backupToolNamePattern)
 
-	goOrder := mapFromSlice(toolCatalogOrder)
+	goOrder := mapFromToolCatalogSlice(toolCatalogOrder)
 	goMetadata := mapFromKeys(toolCatalogEntries)
 
 	if missing := missingKeys(backupNames, goOrder); len(missing) > 0 {
@@ -37,10 +37,10 @@ func TestGoReadWriteSetsIncludeAllBackupTools(t *testing.T) {
 	backupRead := extractSetBlockValues(catalogText, "_READ_TOOL_NAMES")
 	backupWrite := extractSetBlockValues(catalogText, "_WRITE_TOOL_NAMES")
 
-	if missing := missingKeys(backupRead, readToolNames); len(missing) > 0 {
+	if missing := missingKeys(backupRead, mapFromToolSet(readToolNames)); len(missing) > 0 {
 		t.Fatalf("readToolNames missing backup read tools: %v", missing)
 	}
-	if missing := missingKeys(backupWrite, writeToolNames); len(missing) > 0 {
+	if missing := missingKeys(backupWrite, mapFromToolSet(writeToolNames)); len(missing) > 0 {
 		t.Fatalf("writeToolNames missing backup write tools: %v", missing)
 	}
 }
@@ -56,11 +56,11 @@ func TestGoAliasesIncludeAllBackupAliases(t *testing.T) {
 		}
 		alias := pair[1]
 		target := pair[2]
-		mapped, ok := toolAliases[alias]
+		mapped, ok := toolAliases[toolIdentifier(alias)]
 		if !ok {
 			t.Fatalf("missing backup alias %q", alias)
 		}
-		if mapped != target {
+		if mapped.String() != target {
 			t.Fatalf("alias mismatch for %q: got %q want %q", alias, mapped, target)
 		}
 	}
@@ -119,10 +119,18 @@ func extractNamedBlock(t *testing.T, content string, blockName string) string {
 	return ""
 }
 
-func mapFromSlice(values []string) map[string]struct{} {
+func mapFromToolCatalogSlice(values []toolIdentifier) map[string]struct{} {
 	result := make(map[string]struct{}, len(values))
 	for _, value := range values {
-		result[value] = struct{}{}
+		result[value.String()] = struct{}{}
+	}
+	return result
+}
+
+func mapFromToolSet(values map[toolIdentifier]struct{}) map[string]struct{} {
+	result := make(map[string]struct{}, len(values))
+	for value := range values {
+		result[value.String()] = struct{}{}
 	}
 	return result
 }

@@ -38,7 +38,7 @@ func normalizeTokenToolParams(
 	if tokenAuth == nil || len(allowedProjectSet) == 0 {
 		return params, nil
 	}
-	canonicalTool := tokenToolName(canonicalToolName(toolName))
+	canonicalTool := tokenToolName(canonicalToolName(toolIdentifier(toolName)))
 	normalized := cloneToolParams(params)
 	projectID, policyError := resolveTokenProjectIDForTool(canonicalTool, normalized, allowedProjectSet)
 	if policyError != nil {
@@ -170,7 +170,7 @@ func disallowedTokenProjectPolicyError(
 	projectID tokenProjectID,
 ) *toolPolicyError {
 	requiredScope := "read"
-	if requiresWriteScope(string(canonicalTool)) {
+	if requiresWriteScope(toolIdentifier(canonicalTool)) {
 		requiredScope = "write"
 	}
 	return &toolPolicyError{

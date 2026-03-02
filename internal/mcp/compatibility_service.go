@@ -1155,7 +1155,7 @@ func (service *CompatibilityService) dispatchToolsCall(input toolsCallInput) Fra
 	if !ok {
 		return invalidParamsFrame(input.requestID, map[string]any{"invalid": "arguments"})
 	}
-	dottedName := toDottedToolName(name)
+	dottedName := toDottedToolName(toolIdentifier(name))
 	if !toolExists(dottedName) {
 		return methodNotFoundFrame(input.requestID, name)
 	}
@@ -1163,9 +1163,9 @@ func (service *CompatibilityService) dispatchToolsCall(input toolsCallInput) Fra
 		authorizedToolDispatchInput{
 			ctx:              input.ctx,
 			requestID:        input.requestID,
-			policyToolName:   dottedName,
-			responseToolName: name,
-			canonicalMethod:  canonicalToolName(dottedName),
+				policyToolName:   dottedName.String(),
+				responseToolName: name,
+				canonicalMethod:  canonicalToolName(dottedName).String(),
 			actor:            input.actor,
 			params:           arguments,
 			tokenAuth:        input.tokenAuth,
@@ -1184,7 +1184,7 @@ type directToolCallInput struct {
 }
 
 func (service *CompatibilityService) dispatchDirectToolMethod(input directToolCallInput) Frame {
-	dottedMethod := toDottedToolName(input.method)
+	dottedMethod := toDottedToolName(toolIdentifier(input.method))
 	if !toolExists(dottedMethod) {
 		return methodNotFoundFrame(input.requestID, input.method)
 	}
@@ -1192,8 +1192,8 @@ func (service *CompatibilityService) dispatchDirectToolMethod(input directToolCa
 		authorizedToolDispatchInput{
 			ctx:             input.ctx,
 			requestID:       input.requestID,
-			policyToolName:  dottedMethod,
-			canonicalMethod: canonicalToolName(dottedMethod),
+				policyToolName:  dottedMethod.String(),
+				canonicalMethod: canonicalToolName(dottedMethod).String(),
 			actor:           input.actor,
 			params:          input.params,
 			tokenAuth:       input.tokenAuth,
@@ -1217,7 +1217,7 @@ type authorizedToolDispatchInput struct {
 func (service *CompatibilityService) dispatchAuthorizedToolCall(
 	input authorizedToolDispatchInput,
 ) Frame {
-	if policyError := authorizeToolCall(input.policyToolName, input.tokenAuth); policyError != nil {
+	if policyError := authorizeToolCall(toolIdentifier(input.policyToolName), input.tokenAuth); policyError != nil {
 		return errorFrame(input.requestID, policyError.code, policyError.message, policyError.data)
 	}
 	normalizedParams, policyError := normalizeTokenToolParams(

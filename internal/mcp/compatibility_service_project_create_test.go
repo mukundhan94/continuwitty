@@ -76,14 +76,30 @@ func TestCompatibilityServiceProjectCreateDirectMethod(t *testing.T) {
 }
 
 func TestCompatibilityServiceProjectCreateErrors(t *testing.T) {
-	testCases := []struct {
-		name         string
-		service      *fakeProjectCreateService
-		request      StreamCallRequest
-		expectedCode int
-		expectedMsg  *string
-		expectedData *string
-	}{
+	for _, testCase := range buildProjectCreateErrorCases() {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			assertProjectCreateErrorCase(t, testCase)
+		})
+	}
+}
+
+type projectCreateErrorCase struct {
+	name         string
+	service      *fakeProjectCreateService
+	request      StreamCallRequest
+	expectedCode int
+	expectedMsg  *string
+	expectedData *string
+}
+
+func buildProjectCreateErrorCases() []projectCreateErrorCase {
+	cases := buildProjectCreateValidationErrorCases()
+	return append(cases, buildProjectCreateServiceErrorCases()...)
+}
+
+func buildProjectCreateValidationErrorCases() []projectCreateErrorCase {
+	return []projectCreateErrorCase{
 		{
 			name:    "invalid owner user id",
 			service: &fakeProjectCreateService{},
@@ -107,6 +123,11 @@ func TestCompatibilityServiceProjectCreateErrors(t *testing.T) {
 			),
 			expectedCode: -32602,
 		},
+	}
+}
+
+func buildProjectCreateServiceErrorCases() []projectCreateErrorCase {
+	return []projectCreateErrorCase{
 		{
 			name: "missing collaboration schema",
 			service: &fakeProjectCreateService{
@@ -163,26 +184,24 @@ func TestCompatibilityServiceProjectCreateErrors(t *testing.T) {
 			expectedCode: -32603,
 		},
 	}
+}
 
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			frame := runCompatibilityRequestWithService(
-				t,
-				newProjectDefaultCompatibilityService(testCase.service),
-				testCase.request,
-			)
-			errorPayload := errorPayloadFromFrame(t, frame)
-			requireErrorCode(t, errorPayload, testCase.expectedCode)
-			if testCase.expectedMsg != nil {
-				if message, ok := errorPayload["message"].(string); !ok || message != *testCase.expectedMsg {
-					t.Fatalf("expected error message %q, got %#v", *testCase.expectedMsg, errorPayload["message"])
-				}
-			}
-			if testCase.expectedData != nil {
-				assertErrorDetail(t, errorPayload, *testCase.expectedData)
-			}
-		})
+func assertProjectCreateErrorCase(t *testing.T, testCase projectCreateErrorCase) {
+	t.Helper()
+	frame := runCompatibilityRequestWithService(
+		t,
+		newProjectDefaultCompatibilityService(testCase.service),
+		testCase.request,
+	)
+	errorPayload := errorPayloadFromFrame(t, frame)
+	requireErrorCode(t, errorPayload, testCase.expectedCode)
+	if testCase.expectedMsg != nil {
+		if message, ok := errorPayload["message"].(string); !ok || message != *testCase.expectedMsg {
+			t.Fatalf("expected error message %q, got %#v", *testCase.expectedMsg, errorPayload["message"])
+		}
+	}
+	if testCase.expectedData != nil {
+		assertErrorDetail(t, errorPayload, *testCase.expectedData)
 	}
 }
 

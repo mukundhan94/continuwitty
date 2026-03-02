@@ -126,26 +126,16 @@ func TestWithTransaction(t *testing.T) {
 			runner := &fakeBeginner{tx: tx}
 
 			err := WithTransaction(context.Background(), runner, testCase.fn)
-			if testCase.expectErr {
-				if err == nil {
-					t.Fatalf("expected transaction to fail")
-				}
-				if !strings.Contains(err.Error(), "boom") {
-					t.Fatalf("expected wrapped error to include cause, got %q", err.Error())
-				}
-			} else if err != nil {
-				t.Fatalf("expected transaction to succeed: %v", err)
-			}
-
-			if runner.calls != 1 {
-				t.Fatalf("expected begin to be called once, got %d", runner.calls)
-			}
-			if tx.commitCount != testCase.expectedCommit {
-				t.Fatalf("expected %d commit(s), got %d", testCase.expectedCommit, tx.commitCount)
-			}
-			if tx.rollbackCount != testCase.expectedRB {
-				t.Fatalf("expected %d rollback(s), got %d", testCase.expectedRB, tx.rollbackCount)
-			}
+			assertTransactionError(t, err, testCase.expectErr)
+			assertTransactionCounters(
+				t,
+				runner,
+				tx,
+				transactionCounterExpectation{
+					commit:   testCase.expectedCommit,
+					rollback: testCase.expectedRB,
+				},
+			)
 		})
 	}
 }
@@ -229,20 +219,66 @@ func TestHardenBootstrapAdminCredentials(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected credential hardening to succeed: %v", err)
 			}
-			if len(tx.querySQL) == 0 || !strings.Contains(tx.querySQL[0], "SELECT password_hash") {
-				t.Fatalf("expected password hash lookup query to run")
-			}
-
-			updated := false
-			for _, sql := range tx.execSQL {
-				if strings.Contains(sql, "UPDATE users") {
-					updated = true
-					break
-				}
-			}
+			assertPasswordHashLookupQuery(t, tx.querySQL)
+			updated := hasUserUpdateExec(tx.execSQL)
 			if updated != testCase.expectUpdate {
 				t.Fatalf("expected update=%t, got %t", testCase.expectUpdate, updated)
 			}
 		})
 	}
+}
+
+func assertTransactionError(t *testing.T, err error, expectErr bool) {
+	t.Helper()
+	if expectErr {
+		if err == nil {
+			t.Fatalf("expected transaction to fail")
+		}
+		if !strings.Contains(err.Error(), "boom") {
+			t.Fatalf("expected wrapped error to include cause, got %q", err.Error())
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("expected transaction to succeed: %v", err)
+	}
+}
+
+type transactionCounterExpectation struct {
+	commit   int
+	rollback int
+}
+
+func assertTransactionCounters(
+	t *testing.T,
+	runner *fakeBeginner,
+	tx *fakeTx,
+	expectation transactionCounterExpectation,
+) {
+	t.Helper()
+	if runner.calls != 1 {
+		t.Fatalf("expected begin to be called once, got %d", runner.calls)
+	}
+	if tx.commitCount != expectation.commit {
+		t.Fatalf("expected %d commit(s), got %d", expectation.commit, tx.commitCount)
+	}
+	if tx.rollbackCount != expectation.rollback {
+		t.Fatalf("expected %d rollback(s), got %d", expectation.rollback, tx.rollbackCount)
+	}
+}
+
+func assertPasswordHashLookupQuery(t *testing.T, queries []string) {
+	t.Helper()
+	if len(queries) == 0 || !strings.Contains(queries[0], "SELECT password_hash") {
+		t.Fatalf("expected password hash lookup query to run")
+	}
+}
+
+func hasUserUpdateExec(statements []string) bool {
+	for _, statement := range statements {
+		if strings.Contains(statement, "UPDATE users") {
+			return true
+		}
+	}
+	return false
 }

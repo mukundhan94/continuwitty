@@ -120,12 +120,9 @@ func TestCompatibilityServiceEngramCreateUsesDefaults(t *testing.T) {
 	}
 }
 
-func TestCompatibilityServiceEngramCreateValidationAndErrorMappings(t *testing.T) {
+func TestCompatibilityServiceEngramCreateValidationErrors(t *testing.T) {
 	service := newEngramCreateCompatibilityService(&fakeEngramCreateService{})
-	testCases := []struct {
-		name   string
-		params map[string]any
-	}{
+	testCases := []engramCreateValidationCase{
 		{name: "invalid payload type", params: map[string]any{"title": "x", "detailed_summary_markdown": "y", "tags": "bad"}},
 		{name: "missing title", params: map[string]any{"detailed_summary_markdown": "y"}},
 		{name: "missing summary", params: map[string]any{"title": "x"}},
@@ -146,65 +143,99 @@ func TestCompatibilityServiceEngramCreateValidationAndErrorMappings(t *testing.T
 			requireErrorCode(t, errorPayloadFromFrame(t, frame), -32602)
 		})
 	}
+}
 
-	notFoundFrame := runCompatibilityRequestWithService(
-		t,
-		newEngramCreateCompatibilityService(
-			&fakeEngramCreateService{err: projects.ErrProjectNotFound},
-		),
-		toolsCallRequest(
-			"39720000-0000-0000-0000-000000000398",
-			"engram_create",
-			map[string]any{"title": "x", "detailed_summary_markdown": "y", "project_id": "missing"},
-		),
-	)
-	notFoundPayload := errorPayloadFromFrame(t, notFoundFrame)
-	requireErrorCode(t, notFoundPayload, -32602)
-	assertErrorStatusCode(t, notFoundPayload, 404)
-	assertErrorDetail(t, notFoundPayload, "Project not found")
+func TestCompatibilityServiceEngramCreateErrorMappings(t *testing.T) {
+	for _, testCase := range buildEngramCreateErrorMappingCases() {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			assertEngramCreateErrorMappingCase(t, testCase)
+		})
+	}
+}
 
-	defaultMissingFrame := runCompatibilityRequestWithService(
-		t,
-		newEngramCreateCompatibilityService(
-			&fakeEngramCreateService{err: projects.ErrProjectIDRequiredWhenNoDefaultProject},
-		),
-		toolsCallRequest(
-			"39720000-0000-0000-0000-000000000399",
-			"engram_create",
-			map[string]any{"title": "x", "detailed_summary_markdown": "y"},
-		),
-	)
-	defaultMissingPayload := errorPayloadFromFrame(t, defaultMissingFrame)
-	requireErrorCode(t, defaultMissingPayload, -32602)
-	assertErrorStatusCode(t, defaultMissingPayload, 422)
+type engramCreateValidationCase struct {
+	name   string
+	params map[string]any
+}
 
-	defaultHiddenFrame := runCompatibilityRequestWithService(
-		t,
-		newEngramCreateCompatibilityService(
-			&fakeEngramCreateService{err: projects.ErrDefaultProjectNotAccessible},
-		),
-		toolsCallRequest(
-			"39720000-0000-0000-0000-000000000400",
-			"engram_create",
-			map[string]any{"title": "x", "detailed_summary_markdown": "y"},
-		),
-	)
-	defaultHiddenPayload := errorPayloadFromFrame(t, defaultHiddenFrame)
-	requireErrorCode(t, defaultHiddenPayload, -32602)
-	assertErrorStatusCode(t, defaultHiddenPayload, 422)
+type engramCreateErrorMappingCase struct {
+	name           string
+	service        Service
+	request        StreamCallRequest
+	expectedCode   int
+	expectedStatus *int
+	expectedDetail *string
+}
 
-	internalFrame := runCompatibilityRequestWithService(
-		t,
-		newEngramCreateCompatibilityService(
-			&fakeEngramCreateService{err: errors.New("boom")},
-		),
-		toolsCallRequest(
-			"39720000-0000-0000-0000-000000000401",
-			"engram_create",
-			map[string]any{"title": "x", "detailed_summary_markdown": "y"},
-		),
-	)
-	requireErrorCode(t, errorPayloadFromFrame(t, internalFrame), -32603)
+func buildEngramCreateErrorMappingCases() []engramCreateErrorMappingCase {
+	return []engramCreateErrorMappingCase{
+		{
+			name: "project not found",
+			service: newEngramCreateCompatibilityService(
+				&fakeEngramCreateService{err: projects.ErrProjectNotFound},
+			),
+			request: toolsCallRequest(
+				"39720000-0000-0000-0000-000000000398",
+				"engram_create",
+				map[string]any{"title": "x", "detailed_summary_markdown": "y", "project_id": "missing"},
+			),
+			expectedCode:   -32602,
+			expectedStatus: intPtr(404),
+			expectedDetail: stringPtr("Project not found"),
+		},
+		{
+			name: "default project required",
+			service: newEngramCreateCompatibilityService(
+				&fakeEngramCreateService{err: projects.ErrProjectIDRequiredWhenNoDefaultProject},
+			),
+			request: toolsCallRequest(
+				"39720000-0000-0000-0000-000000000399",
+				"engram_create",
+				map[string]any{"title": "x", "detailed_summary_markdown": "y"},
+			),
+			expectedCode:   -32602,
+			expectedStatus: intPtr(422),
+		},
+		{
+			name: "default project inaccessible",
+			service: newEngramCreateCompatibilityService(
+				&fakeEngramCreateService{err: projects.ErrDefaultProjectNotAccessible},
+			),
+			request: toolsCallRequest(
+				"39720000-0000-0000-0000-000000000400",
+				"engram_create",
+				map[string]any{"title": "x", "detailed_summary_markdown": "y"},
+			),
+			expectedCode:   -32602,
+			expectedStatus: intPtr(422),
+		},
+		{
+			name: "internal error",
+			service: newEngramCreateCompatibilityService(
+				&fakeEngramCreateService{err: errors.New("boom")},
+			),
+			request: toolsCallRequest(
+				"39720000-0000-0000-0000-000000000401",
+				"engram_create",
+				map[string]any{"title": "x", "detailed_summary_markdown": "y"},
+			),
+			expectedCode: -32603,
+		},
+	}
+}
+
+func assertEngramCreateErrorMappingCase(t *testing.T, testCase engramCreateErrorMappingCase) {
+	t.Helper()
+	frame := runCompatibilityRequestWithService(t, testCase.service, testCase.request)
+	errorPayload := errorPayloadFromFrame(t, frame)
+	requireErrorCode(t, errorPayload, testCase.expectedCode)
+	if testCase.expectedStatus != nil {
+		assertErrorStatusCode(t, errorPayload, *testCase.expectedStatus)
+	}
+	if testCase.expectedDetail != nil {
+		assertErrorDetail(t, errorPayload, *testCase.expectedDetail)
+	}
 }
 
 func newEngramCreateCompatibilityService(service EngramCreateService) Service {
