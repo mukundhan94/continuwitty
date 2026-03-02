@@ -175,7 +175,7 @@ describe('useWorkspaceActions', () => {
       await result.current.handleSetDefaultProject()
     })
 
-    expect(projectMocks.setDefaultProject).toHaveBeenCalledWith('engram-vault')
+    expect(projectMocks.setDefaultProject).toHaveBeenCalledWith({ project_id: 'engram-vault' })
     expect(setSettingDefaultProject).toHaveBeenCalledWith(true)
     expect(setSettingDefaultProject).toHaveBeenLastCalledWith(false)
     expect(setChatError).toHaveBeenCalledWith(null)

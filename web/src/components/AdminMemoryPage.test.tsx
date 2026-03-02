@@ -305,9 +305,12 @@ describe('AdminMemoryPage', () => {
     await user.click(screen.getByRole('button', { name: /add member/i }))
 
     await waitFor(() => {
-      expect(projectApiMocks.addProjectMember).toHaveBeenCalledWith('engram-vault', {
-        user_id: '00000000-0000-0000-0000-000000000191',
-        role: 'viewer',
+      expect(projectApiMocks.addProjectMember).toHaveBeenCalledWith({
+        project_id: 'engram-vault',
+        payload: {
+          user_id: '00000000-0000-0000-0000-000000000191',
+          role: 'viewer',
+        },
       })
     })
   })

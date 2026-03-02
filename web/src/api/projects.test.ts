@@ -41,7 +41,7 @@ describe('projects api', () => {
       mockJsonResponse({ default_project_id: 'project-phase-31' }),
     )
 
-    const payload = await setDefaultProject('project-phase-31')
+    const payload = await setDefaultProject({ project_id: 'project-phase-31' })
     expect(payload.default_project_id).toBe('project-phase-31')
     const [, init] = fetchMock.mock.calls[0]
     expect((init as RequestInit).method).toBe('PATCH')
@@ -84,7 +84,10 @@ describe('projects api', () => {
       ]),
     )
 
-    const payload = await listProjectMembers('engram-vault', { include_revoked: false, limit: 250, offset: 2 })
+    const payload = await listProjectMembers({
+      project_id: 'engram-vault',
+      params: { include_revoked: false, limit: 250, offset: 2 },
+    })
     expect(payload).toHaveLength(1)
     expect(payload[0].role).toBe('viewer')
     expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/projects/engram-vault/members?')
@@ -121,14 +124,24 @@ describe('projects api', () => {
         }),
       )
 
-    await addProjectMember('engram-vault', {
+    await addProjectMember({
+      project_id: 'engram-vault',
+      payload: {
+        user_id: '00000000-0000-0000-0000-000000000101',
+        role: 'viewer',
+      },
+    })
+    await updateProjectMember({
+      project_id: 'engram-vault',
       user_id: '00000000-0000-0000-0000-000000000101',
-      role: 'viewer',
+      payload: {
+        role: 'editor',
+      },
     })
-    await updateProjectMember('engram-vault', '00000000-0000-0000-0000-000000000101', {
-      role: 'editor',
+    await removeProjectMember({
+      project_id: 'engram-vault',
+      user_id: '00000000-0000-0000-0000-000000000101',
     })
-    await removeProjectMember('engram-vault', '00000000-0000-0000-0000-000000000101')
 
     expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/projects/engram-vault/members')
     expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST')
@@ -154,7 +167,10 @@ describe('projects api', () => {
       ]),
     )
 
-    const payload = await listProjectAuditEvents('engram-vault', { limit: 20, offset: 5 })
+    const payload = await listProjectAuditEvents({
+      project_id: 'engram-vault',
+      params: { limit: 20, offset: 5 },
+    })
     expect(payload).toHaveLength(1)
     expect(payload[0].event_type).toBe('engram.share')
     expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/projects/engram-vault/audit-events?')

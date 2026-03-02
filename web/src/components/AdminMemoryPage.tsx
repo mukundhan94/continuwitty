@@ -1015,16 +1015,22 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
           offset: 0,
         }),
         projectFilter
-          ? listProjectMembers(projectFilter, {
-              include_revoked: false,
-              limit: PROJECT_MEMBER_LIMIT,
-              offset: 0,
+          ? listProjectMembers({
+              project_id: projectFilter,
+              params: {
+                include_revoked: false,
+                limit: PROJECT_MEMBER_LIMIT,
+                offset: 0,
+              },
             })
           : Promise.resolve<ProjectMemberRecord[]>([]),
         projectFilter
-          ? listProjectAuditEvents(projectFilter, {
-              limit: PROJECT_AUDIT_LIMIT,
-              offset: 0,
+          ? listProjectAuditEvents({
+              project_id: projectFilter,
+              params: {
+                limit: PROJECT_AUDIT_LIMIT,
+                offset: 0,
+              },
             })
           : Promise.resolve<ProjectAuditEventRecord[]>([]),
       ])
@@ -1267,9 +1273,12 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
       return
     }
     void runAction(async () => {
-      const added = await addProjectMember(normalizedProjectID, {
-        user_id: normalizedUserID,
-        role: memberRole,
+      const added = await addProjectMember({
+        project_id: normalizedProjectID,
+        payload: {
+          user_id: normalizedUserID,
+          role: memberRole,
+        },
       })
       setMemberUserId('')
       onNotice(`Added member ${added.user_id} (${added.role})`)
@@ -1284,8 +1293,12 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     }
     const targetRole = memberRoleDrafts[member.user_id] ?? member.role
     void runAction(async () => {
-      const updated = await updateProjectMember(normalizedProjectID, member.user_id, {
-        role: targetRole,
+      const updated = await updateProjectMember({
+        project_id: normalizedProjectID,
+        user_id: member.user_id,
+        payload: {
+          role: targetRole,
+        },
       })
       onNotice(`Updated member ${updated.user_id} to ${updated.role}`)
       await refresh()
@@ -1298,7 +1311,10 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
       return
     }
     void runAction(async () => {
-      await removeProjectMember(normalizedProjectID, member.user_id)
+      await removeProjectMember({
+        project_id: normalizedProjectID,
+        user_id: member.user_id,
+      })
       onNotice(`Removed member ${member.user_id}`)
       await refresh()
     })
