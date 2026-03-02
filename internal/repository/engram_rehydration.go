@@ -17,6 +17,13 @@ type RehydrationInput struct {
 	ActorUserID *uuid.UUID
 }
 
+// EngramSourceListInput captures source-list lookup controls.
+type EngramSourceListInput struct {
+	EngramID    uuid.UUID
+	Limit       int
+	ActorUserID *uuid.UUID
+}
+
 type rehydrationRow struct {
 	EngramID        uuid.UUID
 	ProjectID       string
@@ -76,14 +83,12 @@ func GetRehydrationBundle(
 func GetEngramSources(
 	ctx context.Context,
 	db Queryer,
-	engramID uuid.UUID,
-	limit int,
-	actorUserID *uuid.UUID,
+	input EngramSourceListInput,
 ) ([]models.EngramSourceRecord, error) {
-	if limit <= 0 {
-		limit = 100
+	if input.Limit <= 0 {
+		input.Limit = 100
 	}
-	_, err := fetchRehydrationEngramRow(ctx, db, engramID, actorUserID)
+	_, err := fetchRehydrationEngramRow(ctx, db, input.EngramID, input.ActorUserID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return []models.EngramSourceRecord{}, nil
 	}
@@ -98,10 +103,10 @@ func GetEngramSources(
 		FROM sources
 		WHERE engram_id = $1
 		ORDER BY captured_at DESC
-		LIMIT $2
-		`,
-		engramID,
-		limit,
+			LIMIT $2
+			`,
+		input.EngramID,
+		input.Limit,
 	)
 	if err != nil {
 		return nil, err
@@ -227,11 +232,27 @@ func buildRehydrationContent(
 	}
 
 	detailedSummaryMarkdown := detailedSummaryMarkdownValue(engramJSON, row.EngramMarkdown)
-	compactSummary := resolveCompactSummary(row.Abstract, detailedSummaryMarkdown, 800)
-	detailedExcerpt := extractDetailedExcerpt(detailedSummaryMarkdown, 2400)
+	compactSummary := resolveCompactSummary(
+		compactSummaryInput{
+			abstract:                row.Abstract,
+			detailedSummaryMarkdown: detailedSummaryMarkdown,
+			maxChars:                800,
+		},
+	)
+	detailedExcerpt := extractDetailedExcerpt(
+		detailedExcerptInput{
+			markdown: detailedSummaryMarkdown,
+			maxChars: 2400,
+		},
+	)
 	decisions := decisionMapsFromAny(engramJSON["decisions"])
 	openQuestions := stringSliceFromAny(engramJSON["open_questions"])
-	packedCitations := packCitations(citations, 5)
+	packedCitations := packCitations(
+		citationPackInput{
+			citations: citations,
+			limit:     5,
+		},
+	)
 	contextMarkdown := buildRehydrationContextMarkdown(
 		rehydrationContextParts{
 			Title:           row.Title,

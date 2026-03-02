@@ -33,6 +33,48 @@ type rehydrationContextParts struct {
 	Citations       []models.RehydrationCitation
 }
 
+type textLimitInput struct {
+	value    string
+	maxChars int
+}
+
+type detailedExcerptInput struct {
+	markdown string
+	maxChars int
+}
+
+type sectionBodyInput struct {
+	lines []string
+	start int
+}
+
+type compactSummaryInput struct {
+	abstract                string
+	detailedSummaryMarkdown string
+	maxChars                int
+}
+
+type lexicalOverlapInput struct {
+	query          string
+	candidateParts []string
+}
+
+type rankScoreInput struct {
+	distance       float64
+	lexicalOverlap float64
+}
+
+type citationPackInput struct {
+	citations []models.RehydrationCitation
+	limit     int
+}
+
+type rerankRowsInput struct {
+	rows  []map[string]any
+	query string
+	topK  int
+}
+
 func vectorLiteral(values []float64) string {
 	parts := make([]string, 0, len(values))
 	for _, value := range values {
@@ -87,22 +129,22 @@ func tokenize(text string) map[string]struct{} {
 	return tokens
 }
 
-func normalizeSpaces(value string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
+func normalizeSpaces(input textLimitInput) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(input.value)), " ")
 }
 
-func truncateText(value string, maxChars int) string {
-	if maxChars <= 0 || len(value) <= maxChars {
-		return value
+func truncateText(input textLimitInput) string {
+	if input.maxChars <= 0 || len(input.value) <= input.maxChars {
+		return input.value
 	}
-	if maxChars <= 3 {
-		return value[:maxChars]
+	if input.maxChars <= 3 {
+		return input.value[:input.maxChars]
 	}
-	return strings.TrimSpace(value[:maxChars-3]) + "..."
+	return strings.TrimSpace(input.value[:input.maxChars-3]) + "..."
 }
 
-func extractDetailedExcerpt(markdown string, maxChars int) string {
-	text := strings.TrimSpace(markdown)
+func extractDetailedExcerpt(input detailedExcerptInput) string {
+	text := strings.TrimSpace(input.markdown)
 	if text == "" {
 		return ""
 	}
@@ -111,7 +153,7 @@ func extractDetailedExcerpt(markdown string, maxChars int) string {
 	if excerpt == "" {
 		excerpt = text
 	}
-	return truncateText(excerpt, maxChars)
+	return truncateText(textLimitInput{value: excerpt, maxChars: input.maxChars})
 }
 
 func assistantExcerpt(markdown string) string {
@@ -120,7 +162,7 @@ func assistantExcerpt(markdown string) string {
 	if assistantStart < 0 {
 		return ""
 	}
-	return sectionBody(lines, assistantStart)
+	return sectionBody(sectionBodyInput{lines: lines, start: assistantStart})
 }
 
 func assistantSectionStart(lines []string) int {
@@ -132,44 +174,53 @@ func assistantSectionStart(lines []string) int {
 	return -1
 }
 
-func sectionBody(lines []string, start int) string {
+func sectionBody(input sectionBodyInput) string {
 	bodyLines := make([]string, 0)
-	for index := start; index < len(lines); index++ {
-		if strings.HasPrefix(strings.TrimSpace(lines[index]), "## ") {
+	for index := input.start; index < len(input.lines); index++ {
+		if strings.HasPrefix(strings.TrimSpace(input.lines[index]), "## ") {
 			break
 		}
-		bodyLines = append(bodyLines, lines[index])
+		bodyLines = append(bodyLines, input.lines[index])
 	}
 	return strings.TrimSpace(strings.Join(bodyLines, "\n"))
 }
 
-func resolveCompactSummary(abstract, detailedSummaryMarkdown string, maxChars int) string {
-	if maxChars <= 0 {
-		maxChars = 800
+func resolveCompactSummary(input compactSummaryInput) string {
+	if input.maxChars <= 0 {
+		input.maxChars = 800
 	}
 
-	abstractClean := normalizeSpaces(abstract)
+	abstractClean := normalizeSpaces(textLimitInput{value: input.abstract})
 	if _, isGeneric := genericChatAbstracts[strings.ToLower(abstractClean)]; !isGeneric {
-		return truncateText(abstractClean, maxChars)
+		return truncateText(textLimitInput{value: abstractClean, maxChars: input.maxChars})
 	}
 
-	fallback := normalizeSpaces(extractDetailedExcerpt(detailedSummaryMarkdown, maxChars))
+	fallback := normalizeSpaces(
+		textLimitInput{
+			value: extractDetailedExcerpt(
+				detailedExcerptInput{
+					markdown: input.detailedSummaryMarkdown,
+					maxChars: input.maxChars,
+				},
+			),
+		},
+	)
 	if fallback != "" {
 		return fallback
 	}
 	if abstractClean != "" {
-		return truncateText(abstractClean, maxChars)
+		return truncateText(textLimitInput{value: abstractClean, maxChars: input.maxChars})
 	}
 	return "No summary available."
 }
 
-func lexicalOverlapScore(query string, candidateParts []string) float64 {
-	queryTokens := tokenize(query)
+func lexicalOverlapScore(input lexicalOverlapInput) float64 {
+	queryTokens := tokenize(input.query)
 	if len(queryTokens) == 0 {
 		return 0
 	}
 
-	documentTokens := collectTokens(candidateParts)
+	documentTokens := collectTokens(input.candidateParts)
 	if len(documentTokens) == 0 {
 		return 0
 	}
@@ -197,26 +248,26 @@ func overlapCount(source map[string]struct{}, target map[string]struct{}) int {
 	return overlap
 }
 
-func combinedRankScore(distance, lexicalOverlap float64) float64 {
-	denseScore := 1.0 / (1.0 + math.Max(distance, 0))
-	return (denseScore * 0.8) + (lexicalOverlap * 0.2)
+func combinedRankScore(input rankScoreInput) float64 {
+	denseScore := 1.0 / (1.0 + math.Max(input.distance, 0))
+	return (denseScore * 0.8) + (input.lexicalOverlap * 0.2)
 }
 
-func packCitations(citations []models.RehydrationCitation, limit int) []models.RehydrationCitation {
-	if limit <= 0 {
+func packCitations(input citationPackInput) []models.RehydrationCitation {
+	if input.limit <= 0 {
 		return []models.RehydrationCitation{}
 	}
 
-	packed := make([]models.RehydrationCitation, 0, min(limit, len(citations)))
-	seenURLs := make(map[string]struct{}, len(citations))
-	for _, citation := range citations {
+	packed := make([]models.RehydrationCitation, 0, min(input.limit, len(input.citations)))
+	seenURLs := make(map[string]struct{}, len(input.citations))
+	for _, citation := range input.citations {
 		urlKey := strings.ToLower(strings.TrimSpace(citation.URL))
 		if _, exists := seenURLs[urlKey]; exists {
 			continue
 		}
 		seenURLs[urlKey] = struct{}{}
 		packed = append(packed, citation)
-		if len(packed) >= limit {
+		if len(packed) >= input.limit {
 			break
 		}
 	}
@@ -273,29 +324,36 @@ func buildEngramQueryWhere(
 	return "WHERE " + strings.Join(whereClauses, " AND "), params
 }
 
-func rerankByCombinedScore(rows []map[string]any, query string, topK int) []map[string]any {
+func rerankByCombinedScore(input rerankRowsInput) []map[string]any {
 	type rankedRow struct {
 		score     float64
 		createdAt time.Time
 		row       map[string]any
 	}
 
-	ranked := make([]rankedRow, 0, len(rows))
-	for _, row := range rows {
+	ranked := make([]rankedRow, 0, len(input.rows))
+	for _, row := range input.rows {
 		lexicalScore := lexicalOverlapScore(
-			query,
-			[]string{
-				stringFromAny(row["title"]),
-				stringFromAny(row["abstract"]),
-				stringFromAny(row["retrieval_text"]),
-				strings.Join(stringSliceFromAny(row["tags"]), " "),
-				strings.Join(stringSliceFromAny(row["keywords"]), " "),
+			lexicalOverlapInput{
+				query: input.query,
+				candidateParts: []string{
+					stringFromAny(row["title"]),
+					stringFromAny(row["abstract"]),
+					stringFromAny(row["retrieval_text"]),
+					strings.Join(stringSliceFromAny(row["tags"]), " "),
+					strings.Join(stringSliceFromAny(row["keywords"]), " "),
+				},
 			},
 		)
 		ranked = append(
 			ranked,
 			rankedRow{
-				score:     combinedRankScore(float64FromAny(row["distance"]), lexicalScore),
+				score: combinedRankScore(
+					rankScoreInput{
+						distance:       float64FromAny(row["distance"]),
+						lexicalOverlap: lexicalScore,
+					},
+				),
 				createdAt: timeFromAny(row["created_at"]),
 				row:       row,
 			},
@@ -309,11 +367,11 @@ func rerankByCombinedScore(rows []map[string]any, query string, topK int) []map[
 		return ranked[left].score > ranked[right].score
 	})
 
-	if topK <= 0 || topK > len(ranked) {
-		topK = len(ranked)
+	if input.topK <= 0 || input.topK > len(ranked) {
+		input.topK = len(ranked)
 	}
-	trimmed := make([]map[string]any, 0, topK)
-	for _, row := range ranked[:topK] {
+	trimmed := make([]map[string]any, 0, input.topK)
+	for _, row := range ranked[:input.topK] {
 		trimmed = append(trimmed, row.row)
 	}
 	return trimmed

@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	sensitiveSettingKeys = map[string]struct{}{
+	sensitiveSettingKeys = map[sensitiveSettingKey]struct{}{
 		"database_url":               {},
 		"app_session_secret":         {},
 		"ui_demo_password":           {},
@@ -49,6 +49,16 @@ var (
 		"password": {},
 	}
 )
+
+type sensitiveSettingKey string
+
+type auditSinkURL string
+
+type secretValidationInput struct {
+	name            string
+	value           string
+	insecureDefault string
+}
 
 const (
 	minSecretLength                = 32
@@ -233,7 +243,7 @@ func ValidateOIDCSettings(settings Settings) error {
 
 // ValidateAuditSettings enforces centralized audit sink configuration semantics.
 func ValidateAuditSettings(settings Settings) error {
-	sinkURL := strings.TrimSpace(settings.AuditSinkURL)
+	sinkURL := normalizeAuditSinkURL(settings.AuditSinkURL)
 	if err := validateAuditSinkRequirement(settings.AuditSinkRequired, sinkURL); err != nil {
 		return err
 	}
@@ -246,18 +256,22 @@ func ValidateAuditSettings(settings Settings) error {
 	return nil
 }
 
-func validateAuditSinkRequirement(required bool, sinkURL string) error {
+func normalizeAuditSinkURL(raw string) auditSinkURL {
+	return auditSinkURL(strings.TrimSpace(raw))
+}
+
+func validateAuditSinkRequirement(required bool, sinkURL auditSinkURL) error {
 	if required && sinkURL == "" {
 		return errors.New("AUDIT_SINK_REQUIRED is true but AUDIT_SINK_URL is empty")
 	}
 	return nil
 }
 
-func validateAuditSinkURL(sinkURL string) error {
+func validateAuditSinkURL(sinkURL auditSinkURL) error {
 	if sinkURL == "" {
 		return nil
 	}
-	parsed, err := url.Parse(sinkURL)
+	parsed, err := url.Parse(string(sinkURL))
 	if err != nil {
 		return errors.New("AUDIT_SINK_URL must be a valid absolute URL")
 	}
@@ -311,19 +325,19 @@ func ValidateEmbeddingSettings(settings Settings) error {
 	return nil
 }
 
-func appendSecretViolations(violations []string, name, value, insecureDefault string) []string {
-	normalized := strings.TrimSpace(value)
-	if normalized == insecureDefault {
-		violations = append(violations, fmt.Sprintf("%s cannot use the development default in production", name))
+func appendSecretViolations(violations []string, input secretValidationInput) []string {
+	normalized := strings.TrimSpace(input.value)
+	if normalized == input.insecureDefault {
+		violations = append(violations, fmt.Sprintf("%s cannot use the development default in production", input.name))
 	}
 	if len(normalized) < minSecretLength {
-		violations = append(violations, fmt.Sprintf("%s must be at least %d characters in production", name, minSecretLength))
+		violations = append(violations, fmt.Sprintf("%s must be at least %d characters in production", input.name, minSecretLength))
 	}
 	return violations
 }
 
-func demoPasswordViolations(password string) []string {
-	normalized := strings.TrimSpace(password)
+func demoPasswordViolations(password secretValidationInput) []string {
+	normalized := strings.TrimSpace(password.value)
 	violations := make([]string, 0)
 	if len(normalized) < minPasswordLength {
 		violations = append(violations, fmt.Sprintf("UI_DEMO_PASSWORD must be at least %d characters in production", minPasswordLength))
@@ -341,10 +355,25 @@ func ValidateProductionSecurity(settings Settings) error {
 	}
 
 	violations := make([]string, 0)
-	violations = appendSecretViolations(violations, "APP_SESSION_SECRET", settings.AppSessionSecret, defaultSessionSecret)
-	violations = appendSecretViolations(violations, "MCP_TOKEN_PEPPER", settings.MCPTokenPepper, defaultMCPTokenPepper)
-	violations = appendSecretViolations(violations, "OAUTH_CLIENT_SECRET_PEPPER", settings.OAuthClientSecretPepper, defaultOAuthClientSecret)
-	violations = append(violations, demoPasswordViolations(settings.UIDemoPassword)...)
+	violations = appendSecretViolations(violations, secretValidationInput{
+		name:            "APP_SESSION_SECRET",
+		value:           settings.AppSessionSecret,
+		insecureDefault: defaultSessionSecret,
+	})
+	violations = appendSecretViolations(violations, secretValidationInput{
+		name:            "MCP_TOKEN_PEPPER",
+		value:           settings.MCPTokenPepper,
+		insecureDefault: defaultMCPTokenPepper,
+	})
+	violations = appendSecretViolations(violations, secretValidationInput{
+		name:            "OAUTH_CLIENT_SECRET_PEPPER",
+		value:           settings.OAuthClientSecretPepper,
+		insecureDefault: defaultOAuthClientSecret,
+	})
+	violations = append(violations, demoPasswordViolations(secretValidationInput{
+		name:  "UI_DEMO_PASSWORD",
+		value: settings.UIDemoPassword,
+	})...)
 
 	if !settings.OAuthRequireProtectedRegistration {
 		violations = append(violations, "OAUTH_REQUIRE_PROTECTED_REGISTRATION must be enabled in production")
@@ -365,8 +394,8 @@ func BuildDebugSettingsSnapshot(settings Settings) map[string]any {
 	return snapshot
 }
 
-func redactIfSensitive(snapshot map[string]any, key string) {
-	value, exists := snapshot[key]
+func redactIfSensitive(snapshot map[string]any, key sensitiveSettingKey) {
+	value, exists := snapshot[string(key)]
 	if !exists {
 		return
 	}
@@ -377,7 +406,7 @@ func redactIfSensitive(snapshot map[string]any, key string) {
 	if strings.TrimSpace(stringValue) == "" {
 		return
 	}
-	snapshot[key] = "<redacted>"
+	snapshot[string(key)] = "<redacted>"
 }
 
 func settingsMap(settings Settings) map[string]any {

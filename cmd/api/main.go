@@ -572,7 +572,15 @@ func getEngramSourcesDependency(
 		limit int,
 		actorUserID uuid.UUID,
 	) ([]models.EngramSourceRecord, error) {
-		return repository.GetEngramSources(ctx, pool, engramID, limit, &actorUserID)
+		return repository.GetEngramSources(
+			ctx,
+			pool,
+			repository.EngramSourceListInput{
+				EngramID:    engramID,
+				Limit:       limit,
+				ActorUserID: &actorUserID,
+			},
+		)
 	}
 }
 
@@ -825,7 +833,14 @@ func listMCPTokenSummariesDependency(
 		limit int,
 		offset int,
 	) ([]models.MCPTokenSummary, error) {
-		return service.ListTokenSummaries(ctx, ownerUserID, limit, offset)
+		return service.ListTokenSummaries(
+			ctx,
+			mcptokens.TokenListRequest{
+				OwnerUserID: ownerUserID,
+				Limit:       limit,
+				Offset:      offset,
+			},
+		)
 	}
 }
 

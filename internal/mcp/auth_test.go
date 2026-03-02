@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"engram/internal/config"
+	"engram/internal/mcptokens"
 	"engram/internal/models"
 	"engram/internal/repository"
 
@@ -193,13 +194,13 @@ func tokenIsActiveForFixture(
 func verifyTokenSecretForFixture(
 	t *testing.T,
 	tokenID uuid.UUID,
-) func(uuid.UUID, string, string, string) bool {
+) func(mcptokens.TokenSecretVerificationInput) bool {
 	t.Helper()
-	return func(token uuid.UUID, secret string, pepper string, expectedHash string) bool {
-		assertUUIDEqual(t, tokenID, token, "token id")
-		assertStringEqual(t, "token-secret", secret, "token secret")
-		assertStringEqual(t, "pepper-value", pepper, "token pepper")
-		assertStringEqual(t, "expected-hash", expectedHash, "token hash")
+	return func(input mcptokens.TokenSecretVerificationInput) bool {
+		assertUUIDEqual(t, tokenID, input.TokenID, "token id")
+		assertStringEqual(t, "token-secret", input.TokenSecret, "token secret")
+		assertStringEqual(t, "pepper-value", input.Pepper, "token pepper")
+		assertStringEqual(t, "expected-hash", input.ExpectedHash, "token hash")
 		return true
 	}
 }

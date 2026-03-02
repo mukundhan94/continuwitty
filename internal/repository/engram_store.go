@@ -142,7 +142,13 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 		return nil, err
 	}
 
-	rerankedRows := rerankByCombinedScore(candidateRows, input.Request.Query, topK)
+	rerankedRows := rerankByCombinedScore(
+		rerankRowsInput{
+			rows:  candidateRows,
+			query: input.Request.Query,
+			topK:  topK,
+		},
+	)
 	results := make([]models.EngramQueryResult, 0, len(rerankedRows))
 	for _, row := range rerankedRows {
 		results = append(results, mapEngramQueryResult(row))

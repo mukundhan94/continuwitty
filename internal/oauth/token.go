@@ -402,7 +402,13 @@ func issueOAuthAccessToken(
 	tokenSecret := base64.RawURLEncoding.EncodeToString(secretBytes)
 	return issuedToken{
 		plaintext: buildOAuthPlaintextToken(tokenID, tokenSecret),
-		hash:      mcptokens.TokenHash(tokenID, tokenSecret, pepper),
+		hash: mcptokens.TokenHash(
+			mcptokens.TokenHashInput{
+				TokenID:     tokenID,
+				TokenSecret: tokenSecret,
+				Pepper:      pepper,
+			},
+		),
 		hint:      buildOAuthTokenSecretHint(tokenSecret),
 		expiresAt: expiresAt,
 	}, nil

@@ -135,7 +135,14 @@ func TestIssueOAuthAccessTokenProducesHashVerifiedByMCPTokenVerifier(t *testing.
 	if parsedTokenID != tokenID {
 		t.Fatalf("expected parsed token id %s, got %s", tokenID, parsedTokenID)
 	}
-	if !mcptokens.VerifyTokenSecret(tokenID, tokenSecret, "pepper", issued.hash) {
+	if !mcptokens.VerifyTokenSecret(
+		mcptokens.TokenSecretVerificationInput{
+			TokenID:      tokenID,
+			TokenSecret:  tokenSecret,
+			Pepper:       "pepper",
+			ExpectedHash: issued.hash,
+		},
+	) {
 		t.Fatalf("expected issued hash to validate against parsed token secret")
 	}
 }

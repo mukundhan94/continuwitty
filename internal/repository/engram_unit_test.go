@@ -87,7 +87,13 @@ func TestRerankByCombinedScorePrefersLexicalOverlap(t *testing.T) {
 		},
 	}
 
-	reranked := rerankByCombinedScore(rows, "durable checkpoint", 1)
+	reranked := rerankByCombinedScore(
+		rerankRowsInput{
+			rows:  rows,
+			query: "durable checkpoint",
+			topK:  1,
+		},
+	)
 	if len(reranked) != 1 {
 		t.Fatalf("expected one reranked result, got %d", len(reranked))
 	}

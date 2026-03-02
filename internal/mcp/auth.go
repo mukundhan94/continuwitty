@@ -48,7 +48,7 @@ type actorResolverDeps struct {
 	parsePlaintextToken func(raw string) (uuid.UUID, string, error)
 	getTokenByID        func(context.Context, repository.Queryer, uuid.UUID) (*models.MCPTokenRecord, error)
 	tokenIsActive       func(models.MCPTokenRecord, time.Time) bool
-	verifyTokenSecret   func(uuid.UUID, string, string, string) bool
+	verifyTokenSecret   func(mcptokens.TokenSecretVerificationInput) bool
 	getUserByID         func(context.Context, repository.Queryer, uuid.UUID) (*models.UserAuthRecord, error)
 	touchTokenLastUsed  func(context.Context, repository.Queryer, uuid.UUID) error
 	buildAuthContext    func(models.MCPTokenRecord) models.MCPTokenAuthContext
@@ -127,28 +127,23 @@ func (resolver *ActorResolver) resolveBearerActorContext(
 		return ResolvedActor{}, resolver.unauthorized(request)
 	}
 
-	record, err := resolver.deps.getTokenByID(request.Context(), resolver.db, tokenID)
+	record, unauthorized, err := resolver.loadActiveTokenRecord(request.Context(), tokenID)
 	if err != nil {
 		return ResolvedActor{}, resolver.internalError()
 	}
-	if record == nil || !resolver.deps.tokenIsActive(*record, resolver.deps.nowUTC()) {
+	if unauthorized {
 		return ResolvedActor{}, resolver.unauthorized(request)
 	}
 
-	if !resolver.deps.verifyTokenSecret(
-		record.TokenID,
-		tokenSecret,
-		resolver.settings.MCPTokenPepper,
-		record.TokenSecretHash,
-	) {
+	if !resolver.tokenSecretMatches(*record, tokenSecret) {
 		return ResolvedActor{}, resolver.unauthorized(request)
 	}
 
-	user, err := resolver.deps.getUserByID(request.Context(), resolver.db, record.OwnerUserID)
+	user, unauthorized, err := resolver.loadActiveTokenUser(request.Context(), record.OwnerUserID)
 	if err != nil {
 		return ResolvedActor{}, resolver.internalError()
 	}
-	if user == nil || !user.IsActive {
+	if unauthorized {
 		return ResolvedActor{}, resolver.unauthorized(request)
 	}
 
@@ -165,6 +160,59 @@ func (resolver *ActorResolver) resolveBearerActorContext(
 		}),
 		TokenAuth: &tokenAuth,
 	}, nil
+}
+
+func (resolver *ActorResolver) loadActiveTokenRecord(
+	ctx context.Context,
+	tokenID uuid.UUID,
+) (*models.MCPTokenRecord, bool, error) {
+	record, err := resolver.deps.getTokenByID(ctx, resolver.db, tokenID)
+	return resolveActiveRecord(
+		record,
+		err,
+		func(candidate *models.MCPTokenRecord) bool {
+			return resolver.deps.tokenIsActive(*candidate, resolver.deps.nowUTC())
+		},
+	)
+}
+
+func (resolver *ActorResolver) tokenSecretMatches(record models.MCPTokenRecord, tokenSecret string) bool {
+	return resolver.deps.verifyTokenSecret(
+		mcptokens.TokenSecretVerificationInput{
+			TokenID:      record.TokenID,
+			TokenSecret:  tokenSecret,
+			Pepper:       resolver.settings.MCPTokenPepper,
+			ExpectedHash: record.TokenSecretHash,
+		},
+	)
+}
+
+func (resolver *ActorResolver) loadActiveTokenUser(
+	ctx context.Context,
+	ownerUserID uuid.UUID,
+) (*models.UserAuthRecord, bool, error) {
+	user, err := resolver.deps.getUserByID(ctx, resolver.db, ownerUserID)
+	return resolveActiveRecord(
+		user,
+		err,
+		func(candidate *models.UserAuthRecord) bool {
+			return candidate.IsActive
+		},
+	)
+}
+
+func resolveActiveRecord[T any](
+	record *T,
+	err error,
+	isActive func(*T) bool,
+) (*T, bool, error) {
+	if err != nil {
+		return nil, false, err
+	}
+	if record == nil || !isActive(record) {
+		return nil, true, nil
+	}
+	return record, false, nil
 }
 
 func normalizeActor(actor Actor) Actor {

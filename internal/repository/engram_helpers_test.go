@@ -57,8 +57,10 @@ func TestBuildRetrievalTextFallbackComposesFields(t *testing.T) {
 
 func TestLexicalOverlapScorePrefersMatchingTerms(t *testing.T) {
 	score := lexicalOverlapScore(
-		"durable checkpoint workflow",
-		[]string{"LangGraph enables durable checkpoint workflow execution"},
+		lexicalOverlapInput{
+			query:          "durable checkpoint workflow",
+			candidateParts: []string{"LangGraph enables durable checkpoint workflow execution"},
+		},
 	)
 	if score <= 0.6 {
 		t.Fatalf("expected overlap score > 0.6, got %v", score)
@@ -66,8 +68,8 @@ func TestLexicalOverlapScorePrefersMatchingTerms(t *testing.T) {
 }
 
 func TestCombinedRankScoreUsesDenseAndLexicalSignals(t *testing.T) {
-	weakDenseStrongLexical := combinedRankScore(0.8, 1.0)
-	strongDenseWeakLexical := combinedRankScore(0.1, 0.0)
+	weakDenseStrongLexical := combinedRankScore(rankScoreInput{distance: 0.8, lexicalOverlap: 1.0})
+	strongDenseWeakLexical := combinedRankScore(rankScoreInput{distance: 0.1, lexicalOverlap: 0.0})
 	if weakDenseStrongLexical <= 0 {
 		t.Fatalf("expected weakDenseStrongLexical > 0, got %v", weakDenseStrongLexical)
 	}
@@ -104,7 +106,12 @@ func TestPackCitationsDeduplicatesURLs(t *testing.T) {
 			CapturedAt: time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC),
 		},
 	}
-	packed := packCitations(citations, 5)
+	packed := packCitations(
+		citationPackInput{
+			citations: citations,
+			limit:     5,
+		},
+	)
 	if len(packed) != 2 {
 		t.Fatalf("expected 2 packed citations, got %d", len(packed))
 	}
@@ -118,9 +125,11 @@ func TestPackCitationsDeduplicatesURLs(t *testing.T) {
 
 func TestResolveCompactSummaryUsesDetailedForGenericChatSnapshot(t *testing.T) {
 	resolved := resolveCompactSummary(
-		"Snapshot from active chat session.",
-		"# Chat Session Snapshot\n\n## ASSISTANT (ts)\nPrimary cause was DB CPU saturation; rollback did not help.",
-		800,
+		compactSummaryInput{
+			abstract:                "Snapshot from active chat session.",
+			detailedSummaryMarkdown: "# Chat Session Snapshot\n\n## ASSISTANT (ts)\nPrimary cause was DB CPU saturation; rollback did not help.",
+			maxChars:                800,
+		},
 	)
 	if !strings.Contains(resolved, "Primary cause was DB CPU saturation") {
 		t.Fatalf("expected compact summary to use detailed excerpt, got %q", resolved)
@@ -129,8 +138,10 @@ func TestResolveCompactSummaryUsesDetailedForGenericChatSnapshot(t *testing.T) {
 
 func TestExtractDetailedExcerptPrefersAssistantSection(t *testing.T) {
 	excerpt := extractDetailedExcerpt(
-		"# Chat Session Snapshot\n\n## USER (ts)\nWhat happened?\n\n## ASSISTANT (ts)\nDatabase saturation triggered payment latency.\n\n## USER (ts)\nThanks.",
-		200,
+		detailedExcerptInput{
+			markdown: "# Chat Session Snapshot\n\n## USER (ts)\nWhat happened?\n\n## ASSISTANT (ts)\nDatabase saturation triggered payment latency.\n\n## USER (ts)\nThanks.",
+			maxChars: 200,
+		},
 	)
 	if !strings.HasPrefix(excerpt, "Database saturation triggered payment latency.") {
 		t.Fatalf("expected assistant excerpt, got %q", excerpt)

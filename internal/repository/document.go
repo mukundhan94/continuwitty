@@ -574,10 +574,20 @@ func rerankDocumentChunkRows(
 	}
 	ranked := make([]rankedChunk, 0, len(rows))
 	for _, row := range rows {
-		lexical := lexicalOverlapScore(query, []string{row.Title, row.Snippet, row.ChunkText})
+		lexical := lexicalOverlapScore(
+			lexicalOverlapInput{
+				query:          query,
+				candidateParts: []string{row.Title, row.Snippet, row.ChunkText},
+			},
+		)
 		ranked = append(ranked, rankedChunk{
-			score: combinedRankScore(row.Distance, lexical),
-			row:   row,
+			score: combinedRankScore(
+				rankScoreInput{
+					distance:       row.Distance,
+					lexicalOverlap: lexical,
+				},
+			),
+			row: row,
 		})
 	}
 	sort.SliceStable(ranked, func(i, j int) bool {

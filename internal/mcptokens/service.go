@@ -30,7 +30,7 @@ type Service struct {
 type serviceDeps struct {
 	nowUTC         func() time.Time
 	newTokenID     func() uuid.UUID
-	issueNewToken  func(tokenID uuid.UUID, expiresInDays int, pepper string) (issuedToken, error)
+	issueNewToken  func(input tokenIssueInput) (issuedToken, error)
 	createMCPToken func(context.Context, repository.Queryer, repository.MCPTokenCreateInput) (*models.MCPTokenRecord, error)
 	listMCPTokens  func(context.Context, repository.Queryer, repository.MCPTokenListInput) ([]models.MCPTokenRecord, error)
 	revokeMCPToken func(context.Context, repository.Queryer, repository.MCPTokenRevokeInput) (*models.MCPTokenRecord, error)
@@ -41,6 +41,34 @@ type issuedToken struct {
 	hash      string
 	hint      string
 	expiresAt time.Time
+}
+
+// TokenHashInput captures token hashing materials.
+type TokenHashInput struct {
+	TokenID     uuid.UUID
+	TokenSecret string
+	Pepper      string
+}
+
+// TokenSecretVerificationInput captures secret verification materials.
+type TokenSecretVerificationInput struct {
+	TokenID      uuid.UUID
+	TokenSecret  string
+	Pepper       string
+	ExpectedHash string
+}
+
+type tokenIssueInput struct {
+	tokenID       uuid.UUID
+	expiresInDays int
+	pepper        string
+}
+
+// TokenListRequest captures list filters for token summaries.
+type TokenListRequest struct {
+	OwnerUserID uuid.UUID
+	Limit       int
+	Offset      int
 }
 
 func defaultServiceDeps() serviceDeps {
@@ -99,9 +127,9 @@ func NormalizeStringList(values []string) []string {
 }
 
 // TokenHash computes the persisted hash for an MCP token secret.
-func TokenHash(tokenID uuid.UUID, tokenSecret string, pepper string) string {
-	payload := strings.ReplaceAll(tokenID.String(), "-", "") + ":" + tokenSecret
-	mac := hmac.New(sha256.New, []byte(pepper))
+func TokenHash(input TokenHashInput) string {
+	payload := strings.ReplaceAll(input.TokenID.String(), "-", "") + ":" + input.TokenSecret
+	mac := hmac.New(sha256.New, []byte(input.Pepper))
 	_, _ = mac.Write([]byte(payload))
 	return hex.EncodeToString(mac.Sum(nil))
 }
@@ -151,13 +179,16 @@ func ParsePlaintextToken(raw string) (uuid.UUID, string, error) {
 
 // VerifyTokenSecret validates plaintext secret material against a persisted hash.
 func VerifyTokenSecret(
-	tokenID uuid.UUID,
-	tokenSecret string,
-	pepper string,
-	expectedHash string,
+	input TokenSecretVerificationInput,
 ) bool {
-	candidateHash := TokenHash(tokenID, tokenSecret, pepper)
-	return hmac.Equal([]byte(candidateHash), []byte(expectedHash))
+	candidateHash := TokenHash(
+		TokenHashInput{
+			TokenID:     input.TokenID,
+			TokenSecret: input.TokenSecret,
+			Pepper:      input.Pepper,
+		},
+	)
+	return hmac.Equal([]byte(candidateHash), []byte(input.ExpectedHash))
 }
 
 // TokenIsActive evaluates token expiry and revocation state.
@@ -193,13 +224,19 @@ func (service *Service) CreateTokenForOwner(
 	payload models.MCPTokenCreateRequest,
 	pepper string,
 ) (*models.MCPTokenCreateResponse, error) {
-	scopeValue := resolveCreateScope(payload.Scope)
+	scopeValue := resolveCreateScope(payload)
 	parsedScope, err := models.ParseMCPTokenScope(scopeValue)
 	if err != nil {
 		return nil, err
 	}
 	tokenID := service.deps.newTokenID()
-	issued, err := service.deps.issueNewToken(tokenID, resolveExpiresInDays(payload.ExpiresInDays), pepper)
+	issued, err := service.deps.issueNewToken(
+		tokenIssueInput{
+			tokenID:       tokenID,
+			expiresInDays: resolveExpiresInDays(payload),
+			pepper:        pepper,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -237,17 +274,16 @@ func (service *Service) CreateTokenForOwner(
 // ListTokenSummaries returns non-secret token metadata for an owner.
 func (service *Service) ListTokenSummaries(
 	ctx context.Context,
-	ownerUserID uuid.UUID,
-	limit int,
-	offset int,
+	request TokenListRequest,
 ) ([]models.MCPTokenSummary, error) {
+	normalizedRequest := normalizeTokenListRequest(request)
 	records, err := service.deps.listMCPTokens(
 		ctx,
 		service.db,
 		repository.MCPTokenListInput{
-			OwnerUserID: ownerUserID,
-			Limit:       resolveListLimit(limit),
-			Offset:      resolveListOffset(offset),
+			OwnerUserID: normalizedRequest.OwnerUserID,
+			Limit:       normalizedRequest.Limit,
+			Offset:      normalizedRequest.Offset,
 		},
 	)
 	if err != nil {
@@ -301,49 +337,51 @@ func buildTokenSummary(record models.MCPTokenRecord, now time.Time) models.MCPTo
 	}
 }
 
-func resolveExpiresInDays(expiresInDays int) int {
-	if expiresInDays <= 0 {
+func resolveExpiresInDays(payload models.MCPTokenCreateRequest) int {
+	if payload.ExpiresInDays <= 0 {
 		return defaultTokenExpiryDays
 	}
-	return expiresInDays
+	return payload.ExpiresInDays
 }
 
-func resolveListLimit(limit int) int {
-	if limit <= 0 {
-		return defaultTokenListLimit
+func normalizeTokenListRequest(request TokenListRequest) TokenListRequest {
+	if request.Limit <= 0 {
+		request.Limit = defaultTokenListLimit
 	}
-	return limit
-}
-
-func resolveListOffset(offset int) int {
-	if offset < 0 {
-		return 0
+	if request.Offset < 0 {
+		request.Offset = 0
 	}
-	return offset
+	return request
 }
 
-func resolveCreateScope(scope string) string {
-	trimmed := strings.TrimSpace(scope)
+func resolveCreateScope(payload models.MCPTokenCreateRequest) string {
+	trimmed := strings.TrimSpace(payload.Scope)
 	if trimmed == "" {
 		return string(models.MCPTokenScopeRead)
 	}
 	return trimmed
 }
 
-func issueTokenWithDays(tokenID uuid.UUID, expiresInDays int, pepper string) (issuedToken, error) {
-	expiresAt := time.Now().UTC().Add(time.Duration(expiresInDays) * 24 * time.Hour)
-	return issueTokenWithExpiry(tokenID, expiresAt, pepper)
+func issueTokenWithDays(input tokenIssueInput) (issuedToken, error) {
+	expiresAt := time.Now().UTC().Add(time.Duration(input.expiresInDays) * 24 * time.Hour)
+	return issueTokenWithExpiry(input, expiresAt)
 }
 
-func issueTokenWithExpiry(tokenID uuid.UUID, expiresAt time.Time, pepper string) (issuedToken, error) {
+func issueTokenWithExpiry(input tokenIssueInput, expiresAt time.Time) (issuedToken, error) {
 	secretBytes := make([]byte, 32)
 	if _, err := rand.Read(secretBytes); err != nil {
 		return issuedToken{}, err
 	}
 	tokenSecret := base64.RawURLEncoding.EncodeToString(secretBytes)
 	return issuedToken{
-		plaintext: BuildPlaintextToken(tokenID, tokenSecret),
-		hash:      TokenHash(tokenID, tokenSecret, pepper),
+		plaintext: BuildPlaintextToken(input.tokenID, tokenSecret),
+		hash: TokenHash(
+			TokenHashInput{
+				TokenID:     input.tokenID,
+				TokenSecret: tokenSecret,
+				Pepper:      input.pepper,
+			},
+		),
 		hint:      TokenSecretHint(tokenSecret),
 		expiresAt: expiresAt,
 	}, nil

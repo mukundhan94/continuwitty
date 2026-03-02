@@ -131,7 +131,15 @@ func NewLinkSuggestionService(db repository.Queryer, embeddingDim int) *LinkSugg
 			limit int,
 			actorUserID uuid.UUID,
 		) ([]models.EngramSourceRecord, error) {
-			return repository.GetEngramSources(ctx, db, engramID, limit, &actorUserID)
+			return repository.GetEngramSources(
+				ctx,
+				db,
+				repository.EngramSourceListInput{
+					EngramID:    engramID,
+					Limit:       limit,
+					ActorUserID: &actorUserID,
+				},
+			)
 		},
 		listEngramLinks: func(
 			ctx context.Context,

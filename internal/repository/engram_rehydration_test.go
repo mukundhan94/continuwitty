@@ -135,7 +135,15 @@ func TestGetEngramSourcesReturnsRowsWhenVisible(t *testing.T) {
 		},
 	}
 
-	sources, err := GetEngramSources(context.Background(), db, engramID, 100, &actorUserID)
+	sources, err := GetEngramSources(
+		context.Background(),
+		db,
+		EngramSourceListInput{
+			EngramID:    engramID,
+			Limit:       100,
+			ActorUserID: &actorUserID,
+		},
+	)
 	requireNoError(t, err)
 	requireEqual(t, 1, len(sources))
 	requireEqual(t, sourceID, sources[0].SourceID)
@@ -152,7 +160,14 @@ func TestGetEngramSourcesReturnsEmptyWhenNotVisible(t *testing.T) {
 		queryRowResult: &fakeRow{err: pgx.ErrNoRows},
 	}
 
-	sources, err := GetEngramSources(context.Background(), db, engramID, 100, nil)
+	sources, err := GetEngramSources(
+		context.Background(),
+		db,
+		EngramSourceListInput{
+			EngramID: engramID,
+			Limit:    100,
+		},
+	)
 	requireNoError(t, err)
 	requireEqual(t, 0, len(sources))
 }

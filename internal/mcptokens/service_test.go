@@ -13,13 +13,26 @@ import (
 
 func TestIssueTokenParseAndVerifyRoundTrip(t *testing.T) {
 	tokenID := uuid.MustParse("00000000-0000-0000-0000-000000000981")
-	issued, err := issueTokenWithDays(tokenID, 90, "pepper-value")
+	issued, err := issueTokenWithDays(
+		tokenIssueInput{
+			tokenID:       tokenID,
+			expiresInDays: 90,
+			pepper:        "pepper-value",
+		},
+	)
 	requireNoErrorMCPToken(t, err)
 
 	parsedID, parsedSecret, err := ParsePlaintextToken(issued.plaintext)
 	requireNoErrorMCPToken(t, err)
 	requireEqualMCPToken(t, tokenID, parsedID)
-	if !VerifyTokenSecret(parsedID, parsedSecret, "pepper-value", issued.hash) {
+	if !VerifyTokenSecret(
+		TokenSecretVerificationInput{
+			TokenID:      parsedID,
+			TokenSecret:  parsedSecret,
+			Pepper:       "pepper-value",
+			ExpectedHash: issued.hash,
+		},
+	) {
 		t.Fatalf("expected parsed token secret to verify")
 	}
 }
@@ -58,14 +71,10 @@ func TestCreateTokenForOwnerNormalizesLists(t *testing.T) {
 
 	service := NewService(nil)
 	service.deps.newTokenID = func() uuid.UUID { return tokenID }
-	service.deps.issueNewToken = func(
-		issuedTokenID uuid.UUID,
-		expiresInDays int,
-		pepper string,
-	) (issuedToken, error) {
-		capturedIssue.tokenID = issuedTokenID
-		capturedIssue.expiresInDays = expiresInDays
-		capturedIssue.pepper = pepper
+	service.deps.issueNewToken = func(input tokenIssueInput) (issuedToken, error) {
+		capturedIssue.tokenID = input.tokenID
+		capturedIssue.expiresInDays = input.expiresInDays
+		capturedIssue.pepper = input.pepper
 		return issuedToken{
 			plaintext: "engram_mcp_plain",
 			hash:      "hashed-value",
@@ -147,7 +156,14 @@ func TestListTokenSummariesAndRevokeTokenForOwner(t *testing.T) {
 		return &revokedRecord, nil
 	}
 
-	listed, err := service.ListTokenSummaries(context.Background(), ownerUserID, 200, 0)
+	listed, err := service.ListTokenSummaries(
+		context.Background(),
+		TokenListRequest{
+			OwnerUserID: ownerUserID,
+			Limit:       200,
+			Offset:      0,
+		},
+	)
 	requireNoErrorMCPToken(t, err)
 	requireEqualMCPToken(t, 2, len(listed))
 	if !listed[0].IsActive {
