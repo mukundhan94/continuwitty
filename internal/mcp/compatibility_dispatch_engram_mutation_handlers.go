@@ -11,6 +11,7 @@ func registerEngramMutationToolHandlers(handlers map[string]implementedToolHandl
 	)
 	handlers["engram.link_update"] = bindEngramDispatch((*CompatibilityService).dispatchEngramLinkUpdateTool)
 	handlers["engram.link_archive"] = bindEngramDispatch((*CompatibilityService).dispatchEngramLinkArchiveTool)
+	handlers["engram.feedback"] = bindEngramDispatch((*CompatibilityService).dispatchEngramFeedbackTool)
 	handlers["engram.delete"] = bindEngramDispatch((*CompatibilityService).dispatchEngramDeleteTool)
 	handlers["engram.restore"] = bindEngramDispatch((*CompatibilityService).dispatchEngramRestoreTool)
 }

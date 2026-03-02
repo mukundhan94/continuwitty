@@ -1229,6 +1229,32 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"engram.feedback": {
+		description: "Submit explicit feedback for one engram (useful or contradiction).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"engram_id",
+				"feedback_type",
+			},
+			"properties": map[string]any{
+				"engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"feedback_type": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"useful",
+						"contradiction",
+					},
+				},
+				"note": map[string]any{
+					"type": "string",
+				},
+			},
+		},
+	},
 	"engram.share": {
 		description: "Set an engram visibility scope to project.",
 		inputSchema: map[string]any{

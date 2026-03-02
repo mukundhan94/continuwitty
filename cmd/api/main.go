@@ -309,6 +309,7 @@ func newMCPCompatibilityService(
 			EngramLinkSuggest:    newMCPEngramLinkSuggestAdapter(dependencies.pool, settings.EmbeddingDim),
 			EngramTracePath:      newMCPEngramTracePathAdapter(dependencies.pool),
 			EngramUpdate:         newMCPEngramUpdateAdapter(dependencies.memoryAdminService),
+			EngramFeedback:       newMCPEngramFeedbackAdapter(dependencies.pool),
 			EngramMove:           newMCPEngramMoveAdapter(dependencies.memoryAdminService),
 			EngramDelete:         newMCPEngramDeleteAdapter(dependencies.memoryAdminService),
 			EngramRestore:        newMCPEngramRestoreAdapter(dependencies.memoryAdminService),

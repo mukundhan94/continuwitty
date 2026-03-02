@@ -322,6 +322,14 @@ type EngramUpdateService interface {
 	) (*models.AdminEngramRecord, error)
 }
 
+// EngramFeedbackService captures explicit feedback submission for engram ranking signals.
+type EngramFeedbackService interface {
+	SubmitEngramFeedback(
+		ctx context.Context,
+		request EngramFeedbackRequest,
+	) (*models.EngramFeedbackRecord, error)
+}
+
 // EngramMoveService captures engram move-project behavior used by MCP compatibility engram dispatch.
 type EngramMoveService interface {
 	MoveEngram(
@@ -762,6 +770,14 @@ type EngramUpdateRequest struct {
 	Sources                 *[]models.AdminEngramSourceInput
 }
 
+// EngramFeedbackRequest captures compatibility-level engram feedback inputs.
+type EngramFeedbackRequest struct {
+	ActorUserID  uuid.UUID
+	EngramID     uuid.UUID
+	FeedbackType models.EngramFeedbackType
+	Note         *string
+}
+
 // EngramMoveRequest captures compatibility-level engram move inputs.
 type EngramMoveRequest struct {
 	ActorUserID       uuid.UUID
@@ -918,6 +934,7 @@ type CompatibilityServiceDependencies struct {
 	EngramCreate             EngramCreateService
 	EngramCreateConversation EngramCreateFromConversationService
 	EngramUpdate             EngramUpdateService
+	EngramFeedback           EngramFeedbackService
 	EngramMove               EngramMoveService
 	EngramDelete             EngramDeleteService
 	EngramRestore            EngramRestoreService
@@ -971,6 +988,7 @@ type CompatibilityService struct {
 	engramCreate             EngramCreateService
 	engramCreateConversation EngramCreateFromConversationService
 	engramUpdate             EngramUpdateService
+	engramFeedback           EngramFeedbackService
 	engramMove               EngramMoveService
 	engramDelete             EngramDeleteService
 	engramRestore            EngramRestoreService
@@ -1048,6 +1066,7 @@ func NewCompatibilityServiceWithDependencies(
 		engramCreate:             dependencies.EngramCreate,
 		engramCreateConversation: dependencies.EngramCreateConversation,
 		engramUpdate:             dependencies.EngramUpdate,
+		engramFeedback:           dependencies.EngramFeedback,
 		engramMove:               dependencies.EngramMove,
 		engramDelete:             dependencies.EngramDelete,
 		engramRestore:            dependencies.EngramRestore,

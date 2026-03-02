@@ -39,6 +39,7 @@ var engramScopedProjectTools = map[string]struct{}{
 	"engram.link_list":    {},
 	"engram.link_suggest": {},
 	"engram.trace_path":   {},
+	"engram.feedback":     {},
 }
 
 var linkScopedProjectTools = map[string]struct{}{

@@ -30,6 +30,13 @@ func newMCPEngramRehydrateAdapter(db repository.Queryer) mcp.EngramRehydrateServ
 	return mcpEngramReadAdapter{db: db}
 }
 
+func newMCPEngramFeedbackAdapter(db repository.Queryer) mcp.EngramFeedbackService {
+	if db == nil {
+		return nil
+	}
+	return mcpEngramReadAdapter{db: db}
+}
+
 func (adapter mcpEngramReadAdapter) QueryEngrams(
 	ctx context.Context,
 	request mcp.EngramQueryDispatchRequest,
@@ -62,6 +69,22 @@ func (adapter mcpEngramReadAdapter) RehydrateEngram(
 		repository.RehydrationInput{
 			EngramID:    request.EngramID,
 			ActorUserID: &request.ActorUserID,
+		},
+	)
+}
+
+func (adapter mcpEngramReadAdapter) SubmitEngramFeedback(
+	ctx context.Context,
+	request mcp.EngramFeedbackRequest,
+) (*models.EngramFeedbackRecord, error) {
+	return repository.RecordEngramFeedback(
+		ctx,
+		adapter.db,
+		repository.EngramFeedbackCreateInput{
+			EngramID:     request.EngramID,
+			ActorUserID:  request.ActorUserID,
+			FeedbackType: request.FeedbackType,
+			Note:         request.Note,
 		},
 	)
 }
