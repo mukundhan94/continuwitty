@@ -1055,7 +1055,10 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     setSelectedEngramId(engramId)
     setError(null)
     try {
-      const detail = await getAdminEngram(engramId, true)
+      const detail = await getAdminEngram({
+        engram_id: engramId,
+        include_deleted: true,
+      })
       setSelectedEngram(detail)
       setEditTitle(detail.title)
       setEditAbstract(detail.abstract)
@@ -1123,14 +1126,17 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
       return
     }
     void runAction(async () => {
-      const updated = await updateAdminEngram(selectedEngram.engram_id, {
-        title: editTitle.trim(),
-        abstract: editAbstract.trim(),
-        detailed_summary_markdown: editMarkdown,
-        tags: parseCommaSeparated({ value: editTags }),
-        keywords: parseCommaSeparated({ value: editKeywords }),
-        expected_updated_at: selectedEngram.updated_at,
-        sources: sourceRows,
+      const updated = await updateAdminEngram({
+        engram_id: selectedEngram.engram_id,
+        payload: {
+          title: editTitle.trim(),
+          abstract: editAbstract.trim(),
+          detailed_summary_markdown: editMarkdown,
+          tags: parseCommaSeparated({ value: editTags }),
+          keywords: parseCommaSeparated({ value: editKeywords }),
+          expected_updated_at: selectedEngram.updated_at,
+          sources: sourceRows,
+        },
       })
       setSelectedEngram(updated)
       onNotice(`Updated engram ${updated.engram_id}`)
@@ -1143,10 +1149,13 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
       return
     }
     void runAction(async () => {
-      const moved = await moveAdminEngram(selectedEngram.engram_id, {
-        target_project_id: moveTargetProject.trim(),
-        expected_updated_at: selectedEngram.updated_at,
-        reason: 'admin-ui-move',
+      const moved = await moveAdminEngram({
+        engram_id: selectedEngram.engram_id,
+        payload: {
+          target_project_id: moveTargetProject.trim(),
+          expected_updated_at: selectedEngram.updated_at,
+          reason: 'admin-ui-move',
+        },
       })
       setSelectedEngram(moved)
       onNotice(`Moved engram ${moved.engram_id} to ${moved.project_id}`)
@@ -1173,7 +1182,7 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const restoreSelectedEngram = () => {
     runSelectedEngramLifecycleAction(
       async ({ engramId }) => {
-        await restoreAdminEngram(engramId)
+        await restoreAdminEngram({ engram_id: engramId })
       },
       'Restored',
     )
@@ -1182,7 +1191,10 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const deleteSelectedEngram = () => {
     runSelectedEngramLifecycleAction(
       async ({ engramId }) => {
-        await deleteAdminEngram(engramId, { reason: 'admin-ui-delete' })
+        await deleteAdminEngram({
+          engram_id: engramId,
+          payload: { reason: 'admin-ui-delete' },
+        })
       },
       'Deleted',
     )
@@ -1229,8 +1241,11 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const addItemToSelectedCollection = () => {
     runSelectedCollectionItemAction(
       async ({ collectionId, engramId }) => {
-        await addCollectionItems(collectionId, {
-          engram_ids: [engramId],
+        await addCollectionItems({
+          collection_id: collectionId,
+          payload: {
+            engram_ids: [engramId],
+          },
         })
       },
       true,
@@ -1240,7 +1255,10 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const removeItemFromSelectedCollection = () => {
     runSelectedCollectionItemAction(
       async ({ collectionId, engramId }) => {
-        await removeCollectionItem(collectionId, engramId)
+        await removeCollectionItem({
+          collection_id: collectionId,
+          engram_id: engramId,
+        })
       },
       false,
     )
@@ -1248,9 +1266,12 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
 
   const renameCollectionQuickly = (collection: EngramCollectionRecord) => {
     void runAction(async () => {
-      await updateCollection(collection.collection_id, {
-        name: `${collection.name} (updated)`,
-        expected_updated_at: collection.updated_at,
+      await updateCollection({
+        collection_id: collection.collection_id,
+        payload: {
+          name: `${collection.name} (updated)`,
+          expected_updated_at: collection.updated_at,
+        },
       })
       onNotice(`Updated collection ${collection.collection_id}`)
       await refresh()
@@ -1260,7 +1281,10 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const deleteCollectionRecord = (collection: EngramCollectionRecord) => {
     const collectionId = collection.collection_id
     void runAction(async () => {
-      await deleteCollection(collectionId, { reason: 'admin-ui-delete' })
+      await deleteCollection({
+        collection_id: collectionId,
+        payload: { reason: 'admin-ui-delete' },
+      })
       onNotice(`Deleted collection ${collectionId}`)
       await refresh()
     })
@@ -1327,7 +1351,7 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const restoreSessionById = (session: AdminChatSessionRecord) => {
     const sessionId = session.session_id
     void runAction(async () => {
-      await restoreAdminSession(sessionId)
+      await restoreAdminSession({ session_id: sessionId })
       onNotice(`Restored session ${sessionId}`)
       await refresh()
     })
@@ -1336,9 +1360,12 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const deleteSessionById = (session: AdminChatSessionRecord) => {
     const sessionId = session.session_id
     void runAction(async () => {
-      await deleteAdminSession(sessionId, {
-        delete_linked_engrams: deleteLinkedEngrams,
-        reason: 'admin-ui-cleanup',
+      await deleteAdminSession({
+        session_id: sessionId,
+        payload: {
+          delete_linked_engrams: deleteLinkedEngrams,
+          reason: 'admin-ui-cleanup',
+        },
       })
       onNotice(`Deleted session ${sessionId}`)
       await refresh()

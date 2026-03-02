@@ -66,9 +66,12 @@ describe('memory admin api', () => {
       }),
     )
 
-    await moveAdminEngram('id-1', {
-      target_project_id: 'target-project',
-      reason: 'test move',
+    await moveAdminEngram({
+      engram_id: 'id-1',
+      payload: {
+        target_project_id: 'target-project',
+        reason: 'test move',
+      },
     })
 
     const [, init] = fetchMock.mock.calls[0]
@@ -101,8 +104,8 @@ describe('memory admin api', () => {
         }),
       )
 
-    await shareEngram('id-1')
-    await unshareEngram('id-1')
+    await shareEngram({ engram_id: 'id-1' })
+    await unshareEngram({ engram_id: 'id-1' })
 
     expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/engrams/id-1/share')
     expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST')
