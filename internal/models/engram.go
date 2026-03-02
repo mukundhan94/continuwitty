@@ -134,6 +134,12 @@ type EngramFeedbackRecord struct {
 	ContradictionCount int                `json:"contradiction_count"`
 }
 
+// EngramFeedbackCreateRequest models explicit feedback submission payload.
+type EngramFeedbackCreateRequest struct {
+	FeedbackType string  `json:"feedback_type"`
+	Note         *string `json:"note,omitempty"`
+}
+
 // EngramCreateResponse is returned when a new engram is persisted.
 type EngramCreateResponse struct {
 	EngramID           uuid.UUID `json:"engram_id"`

@@ -407,6 +407,7 @@ func buildSessionAuthDependencies(runtimeDependencies sessionAuthRuntimeDependen
 		QueryEngrams:             queryEngramsDependency(runtimeDependencies.pool, runtimeDependencies.settings.EmbeddingDim),
 		GetRehydrationBundle:     getRehydrationBundleDependency(runtimeDependencies.pool),
 		GetEngramSources:         getEngramSourcesDependency(runtimeDependencies.pool),
+		SubmitEngramFeedback:     submitEngramFeedbackDependency(runtimeDependencies.pool),
 		ShareEngram:              shareEngramDependency(runtimeDependencies.projectService),
 		UnshareEngram:            unshareEngramDependency(runtimeDependencies.projectService),
 		CreateEngramLink:         linkAdapter.create,
@@ -579,6 +580,29 @@ func getEngramSourcesDependency(
 				EngramID:    engramID,
 				Limit:       limit,
 				ActorUserID: &actorUserID,
+			},
+		)
+	}
+}
+
+func submitEngramFeedbackDependency(
+	pool *pgxpool.Pool,
+) func(
+	ctx context.Context,
+	input internalapi.SessionEngramFeedbackInput,
+) (*models.EngramFeedbackRecord, error) {
+	return func(
+		ctx context.Context,
+		input internalapi.SessionEngramFeedbackInput,
+	) (*models.EngramFeedbackRecord, error) {
+		return repository.RecordEngramFeedback(
+			ctx,
+			pool,
+			repository.EngramFeedbackCreateInput{
+				EngramID:     input.EngramID,
+				ActorUserID:  input.ActorUserID,
+				FeedbackType: input.FeedbackType,
+				Note:         input.Note,
 			},
 		)
 	}

@@ -82,6 +82,10 @@ type SessionAuthDependencies struct {
 		limit int,
 		actorUserID uuid.UUID,
 	) ([]models.EngramSourceRecord, error)
+	SubmitEngramFeedback func(
+		ctx context.Context,
+		input SessionEngramFeedbackInput,
+	) (*models.EngramFeedbackRecord, error)
 	ShareEngram func(
 		ctx context.Context,
 		actorUserID uuid.UUID,
@@ -190,6 +194,10 @@ type sessionAuthDependencies struct {
 		limit int,
 		actorUserID uuid.UUID,
 	) ([]models.EngramSourceRecord, error)
+	submitEngramFeedback func(
+		ctx context.Context,
+		input SessionEngramFeedbackInput,
+	) (*models.EngramFeedbackRecord, error)
 	shareEngram func(
 		ctx context.Context,
 		actorUserID uuid.UUID,
@@ -289,6 +297,7 @@ func newSessionAuthDependencies(dependencies SessionAuthDependencies) sessionAut
 		queryEngrams:             dependencies.QueryEngrams,
 		getRehydrationBundle:     dependencies.GetRehydrationBundle,
 		getEngramSources:         dependencies.GetEngramSources,
+		submitEngramFeedback:     dependencies.SubmitEngramFeedback,
 		shareEngram:              dependencies.ShareEngram,
 		unshareEngram:            dependencies.UnshareEngram,
 		createEngramLink:         dependencies.CreateEngramLink,
@@ -328,6 +337,7 @@ func MountSessionAuthRoutes(router chi.Router, dependencies SessionAuthDependenc
 	router.Post("/api/v1/engrams/query", deps.handleQueryEngrams)
 	router.Get("/api/v1/engrams/{engram_id}/sources", deps.handleListEngramSources)
 	router.Get("/api/v1/engrams/{engram_id}/rehydrate", deps.handleRehydrateEngram)
+	router.Post("/api/v1/engrams/{engram_id}/feedback", deps.handleSubmitEngramFeedback)
 	router.Post("/api/v1/engrams/{engram_id}/share", deps.handleShareEngram)
 	router.Post("/api/v1/engrams/{engram_id}/unshare", deps.handleUnshareEngram)
 	router.Post("/api/v1/engrams/{engram_id}/links", deps.handleCreateEngramLink)

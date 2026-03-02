@@ -31,6 +31,14 @@ type SessionProjectResolution struct {
 	UsedDefaultProject bool
 }
 
+// SessionEngramFeedbackInput captures feedback route payload + actor context.
+type SessionEngramFeedbackInput struct {
+	EngramID     uuid.UUID
+	ActorUserID  uuid.UUID
+	FeedbackType models.EngramFeedbackType
+	Note         *string
+}
+
 func (dependencies sessionAuthDependencies) handleCreateEngram(writer http.ResponseWriter, request *http.Request) {
 	actor, ok := dependencies.requireAuthenticatedAPIActor(writer, request)
 	if !ok {
@@ -180,6 +188,46 @@ func (dependencies sessionAuthDependencies) handleRehydrateEngram(writer http.Re
 	writeJSON(writer, http.StatusOK, bundle)
 }
 
+func (dependencies sessionAuthDependencies) handleSubmitEngramFeedback(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	actor, ok := dependencies.requireAuthenticatedAPIActor(writer, request)
+	if !ok {
+		return
+	}
+	if dependencies.submitEngramFeedback == nil {
+		writeSessionUserDependenciesError(writer)
+		return
+	}
+	engramID, ok := parsePathUUID(writer, request, "engram_id")
+	if !ok {
+		return
+	}
+	payload, ok := decodeEngramFeedbackRequest(writer, request)
+	if !ok {
+		return
+	}
+	record, err := dependencies.submitEngramFeedback(
+		request.Context(),
+		SessionEngramFeedbackInput{
+			EngramID:     engramID,
+			ActorUserID:  actor.UserID,
+			FeedbackType: payload.FeedbackType,
+			Note:         payload.Note,
+		},
+	)
+	if err != nil {
+		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
+		return
+	}
+	if record == nil {
+		writeJSON(writer, http.StatusNotFound, map[string]string{"detail": "Engram not found"})
+		return
+	}
+	writeJSON(writer, http.StatusOK, record)
+}
+
 func (dependencies sessionAuthDependencies) hasCreateEngramDependencies() bool {
 	return dependencies.createEngram != nil && dependencies.resolveProjectIDForWrite != nil
 }
@@ -275,6 +323,29 @@ func decodeQueryEngramsRequest(
 		payload.Keywords = []string{}
 	}
 	return payload, true
+}
+
+func decodeEngramFeedbackRequest(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (SessionEngramFeedbackInput, bool) {
+	payload := models.EngramFeedbackCreateRequest{}
+	if !decodeJSONAllowEmpty(writer, request, &payload) {
+		return SessionEngramFeedbackInput{}, false
+	}
+	parsedType, err := models.ParseEngramFeedbackType(payload.FeedbackType)
+	if err != nil {
+		writeJSON(
+			writer,
+			http.StatusBadRequest,
+			map[string]string{"detail": "feedback_type must be one of: useful, contradiction"},
+		)
+		return SessionEngramFeedbackInput{}, false
+	}
+	return SessionEngramFeedbackInput{
+		FeedbackType: parsedType,
+		Note:         payload.Note,
+	}, true
 }
 
 func normalizeCreateEngramPayload(payload *models.MemoryEngramCreate) {
