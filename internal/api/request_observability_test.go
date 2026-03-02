@@ -34,31 +34,11 @@ func TestInMemoryRequestMetricsAggregatesSamples(t *testing.T) {
 	)
 
 	snapshot := metrics.Snapshot()
-	if snapshot.Totals.Requests != 2 {
-		t.Fatalf("expected 2 requests, got %d", snapshot.Totals.Requests)
-	}
-	if snapshot.Totals.Errors != 1 {
-		t.Fatalf("expected 1 error request, got %d", snapshot.Totals.Errors)
-	}
-	if snapshot.ByStatusClass["2xx"] != 1 {
-		t.Fatalf("expected one 2xx request")
-	}
-	if snapshot.ByStatusClass["5xx"] != 1 {
-		t.Fatalf("expected one 5xx request")
-	}
-	routeStats, ok := snapshot.ByRoute["GET /api/v1/engrams"]
-	if !ok {
-		t.Fatalf("expected route stats for engram list route")
-	}
-	if routeStats.Count != 2 {
-		t.Fatalf("expected route count 2, got %d", routeStats.Count)
-	}
-	if routeStats.ErrorCount != 1 {
-		t.Fatalf("expected route error count 1, got %d", routeStats.ErrorCount)
-	}
-	if routeStats.AverageDurationMS <= 0 {
-		t.Fatalf("expected positive average duration, got %f", routeStats.AverageDurationMS)
-	}
+	assertRequestTotals(t, snapshot, 2, 1)
+	assertStatusClassCount(t, snapshot, "2xx", 1)
+	assertStatusClassCount(t, snapshot, "5xx", 1)
+	routeStats := requireRouteStats(t, snapshot, "GET /api/v1/engrams")
+	assertRouteStats(t, routeStats, 2, 1)
 }
 
 func TestInMemoryRequestMetricsAggregatesChatObservabilitySamples(t *testing.T) {
@@ -166,5 +146,63 @@ func TestRequestDomainClassification(t *testing.T) {
 		if actual := requestDomain(testCase.path); actual != testCase.expectedType {
 			t.Fatalf("expected %q for path %q, got %q", testCase.expectedType, testCase.path, actual)
 		}
+	}
+}
+
+func assertRequestTotals(
+	t *testing.T,
+	snapshot RequestMetricsSnapshot,
+	expectedRequests int64,
+	expectedErrors int64,
+) {
+	t.Helper()
+	if snapshot.Totals.Requests != expectedRequests {
+		t.Fatalf("expected %d requests, got %d", expectedRequests, snapshot.Totals.Requests)
+	}
+	if snapshot.Totals.Errors != expectedErrors {
+		t.Fatalf("expected %d error request, got %d", expectedErrors, snapshot.Totals.Errors)
+	}
+}
+
+func assertStatusClassCount(
+	t *testing.T,
+	snapshot RequestMetricsSnapshot,
+	class string,
+	expected int64,
+) {
+	t.Helper()
+	if snapshot.ByStatusClass[class] != expected {
+		t.Fatalf("expected %d %s request", expected, class)
+	}
+}
+
+func requireRouteStats(
+	t *testing.T,
+	snapshot RequestMetricsSnapshot,
+	routeKey string,
+) RouteHit {
+	t.Helper()
+	routeStats, ok := snapshot.ByRoute[routeKey]
+	if !ok {
+		t.Fatalf("expected route stats for %s", routeKey)
+	}
+	return routeStats
+}
+
+func assertRouteStats(
+	t *testing.T,
+	routeStats RouteHit,
+	expectedCount int64,
+	expectedErrors int64,
+) {
+	t.Helper()
+	if routeStats.Count != expectedCount {
+		t.Fatalf("expected route count %d, got %d", expectedCount, routeStats.Count)
+	}
+	if routeStats.ErrorCount != expectedErrors {
+		t.Fatalf("expected route error count %d, got %d", expectedErrors, routeStats.ErrorCount)
+	}
+	if routeStats.AverageDurationMS <= 0 {
+		t.Fatalf("expected positive average duration, got %f", routeStats.AverageDurationMS)
 	}
 }
