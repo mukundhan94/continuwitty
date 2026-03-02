@@ -20,6 +20,16 @@ type SnapshotMessageWindow int
 type SnapshotRetentionDays int
 type SnapshotRetentionMaxSnapshots int
 
+type timelineTag string
+type timelineTagValue string
+type timelineTagList []timelineTag
+type timelineEventType string
+type consolidationMergedCount int
+type snapshotText string
+type numberText string
+type snapshotOrdinal int
+type snapshotRetentionLimit int
+
 // SessionLifecyclePolicy captures chat autosave and retention configuration.
 type SessionLifecyclePolicy struct {
 	AutosaveEnabled       bool
@@ -53,19 +63,21 @@ func NormalizeAutosavePolicy(
 
 // ClassifyTimelineEvent classifies timeline tags into event semantics.
 func ClassifyTimelineEvent(tags []string) TimelineEventSemantics {
-	normalizedTags := normalizeTags(tags)
+	normalizedTags := normalizeTags(toTimelineTagList(tags))
 	tagSet := toLowerTagSet(normalizedTags)
-	if _, hasAutosaveSnapshot := tagSet["autosave_snapshot"]; hasAutosaveSnapshot {
+	if _, hasAutosaveSnapshot := tagSet[timelineTag("autosave_snapshot")]; hasAutosaveSnapshot {
 		return TimelineEventSemantics{EventType: "autosave_snapshot"}
 	}
-	if _, hasConsolidated := tagSet["consolidated"]; hasConsolidated {
-		groupKey := extractTagValue(normalizedTags, consolidationGroupKeyTagPrefix)
-		mergedCount := parsePositiveInt(extractTagValue(normalizedTags, consolidationMergedCountTagPrefix))
+	if _, hasConsolidated := tagSet[timelineTag("consolidated")]; hasConsolidated {
+		groupKey := extractTagValue(normalizedTags, timelineTag(consolidationGroupKeyTagPrefix))
+		mergedCount := parsePositiveInt(
+			extractTagValue(normalizedTags, timelineTag(consolidationMergedCountTagPrefix)),
+		)
 		eventType := resolveConsolidationEventType(groupKey, mergedCount)
 		return TimelineEventSemantics{
-			EventType:                eventType,
-			ConsolidationGroupKey:    groupKey,
-			ConsolidationMergedCount: mergedCount,
+			EventType:                string(eventType),
+			ConsolidationGroupKey:    timelineTagValuePtrToString(groupKey),
+			ConsolidationMergedCount: mergedCountPtrToInt(mergedCount),
 		}
 	}
 	return TimelineEventSemantics{EventType: "manual_snapshot"}
@@ -78,7 +90,11 @@ func ClassifyTimelineEventType(tags []string) string {
 
 // IsLowValueSnapshotAbstract detects generic or short snapshot abstracts.
 func IsLowValueSnapshotAbstract(value string) bool {
-	normalized := normalizeSpaces(value)
+	return isLowValueSnapshotAbstract(snapshotText(value))
+}
+
+func isLowValueSnapshotAbstract(value snapshotText) bool {
+	normalized := normalizeSnapshotText(value)
 	if normalized == "" {
 		return true
 	}
@@ -138,66 +154,82 @@ func SelectRetentionPruneIDs(
 	if len(snapshots) == 0 {
 		return []uuid.UUID{}
 	}
-	retentionCutoff, retentionMaxCount := retentionThresholds(resolveReferenceTime(now), retentionDays, retentionMaxSnapshots)
+	retentionCutoff, retentionMaxCount := retentionThresholds(
+		resolveReferenceTime(now),
+		retentionDays,
+		retentionMaxSnapshots,
+	)
 	keepIDs := collectKeepSnapshotIDs(snapshots, retentionCutoff, retentionMaxCount)
 	return collectPruneSnapshotIDs(snapshots, keepIDs)
 }
 
-func normalizeTags(tags []string) []string {
-	normalized := make([]string, 0, len(tags))
+func toTimelineTagList(tags []string) timelineTagList {
+	converted := make(timelineTagList, 0, len(tags))
+	for _, tag := range tags {
+		converted = append(converted, timelineTag(tag))
+	}
+	return converted
+}
+
+func normalizeTags(tags timelineTagList) timelineTagList {
+	normalized := make(timelineTagList, 0, len(tags))
 	for _, item := range tags {
-		candidate := strings.TrimSpace(item)
+		candidate := strings.TrimSpace(string(item))
 		if candidate == "" {
 			continue
 		}
-		normalized = append(normalized, candidate)
+		normalized = append(normalized, timelineTag(candidate))
 	}
 	return normalized
 }
 
-func toLowerTagSet(tags []string) map[string]struct{} {
-	set := make(map[string]struct{}, len(tags))
+func toLowerTagSet(tags timelineTagList) map[timelineTag]struct{} {
+	set := make(map[timelineTag]struct{}, len(tags))
 	for _, tag := range tags {
-		set[strings.ToLower(tag)] = struct{}{}
+		set[timelineTag(strings.ToLower(string(tag)))] = struct{}{}
 	}
 	return set
 }
 
-func extractTagValue(tags []string, prefix string) *string {
-	lowerPrefix := strings.ToLower(prefix)
+func extractTagValue(tags timelineTagList, prefix timelineTag) *timelineTagValue {
+	lowerPrefix := strings.ToLower(string(prefix))
 	for _, tag := range tags {
-		lowerTag := strings.ToLower(tag)
+		rawTag := string(tag)
+		lowerTag := strings.ToLower(rawTag)
 		if !strings.HasPrefix(lowerTag, lowerPrefix) {
 			continue
 		}
-		value := strings.TrimSpace(tag[len(prefix):])
+		value := strings.TrimSpace(rawTag[len(prefix):])
 		if value == "" {
 			continue
 		}
-		return stringPtr(value)
+		return timelineTagValuePtr(timelineTagValue(value))
 	}
 	return nil
 }
 
-func parsePositiveInt(value *string) *int {
+func parsePositiveInt(value *timelineTagValue) *consolidationMergedCount {
 	if value == nil {
 		return nil
 	}
-	parsed, err := parseInt(*value)
+	parsed, err := parseInt(numberText(*value))
 	if err != nil || parsed <= 0 {
 		return nil
 	}
-	return intPtr(parsed)
+	return consolidationMergedCountPtr(consolidationMergedCount(parsed))
 }
 
-func resolveConsolidationEventType(groupKey *string, mergedCount *int) string {
+func resolveConsolidationEventType(
+	groupKey *timelineTagValue,
+	mergedCount *consolidationMergedCount,
+) timelineEventType {
 	if mergedCount != nil && *mergedCount > 1 {
-		return "consolidation_merge"
+		return timelineEventType("consolidation_merge")
 	}
 	if groupKey != nil {
-		return "consolidation_group"
+		return timelineEventType("consolidation_group")
 	}
-	return "consolidation"
+	return timelineEventType("consolidation")
 }
 
 func resolveReferenceTime(now time.Time) time.Time {
@@ -208,10 +240,14 @@ func resolveReferenceTime(now time.Time) time.Time {
 }
 
 func normalizeSpaces(value string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
+	return normalizeSnapshotText(snapshotText(value))
 }
 
-func parseInt(value string) (int, error) {
+func normalizeSnapshotText(value snapshotText) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(string(value))), " ")
+}
+
+func parseInt(value numberText) (int, error) {
 	parsed := 0
 	for _, ch := range value {
 		if ch < '0' || ch > '9' {
@@ -226,18 +262,19 @@ func retentionThresholds(
 	reference time.Time,
 	retentionDays SnapshotRetentionDays,
 	retentionMaxSnapshots SnapshotRetentionMaxSnapshots,
-) (time.Time, int) {
-	return reference.AddDate(0, 0, -maxInt(int(retentionDays), 1)), maxInt(int(retentionMaxSnapshots), 1)
+) (time.Time, snapshotRetentionLimit) {
+	return reference.AddDate(0, 0, -maxInt(int(retentionDays), 1)),
+		snapshotRetentionLimit(maxInt(int(retentionMaxSnapshots), 1))
 }
 
 func collectKeepSnapshotIDs(
 	snapshots []models.EngramSummary,
 	retentionCutoff time.Time,
-	retentionMaxCount int,
+	retentionMaxCount snapshotRetentionLimit,
 ) map[uuid.UUID]struct{} {
 	keepIDs := make(map[uuid.UUID]struct{}, len(snapshots))
 	for index, snapshot := range snapshots {
-		if !shouldKeepSnapshot(index, snapshot, retentionCutoff, retentionMaxCount) {
+		if !shouldKeepSnapshot(snapshotOrdinal(index), snapshot, retentionCutoff, retentionMaxCount) {
 			continue
 		}
 		keepIDs[snapshot.EngramID] = struct{}{}
@@ -246,12 +283,12 @@ func collectKeepSnapshotIDs(
 }
 
 func shouldKeepSnapshot(
-	index int,
+	index snapshotOrdinal,
 	snapshot models.EngramSummary,
 	retentionCutoff time.Time,
-	retentionMaxCount int,
+	retentionMaxCount snapshotRetentionLimit,
 ) bool {
-	withinCount := index < retentionMaxCount
+	withinCount := int(index) < int(retentionMaxCount)
 	withinTime := !snapshot.CreatedAt.Before(retentionCutoff)
 	return withinCount && withinTime
 }
@@ -281,8 +318,28 @@ func stringPtr(value string) *string {
 	return &value
 }
 
-func intPtr(value int) *int {
+func timelineTagValuePtr(value timelineTagValue) *timelineTagValue {
 	return &value
+}
+
+func consolidationMergedCountPtr(value consolidationMergedCount) *consolidationMergedCount {
+	return &value
+}
+
+func timelineTagValuePtrToString(value *timelineTagValue) *string {
+	if value == nil {
+		return nil
+	}
+	text := string(*value)
+	return &text
+}
+
+func mergedCountPtrToInt(value *consolidationMergedCount) *int {
+	if value == nil {
+		return nil
+	}
+	count := int(*value)
+	return &count
 }
 
 var errInvalidNumber = &invalidNumberError{}

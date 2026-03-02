@@ -7,11 +7,31 @@ import (
 	"engram/internal/mcp"
 	"engram/internal/models"
 	"engram/internal/repository"
+
+	"github.com/google/uuid"
 )
 
 type mcpEngramLinkAdapter struct {
 	db                repository.Queryer
 	suggestionService *graph.LinkSuggestionService
+}
+
+type engramLinkExecutionInput struct {
+	linkID          uuid.UUID
+	actorUserID     uuid.UUID
+	includeArchived bool
+}
+
+func newEngramLinkExecutionInput(
+	linkID uuid.UUID,
+	actorUserID uuid.UUID,
+	includeArchived bool,
+) engramLinkExecutionInput {
+	return engramLinkExecutionInput{
+		linkID:          linkID,
+		actorUserID:     actorUserID,
+		includeArchived: includeArchived,
+	}
 }
 
 func newMCPEngramLinkGetAdapter(db repository.Queryer) mcp.EngramLinkGetService {
@@ -74,14 +94,13 @@ func (adapter mcpEngramLinkAdapter) GetEngramLink(
 	ctx context.Context,
 	request mcp.EngramLinkGetRequest,
 ) (*models.EngramLinkRecord, error) {
-	return repository.GetEngramLink(
+	return adapter.executeLinkOperation(
 		ctx,
-		adapter.db,
-		repository.EngramLinkGetInput{
-			LinkID:          request.LinkID,
-			ActorUserID:     request.ActorUserID,
-			IncludeArchived: request.IncludeArchived,
-		},
+		newEngramLinkExecutionInput(
+			request.LinkID,
+			request.ActorUserID,
+			request.IncludeArchived,
+		),
 	)
 }
 
@@ -157,6 +176,21 @@ func (adapter mcpEngramLinkAdapter) ArchiveEngramLink(
 		repository.EngramLinkArchiveInput{
 			LinkID:      request.LinkID,
 			ActorUserID: request.ActorUserID,
+		},
+	)
+}
+
+func (adapter mcpEngramLinkAdapter) executeLinkOperation(
+	ctx context.Context,
+	input engramLinkExecutionInput,
+) (*models.EngramLinkRecord, error) {
+	return repository.GetEngramLink(
+		ctx,
+		adapter.db,
+		repository.EngramLinkGetInput{
+			LinkID:          input.linkID,
+			ActorUserID:     input.actorUserID,
+			IncludeArchived: input.includeArchived,
 		},
 	)
 }

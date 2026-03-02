@@ -72,6 +72,13 @@ type scheduledLinkHygieneExecutor struct {
 	) (*models.EngramLinkRecord, error)
 }
 
+type linkReinforcementRequest struct {
+	ctx         context.Context
+	pool        *pgxpool.Pool
+	actorUserID uuid.UUID
+	now         time.Time
+}
+
 func newScheduledLinkHygieneExecutor(pool *pgxpool.Pool) *scheduledLinkHygieneExecutor {
 	hygieneService := graph.NewLinkHygieneService(pool)
 	if hygieneService == nil {
@@ -167,18 +174,25 @@ func reinforceEngramLinksDependency(
 ) func(ctx context.Context, actorUserID uuid.UUID, linkIDs []uuid.UUID) error {
 	hygieneExecutor := newScheduledLinkHygieneExecutor(pool)
 	return func(ctx context.Context, actorUserID uuid.UUID, linkIDs []uuid.UUID) error {
-		now := time.Now().UTC()
+		request := linkReinforcementRequest{
+			ctx:         ctx,
+			pool:        pool,
+			actorUserID: actorUserID,
+			now:         time.Now().UTC(),
+		}
 		sourceEngramIDs, err := reinforceResolvedLinks(
-			ctx,
-			pool,
-			actorUserID,
+			request,
 			dedupeUUIDs(linkIDs),
-			now,
 		)
 		if err != nil {
 			return err
 		}
-		if err := hygieneExecutor.execute(ctx, actorUserID, sourceEngramIDs, now); err != nil {
+		if err := hygieneExecutor.execute(
+			request.ctx,
+			request.actorUserID,
+			sourceEngramIDs,
+			request.now,
+		); err != nil {
 			return err
 		}
 		return nil
@@ -186,15 +200,12 @@ func reinforceEngramLinksDependency(
 }
 
 func reinforceResolvedLinks(
-	ctx context.Context,
-	pool *pgxpool.Pool,
-	actorUserID uuid.UUID,
+	request linkReinforcementRequest,
 	linkIDs []uuid.UUID,
-	now time.Time,
 ) ([]uuid.UUID, error) {
 	sourceEngramIDs := make([]uuid.UUID, 0, len(linkIDs))
 	for _, linkID := range linkIDs {
-		sourceEngramID, err := reinforceSingleEngramLink(ctx, pool, actorUserID, linkID, now)
+		sourceEngramID, err := reinforceSingleEngramLink(request, linkID)
 		if err != nil {
 			return nil, err
 		}
@@ -206,18 +217,15 @@ func reinforceResolvedLinks(
 }
 
 func reinforceSingleEngramLink(
-	ctx context.Context,
-	pool *pgxpool.Pool,
-	actorUserID uuid.UUID,
+	request linkReinforcementRequest,
 	linkID uuid.UUID,
-	now time.Time,
 ) (uuid.UUID, error) {
 	link, err := repository.GetEngramLink(
-		ctx,
-		pool,
+		request.ctx,
+		request.pool,
 		repository.EngramLinkGetInput{
 			LinkID:          linkID,
-			ActorUserID:     actorUserID,
+			ActorUserID:     request.actorUserID,
 			IncludeArchived: true,
 		},
 	)
@@ -230,7 +238,7 @@ func reinforceSingleEngramLink(
 	if !linkIsReinforceable(*link) {
 		return link.SourceEngramID, nil
 	}
-	if err := updateReinforcedEngramLink(ctx, pool, actorUserID, linkID, *link, now); err != nil {
+	if err := updateReinforcedEngramLink(request, linkID, *link); err != nil {
 		return uuid.Nil, err
 	}
 	return link.SourceEngramID, nil
@@ -242,24 +250,21 @@ func linkIsReinforceable(link models.EngramLinkRecord) bool {
 }
 
 func updateReinforcedEngramLink(
-	ctx context.Context,
-	pool *pgxpool.Pool,
-	actorUserID uuid.UUID,
+	request linkReinforcementRequest,
 	linkID uuid.UUID,
 	link models.EngramLinkRecord,
-	now time.Time,
 ) error {
-	temporalWeight := chat.ReinforcedLinkTemporalWeight(now, link)
+	temporalWeight := chat.ReinforcedLinkTemporalWeight(request.now, link)
 	status := statusForReinforcedLink(link)
 	_, err := repository.UpdateEngramLink(
-		ctx,
-		pool,
+		request.ctx,
+		request.pool,
 		repository.EngramLinkUpdateInput{
 			LinkID:           linkID,
-			ActorUserID:      actorUserID,
+			ActorUserID:      request.actorUserID,
 			TemporalWeight:   &temporalWeight,
 			Status:           status,
-			LastReinforcedAt: &now,
+			LastReinforcedAt: &request.now,
 		},
 	)
 	return err
