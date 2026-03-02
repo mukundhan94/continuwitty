@@ -16,6 +16,7 @@ import (
 )
 
 const defaultBootstrapAdminHash = "pbkdf2_sha256$390000$00112233445566778899aabbccddeeff$45c0bdc16f1609a69d14a4e8d89974fd24556c45af75ee01c34bdb9de1c1832a"
+const defaultSchemaRelativePath = "db/init/001_schema.sql"
 
 // RowScanner scans a single row result.
 type RowScanner interface {
@@ -106,11 +107,81 @@ func Ping(ctx context.Context, pool *pgxpool.Pool) error {
 
 // DefaultSchemaPath resolves db/init/001_schema.sql from the repository root.
 func DefaultSchemaPath() string {
-	_, filePath, _, ok := runtime.Caller(0)
-	if !ok {
-		return "db/init/001_schema.sql"
+	_, callerPath, _, _ := runtime.Caller(0)
+	workingDir, _ := os.Getwd()
+	resolvedPath := resolveDefaultSchemaPath(callerPath, workingDir, fileExists)
+	return filepath.Clean(resolvedPath)
+}
+
+func resolveDefaultSchemaPath(
+	callerPath string,
+	workingDir string,
+	pathExists func(path string) bool,
+) string {
+	if pathExists == nil {
+		pathExists = fileExists
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(filePath), "..", "..", "db", "init", "001_schema.sql"))
+	resolved := firstExistingSchemaPath(schemaPathCandidates(callerPath, workingDir), pathExists)
+	if resolved != "" {
+		return resolved
+	}
+	return defaultSchemaRelativePath
+}
+
+func schemaPathCandidates(callerPath string, workingDir string) []string {
+	candidates := make([]string, 0, 8)
+	if strings.TrimSpace(workingDir) != "" {
+		candidates = append(candidates,
+			filepath.Join(workingDir, defaultSchemaRelativePath),
+			filepath.Join(workingDir, "engram", defaultSchemaRelativePath),
+		)
+	}
+	if strings.TrimSpace(callerPath) != "" {
+		callerDir := filepath.Dir(callerPath)
+		candidates = append(candidates,
+			filepath.Join(callerDir, "..", "..", "db", "init", "001_schema.sql"),
+			filepath.Join(callerDir, "..", "..", "..", "db", "init", "001_schema.sql"),
+		)
+	}
+	candidates = append(candidates,
+		defaultSchemaRelativePath,
+		filepath.Join("engram", defaultSchemaRelativePath),
+	)
+	return candidates
+}
+
+func firstExistingSchemaPath(candidates []string, pathExists func(path string) bool) string {
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		normalized := normalizeSchemaCandidate(candidate)
+		if normalized == "" {
+			continue
+		}
+		if _, duplicated := seen[normalized]; duplicated {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		if pathExists(normalized) {
+			return normalized
+		}
+	}
+	return ""
+}
+
+func normalizeSchemaCandidate(path string) string {
+	normalized := filepath.Clean(path)
+	if normalized == "" || normalized == "." {
+		return ""
+	}
+	return normalized
+}
+
+func fileExists(path string) bool {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return !fileInfo.IsDir()
 }
 
 // WithTransaction starts a transaction, runs fn, commits on success, and rolls back on failure.

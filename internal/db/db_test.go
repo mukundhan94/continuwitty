@@ -282,3 +282,50 @@ func hasUserUpdateExec(statements []string) bool {
 	}
 	return false
 }
+
+func TestResolveDefaultSchemaPath(t *testing.T) {
+	testCases := []struct {
+		name       string
+		callerPath string
+		workingDir string
+		existing   map[string]bool
+		expected   string
+	}{
+		{
+			name:       "prefers working directory schema path",
+			workingDir: "/srv",
+			existing: map[string]bool{
+				filepath.Clean("/srv/db/init/001_schema.sql"): true,
+			},
+			expected: filepath.Clean("/srv/db/init/001_schema.sql"),
+		},
+		{
+			name:       "resolves trimpath caller path via repository root fallback",
+			callerPath: filepath.Clean("engram/internal/db/db.go"),
+			workingDir: "/srv",
+			existing: map[string]bool{
+				filepath.Clean("db/init/001_schema.sql"): true,
+			},
+			expected: filepath.Clean("db/init/001_schema.sql"),
+		},
+		{
+			name:       "falls back to default relative path when nothing exists",
+			callerPath: filepath.Clean("engram/internal/db/db.go"),
+			workingDir: "/srv",
+			existing:   map[string]bool{},
+			expected:   filepath.Clean("db/init/001_schema.sql"),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			pathExists := func(path string) bool {
+				return testCase.existing[filepath.Clean(path)]
+			}
+			resolved := resolveDefaultSchemaPath(testCase.callerPath, testCase.workingDir, pathExists)
+			if filepath.Clean(resolved) != filepath.Clean(testCase.expected) {
+				t.Fatalf("expected %q, got %q", testCase.expected, resolved)
+			}
+		})
+	}
+}
