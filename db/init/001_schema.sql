@@ -513,6 +513,24 @@ CREATE INDEX IF NOT EXISTS engram_access_events_session_accessed_idx
 CREATE INDEX IF NOT EXISTS engram_access_events_source_accessed_idx
   ON engram_access_events (access_source, accessed_at DESC);
 
+CREATE TABLE IF NOT EXISTS engram_feedback (
+  feedback_id UUID PRIMARY KEY,
+  engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  actor_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  feedback_type TEXT NOT NULL CHECK (feedback_type IN ('useful', 'contradiction')),
+  note TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS engram_feedback_engram_created_idx
+  ON engram_feedback (engram_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_feedback_actor_created_idx
+  ON engram_feedback (actor_user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_feedback_type_created_idx
+  ON engram_feedback (feedback_type, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS session_pinned_engrams (
   session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
   engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,

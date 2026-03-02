@@ -131,40 +131,7 @@ func TestListEngramsWithoutActorOmitsVisibilityClause(t *testing.T) {
 func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	projectID := "engram-vault"
-	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
-	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)
-	db := &fakeQueryer{
-		queryRowsResult: &fakeRows{
-			values: [][]any{
-				{
-					uuid.MustParse("00000000-0000-0000-0000-000000000211"),
-					projectID,
-					"Dense Match",
-					"",
-					createdDense,
-					[]string{},
-					[]string{},
-					nil,
-					"private",
-					"unrelated text",
-					0.2,
-				},
-				{
-					uuid.MustParse("00000000-0000-0000-0000-000000000212"),
-					projectID,
-					"Lexical Match",
-					"",
-					createdLexical,
-					[]string{},
-					[]string{"durable", "checkpoint"},
-					nil,
-					"private",
-					"durable checkpoint lifecycle",
-					0.25,
-				},
-			},
-		},
-	}
+	db := buildQueryEngramsFixture(projectID)
 
 	results, err := QueryEngrams(
 		context.Background(),
@@ -182,14 +149,72 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	requireNoError(t, err)
 	requireEqual(t, 1, len(results))
 	requireEqual(t, "Lexical Match", results[0].Title)
+	assertQueryEngramsRuntimeQuery(
+		t,
+		queryRuntimeAssertionInput{
+			query:       db.querySQL[0],
+			args:        db.queryArgs[0],
+			projectID:   projectID,
+			actorUserID: actorUserID,
+		},
+	)
+}
 
-	requireEqual(t, 1, len(db.querySQL))
-	query := db.querySQL[0]
-	if !strings.Contains(query, "embed <=> $1::vector AS distance") {
-		t.Fatalf("expected vector distance clause in query, got %q", query)
+func buildQueryEngramsFixture(projectID string) *fakeQueryer {
+	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
+	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)
+	return &fakeQueryer{
+		queryRowsResult: &fakeRows{
+			values: [][]any{
+				{
+					uuid.MustParse("00000000-0000-0000-0000-000000000211"),
+					projectID,
+					"Dense Match",
+					"",
+					createdDense,
+					[]string{},
+					[]string{},
+					nil,
+					"private",
+					"unrelated text",
+					0,
+					0,
+					0.2,
+				},
+				{
+					uuid.MustParse("00000000-0000-0000-0000-000000000212"),
+					projectID,
+					"Lexical Match",
+					"",
+					createdLexical,
+					[]string{},
+					[]string{"durable", "checkpoint"},
+					nil,
+					"private",
+					"durable checkpoint lifecycle",
+					0,
+					0,
+					0.25,
+				},
+			},
+		},
 	}
-	if !strings.Contains(query, "WHERE deleted_at IS NULL AND project_id = $2") {
-		t.Fatalf("expected project clause with pgx placeholders, got %q", query)
+}
+
+type queryRuntimeAssertionInput struct {
+	query       string
+	args        []any
+	projectID   string
+	actorUserID uuid.UUID
+}
+
+func assertQueryEngramsRuntimeQuery(t *testing.T, input queryRuntimeAssertionInput) {
+	t.Helper()
+	if !strings.Contains(input.query, "embed <=> $1::vector AS distance") {
+		t.Fatalf("expected vector distance clause in query, got %q", input.query)
+	}
+	if !strings.Contains(input.query, "WHERE deleted_at IS NULL AND project_id = $2") {
+		t.Fatalf("expected project clause with pgx placeholders, got %q", input.query)
 	}
 	requiredVisibilityFragments := []string{
 		"owner_user_id = $3",
@@ -200,12 +225,12 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 		"owner_user_id IS NULL",
 	}
 	for _, fragment := range requiredVisibilityFragments {
-		if !strings.Contains(query, fragment) {
-			t.Fatalf("expected actor visibility fragment %q in query, got %q", fragment, query)
+		if !strings.Contains(input.query, fragment) {
+			t.Fatalf("expected actor visibility fragment %q in query, got %q", fragment, input.query)
 		}
 	}
-	expectedArgs := []any{"[0.1,0.2,0.3]", projectID, actorUserID, 4}
-	if !reflect.DeepEqual(db.queryArgs[0], expectedArgs) {
-		t.Fatalf("expected args %#v, got %#v", expectedArgs, db.queryArgs[0])
+	expectedArgs := []any{"[0.1,0.2,0.3]", input.projectID, input.actorUserID, 4}
+	if !reflect.DeepEqual(input.args, expectedArgs) {
+		t.Fatalf("expected args %#v, got %#v", expectedArgs, input.args)
 	}
 }
