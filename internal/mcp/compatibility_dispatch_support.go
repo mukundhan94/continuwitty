@@ -94,11 +94,15 @@ func (service *CompatibilityService) dispatchProjectListTool(
 
 	projects, err := service.projectService.ListProjects(
 		ctx,
-		actor.UserID,
-		normalizedActorRole(actor),
-		includeArchived,
-		limit,
-		offset,
+		projects.ActorContext{
+			UserID: actor.UserID,
+			Role:   normalizedActorRole(actor),
+		},
+		projects.ProjectListRequest{
+			IncludeArchived: includeArchived,
+			Limit:           limit,
+			Offset:          offset,
+		},
 	)
 	if err != nil {
 		return nil, true, &toolDispatchError{code: -32603, message: "Internal error"}
@@ -199,12 +203,16 @@ func (service *CompatibilityService) dispatchProjectMemberListTool(
 	}
 	members, err := service.projectService.ListProjectMembers(
 		ctx,
-		actor.UserID,
-		normalizedActorRole(actor),
-		projectID,
-		includeRevoked,
-		limit,
-		offset,
+		projects.ActorContext{
+			UserID: actor.UserID,
+			Role:   normalizedActorRole(actor),
+		},
+		projects.ProjectMemberListRequest{
+			ProjectID:      projectID,
+			IncludeRevoked: includeRevoked,
+			Limit:          limit,
+			Offset:         offset,
+		},
 	)
 	if err != nil {
 		return nil, true, mapProjectServiceError(err)

@@ -21,11 +21,8 @@ const (
 type ProjectListService interface {
 	ListProjects(
 		ctx context.Context,
-		actorUserID uuid.UUID,
-		actorRole models.UserRole,
-		includeArchived bool,
-		limit int,
-		offset int,
+		actor projects.ActorContext,
+		request projects.ProjectListRequest,
 	) ([]models.ProjectRecord, error)
 	CreateProject(
 		ctx context.Context,
@@ -42,12 +39,8 @@ type ProjectListService interface {
 	) (string, error)
 	ListProjectMembers(
 		ctx context.Context,
-		actorUserID uuid.UUID,
-		actorRole models.UserRole,
-		projectID string,
-		includeRevoked bool,
-		limit int,
-		offset int,
+		actor projects.ActorContext,
+		request projects.ProjectMemberListRequest,
 	) ([]models.ProjectMemberRecord, error)
 	AddProjectMember(
 		ctx context.Context,

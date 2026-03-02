@@ -277,20 +277,16 @@ type fakeProjectMembershipService struct {
 
 func (service *fakeProjectMembershipService) ListProjectMembers(
 	_ context.Context,
-	actorUserID uuid.UUID,
-	actorRole models.UserRole,
-	projectID string,
-	includeRevoked bool,
-	limit int,
-	offset int,
+	actor projects.ActorContext,
+	request projects.ProjectMemberListRequest,
 ) ([]models.ProjectMemberRecord, error) {
 	service.listCall = projectMemberListCall{
-		actorUserID:    actorUserID,
-		actorRole:      actorRole,
-		projectID:      projectID,
-		includeRevoked: includeRevoked,
-		limit:          limit,
-		offset:         offset,
+		actorUserID:    actor.UserID,
+		actorRole:      actor.Role,
+		projectID:      request.ProjectID,
+		includeRevoked: request.IncludeRevoked,
+		limit:          request.Limit,
+		offset:         request.Offset,
 	}
 	if service.listErr != nil {
 		return nil, service.listErr

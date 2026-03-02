@@ -5,6 +5,7 @@ import (
 
 	internalapi "engram/internal/api"
 	"engram/internal/models"
+	"engram/internal/projects"
 )
 
 func (adapter projectRouteServiceAdapter) ListProjectMembers(
@@ -13,11 +14,15 @@ func (adapter projectRouteServiceAdapter) ListProjectMembers(
 ) ([]models.ProjectMemberRecord, error) {
 	return adapter.service.ListProjectMembers(
 		ctx,
-		request.ActorUserID,
-		request.ActorRole,
-		request.ProjectID,
-		request.IncludeRevoked,
-		request.Limit,
-		request.Offset,
+		projects.ActorContext{
+			UserID: request.ActorUserID,
+			Role:   request.ActorRole,
+		},
+		projects.ProjectMemberListRequest{
+			ProjectID:      request.ProjectID,
+			IncludeRevoked: request.IncludeRevoked,
+			Limit:          request.Limit,
+			Offset:         request.Offset,
+		},
 	)
 }

@@ -8,6 +8,7 @@ import (
 
 	"engram/internal/admin"
 	"engram/internal/models"
+	"engram/internal/projects"
 
 	"github.com/google/uuid"
 )
@@ -15,24 +16,20 @@ import (
 type fakeProjectLookup struct {
 	getProjectFn func(
 		ctx context.Context,
-		actorUserID uuid.UUID,
-		actorRole models.UserRole,
-		projectID string,
-		includeArchived bool,
+		actor projects.ActorContext,
+		request projects.ProjectGetRequest,
 	) (*models.ProjectRecord, error)
 }
 
 func (fake *fakeProjectLookup) GetProject(
 	ctx context.Context,
-	actorUserID uuid.UUID,
-	actorRole models.UserRole,
-	projectID string,
-	includeArchived bool,
+	actor projects.ActorContext,
+	request projects.ProjectGetRequest,
 ) (*models.ProjectRecord, error) {
 	if fake.getProjectFn == nil {
 		return nil, nil
 	}
-	return fake.getProjectFn(ctx, actorUserID, actorRole, projectID, includeArchived)
+	return fake.getProjectFn(ctx, actor, request)
 }
 
 type fakeMemoryAdminLookup struct {

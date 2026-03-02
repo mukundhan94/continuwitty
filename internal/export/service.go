@@ -7,6 +7,7 @@ import (
 
 	"engram/internal/admin"
 	"engram/internal/models"
+	"engram/internal/projects"
 	"engram/internal/repository"
 
 	"github.com/google/uuid"
@@ -38,10 +39,8 @@ var (
 type projectLookup interface {
 	GetProject(
 		ctx context.Context,
-		actorUserID uuid.UUID,
-		actorRole models.UserRole,
-		projectID string,
-		includeArchived bool,
+		actor projects.ActorContext,
+		request projects.ProjectGetRequest,
 	) (*models.ProjectRecord, error)
 }
 

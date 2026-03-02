@@ -8,6 +8,7 @@ import (
 
 	"engram/internal/admin"
 	"engram/internal/models"
+	"engram/internal/projects"
 	"engram/internal/repository"
 
 	"github.com/google/uuid"
@@ -25,13 +26,11 @@ func TestBuildProjectExportBundleCollectionFilter(t *testing.T) {
 
 	projectService.getProjectFn = func(
 		_ context.Context,
-		_ uuid.UUID,
-		_ models.UserRole,
-		projectID string,
-		_ bool,
+		_ projects.ActorContext,
+		request projects.ProjectGetRequest,
 	) (*models.ProjectRecord, error) {
 		return &models.ProjectRecord{
-			ProjectID:   projectID,
+			ProjectID:   request.ProjectID,
 			Name:        "Alpha",
 			Description: "",
 			OwnerUserID: actorID,
@@ -111,13 +110,11 @@ func TestBuildProjectExportBundleWithoutCollectionFilterAttachesSources(t *testi
 
 	projectService.getProjectFn = func(
 		_ context.Context,
-		_ uuid.UUID,
-		_ models.UserRole,
-		projectID string,
-		_ bool,
+		_ projects.ActorContext,
+		request projects.ProjectGetRequest,
 	) (*models.ProjectRecord, error) {
 		return &models.ProjectRecord{
-			ProjectID:   projectID,
+			ProjectID:   request.ProjectID,
 			Name:        "Alpha",
 			Description: "",
 			OwnerUserID: actorID,
@@ -185,15 +182,13 @@ func TestBuildProjectExportBundleWithoutCollectionFilterAttachesSources(t *testi
 func TestBuildProjectExportBundleValidationErrors(t *testing.T) {
 	t.Run("project not found", func(t *testing.T) {
 		service, projectService, _ := newTestExportService()
-		projectService.getProjectFn = func(
-			_ context.Context,
-			_ uuid.UUID,
-			_ models.UserRole,
-			_ string,
-			_ bool,
-		) (*models.ProjectRecord, error) {
-			return nil, nil
-		}
+			projectService.getProjectFn = func(
+				_ context.Context,
+				_ projects.ActorContext,
+				_ projects.ProjectGetRequest,
+			) (*models.ProjectRecord, error) {
+				return nil, nil
+			}
 
 		_, err := service.BuildProjectExportBundle(
 			context.Background(),
@@ -210,18 +205,16 @@ func TestBuildProjectExportBundleValidationErrors(t *testing.T) {
 
 	t.Run("collection not found for project", func(t *testing.T) {
 		service, projectService, memoryService := newTestExportService()
-		projectService.getProjectFn = func(
-			_ context.Context,
-			_ uuid.UUID,
-			_ models.UserRole,
-			projectID string,
-			_ bool,
-		) (*models.ProjectRecord, error) {
-			return &models.ProjectRecord{
-				ProjectID:   projectID,
-				OwnerUserID: uuid.MustParse("00000000-0000-0000-0000-000000000c21"),
-			}, nil
-		}
+			projectService.getProjectFn = func(
+				_ context.Context,
+				_ projects.ActorContext,
+				request projects.ProjectGetRequest,
+			) (*models.ProjectRecord, error) {
+				return &models.ProjectRecord{
+					ProjectID:   request.ProjectID,
+					OwnerUserID: uuid.MustParse("00000000-0000-0000-0000-000000000c21"),
+				}, nil
+			}
 		memoryService.listCollectionsFn = func(
 			_ context.Context,
 			_ admin.MemoryAdminListRequest,

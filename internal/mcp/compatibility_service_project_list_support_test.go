@@ -26,18 +26,15 @@ type fakeProjectListService struct {
 
 func (service fakeProjectListService) ListProjects(
 	_ context.Context,
-	actorUserID uuid.UUID,
-	actorRole models.UserRole,
-	includeArchived bool,
-	limit int,
-	offset int,
+	actor projects.ActorContext,
+	request projects.ProjectListRequest,
 ) ([]models.ProjectRecord, error) {
 	if service.capture != nil {
-		service.capture.actorUserID = actorUserID
-		service.capture.actorRole = actorRole
-		service.capture.includeArchived = includeArchived
-		service.capture.limit = limit
-		service.capture.offset = offset
+		service.capture.actorUserID = actor.UserID
+		service.capture.actorRole = actor.Role
+		service.capture.includeArchived = request.IncludeArchived
+		service.capture.limit = request.Limit
+		service.capture.offset = request.Offset
 	}
 	return []models.ProjectRecord{buildProjectRecord(service.ownerUserID)}, nil
 }
@@ -69,12 +66,8 @@ func (fakeProjectListService) SetDefaultProjectID(
 
 func (fakeProjectListService) ListProjectMembers(
 	_ context.Context,
-	_ uuid.UUID,
-	_ models.UserRole,
-	_ string,
-	_ bool,
-	_ int,
-	_ int,
+	_ projects.ActorContext,
+	_ projects.ProjectMemberListRequest,
 ) ([]models.ProjectMemberRecord, error) {
 	return []models.ProjectMemberRecord{}, nil
 }

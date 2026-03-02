@@ -22,7 +22,11 @@ func TestListProjectsForwardsRepositoryInput(t *testing.T) {
 		return []models.ProjectRecord{}, nil
 	}
 
-	_, err := service.ListProjects(context.Background(), actorUserID, models.UserRoleAnalyst, true, 50, 10)
+	_, err := service.ListProjects(
+		context.Background(),
+		ActorContext{UserID: actorUserID, Role: models.UserRoleAnalyst},
+		ProjectListRequest{IncludeArchived: true, Limit: 50, Offset: 10},
+	)
 	requireNoError(t, err)
 	requireEqual(t, actorUserID, captured.ActorUserID)
 	requireEqual(t, string(models.UserRoleAnalyst), captured.ActorRole)
@@ -41,10 +45,11 @@ func TestGetProjectReturnsNilForBlankProjectID(t *testing.T) {
 
 	record, err := service.GetProject(
 		context.Background(),
-		uuid.MustParse("00000000-0000-0000-0000-000000000712"),
-		models.UserRoleAnalyst,
-		"   ",
-		false,
+		ActorContext{
+			UserID: uuid.MustParse("00000000-0000-0000-0000-000000000712"),
+			Role:   models.UserRoleAnalyst,
+		},
+		ProjectGetRequest{ProjectID: "   ", IncludeArchived: false},
 	)
 	requireNoError(t, err)
 	if record != nil {

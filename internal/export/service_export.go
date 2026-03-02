@@ -6,6 +6,7 @@ import (
 
 	"engram/internal/admin"
 	"engram/internal/models"
+	"engram/internal/projects"
 
 	"github.com/google/uuid"
 )
@@ -151,7 +152,11 @@ func (service *ProjectTransferService) resolveProjectOrError(
 	if err != nil {
 		return nil, ErrInvalidActorRole
 	}
-	project, err := service.projectService.GetProject(ctx, actorUserID, role, projectID, true)
+	project, err := service.projectService.GetProject(
+		ctx,
+		projects.ActorContext{UserID: actorUserID, Role: role},
+		projects.ProjectGetRequest{ProjectID: projectID, IncludeArchived: true},
+	)
 	if err != nil {
 		return nil, err
 	}

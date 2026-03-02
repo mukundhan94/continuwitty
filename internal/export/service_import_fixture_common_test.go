@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"engram/internal/models"
+	"engram/internal/projects"
 
 	"github.com/google/uuid"
 )
@@ -13,12 +14,10 @@ import (
 func setVisibleProject(projectService *fakeProjectLookup, actorID uuid.UUID) {
 	projectService.getProjectFn = func(
 		_ context.Context,
-		_ uuid.UUID,
-		_ models.UserRole,
-		projectID string,
-		_ bool,
+		_ projects.ActorContext,
+		request projects.ProjectGetRequest,
 	) (*models.ProjectRecord, error) {
-		return &models.ProjectRecord{ProjectID: projectID, OwnerUserID: actorID}, nil
+		return &models.ProjectRecord{ProjectID: request.ProjectID, OwnerUserID: actorID}, nil
 	}
 }
 
