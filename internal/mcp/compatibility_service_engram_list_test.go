@@ -20,13 +20,11 @@ func TestCompatibilityServiceEngramListParity(t *testing.T) {
 	params := engramListParityParams(projectID, sessionID, queryText)
 	service := newFakeEngramListService(projectID)
 
-	runEngramListParityCase(
-		t,
-		service,
-		"direct",
-		directToolRequest(actorUserID.String(), "engram.list", params),
-		false,
-		EngramListRequest{
+	runEngramListParityCase(t, service, engramListParityCase{
+		name:           "direct",
+		request:        directToolRequest(actorUserID.String(), "engram.list", params),
+		asToolsCallPath: false,
+		expectedCall: EngramListRequest{
 			ActorUserID:    actorUserID,
 			ActorRole:      models.UserRoleViewer,
 			ProjectID:      &projectID,
@@ -36,14 +34,12 @@ func TestCompatibilityServiceEngramListParity(t *testing.T) {
 			Limit:          25,
 			Offset:         2,
 		},
-	)
-	runEngramListParityCase(
-		t,
-		service,
-		"tools call",
-		toolsCallRequest(actorUserID.String(), "engram_list", params),
-		true,
-		EngramListRequest{
+	})
+	runEngramListParityCase(t, service, engramListParityCase{
+		name:           "tools call",
+		request:        toolsCallRequest(actorUserID.String(), "engram_list", params),
+		asToolsCallPath: true,
+		expectedCall: EngramListRequest{
 			ActorUserID:    actorUserID,
 			ActorRole:      models.UserRoleAnalyst,
 			ProjectID:      &projectID,
@@ -53,7 +49,7 @@ func TestCompatibilityServiceEngramListParity(t *testing.T) {
 			Limit:          25,
 			Offset:         2,
 		},
-	)
+	})
 }
 
 func TestCompatibilityServiceEngramListUsesDefaults(t *testing.T) {
@@ -174,25 +170,29 @@ func newFakeEngramListService(projectID string) *fakeEngramListService {
 	}
 }
 
+type engramListParityCase struct {
+	name            string
+	request         StreamCallRequest
+	asToolsCallPath bool
+	expectedCall    EngramListRequest
+}
+
 func runEngramListParityCase(
 	t *testing.T,
 	service *fakeEngramListService,
-	name string,
-	request StreamCallRequest,
-	asToolsCallPath bool,
-	expectedCall EngramListRequest,
+	parityCase engramListParityCase,
 ) {
-	t.Run(name, func(t *testing.T) {
+	t.Run(parityCase.name, func(t *testing.T) {
 		frame := runCompatibilityRequestWithService(
 			t,
 			newEngramListCompatibilityService(service),
-			request,
+			parityCase.request,
 		)
-		engrams := engramsFromFrame(t, frame, asToolsCallPath)
+		engrams := engramsFromFrame(t, frame, parityCase.asToolsCallPath)
 		if !reflect.DeepEqual(service.engrams, engrams) {
 			t.Fatalf("expected engrams payload to match service output")
 		}
-		assertEngramListCall(t, service.call, expectedCall)
+		assertEngramListCall(t, service.call, parityCase.expectedCall)
 	})
 }
 
