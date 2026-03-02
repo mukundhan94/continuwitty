@@ -36,82 +36,85 @@ type sessionUserCallTracker struct {
 	updateCalls int
 }
 
+type adminManageUsersFixture struct {
+	actor         *models.UserAuthRecord
+	createdUserID uuid.UUID
+	createdAt     time.Time
+	callTracker   *sessionUserCallTracker
+}
+
 func TestMountSessionAuthRoutesAdminCanManageUsers(t *testing.T) {
-	actor := newSessionRoutesTestActor(t, models.UserRoleAdmin)
-	createdUserID := uuid.MustParse("00000000-0000-0000-0000-000000000811")
-	createdAt := time.Date(2026, 2, 22, 4, 0, 0, 0, time.UTC)
-	callTracker := &sessionUserCallTracker{}
+	fixture := adminManageUsersFixture{
+		actor:         newSessionRoutesTestActor(t, models.UserRoleAdmin),
+		createdUserID: uuid.MustParse("00000000-0000-0000-0000-000000000811"),
+		createdAt:     time.Date(2026, 2, 22, 4, 0, 0, 0, time.UTC),
+		callTracker:   &sessionUserCallTracker{},
+	}
 
 	handler, manager := buildSessionUserRoutesTestHandler(
 		t,
-		newAdminManageUsersHandlerOptions(t, actor, createdUserID, createdAt, callTracker),
+		newAdminManageUsersHandlerOptions(t, fixture),
 	)
 	loginCookie := loginSessionUserRoutesActor(
 		t,
 		handler,
 		manager,
 		sessionUserLoginCredentials{
-			username: actor.Username,
+			username: fixture.actor.Username,
 			password: "StrongPassword-12345",
 		},
 	)
 
-	assertAdminUsersListIncludesActor(t, handler, loginCookie, actor.Username)
+	assertAdminUsersListIncludesActor(t, handler, loginCookie, fixture.actor.Username)
 	assertAdminCreateUserSucceeds(t, handler, loginCookie)
-	assertAdminUpdateUserSucceeds(t, handler, loginCookie, createdUserID)
+	assertAdminUpdateUserSucceeds(t, handler, loginCookie, fixture.createdUserID)
 
-	if callTracker.createCalls != 1 {
-		t.Fatalf("expected exactly one create call, got %d", callTracker.createCalls)
+	if fixture.callTracker.createCalls != 1 {
+		t.Fatalf("expected exactly one create call, got %d", fixture.callTracker.createCalls)
 	}
-	if callTracker.updateCalls != 1 {
-		t.Fatalf("expected exactly one update call, got %d", callTracker.updateCalls)
+	if fixture.callTracker.updateCalls != 1 {
+		t.Fatalf("expected exactly one update call, got %d", fixture.callTracker.updateCalls)
 	}
 }
 
-func newAdminManageUsersHandlerOptions(
-	t *testing.T,
-	actor *models.UserAuthRecord,
-	createdUserID uuid.UUID,
-	createdAt time.Time,
-	callTracker *sessionUserCallTracker,
-) sessionUserRoutesHandlerOptions {
+func newAdminManageUsersHandlerOptions(t *testing.T, fixture adminManageUsersFixture) sessionUserRoutesHandlerOptions {
 	t.Helper()
 	return sessionUserRoutesHandlerOptions{
-		actor: actor,
+		actor: fixture.actor,
 		listUsers: func(_ context.Context, limit, offset int) ([]models.UserRecord, error) {
 			if limit != 200 || offset != 0 {
 				t.Fatalf("expected default pagination 200/0, got %d/%d", limit, offset)
 			}
 			return []models.UserRecord{
 				{
-					UserID:    actor.UserID,
-					Username:  actor.Username,
-					Role:      actor.Role,
-					IsActive:  actor.IsActive,
-					CreatedAt: actor.CreatedAt,
+					UserID:    fixture.actor.UserID,
+					Username:  fixture.actor.Username,
+					Role:      fixture.actor.Role,
+					IsActive:  fixture.actor.IsActive,
+					CreatedAt: fixture.actor.CreatedAt,
 				},
 			}, nil
 		},
 		createUser: func(_ context.Context, input SessionUserCreateInput) (*models.UserRecord, error) {
-			callTracker.createCalls++
+			fixture.callTracker.createCalls++
 			assertAdminCreateInput(t, input)
 			return &models.UserRecord{
-				UserID:    createdUserID,
+				UserID:    fixture.createdUserID,
 				Username:  input.Username,
 				Role:      input.Role,
 				IsActive:  input.IsActive,
-				CreatedAt: createdAt,
+				CreatedAt: fixture.createdAt,
 			}, nil
 		},
 		updateUser: func(_ context.Context, userID uuid.UUID, input SessionUserUpdateInput) (*models.UserRecord, error) {
-			callTracker.updateCalls++
-			assertAdminUpdateInput(t, createdUserID, userID, input)
+			fixture.callTracker.updateCalls++
+			assertAdminUpdateInput(t, fixture.createdUserID, userID, input)
 			return &models.UserRecord{
-				UserID:    createdUserID,
+				UserID:    fixture.createdUserID,
 				Username:  "analyst_01",
 				Role:      *input.Role,
 				IsActive:  true,
-				CreatedAt: createdAt,
+				CreatedAt: fixture.createdAt,
 			}, nil
 		},
 	}

@@ -325,6 +325,17 @@ func assertEngramUpdateCall(
 	expected engramUpdateCallExpectation,
 ) {
 	t.Helper()
+	assertEngramUpdateRequiredFields(t, call, expected)
+	assertEngramUpdateTextFields(t, call, expected)
+	assertEngramUpdateCollectionFields(t, call, expected)
+}
+
+func assertEngramUpdateRequiredFields(
+	t *testing.T,
+	call EngramUpdateRequest,
+	expected engramUpdateCallExpectation,
+) {
+	t.Helper()
 	if call.ActorUserID != expected.actorUserID {
 		t.Fatalf("expected actor user id forwarded")
 	}
@@ -334,66 +345,110 @@ func assertEngramUpdateCall(
 	if call.EngramID != expected.engramID {
 		t.Fatalf("expected engram id forwarded")
 	}
-	assertOptionalField(t, "expected_updated_at", call.ExpectedUpdatedAt, expected.expectedUpdatedAt, func(a, b time.Time) bool {
-		return a.Equal(b)
-	})
-	assertOptionalField(t, "title", call.Title, expected.title, func(a, b string) bool { return a == b })
-	assertOptionalField(t, "abstract", call.Abstract, expected.abstract, func(a, b string) bool { return a == b })
 	assertOptionalField(
 		t,
-		"detailed_summary_markdown",
-		call.DetailedSummaryMarkdown,
-		expected.detailedSummaryMarkdown,
+		optionalFieldAssertion[time.Time]{
+			label:    "expected_updated_at",
+			actual:   call.ExpectedUpdatedAt,
+			expected: expected.expectedUpdatedAt,
+		},
+		func(a, b time.Time) bool { return a.Equal(b) },
+	)
+}
+
+func assertEngramUpdateTextFields(
+	t *testing.T,
+	call EngramUpdateRequest,
+	expected engramUpdateCallExpectation,
+) {
+	t.Helper()
+	assertOptionalField(
+		t,
+		optionalFieldAssertion[string]{label: "title", actual: call.Title, expected: expected.title},
 		func(a, b string) bool { return a == b },
 	)
 	assertOptionalField(
 		t,
-		"tags",
-		call.Tags,
-		expected.tags,
+		optionalFieldAssertion[string]{label: "abstract", actual: call.Abstract, expected: expected.abstract},
+		func(a, b string) bool { return a == b },
+	)
+	assertOptionalField(
+		t,
+		optionalFieldAssertion[string]{
+			label:    "detailed_summary_markdown",
+			actual:   call.DetailedSummaryMarkdown,
+			expected: expected.detailedSummaryMarkdown,
+		},
+		func(a, b string) bool { return a == b },
+	)
+}
+
+func assertEngramUpdateCollectionFields(
+	t *testing.T,
+	call EngramUpdateRequest,
+	expected engramUpdateCallExpectation,
+) {
+	t.Helper()
+	assertOptionalField(
+		t,
+		optionalFieldAssertion[[]string]{
+			label:    "tags",
+			actual:   call.Tags,
+			expected: expected.tags,
+		},
 		func(actual []string, expected []string) bool { return reflect.DeepEqual(actual, expected) },
 	)
 	assertOptionalField(
 		t,
-		"keywords",
-		call.Keywords,
-		expected.keywords,
+		optionalFieldAssertion[[]string]{
+			label:    "keywords",
+			actual:   call.Keywords,
+			expected: expected.keywords,
+		},
 		func(actual []string, expected []string) bool { return reflect.DeepEqual(actual, expected) },
 	)
 	assertOptionalField(
 		t,
-		"visibility_scope",
-		call.VisibilityScope,
-		expected.visibilityScope,
+		optionalFieldAssertion[models.VisibilityScope]{
+			label:    "visibility_scope",
+			actual:   call.VisibilityScope,
+			expected: expected.visibilityScope,
+		},
 		func(a, b models.VisibilityScope) bool { return a == b },
 	)
 	assertOptionalField(
 		t,
-		"sources",
-		call.Sources,
-		expected.sources,
+		optionalFieldAssertion[[]models.AdminEngramSourceInput]{
+			label:    "sources",
+			actual:   call.Sources,
+			expected: expected.sources,
+		},
 		func(actual []models.AdminEngramSourceInput, expected []models.AdminEngramSourceInput) bool {
 			return reflect.DeepEqual(actual, expected)
 		},
 	)
 }
 
+type optionalFieldAssertion[T any] struct {
+	label    string
+	actual   *T
+	expected *T
+}
+
 func assertOptionalField[T any](
 	t *testing.T,
-	label string,
-	actual *T,
-	expected *T,
+	assertion optionalFieldAssertion[T],
 	equals func(T, T) bool,
 ) {
 	t.Helper()
-	if expected == nil {
-		if actual != nil {
-			t.Fatalf("expected %s omitted", label)
+	if assertion.expected == nil {
+		if assertion.actual != nil {
+			t.Fatalf("expected %s omitted", assertion.label)
 		}
 		return
 	}
-	if actual == nil || !equals(*actual, *expected) {
-		t.Fatalf("expected %s forwarded", label)
+	if assertion.actual == nil || !equals(*assertion.actual, *assertion.expected) {
+		t.Fatalf("expected %s forwarded", assertion.label)
 	}
 }
 

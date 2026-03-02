@@ -165,9 +165,11 @@ func assertEngramMoveCall(
 	assertOptionalDeleteReason(t, call.Reason, expected.reason)
 	assertOptionalField(
 		t,
-		"expected_updated_at",
-		call.ExpectedUpdatedAt,
-		expected.expectedUpdatedAt,
+		optionalFieldAssertion[time.Time]{
+			label:    "expected_updated_at",
+			actual:   call.ExpectedUpdatedAt,
+			expected: expected.expectedUpdatedAt,
+		},
 		func(actual time.Time, expected time.Time) bool { return actual.Equal(expected) },
 	)
 }
@@ -203,15 +205,26 @@ func assertEngramMoveValidationErrors(t *testing.T, service Service) {
 func assertEngramMoveErrorMappings(t *testing.T) {
 	t.Helper()
 	notFoundID := uuid.MustParse("39910000-0000-0000-0000-000000000399")
-	testCases := []struct {
-		name           string
-		service        Service
-		params         map[string]any
-		expectedCode   int
-		expectedStatus *int
-		expectedDetail *string
-		expectNotFound bool
-	}{
+	for _, testCase := range buildEngramMoveErrorCases(notFoundID) {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			assertEngramMoveErrorCase(t, testCase, notFoundID)
+		})
+	}
+}
+
+type engramMoveErrorCase struct {
+	name           string
+	service        Service
+	params         map[string]any
+	expectedCode   int
+	expectedStatus *int
+	expectedDetail *string
+	expectNotFound bool
+}
+
+func buildEngramMoveErrorCases(notFoundID uuid.UUID) []engramMoveErrorCase {
+	return []engramMoveErrorCase{
 		{
 			name:           "not found",
 			service:        newEngramMoveCompatibilityService(&fakeEngramMoveService{}),
@@ -262,30 +275,29 @@ func assertEngramMoveErrorMappings(t *testing.T) {
 			expectedCode: -32603,
 		},
 	}
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			frame := runCompatibilityRequestWithService(
-				t,
-				testCase.service,
-				toolsCallRequest(
-					uuid.MustParse("39910000-0000-0000-0000-000000000400").String(),
-					"engram_move_project",
-					testCase.params,
-				),
-			)
-			errorPayload := errorPayloadFromFrame(t, frame)
-			requireErrorCode(t, errorPayload, testCase.expectedCode)
-			if testCase.expectNotFound {
-				assertEngramMutationNotFoundData(t, errorPayload, notFoundID)
-			}
-			if testCase.expectedStatus != nil {
-				assertErrorStatusCode(t, errorPayload, *testCase.expectedStatus)
-			}
-			if testCase.expectedDetail != nil {
-				assertErrorDetail(t, errorPayload, *testCase.expectedDetail)
-			}
-		})
+}
+
+func assertEngramMoveErrorCase(t *testing.T, testCase engramMoveErrorCase, notFoundID uuid.UUID) {
+	t.Helper()
+	frame := runCompatibilityRequestWithService(
+		t,
+		testCase.service,
+		toolsCallRequest(
+			uuid.MustParse("39910000-0000-0000-0000-000000000400").String(),
+			"engram_move_project",
+			testCase.params,
+		),
+	)
+	errorPayload := errorPayloadFromFrame(t, frame)
+	requireErrorCode(t, errorPayload, testCase.expectedCode)
+	if testCase.expectNotFound {
+		assertEngramMutationNotFoundData(t, errorPayload, notFoundID)
+	}
+	if testCase.expectedStatus != nil {
+		assertErrorStatusCode(t, errorPayload, *testCase.expectedStatus)
+	}
+	if testCase.expectedDetail != nil {
+		assertErrorDetail(t, errorPayload, *testCase.expectedDetail)
 	}
 }
 

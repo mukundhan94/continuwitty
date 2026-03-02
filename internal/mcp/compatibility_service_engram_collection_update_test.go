@@ -228,9 +228,11 @@ func assertCollectionUpdateCall(
 	}
 	assertOptionalField(
 		t,
-		"expected_updated_at",
-		call.ExpectedUpdatedAt,
-		expected.expectedUpdatedAt,
+		optionalFieldAssertion[time.Time]{
+			label:    "expected_updated_at",
+			actual:   call.ExpectedUpdatedAt,
+			expected: expected.expectedUpdatedAt,
+		},
 		func(actual time.Time, expected time.Time) bool { return actual.Equal(expected) },
 	)
 	assertOptionalDeleteReason(t, call.Name, expected.name)
