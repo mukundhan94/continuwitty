@@ -75,36 +75,61 @@ func TestCompatibilityServiceEngramFeedbackParity(t *testing.T) {
 	}
 }
 
-func TestCompatibilityServiceEngramFeedbackUsesDefaults(t *testing.T) {
+func TestCompatibilityServiceEngramFeedbackNormalizesOptionalNote(t *testing.T) {
 	actorUserID := uuid.MustParse("39920000-0000-0000-0000-000000000399")
 	engramID := uuid.MustParse("39920000-0000-0000-0000-000000000400")
-	service := &fakeEngramFeedbackService{
-		record: &models.EngramFeedbackRecord{
-			FeedbackID:         uuid.MustParse("39920000-0000-0000-0000-000000000401"),
-			EngramID:           engramID,
-			ActorUserID:        actorUserID,
-			FeedbackType:       models.EngramFeedbackTypeContradiction,
-			Note:               "",
-			CreatedAt:          time.Date(2026, 3, 2, 13, 10, 0, 0, time.UTC),
-			UsefulCount:        0,
-			ContradictionCount: 2,
-		},
-	}
-	frame := runCompatibilityRequestWithService(
-		t,
-		newEngramFeedbackCompatibilityService(service),
-		directToolRequest(
-			actorUserID.String(),
-			"engram.feedback",
-			map[string]any{
+	testCases := []struct {
+		name         string
+		feedbackType models.EngramFeedbackType
+		params       map[string]any
+	}{
+		{
+			name:         "omitted note",
+			feedbackType: models.EngramFeedbackTypeContradiction,
+			params: map[string]any{
 				"engram_id":     engramID.String(),
 				"feedback_type": "contradiction",
 			},
-		),
-	)
-	_ = engramFeedbackFromFrame(t, frame, false)
-	if service.call.Note != nil {
-		t.Fatalf("expected note to remain nil when omitted")
+		},
+		{
+			name:         "blank note",
+			feedbackType: models.EngramFeedbackTypeUseful,
+			params: map[string]any{
+				"engram_id":     engramID.String(),
+				"feedback_type": "useful",
+				"note":          "   ",
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			service := &fakeEngramFeedbackService{
+				record: &models.EngramFeedbackRecord{
+					FeedbackID:         uuid.MustParse("39920000-0000-0000-0000-000000000401"),
+					EngramID:           engramID,
+					ActorUserID:        actorUserID,
+					FeedbackType:       testCase.feedbackType,
+					CreatedAt:          time.Date(2026, 3, 2, 13, 10, 0, 0, time.UTC),
+					UsefulCount:        0,
+					ContradictionCount: 2,
+				},
+			}
+			frame := runCompatibilityRequestWithService(
+				t,
+				newEngramFeedbackCompatibilityService(service),
+				directToolRequest(
+					actorUserID.String(),
+					"engram.feedback",
+					testCase.params,
+				),
+			)
+			_ = engramFeedbackFromFrame(t, frame, false)
+			if service.call.Note != nil {
+				t.Fatalf("expected normalized note to be nil")
+			}
+		})
 	}
 }
 

@@ -74,7 +74,7 @@ func TestMountSessionAuthRoutesSubmitEngramFeedbackUsesRepository(t *testing.T) 
 	if capturedInput.Note == nil {
 		t.Fatalf("expected note to be forwarded")
 	}
-	requireEqual(t, "  helpful answer  ", *capturedInput.Note)
+	requireEqual(t, "helpful answer", *capturedInput.Note)
 
 	var payload map[string]any
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {

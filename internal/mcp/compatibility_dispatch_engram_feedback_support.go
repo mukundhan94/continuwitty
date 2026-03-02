@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"strings"
 
 	"engram/internal/models"
 )
@@ -52,6 +53,17 @@ func parseEngramFeedbackRequest(
 		ActorUserID:  actor.UserID,
 		EngramID:     engramID,
 		FeedbackType: feedbackType,
-		Note:         note,
+		Note:         normalizeOptionalTrimmedParamString(note),
 	}, nil
+}
+
+func normalizeOptionalTrimmedParamString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }

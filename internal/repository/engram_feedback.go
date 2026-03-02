@@ -99,6 +99,9 @@ func normalizeFeedbackNote(note *string) *string {
 		return nil
 	}
 	trimmed := strings.TrimSpace(*note)
+	if trimmed == "" {
+		return nil
+	}
 	return &trimmed
 }
 

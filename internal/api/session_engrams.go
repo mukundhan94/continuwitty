@@ -344,7 +344,7 @@ func decodeEngramFeedbackRequest(
 	}
 	return SessionEngramFeedbackInput{
 		FeedbackType: parsedType,
-		Note:         payload.Note,
+		Note:         normalizeOptionalTrimmedString(payload.Note),
 	}, true
 }
 
@@ -390,10 +390,14 @@ func normalizeEngramVisibilityScope(scope string) string {
 }
 
 func normalizeOptionalProjectID(projectID *string) *string {
-	if projectID == nil {
+	return normalizeOptionalTrimmedString(projectID)
+}
+
+func normalizeOptionalTrimmedString(value *string) *string {
+	if value == nil {
 		return nil
 	}
-	trimmed := strings.TrimSpace(*projectID)
+	trimmed := strings.TrimSpace(*value)
 	if trimmed == "" {
 		return nil
 	}

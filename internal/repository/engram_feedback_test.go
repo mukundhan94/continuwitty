@@ -129,6 +129,53 @@ func TestRecordEngramFeedbackDefaultsTimestampAndTrimsNote(t *testing.T) {
 	requireEqual(t, now, record.CreatedAt)
 }
 
+func TestRecordEngramFeedbackNormalizesBlankNoteToNil(t *testing.T) {
+	feedbackID := uuid.MustParse("00000000-0000-0000-0000-000000000a16")
+	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000a17")
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000a18")
+	now := time.Date(2026, 3, 2, 9, 40, 0, 0, time.UTC)
+	db := &fakeQueryer{
+		queryRowResult: &fakeRow{
+			values: []any{
+				feedbackID,
+				engramID,
+				actorUserID,
+				string(models.EngramFeedbackTypeUseful),
+				"",
+				now,
+				1,
+				0,
+			},
+		},
+	}
+
+	originalIDFactory := newEngramFeedbackUUID
+	newEngramFeedbackUUID = func() uuid.UUID { return feedbackID }
+	t.Cleanup(func() { newEngramFeedbackUUID = originalIDFactory })
+
+	originalNow := nowEngramFeedbackUTC
+	nowEngramFeedbackUTC = func() time.Time { return now }
+	t.Cleanup(func() { nowEngramFeedbackUTC = originalNow })
+
+	note := "   "
+	record, err := RecordEngramFeedback(
+		context.Background(),
+		db,
+		EngramFeedbackCreateInput{
+			EngramID:     engramID,
+			ActorUserID:  actorUserID,
+			FeedbackType: models.EngramFeedbackTypeUseful,
+			Note:         &note,
+		},
+	)
+	requireNoError(t, err)
+	requireNotNil(t, record)
+	requireEqual(t, "", record.Note)
+
+	requireEqual(t, 1, len(db.queryRowArgs))
+	requireEqual(t, nil, db.queryRowArgs[0][4])
+}
+
 func TestRecordEngramFeedbackReturnsNilWhenEngramNotVisible(t *testing.T) {
 	db := &fakeQueryer{queryRowResult: &fakeRow{err: pgx.ErrNoRows}}
 	record, err := RecordEngramFeedback(
