@@ -146,13 +146,7 @@ func fetchRehydrationEngramRow(
 		actorPlaceholder := pgxPlaceholder(len(params) + 1)
 		whereClauses = append(
 			whereClauses,
-			buildMembershipReadClause(
-				"owner_user_id",
-				"visibility_scope",
-				"project_id",
-				actorPlaceholder,
-				true,
-			),
+			buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "owner_user_id", visibilityColumn: "visibility_scope", projectColumn: "project_id", actorPlaceholder: actorPlaceholder, includeOwnerless: true}),
 		)
 		params = append(params, *actorUserID)
 	}

@@ -35,24 +35,26 @@ func actorIsAdminSQL(actorPlaceholder string) string {
 	)
 }
 
-func buildMembershipReadClause(
-	ownerColumn string,
-	visibilityColumn string,
-	projectColumn string,
-	actorPlaceholder string,
-	includeOwnerless bool,
-) string {
-	membershipClause := activeProjectMembershipExistsSQL(projectColumn, actorPlaceholder)
+type membershipReadClauseInput struct {
+	ownerColumn      string
+	visibilityColumn string
+	projectColumn    string
+	actorPlaceholder string
+	includeOwnerless bool
+}
+
+func buildMembershipReadClause(input membershipReadClauseInput) string {
+	membershipClause := activeProjectMembershipExistsSQL(input.projectColumn, input.actorPlaceholder)
 	ownerlessClause := ""
-	if includeOwnerless {
-		ownerlessClause = fmt.Sprintf(" OR (%s IS NULL AND %s)", ownerColumn, membershipClause)
+	if input.includeOwnerless {
+		ownerlessClause = fmt.Sprintf(" OR (%s IS NULL AND %s)", input.ownerColumn, membershipClause)
 	}
 	return fmt.Sprintf(
 		"(%s = %s OR %s OR (%s = 'project' AND %s)%s)",
-		ownerColumn,
-		actorPlaceholder,
-		actorIsAdminSQL(actorPlaceholder),
-		visibilityColumn,
+		input.ownerColumn,
+		input.actorPlaceholder,
+		actorIsAdminSQL(input.actorPlaceholder),
+		input.visibilityColumn,
 		membershipClause,
 		ownerlessClause,
 	)

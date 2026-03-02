@@ -72,26 +72,14 @@ var (
 		resourceTable: "engrams",
 		resourceAccessClause: fmt.Sprintf(
 			`r.deleted_at IS NULL AND %s`,
-			buildMembershipReadClause(
-				"r.owner_user_id",
-				"r.visibility_scope",
-				"r.project_id",
-				"%s",
-				true,
-			),
+			buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "r.owner_user_id", visibilityColumn: "r.visibility_scope", projectColumn: "r.project_id", actorPlaceholder: "%s", includeOwnerless: true}),
 		),
 	}
 	documentPinMutationConfig = pinnedResourceMutationConfig{
-		table:         "session_pinned_documents",
-		idColumn:      "document_id",
-		resourceTable: "documents",
-		resourceAccessClause: buildMembershipReadClause(
-			"r.owner_user_id",
-			"r.visibility_scope",
-			"r.project_id",
-			"%s",
-			false,
-		),
+		table:                "session_pinned_documents",
+		idColumn:             "document_id",
+		resourceTable:        "documents",
+		resourceAccessClause: buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "r.owner_user_id", visibilityColumn: "r.visibility_scope", projectColumn: "r.project_id", actorPlaceholder: "%s", includeOwnerless: false}),
 	}
 	engramPinListConfig = pinnedResourceListConfig{
 		table:                "session_pinned_engrams",
@@ -105,14 +93,8 @@ var (
 		JOIN documents d
 		  ON d.document_id = p.document_id
 		`,
-		resourceAccessClause: buildMembershipReadClause(
-			"d.owner_user_id",
-			"d.visibility_scope",
-			"d.project_id",
-			"%s",
-			false,
-		),
-		includeActorParam: true,
+		resourceAccessClause: buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "d.owner_user_id", visibilityColumn: "d.visibility_scope", projectColumn: "d.project_id", actorPlaceholder: "%s", includeOwnerless: false}),
+		includeActorParam:    true,
 	}
 )
 
@@ -205,20 +187,8 @@ func ListPinnedEngramSummaries(
 	db Queryer,
 	input ChatPinnedListInput,
 ) ([]models.EngramSummary, error) {
-	sessionAccessClause := buildMembershipReadClause(
-		"s.owner_user_id",
-		"s.visibility_scope",
-		"s.project_id",
-		"$2",
-		false,
-	)
-	engramAccessClause := buildMembershipReadClause(
-		"e.owner_user_id",
-		"e.visibility_scope",
-		"e.project_id",
-		"$3",
-		true,
-	)
+	sessionAccessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "s.owner_user_id", visibilityColumn: "s.visibility_scope", projectColumn: "s.project_id", actorPlaceholder: "$2", includeOwnerless: false})
+	engramAccessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "e.owner_user_id", visibilityColumn: "e.visibility_scope", projectColumn: "e.project_id", actorPlaceholder: "$3", includeOwnerless: true})
 	rows, err := db.Query(
 		ctx,
 		fmt.Sprintf(
@@ -551,13 +521,7 @@ func resolvePinnedResourceAccessClause(clause string, actorPlaceholder string) s
 }
 
 func buildSessionPinAccessClause(actorPlaceholder string) string {
-	return buildMembershipReadClause(
-		"s.owner_user_id",
-		"s.visibility_scope",
-		"s.project_id",
-		actorPlaceholder,
-		false,
-	)
+	return buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "s.owner_user_id", visibilityColumn: "s.visibility_scope", projectColumn: "s.project_id", actorPlaceholder: actorPlaceholder, includeOwnerless: false})
 }
 
 func buildPinResourceToSessionSQL(

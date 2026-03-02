@@ -133,13 +133,7 @@ func ListChatSessions(
 	db Queryer,
 	input ChatSessionListInput,
 ) ([]models.ChatSessionRecord, error) {
-	accessClause := buildMembershipReadClause(
-		"owner_user_id",
-		"visibility_scope",
-		"project_id",
-		"$1",
-		false,
-	)
+	accessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "owner_user_id", visibilityColumn: "visibility_scope", projectColumn: "project_id", actorPlaceholder: "$1", includeOwnerless: false})
 	query := fmt.Sprintf(
 		`
 		SELECT %s
@@ -189,13 +183,7 @@ func GetChatSession(
 	db Queryer,
 	input ChatSessionGetInput,
 ) (*models.ChatSessionRecord, error) {
-	accessClause := buildMembershipReadClause(
-		"owner_user_id",
-		"visibility_scope",
-		"project_id",
-		"$2",
-		false,
-	)
+	accessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "owner_user_id", visibilityColumn: "visibility_scope", projectColumn: "project_id", actorPlaceholder: "$2", includeOwnerless: false})
 	row := db.QueryRow(
 		ctx,
 		fmt.Sprintf(

@@ -264,13 +264,7 @@ func ListDocuments(
 	db Queryer,
 	input DocumentListInput,
 ) ([]models.DocumentRecord, error) {
-	accessClause := buildMembershipReadClause(
-		"owner_user_id",
-		"visibility_scope",
-		"project_id",
-		"$1",
-		false,
-	)
+	accessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "owner_user_id", visibilityColumn: "visibility_scope", projectColumn: "project_id", actorPlaceholder: "$1", includeOwnerless: false})
 	query := fmt.Sprintf(`
 		SELECT
 			document_id,
@@ -543,13 +537,7 @@ func buildDocumentChunkWhere(
 	}
 	actorPlaceholder := nextPlaceholder()
 	whereClauses := []string{
-		buildMembershipReadClause(
-			"d.owner_user_id",
-			"d.visibility_scope",
-			"d.project_id",
-			actorPlaceholder,
-			false,
-		),
+		buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "d.owner_user_id", visibilityColumn: "d.visibility_scope", projectColumn: "d.project_id", actorPlaceholder: actorPlaceholder, includeOwnerless: false}),
 	}
 	whereParams = append(whereParams, actorUserID)
 	if request.ProjectID != nil && *request.ProjectID != "" {

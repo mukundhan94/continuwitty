@@ -81,13 +81,7 @@ func CreateChatMessage(
 	input ChatMessageCreateInput,
 ) (*models.ChatMessageRecord, error) {
 	metadata := resolveMessageMetadata(input.Metadata)
-	sessionAccessClause := buildMembershipReadClause(
-		"s.owner_user_id",
-		"s.visibility_scope",
-		"s.project_id",
-		"$10",
-		false,
-	)
+	sessionAccessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "s.owner_user_id", visibilityColumn: "s.visibility_scope", projectColumn: "s.project_id", actorPlaceholder: "$10", includeOwnerless: false})
 	row := db.QueryRow(
 		ctx,
 		fmt.Sprintf(
@@ -150,13 +144,7 @@ func ListChatMessages(
 	db Queryer,
 	input ChatMessageListInput,
 ) ([]models.ChatMessageRecord, error) {
-	sessionAccessClause := buildMembershipReadClause(
-		"s.owner_user_id",
-		"s.visibility_scope",
-		"s.project_id",
-		"$2",
-		false,
-	)
+	sessionAccessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "s.owner_user_id", visibilityColumn: "s.visibility_scope", projectColumn: "s.project_id", actorPlaceholder: "$2", includeOwnerless: false})
 	rows, err := db.Query(
 		ctx,
 		fmt.Sprintf(
@@ -213,20 +201,8 @@ func ListSessionLinkedEngrams(
 	db Queryer,
 	input SessionLinkedEngramsListInput,
 ) ([]models.EngramSummary, error) {
-	sessionAccessClause := buildMembershipReadClause(
-		"s.owner_user_id",
-		"s.visibility_scope",
-		"s.project_id",
-		"$2",
-		false,
-	)
-	engramAccessClause := buildMembershipReadClause(
-		"e.owner_user_id",
-		"e.visibility_scope",
-		"e.project_id",
-		"$3",
-		true,
-	)
+	sessionAccessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "s.owner_user_id", visibilityColumn: "s.visibility_scope", projectColumn: "s.project_id", actorPlaceholder: "$2", includeOwnerless: false})
+	engramAccessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "e.owner_user_id", visibilityColumn: "e.visibility_scope", projectColumn: "e.project_id", actorPlaceholder: "$3", includeOwnerless: true})
 	rows, err := db.Query(
 		ctx,
 		fmt.Sprintf(
@@ -288,13 +264,7 @@ func CountSessionMessagesByRole(
 	db Queryer,
 	input SessionMessageRoleCountInput,
 ) (int, error) {
-	sessionAccessClause := buildMembershipReadClause(
-		"s.owner_user_id",
-		"s.visibility_scope",
-		"s.project_id",
-		"$3",
-		false,
-	)
+	sessionAccessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "s.owner_user_id", visibilityColumn: "s.visibility_scope", projectColumn: "s.project_id", actorPlaceholder: "$3", includeOwnerless: false})
 	row := db.QueryRow(
 		ctx,
 		fmt.Sprintf(
@@ -335,20 +305,8 @@ func DeleteSessionAutosaveEngrams(
 	if len(input.EngramIDs) == 0 {
 		return []uuid.UUID{}, nil
 	}
-	sessionAccessClause := buildMembershipReadClause(
-		"s.owner_user_id",
-		"s.visibility_scope",
-		"s.project_id",
-		"$3",
-		false,
-	)
-	engramAccessClause := buildMembershipReadClause(
-		"e.owner_user_id",
-		"e.visibility_scope",
-		"e.project_id",
-		"$4",
-		true,
-	)
+	sessionAccessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "s.owner_user_id", visibilityColumn: "s.visibility_scope", projectColumn: "s.project_id", actorPlaceholder: "$3", includeOwnerless: false})
+	engramAccessClause := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "e.owner_user_id", visibilityColumn: "e.visibility_scope", projectColumn: "e.project_id", actorPlaceholder: "$4", includeOwnerless: true})
 	rows, err := db.Query(
 		ctx,
 		fmt.Sprintf(

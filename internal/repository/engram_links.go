@@ -342,20 +342,8 @@ func TraverseEngramLinks(
 }
 
 func buildCreateEngramLinkSQL() string {
-	sourceAccess := buildMembershipReadClause(
-		"source_engram.owner_user_id",
-		"source_engram.visibility_scope",
-		"source_engram.project_id",
-		"$14",
-		true,
-	)
-	targetAccess := buildMembershipReadClause(
-		"target_engram.owner_user_id",
-		"target_engram.visibility_scope",
-		"target_engram.project_id",
-		"$14",
-		true,
-	)
+	sourceAccess := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "source_engram.owner_user_id", visibilityColumn: "source_engram.visibility_scope", projectColumn: "source_engram.project_id", actorPlaceholder: "$14", includeOwnerless: true})
+	targetAccess := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "target_engram.owner_user_id", visibilityColumn: "target_engram.visibility_scope", projectColumn: "target_engram.project_id", actorPlaceholder: "$14", includeOwnerless: true})
 	writeAccess := buildMembershipWriteClause("source_engram.project_id", "$14")
 	return fmt.Sprintf(
 		`
@@ -585,20 +573,8 @@ func buildTraversalNeighborSQL() string {
 func buildVisibleEngramLinkSelectSQL(
 	spec visibleEngramLinkSelectSpec,
 ) string {
-	sourceAccess := buildMembershipReadClause(
-		"source_engram.owner_user_id",
-		"source_engram.visibility_scope",
-		"source_engram.project_id",
-		spec.ActorPlaceholder,
-		true,
-	)
-	targetAccess := buildMembershipReadClause(
-		"target_engram.owner_user_id",
-		"target_engram.visibility_scope",
-		"target_engram.project_id",
-		spec.ActorPlaceholder,
-		true,
-	)
+	sourceAccess := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "source_engram.owner_user_id", visibilityColumn: "source_engram.visibility_scope", projectColumn: "source_engram.project_id", actorPlaceholder: spec.ActorPlaceholder, includeOwnerless: true})
+	targetAccess := buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "target_engram.owner_user_id", visibilityColumn: "target_engram.visibility_scope", projectColumn: "target_engram.project_id", actorPlaceholder: spec.ActorPlaceholder, includeOwnerless: true})
 	filters := append([]string{
 		"source_engram.deleted_at IS NULL",
 		"target_engram.deleted_at IS NULL",
