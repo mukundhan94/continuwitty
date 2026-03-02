@@ -19,20 +19,18 @@ func TestCreateMCPTokenUsesGeneratedIDAndReturnsRecord(t *testing.T) {
 	expiresAt := time.Date(2026, 2, 24, 10, 0, 0, 0, time.UTC)
 	createdAt := time.Date(2026, 2, 22, 14, 0, 0, 0, time.UTC)
 	db := &fakeQueryer{
-		queryRowResult: &fakeRow{values: mcpTokenRowValues(
-			tokenID,
-			ownerUserID,
-			"Agent write",
-			"write",
-			[]string{"chat.send", "engram.create"},
-			[]string{"project-docs"},
-			"hash-value",
-			"...abcd",
-			expiresAt,
-			nil,
-			nil,
-			createdAt,
-		)},
+		queryRowResult: &fakeRow{values: mcpTokenRowValues(mcpTokenRowFixture{
+			TokenID:           tokenID,
+			OwnerUserID:       ownerUserID,
+			Name:              "Agent write",
+			Scope:             "write",
+			AllowedTools:      []string{"chat.send", "engram.create"},
+			AllowedProjectIDs: []string{"project-docs"},
+			TokenSecretHash:   "hash-value",
+			TokenSecretHint:   "...abcd",
+			ExpiresAt:         expiresAt,
+			CreatedAt:         createdAt,
+		})},
 	}
 
 	originalTokenUUID := newMCPTokenUUID
@@ -112,20 +110,16 @@ func TestListMCPTokensReturnsDefaultsForNilArrays(t *testing.T) {
 	createdAt := time.Date(2026, 2, 22, 14, 5, 0, 0, time.UTC)
 	db := &fakeQueryer{
 		queryRowsResult: &fakeRows{values: [][]any{
-			mcpTokenRowValues(
-				tokenID,
-				ownerUserID,
-				"Read token",
-				"read",
-				nil,
-				nil,
-				"hash",
-				"...hint",
-				expiresAt,
-				nil,
-				nil,
-				createdAt,
-			),
+			mcpTokenRowValues(mcpTokenRowFixture{
+				TokenID:         tokenID,
+				OwnerUserID:     ownerUserID,
+				Name:            "Read token",
+				Scope:           "read",
+				TokenSecretHash: "hash",
+				TokenSecretHint: "...hint",
+				ExpiresAt:       expiresAt,
+				CreatedAt:       createdAt,
+			}),
 		}},
 	}
 
@@ -194,40 +188,42 @@ func TestTouchMCPTokenLastUsedUsesCurrentTimestamp(t *testing.T) {
 	}
 }
 
-func mcpTokenRowValues(
-	tokenID uuid.UUID,
-	ownerUserID uuid.UUID,
-	name string,
-	scope string,
-	allowedTools []string,
-	allowedProjectIDs []string,
-	tokenSecretHash string,
-	tokenSecretHint string,
-	expiresAt time.Time,
-	lastUsedAt *time.Time,
-	revokedAt *time.Time,
-	createdAt time.Time,
-) []any {
+type mcpTokenRowFixture struct {
+	TokenID           uuid.UUID
+	OwnerUserID       uuid.UUID
+	Name              string
+	Scope             string
+	AllowedTools      []string
+	AllowedProjectIDs []string
+	TokenSecretHash   string
+	TokenSecretHint   string
+	ExpiresAt         time.Time
+	LastUsedAt        *time.Time
+	RevokedAt         *time.Time
+	CreatedAt         time.Time
+}
+
+func mcpTokenRowValues(fixture mcpTokenRowFixture) []any {
 	var lastUsedAtValue any
-	if lastUsedAt != nil {
-		lastUsedAtValue = *lastUsedAt
+	if fixture.LastUsedAt != nil {
+		lastUsedAtValue = *fixture.LastUsedAt
 	}
 	var revokedAtValue any
-	if revokedAt != nil {
-		revokedAtValue = *revokedAt
+	if fixture.RevokedAt != nil {
+		revokedAtValue = *fixture.RevokedAt
 	}
 	return []any{
-		tokenID,
-		ownerUserID,
-		name,
-		scope,
-		allowedTools,
-		allowedProjectIDs,
-		tokenSecretHash,
-		tokenSecretHint,
-		expiresAt,
+		fixture.TokenID,
+		fixture.OwnerUserID,
+		fixture.Name,
+		fixture.Scope,
+		fixture.AllowedTools,
+		fixture.AllowedProjectIDs,
+		fixture.TokenSecretHash,
+		fixture.TokenSecretHint,
+		fixture.ExpiresAt,
 		lastUsedAtValue,
 		revokedAtValue,
-		createdAt,
+		fixture.CreatedAt,
 	}
 }
