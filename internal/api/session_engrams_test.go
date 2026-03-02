@@ -513,74 +513,87 @@ func TestMountSessionAuthRoutesShareEngramReturnsUpdatedVisibility(t *testing.T)
 	requireEqual(t, "project", payload["visibility_scope"].(string))
 }
 
-func TestMountSessionAuthRoutesShareEngramMapsForbidden(t *testing.T) {
-	actor := newSessionRoutesTestActor(t, models.UserRoleViewer)
-	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000910")
-	handler, manager := buildSessionEngramRoutesTestHandler(
-		t,
-		sessionEngramRoutesHandlerOptions{
-			actor: actor,
-			shareEngram: func(
-				_ context.Context,
-				_ uuid.UUID,
-				_ models.UserRole,
-				_ uuid.UUID,
-			) (*models.EngramVisibilityRecord, error) {
-				return nil, projects.ErrEngramShareForbidden
+func TestMountSessionAuthRoutesEngramVisibilityErrorMappings(t *testing.T) {
+	testCases := []struct {
+		name           string
+		actorRole      models.UserRole
+		engramID       uuid.UUID
+		pathSuffix     string
+		expectedStatus int
+		buildOptions   func(actor *models.UserAuthRecord) sessionEngramRoutesHandlerOptions
+	}{
+		{
+			name:           "share forbidden",
+			actorRole:      models.UserRoleViewer,
+			engramID:       uuid.MustParse("00000000-0000-0000-0000-000000000910"),
+			pathSuffix:     "/share",
+			expectedStatus: http.StatusForbidden,
+			buildOptions: func(actor *models.UserAuthRecord) sessionEngramRoutesHandlerOptions {
+				return sessionEngramRoutesHandlerOptions{
+					actor: actor,
+					shareEngram: func(
+						_ context.Context,
+						_ uuid.UUID,
+						_ models.UserRole,
+						_ uuid.UUID,
+					) (*models.EngramVisibilityRecord, error) {
+						return nil, projects.ErrEngramShareForbidden
+					},
+				}
 			},
 		},
-	)
-	loginCookie := loginSessionEngramActor(
-		t,
-		handler,
-		manager,
-		sessionEngramLoginCredentials{
-			username: actor.Username,
-			password: "StrongPassword-12345",
-		},
-	)
-
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/engrams/"+engramID.String()+"/share", nil)
-	request.AddCookie(loginCookie)
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-
-	requireEqual(t, http.StatusForbidden, response.Code)
-}
-
-func TestMountSessionAuthRoutesUnshareEngramMapsNotFound(t *testing.T) {
-	actor := newSessionRoutesTestActor(t, models.UserRoleAdmin)
-	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000911")
-	handler, manager := buildSessionEngramRoutesTestHandler(
-		t,
-		sessionEngramRoutesHandlerOptions{
-			actor: actor,
-			unshareEngram: func(
-				_ context.Context,
-				_ uuid.UUID,
-				_ models.UserRole,
-				_ uuid.UUID,
-			) (*models.EngramVisibilityRecord, error) {
-				return nil, errors.Join(projects.ErrEngramNotFound)
+		{
+			name:           "unshare not found",
+			actorRole:      models.UserRoleAdmin,
+			engramID:       uuid.MustParse("00000000-0000-0000-0000-000000000911"),
+			pathSuffix:     "/unshare",
+			expectedStatus: http.StatusNotFound,
+			buildOptions: func(actor *models.UserAuthRecord) sessionEngramRoutesHandlerOptions {
+				return sessionEngramRoutesHandlerOptions{
+					actor: actor,
+					unshareEngram: func(
+						_ context.Context,
+						_ uuid.UUID,
+						_ models.UserRole,
+						_ uuid.UUID,
+					) (*models.EngramVisibilityRecord, error) {
+						return nil, errors.Join(projects.ErrEngramNotFound)
+					},
+				}
 			},
 		},
-	)
-	loginCookie := loginSessionEngramActor(
-		t,
-		handler,
-		manager,
-		sessionEngramLoginCredentials{
-			username: actor.Username,
-			password: "StrongPassword-12345",
-		},
-	)
+	}
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/engrams/"+engramID.String()+"/unshare", nil)
-	request.AddCookie(loginCookie)
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			actor := newSessionRoutesTestActor(t, testCase.actorRole)
+			handler, manager := buildSessionEngramRoutesTestHandler(
+				t,
+				testCase.buildOptions(actor),
+			)
+			loginCookie := loginSessionEngramActor(
+				t,
+				handler,
+				manager,
+				sessionEngramLoginCredentials{
+					username: actor.Username,
+					password: "StrongPassword-12345",
+				},
+			)
 
-	requireEqual(t, http.StatusNotFound, response.Code)
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/api/v1/engrams/"+testCase.engramID.String()+testCase.pathSuffix,
+				nil,
+			)
+			request.AddCookie(loginCookie)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			requireEqual(t, testCase.expectedStatus, response.Code)
+		})
+	}
 }
 
 func buildSessionEngramRoutesTestHandler(
