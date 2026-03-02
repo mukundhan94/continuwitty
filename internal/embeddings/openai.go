@@ -154,43 +154,83 @@ func (provider *OpenAIEmbeddingProvider) EmbedMany(texts []string, dim int) ([][
 func (provider *OpenAIEmbeddingProvider) callEmbeddingsAPI(
 	payload openAIEmbeddingRequest,
 ) (openAIEmbeddingResponse, error) {
-	body, err := json.Marshal(payload)
+	request, err := provider.newEmbeddingsRequest(payload)
 	if err != nil {
 		return openAIEmbeddingResponse{}, err
 	}
-	request, err := http.NewRequest(http.MethodPost, provider.endpoint, bytes.NewReader(body))
-	if err != nil {
-		return openAIEmbeddingResponse{}, err
-	}
-	request.Header.Set("Authorization", "Bearer "+provider.apiKey)
-	request.Header.Set("Content-Type", "application/json")
-
 	response, err := provider.httpClient.Do(request)
 	if err != nil {
 		return openAIEmbeddingResponse{}, &ProviderError{Message: fmt.Sprintf("openai embeddings request failed: %v", err)}
 	}
 	defer response.Body.Close()
 
-	responseBody, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
-	if readErr != nil {
+	responseBody, err := readOpenAIEmbeddingsResponseBody(response.Body)
+	if err != nil {
 		return openAIEmbeddingResponse{}, &ProviderError{Message: "failed to read openai embeddings response"}
 	}
+	return decodeOpenAIEmbeddingAPIResponse(response.StatusCode, responseBody)
+}
 
-	parsed := openAIEmbeddingResponse{}
-	if len(responseBody) > 0 {
-		if unmarshalErr := json.Unmarshal(responseBody, &parsed); unmarshalErr != nil && response.StatusCode < http.StatusBadRequest {
-			return openAIEmbeddingResponse{}, &ProviderError{Message: "failed to decode openai embeddings response"}
-		}
+func (provider *OpenAIEmbeddingProvider) newEmbeddingsRequest(
+	payload openAIEmbeddingRequest,
+) (*http.Request, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
 	}
-	if response.StatusCode >= http.StatusBadRequest {
-		message := strings.TrimSpace(string(responseBody))
-		if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
-			message = parsed.Error.Message
-		}
-		if message == "" {
-			message = fmt.Sprintf("openai embeddings request failed with status %d", response.StatusCode)
-		}
+	request, err := http.NewRequest(http.MethodPost, provider.endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Authorization", "Bearer "+provider.apiKey)
+	request.Header.Set("Content-Type", "application/json")
+	return request, nil
+}
+
+func readOpenAIEmbeddingsResponseBody(body io.Reader) ([]byte, error) {
+	return io.ReadAll(io.LimitReader(body, 1<<20))
+}
+
+func decodeOpenAIEmbeddingAPIResponse(
+	statusCode int,
+	responseBody []byte,
+) (openAIEmbeddingResponse, error) {
+	parsed := openAIEmbeddingResponse{}
+	if err := unmarshalOpenAIEmbeddingResponse(statusCode, responseBody, &parsed); err != nil {
+		return openAIEmbeddingResponse{}, err
+	}
+	if statusCode >= http.StatusBadRequest {
+		message := openAIEmbeddingErrorMessage(statusCode, responseBody, parsed)
 		return openAIEmbeddingResponse{}, &ProviderError{Message: message}
 	}
 	return parsed, nil
+}
+
+func unmarshalOpenAIEmbeddingResponse(
+	statusCode int,
+	responseBody []byte,
+	parsed *openAIEmbeddingResponse,
+) error {
+	if len(responseBody) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(responseBody, parsed); err != nil && statusCode < http.StatusBadRequest {
+		return &ProviderError{Message: "failed to decode openai embeddings response"}
+	}
+	return nil
+}
+
+func openAIEmbeddingErrorMessage(
+	statusCode int,
+	responseBody []byte,
+	parsed openAIEmbeddingResponse,
+) string {
+	if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
+		return parsed.Error.Message
+	}
+	message := strings.TrimSpace(string(responseBody))
+	if message == "" {
+		return fmt.Sprintf("openai embeddings request failed with status %d", statusCode)
+	}
+	return message
 }
