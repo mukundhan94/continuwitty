@@ -93,7 +93,7 @@ type serviceDeps struct {
 	addOrRestoreProjectMember func(ctx context.Context, db repository.Queryer, input repository.ProjectMemberAddInput) (*models.ProjectMemberRecord, error)
 	updateProjectMemberRole   func(ctx context.Context, db repository.Queryer, input repository.ProjectMemberUpdateInput) (*models.ProjectMemberRecord, error)
 	removeProjectMember       func(ctx context.Context, db repository.Queryer, input repository.ProjectMemberRemoveInput) (bool, error)
-	getProjectMember          func(ctx context.Context, db repository.Queryer, projectID string, userID uuid.UUID, includeRevoked bool) (*models.ProjectMemberRecord, error)
+	getProjectMember          func(ctx context.Context, db repository.Queryer, input repository.ProjectMemberGetInput) (*models.ProjectMemberRecord, error)
 	createProjectAuditEvent   func(ctx context.Context, db repository.Queryer, input repository.ProjectAuditEventCreateInput) (*models.ProjectAuditEventRecord, error)
 	listProjectAuditEvents    func(ctx context.Context, db repository.Queryer, input repository.ProjectAuditEventListInput) ([]models.ProjectAuditEventRecord, error)
 	getEngramShareRecord      func(ctx context.Context, db repository.Queryer, engramID uuid.UUID, includeDeleted bool) (*repository.EngramShareRecord, error)
@@ -350,7 +350,15 @@ func (service *Service) UpdateProjectMember(
 	if request.UserID == project.OwnerUserID {
 		return nil, ErrProjectOwnerMembershipImmutable
 	}
-	current, err := service.deps.getProjectMember(ctx, service.db, project.ProjectID, request.UserID, false)
+	current, err := service.deps.getProjectMember(
+		ctx,
+		service.db,
+		repository.ProjectMemberGetInput{
+			ProjectID:      project.ProjectID,
+			UserID:         request.UserID,
+			IncludeRevoked: false,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -44,6 +44,13 @@ type ProjectMemberRemoveInput struct {
 	RevocationReason string
 }
 
+// ProjectMemberGetInput captures project/user member lookup controls.
+type ProjectMemberGetInput struct {
+	ProjectID      string
+	UserID         uuid.UUID
+	IncludeRevoked bool
+}
+
 // ActorProjectRoleInput captures actor-scoped membership role lookup inputs.
 type ActorProjectRoleInput struct {
 	ProjectID   string
@@ -234,9 +241,7 @@ func RemoveProjectMember(
 func GetProjectMember(
 	ctx context.Context,
 	db Queryer,
-	projectID string,
-	userID uuid.UUID,
-	includeRevoked bool,
+	input ProjectMemberGetInput,
 ) (*models.ProjectMemberRecord, error) {
 	query := `
 		SELECT
@@ -253,11 +258,11 @@ func GetProjectMember(
 			project_id = $1
 			AND user_id = $2
 	`
-	if !includeRevoked {
+	if !input.IncludeRevoked {
 		query += " AND revoked_at IS NULL"
 	}
 	query += " LIMIT 1"
-	row := db.QueryRow(ctx, query, projectID, userID)
+	row := db.QueryRow(ctx, query, input.ProjectID, input.UserID)
 	record, err := scanProjectMemberRecord(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

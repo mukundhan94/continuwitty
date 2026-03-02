@@ -191,6 +191,13 @@ type documentChunkReplaceInput struct {
 	ChunkEmbeddings []embeddings.Result
 }
 
+type documentChunkInsertInput struct {
+	DocumentID uuid.UUID
+	Chunk      DocumentChunkDraft
+	Embedding  embeddings.Result
+	Timestamp  time.Time
+}
+
 // UpsertDocumentWithChunks persists document metadata and atomically replaces chunks.
 func UpsertDocumentWithChunks(
 	ctx context.Context,
@@ -353,10 +360,12 @@ func replaceDocumentChunks(
 		if err := insertDocumentChunk(
 			ctx,
 			db,
-			input.Payload.DocumentID,
-			chunk,
-			input.ChunkEmbeddings[index],
-			input.Timestamp,
+			documentChunkInsertInput{
+				DocumentID: input.Payload.DocumentID,
+				Chunk:      chunk,
+				Embedding:  input.ChunkEmbeddings[index],
+				Timestamp:  input.Timestamp,
+			},
 		); err != nil {
 			return err
 		}
@@ -456,12 +465,9 @@ func deleteDocumentChunks(ctx context.Context, db Queryer, documentID uuid.UUID)
 func insertDocumentChunk(
 	ctx context.Context,
 	db Queryer,
-	documentID uuid.UUID,
-	chunk DocumentChunkDraft,
-	embedding embeddings.Result,
-	timestamp time.Time,
+	input documentChunkInsertInput,
 ) error {
-	metadataJSON, err := marshalJSON(orEmptyMap(chunk.Metadata))
+	metadataJSON, err := marshalJSON(orEmptyMap(input.Chunk.Metadata))
 	if err != nil {
 		return err
 	}
@@ -469,18 +475,18 @@ func insertDocumentChunk(
 	row := db.QueryRow(
 		ctx,
 		insertDocumentChunkSQL,
-		chunk.ChunkID,
-		documentID,
-		chunk.ChunkIndex,
-		chunk.ChunkText,
-		chunk.Snippet,
-		chunk.CharStart,
-		chunk.CharEnd,
-		chunk.TokenEstimate,
+		input.Chunk.ChunkID,
+		input.DocumentID,
+		input.Chunk.ChunkIndex,
+		input.Chunk.ChunkText,
+		input.Chunk.Snippet,
+		input.Chunk.CharStart,
+		input.Chunk.CharEnd,
+		input.Chunk.TokenEstimate,
 		metadataJSON,
-		embedding.ProviderID,
-		vectorLiteral(embedding.Vector),
-		timestamp,
+		input.Embedding.ProviderID,
+		vectorLiteral(input.Embedding.Vector),
+		input.Timestamp,
 	)
 	return row.Scan(&chunkID)
 }

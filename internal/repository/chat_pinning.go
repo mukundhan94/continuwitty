@@ -59,6 +59,12 @@ type pinnedResourceListConfig struct {
 	includeActorParam    bool
 }
 
+type pinnedResourceRecordListInput[T any] struct {
+	config pinnedResourceListConfig
+	list   ChatPinnedListInput
+	mapper func(pinnedResourceRow) T
+}
+
 var (
 	engramPinMutationConfig = pinnedResourceMutationConfig{
 		table:         "session_pinned_engrams",
@@ -182,7 +188,15 @@ func ListPinnedEngrams(
 	db Queryer,
 	input ChatPinnedListInput,
 ) ([]models.PinnedEngramRecord, error) {
-	return listPinnedResourceRecords(ctx, db, engramPinListConfig, input, pinnedEngramRecordFromRow)
+	return listPinnedResourceRecords(
+		ctx,
+		db,
+		pinnedResourceRecordListInput[models.PinnedEngramRecord]{
+			config: engramPinListConfig,
+			list:   input,
+			mapper: pinnedEngramRecordFromRow,
+		},
+	)
 }
 
 // ListPinnedEngramSummaries returns visible engram summaries from session pins.
@@ -265,7 +279,15 @@ func ListPinnedDocuments(
 	db Queryer,
 	input ChatPinnedListInput,
 ) ([]models.PinnedDocumentRecord, error) {
-	return listPinnedResourceRecords(ctx, db, documentPinListConfig, input, pinnedDocumentRecordFromRow)
+	return listPinnedResourceRecords(
+		ctx,
+		db,
+		pinnedResourceRecordListInput[models.PinnedDocumentRecord]{
+			config: documentPinListConfig,
+			list:   input,
+			mapper: pinnedDocumentRecordFromRow,
+		},
+	)
 }
 
 func pinResourceToSession(
@@ -274,68 +296,11 @@ func pinResourceToSession(
 	input pinnedResourceMutationInput,
 ) (*pinnedResourceRow, error) {
 	config := input.Config
-	resourceAccessClause := config.resourceAccessClause
-	if strings.Contains(resourceAccessClause, "%s") {
-		resourceAccessClause = replaceAccessClauseActorPlaceholder(resourceAccessClause, pgxPlaceholder(4))
-	}
-	sessionAccessClause := buildMembershipReadClause(
-		"s.owner_user_id",
-		"s.visibility_scope",
-		"s.project_id",
-		"$2",
-		false,
-	)
+	resourceAccessClause := resolvePinnedResourceAccessClause(config.resourceAccessClause, pgxPlaceholder(4))
+	sessionAccessClause := buildSessionPinAccessClause("$2")
 	row := db.QueryRow(
 		ctx,
-		fmt.Sprintf(
-			`
-			WITH accessible_session AS (
-				SELECT s.session_id
-				FROM chat_sessions s
-				WHERE
-					s.session_id = $1
-					AND s.deleted_at IS NULL
-					AND %s
-			),
-			accessible_resource AS (
-				SELECT r.%s
-				FROM %s r
-				WHERE
-					r.%s = $3
-					AND %s
-			)
-			INSERT INTO %s (
-				session_id,
-				%s,
-				pinned_by_user_id,
-				created_at
-			)
-			SELECT
-				s.session_id,
-				r.%s,
-				$5,
-				$6
-			FROM accessible_session s
-			CROSS JOIN accessible_resource r
-			ON CONFLICT (session_id, %s) DO UPDATE
-				SET pinned_by_user_id = EXCLUDED.pinned_by_user_id
-			RETURNING
-				session_id,
-				%s,
-				pinned_by_user_id,
-				created_at
-			`,
-			sessionAccessClause,
-			config.idColumn,
-			config.resourceTable,
-			config.idColumn,
-			resourceAccessClause,
-			config.table,
-			config.idColumn,
-			config.idColumn,
-			config.idColumn,
-			config.idColumn,
-		),
+		buildPinResourceToSessionSQL(config, sessionAccessClause, resourceAccessClause),
 		input.Resource.SessionID,
 		input.Resource.ActorUserID,
 		input.Resource.ResourceID,
@@ -359,13 +324,7 @@ func unpinResourceFromSession(
 	input pinnedResourceMutationInput,
 ) (bool, error) {
 	config := input.Config
-	sessionAccessClause := buildMembershipReadClause(
-		"s.owner_user_id",
-		"s.visibility_scope",
-		"s.project_id",
-		"$3",
-		false,
-	)
+	sessionAccessClause := buildSessionPinAccessClause("$3")
 	row := db.QueryRow(
 		ctx,
 		fmt.Sprintf(
@@ -414,13 +373,7 @@ func listPinnedResources(
 		)
 		params = append(params, input.ActorUserID)
 	}
-	sessionAccessClause := buildMembershipReadClause(
-		"s.owner_user_id",
-		"s.visibility_scope",
-		"s.project_id",
-		"$2",
-		false,
-	)
+	sessionAccessClause := buildSessionPinAccessClause("$2")
 
 	rows, err := db.Query(
 		ctx,
@@ -526,15 +479,13 @@ func pinResourceRecord[T any](
 func listPinnedResourceRecords[T any](
 	ctx context.Context,
 	db Queryer,
-	config pinnedResourceListConfig,
-	input ChatPinnedListInput,
-	mapper func(pinnedResourceRow) T,
+	input pinnedResourceRecordListInput[T],
 ) ([]T, error) {
-	rows, err := listPinnedResources(ctx, db, config, input)
+	rows, err := listPinnedResources(ctx, db, input.config, input.list)
 	if err != nil {
 		return nil, err
 	}
-	return mapPinnedResourceRows(rows, mapper), nil
+	return mapPinnedResourceRows(rows, input.mapper), nil
 }
 
 func mapPinnedResourceRows[T any](
@@ -590,6 +541,79 @@ func replaceAccessClauseActorPlaceholder(
 		return clause
 	}
 	return strings.ReplaceAll(clause, "%s", placeholder)
+}
+
+func resolvePinnedResourceAccessClause(clause string, actorPlaceholder string) string {
+	if !strings.Contains(clause, "%s") {
+		return clause
+	}
+	return replaceAccessClauseActorPlaceholder(clause, actorPlaceholder)
+}
+
+func buildSessionPinAccessClause(actorPlaceholder string) string {
+	return buildMembershipReadClause(
+		"s.owner_user_id",
+		"s.visibility_scope",
+		"s.project_id",
+		actorPlaceholder,
+		false,
+	)
+}
+
+func buildPinResourceToSessionSQL(
+	config pinnedResourceMutationConfig,
+	sessionAccessClause string,
+	resourceAccessClause string,
+) string {
+	return fmt.Sprintf(
+		`
+		WITH accessible_session AS (
+			SELECT s.session_id
+			FROM chat_sessions s
+			WHERE
+				s.session_id = $1
+				AND s.deleted_at IS NULL
+				AND %s
+		),
+		accessible_resource AS (
+			SELECT r.%s
+			FROM %s r
+			WHERE
+				r.%s = $3
+				AND %s
+		)
+		INSERT INTO %s (
+			session_id,
+			%s,
+			pinned_by_user_id,
+			created_at
+		)
+		SELECT
+			s.session_id,
+			r.%s,
+			$5,
+			$6
+		FROM accessible_session s
+		CROSS JOIN accessible_resource r
+		ON CONFLICT (session_id, %s) DO UPDATE
+			SET pinned_by_user_id = EXCLUDED.pinned_by_user_id
+		RETURNING
+			session_id,
+			%s,
+			pinned_by_user_id,
+			created_at
+		`,
+		sessionAccessClause,
+		config.idColumn,
+		config.resourceTable,
+		config.idColumn,
+		resourceAccessClause,
+		config.table,
+		config.idColumn,
+		config.idColumn,
+		config.idColumn,
+		config.idColumn,
+	)
 }
 
 func emitEngramPinAuditEvent(
