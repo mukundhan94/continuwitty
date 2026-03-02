@@ -148,39 +148,58 @@ func buildOpenAIPayload(request ProviderGenerateRequest) map[string]any {
 }
 
 func extractOpenAIResponseText(body map[string]any) string {
+	content, ok := firstOpenAIMessageContent(body)
+	if !ok {
+		return ""
+	}
+	return openAIMessageContentText(content)
+}
+
+func firstOpenAIMessageContent(body map[string]any) (any, bool) {
 	choices, ok := body["choices"].([]any)
 	if !ok || len(choices) == 0 {
-		return ""
+		return nil, false
 	}
 	firstChoice, ok := choices[0].(map[string]any)
 	if !ok {
-		return ""
+		return nil, false
 	}
 	message, ok := firstChoice["message"].(map[string]any)
 	if !ok {
-		return ""
+		return nil, false
 	}
-	content := message["content"]
+	content, ok := message["content"]
+	if !ok {
+		return nil, false
+	}
+	return content, true
+}
+
+func openAIMessageContentText(content any) string {
 	switch typed := content.(type) {
 	case string:
 		return typed
 	case []any:
-		parts := make([]string, 0, len(typed))
-		for _, item := range typed {
-			itemMap, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			textValue, ok := itemMap["text"].(string)
-			if !ok {
-				continue
-			}
-			parts = append(parts, textValue)
-		}
-		return strings.Join(parts, "")
+		return joinOpenAITextParts(typed)
 	default:
 		return ""
 	}
+}
+
+func joinOpenAITextParts(parts []any) string {
+	textParts := make([]string, 0, len(parts))
+	for _, item := range parts {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		textValue, ok := itemMap["text"].(string)
+		if !ok {
+			continue
+		}
+		textParts = append(textParts, textValue)
+	}
+	return strings.Join(textParts, "")
 }
 
 func extractOpenAITokenUsage(body map[string]any, key string) int {
