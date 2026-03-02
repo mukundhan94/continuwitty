@@ -19,27 +19,27 @@ func EvaluateDeltaGate(
 		delta := roundScore(current.Score - baseline.Score)
 		result.OverallDeltaBaseline = floatPtr(delta)
 		appendOverallViolationIfNeeded(&result, "baseline", delta, thresholds.MinOverallDelta)
-		collectDimensionDelta(
-			current,
-			*baseline,
-			thresholds.MinDimensionDelta,
-			"baseline",
-			result.DimensionDeltaBaseline,
-			&result,
-		)
+		collectDimensionDelta(dimensionDeltaInput{
+			currentRun:     current,
+			referenceRun:   *baseline,
+			threshold:      thresholds.MinDimensionDelta,
+			referenceLabel: "baseline",
+			store:          result.DimensionDeltaBaseline,
+			result:         &result,
+		})
 	}
 	if previous != nil {
 		delta := roundScore(current.Score - previous.Score)
 		result.OverallDeltaPrevious = floatPtr(delta)
 		appendOverallViolationIfNeeded(&result, "previous", delta, thresholds.MinOverallDelta)
-		collectDimensionDelta(
-			current,
-			*previous,
-			thresholds.MinDimensionDelta,
-			"previous",
-			result.DimensionDeltaPrevious,
-			&result,
-		)
+		collectDimensionDelta(dimensionDeltaInput{
+			currentRun:     current,
+			referenceRun:   *previous,
+			threshold:      thresholds.MinDimensionDelta,
+			referenceLabel: "previous",
+			store:          result.DimensionDeltaPrevious,
+			result:         &result,
+		})
 	}
 	return result
 }
@@ -71,39 +71,41 @@ func appendOverallViolationIfNeeded(
 	)
 }
 
-func collectDimensionDelta(
-	current SuiteRun,
-	referenceRun SuiteRun,
-	threshold float64,
-	referenceLabel string,
-	store map[Dimension]float64,
-	result *DeltaGateResult,
-) {
-	for _, currentDimension := range current.Dimensions {
-		referenceScore, exists := dimensionScore(referenceRun, currentDimension.Dimension)
+type dimensionDeltaInput struct {
+	currentRun     SuiteRun
+	referenceRun   SuiteRun
+	threshold      float64
+	referenceLabel string
+	store          map[Dimension]float64
+	result         *DeltaGateResult
+}
+
+func collectDimensionDelta(input dimensionDeltaInput) {
+	for _, currentDimension := range input.currentRun.Dimensions {
+		referenceScore, exists := dimensionScore(input.referenceRun, currentDimension.Dimension)
 		if !exists {
 			continue
 		}
 		delta := roundScore(currentDimension.Score - referenceScore)
-		store[currentDimension.Dimension] = delta
-		if delta >= threshold {
+		input.store[currentDimension.Dimension] = delta
+		if delta >= input.threshold {
 			continue
 		}
-		result.Passed = false
-		result.Violations = append(
-			result.Violations,
+		input.result.Passed = false
+		input.result.Violations = append(
+			input.result.Violations,
 			GateViolation{
 				Scope:     "dimension",
 				Dimension: string(currentDimension.Dimension),
-				Reference: referenceLabel,
+				Reference: input.referenceLabel,
 				Delta:     delta,
-				Threshold: threshold,
+				Threshold: input.threshold,
 				Message: fmt.Sprintf(
 					"dimension %s delta vs %s %.4f is below threshold %.4f",
 					currentDimension.Dimension,
-					referenceLabel,
+					input.referenceLabel,
 					delta,
-					threshold,
+					input.threshold,
 				),
 			},
 		)
