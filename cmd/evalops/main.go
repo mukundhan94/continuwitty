@@ -20,68 +20,151 @@ func main() {
 	os.Exit(run())
 }
 
+type evalRunResult struct {
+	runSummary        evalops.SuiteRun
+	gate              evalops.DeltaGateResult
+	hasBaseline       bool
+	deltaGateEnforced bool
+}
+
+type trendReportInput struct {
+	options   cliOptions
+	history   []evalops.SuiteRun
+	baseline  *evalops.SuiteRun
+	gate      evalops.DeltaGateResult
+	startedAt time.Time
+}
+
 func run() int {
 	options := parseFlags()
-	startedAt := time.Now().UTC()
-	runID := startedAt.Format("20060102T150405Z")
-
-	historyBefore, err := evalops.LoadHistory(options.historyPath)
+	result, err := executeEvalRun(options)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "load eval history: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
-	previous := evalops.LastRun(historyBefore)
-
-	suite := evalops.DefaultSuiteDefinition()
-	runSummary := evalops.RunSuite(suite, startedAt, runID)
-
-	if err := evalops.WriteSuiteRun(options.outPath, runSummary); err != nil {
-		fmt.Fprintf(os.Stderr, "write latest eval run: %v\n", err)
-		return 1
-	}
-
-	history, err := evalops.AppendHistory(options.historyPath, runSummary, options.maxHistoryEntries)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "append eval history: %v\n", err)
-		return 1
-	}
-
-	baseline, err := evalops.ReadSuiteRun(options.baselinePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "read eval baseline: %v\n", err)
-		return 1
-	}
-
-	gate := evalops.DeltaGateResult{Passed: true}
-	if options.enforceDeltaGate {
-		if baseline == nil {
-			fmt.Fprintf(os.Stderr, "delta gate requires baseline file: %s\n", options.baselinePath)
-			return 1
-		}
-		gate = evalops.EvaluateDeltaGate(
-			runSummary,
-			baseline,
-			previous,
-			evalops.DeltaThresholds{
-				MinOverallDelta:   options.minOverallDelta,
-				MinDimensionDelta: options.minDimensionDelta,
-			},
-		)
-	}
-
-	if err := evalops.WriteTrendReport(options.trendReportPath, history, baseline, gate, startedAt); err != nil {
-		fmt.Fprintf(os.Stderr, "write eval trend report: %v\n", err)
-		return 1
-	}
-
-	printSummary(runSummary, gate, baseline != nil, options.enforceDeltaGate)
-	if !runSummary.Passed {
-		return 1
-	}
-	if options.enforceDeltaGate && !gate.Passed {
+	printSummary(result.runSummary, result.gate, result.hasBaseline, result.deltaGateEnforced)
+	if shouldFailEvalRun(result) {
 		return 1
 	}
 	return 0
+}
+
+func executeEvalRun(options cliOptions) (evalRunResult, error) {
+	startedAt := time.Now().UTC()
+	runSummary, previous, err := runEvalSuite(options, startedAt)
+	if err != nil {
+		return evalRunResult{}, err
+	}
+	history, err := appendEvalHistory(options, runSummary)
+	if err != nil {
+		return evalRunResult{}, err
+	}
+	baseline, err := readEvalBaseline(options)
+	if err != nil {
+		return evalRunResult{}, err
+	}
+	gate, err := evaluateDeltaGate(options, runSummary, baseline, previous)
+	if err != nil {
+		return evalRunResult{}, err
+	}
+	if err := writeEvalTrendReport(
+		trendReportInput{
+			options:   options,
+			history:   history,
+			baseline:  baseline,
+			gate:      gate,
+			startedAt: startedAt,
+		},
+	); err != nil {
+		return evalRunResult{}, err
+	}
+	return evalRunResult{
+		runSummary:        runSummary,
+		gate:              gate,
+		hasBaseline:       baseline != nil,
+		deltaGateEnforced: options.enforceDeltaGate,
+	}, nil
+}
+
+func runEvalSuite(
+	options cliOptions,
+	startedAt time.Time,
+) (evalops.SuiteRun, *evalops.SuiteRun, error) {
+	historyBefore, err := evalops.LoadHistory(options.historyPath)
+	if err != nil {
+		return evalops.SuiteRun{}, nil, fmt.Errorf("load eval history: %w", err)
+	}
+	runID := startedAt.Format("20060102T150405Z")
+	suite := evalops.DefaultSuiteDefinition()
+	runSummary := evalops.RunSuite(suite, startedAt, runID)
+	if err := evalops.WriteSuiteRun(options.outPath, runSummary); err != nil {
+		return evalops.SuiteRun{}, nil, fmt.Errorf("write latest eval run: %w", err)
+	}
+	return runSummary, evalops.LastRun(historyBefore), nil
+}
+
+func appendEvalHistory(options cliOptions, runSummary evalops.SuiteRun) ([]evalops.SuiteRun, error) {
+	history, err := evalops.AppendHistory(options.historyPath, runSummary, options.maxHistoryEntries)
+	if err != nil {
+		return nil, fmt.Errorf("append eval history: %w", err)
+	}
+	return history, nil
+}
+
+func readEvalBaseline(options cliOptions) (*evalops.SuiteRun, error) {
+	baseline, err := evalops.ReadSuiteRun(options.baselinePath)
+	if err != nil {
+		return nil, fmt.Errorf("read eval baseline: %w", err)
+	}
+	return baseline, nil
+}
+
+func evaluateDeltaGate(
+	options cliOptions,
+	runSummary evalops.SuiteRun,
+	baseline *evalops.SuiteRun,
+	previous *evalops.SuiteRun,
+) (evalops.DeltaGateResult, error) {
+	if !options.enforceDeltaGate {
+		return evalops.DeltaGateResult{Passed: true}, nil
+	}
+	if baseline == nil {
+		return evalops.DeltaGateResult{}, fmt.Errorf(
+			"delta gate requires baseline file: %s",
+			options.baselinePath,
+		)
+	}
+	return evalops.EvaluateDeltaGate(
+		runSummary,
+		baseline,
+		previous,
+		evalops.DeltaThresholds{
+			MinOverallDelta:   options.minOverallDelta,
+			MinDimensionDelta: options.minDimensionDelta,
+		},
+	), nil
+}
+
+func writeEvalTrendReport(
+	input trendReportInput,
+) error {
+	if err := evalops.WriteTrendReport(
+		input.options.trendReportPath,
+		input.history,
+		input.baseline,
+		input.gate,
+		input.startedAt,
+	); err != nil {
+		return fmt.Errorf("write eval trend report: %w", err)
+	}
+	return nil
+}
+
+func shouldFailEvalRun(result evalRunResult) bool {
+	if !result.runSummary.Passed {
+		return true
+	}
+	return result.deltaGateEnforced && !result.gate.Passed
 }
 
 type cliOptions struct {

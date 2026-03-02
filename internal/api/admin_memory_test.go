@@ -24,7 +24,7 @@ type fakeMemoryAdminService struct {
 	listEngramsFn          func(ctx context.Context, request admin.MemoryAdminEngramListRequest) ([]models.AdminEngramRecord, error)
 	getEngramFn            func(ctx context.Context, engramID uuid.UUID, includeDeleted bool) (*models.AdminEngramRecord, error)
 	updateEngramFn         func(ctx context.Context, engramID, actorUserID uuid.UUID, payload admin.EngramUpdateRequest) (*models.AdminEngramRecord, error)
-	moveEngramFn           func(ctx context.Context, engramID, actorUserID uuid.UUID, actorRole string, payload admin.EngramMoveRequest) (*models.AdminEngramRecord, error)
+	moveEngramFn           func(ctx context.Context, engramID uuid.UUID, actor admin.WriteActor, payload admin.EngramMoveRequest) (*models.AdminEngramRecord, error)
 	deleteEngramFn         func(ctx context.Context, engramID, actorUserID uuid.UUID, payload admin.EngramDeleteRequest) (admin.EngramDeleteResponse, error)
 	restoreEngramFn        func(ctx context.Context, engramID uuid.UUID) (admin.EngramRestoreResponse, error)
 	listCollectionsFn      func(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error)
@@ -77,11 +77,16 @@ func (f *fakeMemoryAdminService) UpdateEngram(ctx context.Context, engramID, act
 	return f.updateEngramFn(ctx, engramID, actorUserID, payload)
 }
 
-func (f *fakeMemoryAdminService) MoveEngram(ctx context.Context, engramID, actorUserID uuid.UUID, actorRole string, payload admin.EngramMoveRequest) (*models.AdminEngramRecord, error) {
+func (f *fakeMemoryAdminService) MoveEngram(
+	ctx context.Context,
+	engramID uuid.UUID,
+	actor admin.WriteActor,
+	payload admin.EngramMoveRequest,
+) (*models.AdminEngramRecord, error) {
 	if f.moveEngramFn == nil {
 		panic("unexpected MoveEngram call")
 	}
-	return f.moveEngramFn(ctx, engramID, actorUserID, actorRole, payload)
+	return f.moveEngramFn(ctx, engramID, actor, payload)
 }
 
 func (f *fakeMemoryAdminService) DeleteEngram(ctx context.Context, engramID, actorUserID uuid.UUID, payload admin.EngramDeleteRequest) (admin.EngramDeleteResponse, error) {

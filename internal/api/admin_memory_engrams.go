@@ -4,8 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	"engram/internal/admin"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -51,33 +49,6 @@ func getMemoryAdminEngramRoute(service MemoryAdminService, requireAdminActor Req
 			return service.GetEngram(request.Context(), engramID, includeDeleted)
 		})
 	}
-}
-
-func updateMemoryAdminEngramRoute(service MemoryAdminService, requireAdminActor RequireAdminActor) http.HandlerFunc {
-	return engramActorPathPayloadRoute(
-		requireAdminActor,
-		func(ctx context.Context, actor AdminActor, engramID uuid.UUID, payload admin.EngramUpdateRequest) (any, error) {
-			return service.UpdateEngram(ctx, engramID, actor.UserID, payload)
-		},
-	)
-}
-
-func moveMemoryAdminEngramRoute(service MemoryAdminService, requireAdminActor RequireAdminActor) http.HandlerFunc {
-	return engramActorPathPayloadRoute(
-		requireAdminActor,
-		func(ctx context.Context, actor AdminActor, engramID uuid.UUID, payload admin.EngramMoveRequest) (any, error) {
-			return service.MoveEngram(ctx, engramID, actor.UserID, actor.Role, payload)
-		},
-	)
-}
-
-func deleteMemoryAdminEngramRoute(service MemoryAdminService, requireAdminActor RequireAdminActor) http.HandlerFunc {
-	return engramActorPathPayloadRoute(
-		requireAdminActor,
-		func(ctx context.Context, actor AdminActor, engramID uuid.UUID, payload admin.EngramDeleteRequest) (any, error) {
-			return service.DeleteEngram(ctx, engramID, actor.UserID, payload)
-		},
-	)
 }
 
 func restoreMemoryAdminEngramRoute(service MemoryAdminService, requireAdminActor RequireAdminActor) http.HandlerFunc {

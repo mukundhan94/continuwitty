@@ -35,8 +35,10 @@ func (adapter mcpEngramAdminAdapter) MoveEngram(
 	moved, err := adapter.service.MoveEngram(
 		ctx,
 		request.EngramID,
-		request.ActorUserID,
-		string(request.ActorRole),
+		admin.WriteActor{
+			UserID: request.ActorUserID,
+			Role:   string(request.ActorRole),
+		},
 		admin.EngramMoveRequest{
 			TargetProjectID:   request.TargetProjectID,
 			Reason:            request.Reason,

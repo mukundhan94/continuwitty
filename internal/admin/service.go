@@ -353,16 +353,11 @@ func (s *Service) UpdateEngram(ctx context.Context, engramID, actorUserID uuid.U
 // MoveEngram moves an engram to another project after project resolution.
 func (s *Service) MoveEngram(
 	ctx context.Context,
-	engramID, actorUserID uuid.UUID,
-	actorRole string,
+	engramID uuid.UUID,
+	actor WriteActor,
 	payload EngramMoveRequest,
 ) (*models.AdminEngramRecord, error) {
-	return s.moveEngramWithActor(
-		ctx,
-		engramID,
-		WriteActor{UserID: actorUserID, Role: actorRole},
-		payload,
-	)
+	return s.moveEngramWithActor(ctx, engramID, actor, payload)
 }
 
 func (s *Service) moveEngramWithActor(

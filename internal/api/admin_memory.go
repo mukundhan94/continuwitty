@@ -35,7 +35,7 @@ type MemoryAdminService interface {
 	ListEngrams(ctx context.Context, request admin.MemoryAdminEngramListRequest) ([]models.AdminEngramRecord, error)
 	GetEngram(ctx context.Context, engramID uuid.UUID, includeDeleted bool) (*models.AdminEngramRecord, error)
 	UpdateEngram(ctx context.Context, engramID, actorUserID uuid.UUID, payload admin.EngramUpdateRequest) (*models.AdminEngramRecord, error)
-	MoveEngram(ctx context.Context, engramID, actorUserID uuid.UUID, actorRole string, payload admin.EngramMoveRequest) (*models.AdminEngramRecord, error)
+	MoveEngram(ctx context.Context, engramID uuid.UUID, actor admin.WriteActor, payload admin.EngramMoveRequest) (*models.AdminEngramRecord, error)
 	DeleteEngram(ctx context.Context, engramID, actorUserID uuid.UUID, payload admin.EngramDeleteRequest) (admin.EngramDeleteResponse, error)
 	RestoreEngram(ctx context.Context, engramID uuid.UUID) (admin.EngramRestoreResponse, error)
 
