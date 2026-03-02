@@ -124,6 +124,20 @@ interface LinkedEngramPanelProps {
   onRejectSuggestion: (suggestion: EngramLinkSuggestion) => Promise<void>
 }
 
+interface LinkListSectionProps {
+  links: EngramLinkRecord[]
+  engramLookup: Map<string, EngramSummary>
+}
+
+interface SuggestionQueueSectionProps {
+  loading: boolean
+  suggestions: EngramLinkSuggestion[]
+  pendingSuggestionKeys: string[]
+  engramLookup: Map<string, EngramSummary>
+  onAcceptSuggestion: (suggestion: EngramLinkSuggestion) => Promise<void>
+  onRejectSuggestion: (suggestion: EngramLinkSuggestion) => Promise<void>
+}
+
 export function LinkedEngramPanel({
   selectedSessionId,
   loading,
@@ -170,84 +184,109 @@ export function LinkedEngramPanel({
           <SectionDivider>
             <SectionTitle>Linked Engram Edges</SectionTitle>
           </SectionDivider>
-          <ScrollColumn>
-            {links.length === 0 ? (
-              <MutedText>No linked edges captured yet for this response.</MutedText>
-            ) : (
-              links.map((link) => {
-                const sourceTitle = resolveEngramTitle(engramLookup, link.source_engram_id)
-                const targetTitle = resolveEngramTitle(engramLookup, link.target_engram_id)
-                return (
-                  <LinkCard data-testid={`linked-edge-${link.link_id}`} key={link.link_id}>
-                    <LinkHeading>
-                      {sourceTitle} {'->'} {targetTitle}
-                    </LinkHeading>
-                    <LinkMeta>
-                      Relation: {link.relation_type} | Weight: {link.weight.toFixed(2)} | Confidence:{' '}
-                      {link.confidence.toFixed(2)}
-                    </LinkMeta>
-                    <LinkMeta>
-                      Status: {link.status} | Origin: {link.origin} | Updated{' '}
-                      {formatRelativeAge(link.last_reinforced_at ?? link.updated_at)}
-                    </LinkMeta>
-                  </LinkCard>
-                )
-              })
-            )}
-          </ScrollColumn>
+          <LinkListSection links={links} engramLookup={engramLookup} />
 
           <SectionDivider>
             <SectionTitle>Suggestion Queue</SectionTitle>
           </SectionDivider>
-          <ScrollColumn>
-            {suggestions.length === 0 ? (
-              <MutedText>No new link suggestions for active response engrams.</MutedText>
-            ) : (
-              suggestions.map((suggestion) => {
-                const key = suggestionKey(suggestion)
-                const pending = pendingSuggestionKeys.includes(key)
-                const sourceTitle = resolveEngramTitle(engramLookup, suggestion.source_engram_id)
-                return (
-                  <LinkCard data-testid={`link-suggestion-${key}`} key={key}>
-                    <LinkHeading>
-                      {sourceTitle} {'->'}{' '}
-                      {resolveEngramTitle(
-                        engramLookup,
-                        suggestion.target_engram_id,
-                        suggestion.target_title,
-                      )}
-                    </LinkHeading>
-                    <LinkMeta>
-                      Suggested relation: {suggestion.relation_type} | Score:{' '}
-                      {suggestion.score.toFixed(2)} | Age{' '}
-                      {formatRelativeAge(suggestion.target_created_at)}
-                    </LinkMeta>
-                    {suggestion.reasons.length > 0 ? (
-                      <LinkMeta>Reasons: {suggestion.reasons.join(', ')}</LinkMeta>
-                    ) : null}
-                    <SuggestionActions>
-                      <button
-                        disabled={loading || pending}
-                        onClick={() => void onAcceptSuggestion(suggestion)}
-                        type="button"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        disabled={loading || pending}
-                        onClick={() => void onRejectSuggestion(suggestion)}
-                        type="button"
-                      >
-                        Reject
-                      </button>
-                    </SuggestionActions>
-                  </LinkCard>
-                )
-              })
-            )}
-          </ScrollColumn>
+          <SuggestionQueueSection
+            loading={loading}
+            suggestions={suggestions}
+            pendingSuggestionKeys={pendingSuggestionKeys}
+            engramLookup={engramLookup}
+            onAcceptSuggestion={onAcceptSuggestion}
+            onRejectSuggestion={onRejectSuggestion}
+          />
         </>
       )}
     </GlassPane>
+  )
+}
+
+function LinkListSection({ links, engramLookup }: LinkListSectionProps) {
+  return (
+    <ScrollColumn>
+      {links.length === 0 ? (
+        <MutedText>No linked edges captured yet for this response.</MutedText>
+      ) : (
+        links.map((link) => {
+          const sourceTitle = resolveEngramTitle(engramLookup, link.source_engram_id)
+          const targetTitle = resolveEngramTitle(engramLookup, link.target_engram_id)
+          return (
+            <LinkCard data-testid={`linked-edge-${link.link_id}`} key={link.link_id}>
+              <LinkHeading>
+                {sourceTitle} {'->'} {targetTitle}
+              </LinkHeading>
+              <LinkMeta>
+                Relation: {link.relation_type} | Weight: {link.weight.toFixed(2)} | Confidence:{' '}
+                {link.confidence.toFixed(2)}
+              </LinkMeta>
+              <LinkMeta>
+                Status: {link.status} | Origin: {link.origin} | Updated{' '}
+                {formatRelativeAge(link.last_reinforced_at ?? link.updated_at)}
+              </LinkMeta>
+            </LinkCard>
+          )
+        })
+      )}
+    </ScrollColumn>
+  )
+}
+
+function SuggestionQueueSection({
+  loading,
+  suggestions,
+  pendingSuggestionKeys,
+  engramLookup,
+  onAcceptSuggestion,
+  onRejectSuggestion,
+}: SuggestionQueueSectionProps) {
+  return (
+    <ScrollColumn>
+      {suggestions.length === 0 ? (
+        <MutedText>No new link suggestions for active response engrams.</MutedText>
+      ) : (
+        suggestions.map((suggestion) => {
+          const key = suggestionKey(suggestion)
+          const pending = pendingSuggestionKeys.includes(key)
+          const sourceTitle = resolveEngramTitle(engramLookup, suggestion.source_engram_id)
+          const targetTitle = resolveEngramTitle(
+            engramLookup,
+            suggestion.target_engram_id,
+            suggestion.target_title,
+          )
+          return (
+            <LinkCard data-testid={`link-suggestion-${key}`} key={key}>
+              <LinkHeading>
+                {sourceTitle} {'->'} {targetTitle}
+              </LinkHeading>
+              <LinkMeta>
+                Suggested relation: {suggestion.relation_type} | Score: {suggestion.score.toFixed(2)} | Age{' '}
+                {formatRelativeAge(suggestion.target_created_at)}
+              </LinkMeta>
+              {suggestion.reasons.length > 0 ? (
+                <LinkMeta>Reasons: {suggestion.reasons.join(', ')}</LinkMeta>
+              ) : null}
+              <SuggestionActions>
+                <button
+                  disabled={loading || pending}
+                  onClick={() => void onAcceptSuggestion(suggestion)}
+                  type="button"
+                >
+                  Accept
+                </button>
+                <button
+                  disabled={loading || pending}
+                  onClick={() => void onRejectSuggestion(suggestion)}
+                  type="button"
+                >
+                  Reject
+                </button>
+              </SuggestionActions>
+            </LinkCard>
+          )
+        })
+      )}
+    </ScrollColumn>
   )
 }
