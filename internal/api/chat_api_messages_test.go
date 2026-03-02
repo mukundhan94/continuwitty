@@ -65,9 +65,12 @@ func TestSendMessageHandlerWritesCreatedResponse(t *testing.T) {
 			receivedSessionID uuid.UUID,
 			payload chat.ChatMessageCreateRequest,
 		) (chat.ChatSendResponse, error) {
-			if receivedActorID != actorID || receivedSessionID != sessionID {
-				t.Fatalf("unexpected send identifiers: actor=%s session=%s", receivedActorID, receivedSessionID)
-			}
+			assertSendIdentifiers(t, sendIdentifiersAssertion{
+				receivedActorID:   receivedActorID,
+				expectedActorID:   actorID,
+				receivedSessionID: receivedSessionID,
+				expectedSessionID: sessionID,
+			})
 			capturedText = payload.ContentText
 			return expected, nil
 		},
@@ -85,11 +88,51 @@ func TestSendMessageHandlerWritesCreatedResponse(t *testing.T) {
 		t.Fatalf("expected status 201, got %d", response.Code)
 	}
 	sent := decodeChatResponseBody[chat.ChatSendResponse](t, response.Body.Bytes())
-	if sent.SessionID != sessionID || sent.MessageID != messageID || sent.ReplyMessageID != replyMessageID {
-		t.Fatalf("unexpected send response: %#v", sent)
-	}
+	assertSendResponseIDs(t, sendResponseIDsAssertion{
+		response:               sent,
+		expectedSessionID:      sessionID,
+		expectedMessageID:      messageID,
+		expectedReplyMessageID: replyMessageID,
+	})
 	if capturedText != "Hello world" {
 		t.Fatalf("expected content_text to be forwarded, got %q", capturedText)
+	}
+}
+
+type sendIdentifiersAssertion struct {
+	receivedActorID   uuid.UUID
+	expectedActorID   uuid.UUID
+	receivedSessionID uuid.UUID
+	expectedSessionID uuid.UUID
+}
+
+func assertSendIdentifiers(t *testing.T, assertion sendIdentifiersAssertion) {
+	t.Helper()
+	if assertion.receivedActorID != assertion.expectedActorID {
+		t.Fatalf("unexpected actor id: got=%s expected=%s", assertion.receivedActorID, assertion.expectedActorID)
+	}
+	if assertion.receivedSessionID != assertion.expectedSessionID {
+		t.Fatalf("unexpected session id: got=%s expected=%s", assertion.receivedSessionID, assertion.expectedSessionID)
+	}
+}
+
+type sendResponseIDsAssertion struct {
+	response               chat.ChatSendResponse
+	expectedSessionID      uuid.UUID
+	expectedMessageID      uuid.UUID
+	expectedReplyMessageID uuid.UUID
+}
+
+func assertSendResponseIDs(t *testing.T, assertion sendResponseIDsAssertion) {
+	t.Helper()
+	if assertion.response.SessionID != assertion.expectedSessionID {
+		t.Fatalf("unexpected session id in send response: %#v", assertion.response)
+	}
+	if assertion.response.MessageID != assertion.expectedMessageID {
+		t.Fatalf("unexpected message id in send response: %#v", assertion.response)
+	}
+	if assertion.response.ReplyMessageID != assertion.expectedReplyMessageID {
+		t.Fatalf("unexpected reply message id in send response: %#v", assertion.response)
 	}
 }
 
