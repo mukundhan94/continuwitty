@@ -42,108 +42,119 @@ type implementedToolHandler func(
 var implementedToolHandlers = buildImplementedToolHandlers()
 
 func buildImplementedToolHandlers() map[string]implementedToolHandler {
-	handlers := map[string]implementedToolHandler{
-		"user.get_profile": func(
-			_ *CompatibilityService,
-			_ context.Context,
-			actor Actor,
-			_ map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return map[string]any{"profile": actorPayload(actor)}, true, nil
-		},
-		"user.list_projects": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			_ map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchUserListProjectsTool(ctx, actor)
-		},
-		"project.list": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			params map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchProjectListTool(ctx, actor, params)
-		},
-		"project.create": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			params map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchProjectCreateTool(ctx, actor, params)
-		},
-		"project.get_default": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			_ map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchProjectGetDefaultTool(ctx, actor)
-		},
-		"project.set_default": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			params map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchProjectSetDefaultTool(ctx, actor, params)
-		},
-		"project.member_list": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			params map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchProjectMemberListTool(ctx, actor, params)
-		},
-		"project.member_add": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			params map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchProjectMemberAddTool(ctx, actor, params)
-		},
-		"project.member_update": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			params map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchProjectMemberUpdateTool(ctx, actor, params)
-		},
-		"project.member_remove": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			params map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchProjectMemberRemoveTool(ctx, actor, params)
-		},
-		"engram.share": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			params map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchEngramShareTool(ctx, actor, params)
-		},
-		"engram.unshare": func(
-			service *CompatibilityService,
-			ctx context.Context,
-			actor Actor,
-			params map[string]any,
-		) (map[string]any, bool, *toolDispatchError) {
-			return service.dispatchEngramUnshareTool(ctx, actor, params)
-		},
-	}
+	handlers := map[string]implementedToolHandler{}
+	registerProfileAndProjectToolHandlers(handlers)
+	registerProjectMembershipToolHandlers(handlers)
+	registerEngramVisibilityToolHandlers(handlers)
 	registerProjectTransferToolHandlers(handlers)
 	registerChatToolHandlers(handlers)
 	registerEngramToolHandlers(handlers)
 	return handlers
+}
+
+func registerProfileAndProjectToolHandlers(handlers map[string]implementedToolHandler) {
+	handlers["user.get_profile"] = func(
+		_ *CompatibilityService,
+		_ context.Context,
+		actor Actor,
+		_ map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return map[string]any{"profile": actorPayload(actor)}, true, nil
+	}
+	handlers["user.list_projects"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		_ map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchUserListProjectsTool(ctx, actor)
+	}
+	handlers["project.list"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectListTool(ctx, actor, params)
+	}
+	handlers["project.create"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectCreateTool(ctx, actor, params)
+	}
+	handlers["project.get_default"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		_ map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectGetDefaultTool(ctx, actor)
+	}
+	handlers["project.set_default"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectSetDefaultTool(ctx, actor, params)
+	}
+}
+
+func registerProjectMembershipToolHandlers(handlers map[string]implementedToolHandler) {
+	handlers["project.member_list"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectMemberListTool(ctx, actor, params)
+	}
+	handlers["project.member_add"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectMemberAddTool(ctx, actor, params)
+	}
+	handlers["project.member_update"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectMemberUpdateTool(ctx, actor, params)
+	}
+	handlers["project.member_remove"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchProjectMemberRemoveTool(ctx, actor, params)
+	}
+}
+
+func registerEngramVisibilityToolHandlers(handlers map[string]implementedToolHandler) {
+	handlers["engram.share"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchEngramShareTool(ctx, actor, params)
+	}
+	handlers["engram.unshare"] = func(
+		service *CompatibilityService,
+		ctx context.Context,
+		actor Actor,
+		params map[string]any,
+	) (map[string]any, bool, *toolDispatchError) {
+		return service.dispatchEngramUnshareTool(ctx, actor, params)
+	}
 }
 
 func (service *CompatibilityService) dispatchImplementedTool(

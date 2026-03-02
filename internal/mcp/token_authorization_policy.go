@@ -23,24 +23,46 @@ var projectFallbackTools = map[string]struct{}{
 	"engram.collection_create":        {},
 }
 
+type tokenToolName string
+
+type tokenProjectID string
+
+type tokenProjectSet map[tokenProjectID]struct{}
+
 func normalizeTokenToolParams(
 	toolName string,
 	params map[string]any,
 	tokenAuth *models.MCPTokenAuthContext,
 ) (map[string]any, *toolPolicyError) {
-	if tokenAuth == nil || len(tokenAuth.AllowedProjectIDs) == 0 {
+	allowedProjectSet := newTokenProjectSet(tokenAuth)
+	if tokenAuth == nil || len(allowedProjectSet) == 0 {
 		return params, nil
 	}
-	canonicalTool := canonicalToolName(toolName)
+	canonicalTool := tokenToolName(canonicalToolName(toolName))
 	normalized := cloneToolParams(params)
-	projectID, policyError := resolveTokenProjectIDForTool(canonicalTool, normalized, tokenAuth.AllowedProjectIDs)
+	projectID, policyError := resolveTokenProjectIDForTool(canonicalTool, normalized, allowedProjectSet)
 	if policyError != nil {
 		return nil, policyError
 	}
-	if projectID == "" || projectAllowedByToken(projectID, tokenAuth.AllowedProjectIDs) {
+	if projectID == "" || allowedProjectSet.contains(projectID) {
 		return normalized, nil
 	}
-	return nil, disallowedProjectPolicyError(toolName, canonicalTool, tokenAuth.Scope, projectID)
+	return nil, disallowedTokenProjectPolicyError(toolName, canonicalTool, tokenAuth.Scope, projectID)
+}
+
+func newTokenProjectSet(tokenAuth *models.MCPTokenAuthContext) tokenProjectSet {
+	if tokenAuth == nil {
+		return nil
+	}
+	set := make(tokenProjectSet, len(tokenAuth.AllowedProjectIDs))
+	for _, projectID := range tokenAuth.AllowedProjectIDs {
+		normalizedProjectID := tokenProjectID(strings.TrimSpace(projectID))
+		if normalizedProjectID == "" {
+			continue
+		}
+		set[normalizedProjectID] = struct{}{}
+	}
+	return set
 }
 
 func cloneToolParams(params map[string]any) map[string]any {
@@ -55,60 +77,60 @@ func cloneToolParams(params map[string]any) map[string]any {
 }
 
 func resolveTokenProjectIDForTool(
-	canonicalTool string,
+	canonicalTool tokenToolName,
 	params map[string]any,
-	allowedProjectIDs []string,
-) (string, *toolPolicyError) {
-	projectID := normalizeProjectIDParam(params)
+	allowedProjects tokenProjectSet,
+) (tokenProjectID, *toolPolicyError) {
+	projectID := normalizeTokenProjectIDParam(params)
 	if projectID != "" {
 		if toolUsesInputProjectIDForTokenPolicy(canonicalTool, params) {
 			return projectID, nil
 		}
-		return "", nil
+		return tokenProjectID(""), nil
 	}
 	if !needsProjectAutofillForToken(canonicalTool, params) {
 		return projectID, nil
 	}
-	autofilledProjectID, policyError := resolveProjectAutofillForToken(allowedProjectIDs)
+	autofilledProjectID, policyError := resolveProjectAutofillForToken(allowedProjects)
 	if policyError != nil {
-		return "", policyError
+		return tokenProjectID(""), policyError
 	}
-	params["project_id"] = autofilledProjectID
+	params["project_id"] = string(autofilledProjectID)
 	return autofilledProjectID, nil
 }
 
-func normalizeProjectIDParam(params map[string]any) string {
+func normalizeTokenProjectIDParam(params map[string]any) tokenProjectID {
 	rawProjectID, exists := params["project_id"]
 	if !exists || rawProjectID == nil {
 		return ""
 	}
-	return strings.TrimSpace(fmt.Sprint(rawProjectID))
+	return tokenProjectID(strings.TrimSpace(fmt.Sprint(rawProjectID)))
 }
 
-func needsProjectAutofillForToken(canonicalTool string, params map[string]any) bool {
-	if _, exists := optionalProjectTools[canonicalTool]; exists {
+func needsProjectAutofillForToken(canonicalTool tokenToolName, params map[string]any) bool {
+	if _, exists := optionalProjectTools[string(canonicalTool)]; exists {
 		return true
 	}
-	if _, exists := projectFallbackTools[canonicalTool]; !exists {
+	if _, exists := projectFallbackTools[string(canonicalTool)]; !exists {
 		return false
 	}
-	if canonicalTool != "chat.save_as_engram" {
+	if canonicalTool != tokenToolName("chat.save_as_engram") {
 		return true
 	}
 	return !hasNonEmptySessionID(params)
 }
 
-func toolUsesInputProjectIDForTokenPolicy(canonicalTool string, params map[string]any) bool {
-	if _, projectInputTool := projectInputTools[canonicalTool]; projectInputTool {
+func toolUsesInputProjectIDForTokenPolicy(canonicalTool tokenToolName, params map[string]any) bool {
+	if _, projectInputTool := projectInputTools[string(canonicalTool)]; projectInputTool {
 		return true
 	}
-	if _, optionalTool := optionalProjectTools[canonicalTool]; optionalTool {
+	if _, optionalTool := optionalProjectTools[string(canonicalTool)]; optionalTool {
 		return true
 	}
-	if _, fallbackTool := projectFallbackTools[canonicalTool]; !fallbackTool {
+	if _, fallbackTool := projectFallbackTools[string(canonicalTool)]; !fallbackTool {
 		return false
 	}
-	if canonicalTool != "chat.save_as_engram" {
+	if canonicalTool != tokenToolName("chat.save_as_engram") {
 		return true
 	}
 	return !hasNonEmptySessionID(params)
@@ -122,8 +144,8 @@ func hasNonEmptySessionID(params map[string]any) bool {
 	return strings.TrimSpace(fmt.Sprint(sessionID)) != ""
 }
 
-func resolveProjectAutofillForToken(allowedProjectIDs []string) (string, *toolPolicyError) {
-	if len(allowedProjectIDs) > 1 {
+func resolveProjectAutofillForToken(allowedProjects tokenProjectSet) (tokenProjectID, *toolPolicyError) {
+	if len(allowedProjects) > 1 {
 		return "", &toolPolicyError{
 			code:    -32602,
 			message: "Invalid params",
@@ -133,27 +155,22 @@ func resolveProjectAutofillForToken(allowedProjectIDs []string) (string, *toolPo
 			},
 		}
 	}
-	return strings.TrimSpace(allowedProjectIDs[0]), nil
+	return allowedProjects.first(), nil
 }
 
-func projectAllowedByToken(projectID string, allowedProjectIDs []string) bool {
-	normalizedProjectID := strings.TrimSpace(projectID)
-	for _, allowedProjectID := range allowedProjectIDs {
-		if strings.TrimSpace(allowedProjectID) == normalizedProjectID {
-			return true
-		}
-	}
-	return false
+func (allowedProjects tokenProjectSet) contains(projectID tokenProjectID) bool {
+	_, exists := allowedProjects[projectID]
+	return exists
 }
 
-func disallowedProjectPolicyError(
+func disallowedTokenProjectPolicyError(
 	toolName string,
-	canonicalTool string,
+	canonicalTool tokenToolName,
 	scope models.MCPTokenScope,
-	projectID string,
+	projectID tokenProjectID,
 ) *toolPolicyError {
 	requiredScope := "read"
-	if requiresWriteScope(canonicalTool) {
+	if requiresWriteScope(string(canonicalTool)) {
 		requiredScope = "write"
 	}
 	return &toolPolicyError{
@@ -163,7 +180,14 @@ func disallowedProjectPolicyError(
 			"tool":           toolName,
 			"required_scope": requiredScope,
 			"token_scope":    string(scope),
-			"project_id":     projectID,
+			"project_id":     string(projectID),
 		},
 	}
+}
+
+func (allowedProjects tokenProjectSet) first() tokenProjectID {
+	for projectID := range allowedProjects {
+		return projectID
+	}
+	return ""
 }
