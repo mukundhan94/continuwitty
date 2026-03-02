@@ -1,0 +1,280 @@
+package config
+
+import (
+	"strings"
+	"testing"
+)
+
+func baseSettings() Settings {
+	return Settings{
+		AppEnv:                            "development",
+		LogConfigInDev:                    true,
+		DatabaseURL:                       "postgresql://engram:engram@localhost:5432/engram_vault",
+		EmbeddingProvider:                 "local",
+		EmbeddingTimeoutSeconds:           20.0,
+		AppSessionSecret:                  defaultSessionSecret,
+		UIDemoUsername:                    "admin",
+		UIDemoPassword:                    defaultUIDemoPassword,
+		AuditSinkTimeoutSeconds:           2.0,
+		MCPTokenPepper:                    defaultMCPTokenPepper,
+		OAuthClientSecretPepper:           defaultOAuthClientSecret,
+		OAuthRequireProtectedRegistration: true,
+		DefaultChatProvider:               "openai",
+		GraphLinkNoiseSuppressionEnabled:  true,
+		GraphLinkNoiseScoreThreshold:      0.30,
+		ChatPromptPolicyVersion:           defaultChatPromptPolicyVersion,
+		MCPToolPolicyVersion:              defaultMCPToolPolicyVersion,
+		EvalSuiteVersion:                  defaultEvalSuiteVersion,
+	}
+}
+
+func TestBuildDebugSettingsSnapshotRedactsSecrets(t *testing.T) {
+	settings := baseSettings()
+	settings.DatabaseURL = "postgresql://engram:secret@localhost:5432/engram_vault"
+	settings.AppSessionSecret = "session-secret"
+	settings.UIDemoPassword = "admin123"
+	settings.UIDemoPasswordHash = "hash-value"
+	settings.AuditSinkAuthToken = "audit-sink-token"
+	settings.OIDCClientSecret = "oidc-secret"
+	settings.OpenAIAPIKey = "openai-key"
+	settings.AnthropicAPIKey = "anthropic-key"
+	settings.AWSAccessKeyID = "aws-access"
+	settings.AWSSecretAccessKey = "aws-secret"
+	settings.AWSSessionToken = "aws-session"
+	settings.OAuthClientSecretPepper = "oauth-secret-pepper"
+	settings.DefaultChatProvider = "openai"
+
+	snapshot := BuildDebugSettingsSnapshot(settings)
+
+	assertEqualString(t, snapshot["database_url"], "<redacted>")
+	assertEqualString(t, snapshot["app_session_secret"], "<redacted>")
+	assertEqualString(t, snapshot["ui_demo_password"], "<redacted>")
+	assertEqualString(t, snapshot["ui_demo_password_hash"], "<redacted>")
+	assertEqualString(t, snapshot["audit_sink_auth_token"], "<redacted>")
+	assertEqualString(t, snapshot["oidc_client_secret"], "<redacted>")
+	assertEqualString(t, snapshot["openai_api_key"], "<redacted>")
+	assertEqualString(t, snapshot["anthropic_api_key"], "<redacted>")
+	assertEqualString(t, snapshot["aws_access_key_id"], "<redacted>")
+	assertEqualString(t, snapshot["aws_secret_access_key"], "<redacted>")
+	assertEqualString(t, snapshot["aws_session_token"], "<redacted>")
+	assertEqualString(t, snapshot["oauth_client_secret_pepper"], "<redacted>")
+	assertEqualString(t, snapshot["default_chat_provider"], "openai")
+	assertEqualString(t, snapshot["chat_prompt_policy_version"], defaultChatPromptPolicyVersion)
+	assertEqualString(t, snapshot["mcp_tool_policy_version"], defaultMCPToolPolicyVersion)
+	assertEqualString(t, snapshot["eval_suite_version"], defaultEvalSuiteVersion)
+}
+
+func TestShouldLogSettingsOnlyForDevModes(t *testing.T) {
+	devSettings := baseSettings()
+	devSettings.AppEnv = "development"
+	devSettings.LogConfigInDev = true
+
+	localSettings := baseSettings()
+	localSettings.AppEnv = "local"
+	localSettings.LogConfigInDev = true
+
+	prodSettings := baseSettings()
+	prodSettings.AppEnv = "production"
+	prodSettings.LogConfigInDev = true
+	prodSettings.AppSessionSecret = strings.Repeat("p", 48)
+	prodSettings.UIDemoPassword = "P@ssword-for-production-123"
+	prodSettings.MCPTokenPepper = strings.Repeat("m", 48)
+	prodSettings.OAuthClientSecretPepper = strings.Repeat("o", 48)
+
+	disabledSettings := baseSettings()
+	disabledSettings.AppEnv = "development"
+	disabledSettings.LogConfigInDev = false
+
+	if !ShouldLogSettings(devSettings) {
+		t.Fatalf("development settings should be loggable")
+	}
+	if !ShouldLogSettings(localSettings) {
+		t.Fatalf("local settings should be loggable")
+	}
+	if ShouldLogSettings(prodSettings) {
+		t.Fatalf("production settings should not be loggable")
+	}
+	if ShouldLogSettings(disabledSettings) {
+		t.Fatalf("log disabled settings should not be loggable")
+	}
+}
+
+func TestProductionSettingsRejectInsecureDefaults(t *testing.T) {
+	settings := baseSettings()
+	settings.AppEnv = "production"
+
+	err := ValidateProductionSecurity(settings)
+	if err == nil {
+		t.Fatalf("expected production settings validation to fail")
+	}
+	message := err.Error()
+	if !strings.Contains(message, "APP_SESSION_SECRET cannot use the development default in production") {
+		t.Fatalf("expected APP_SESSION_SECRET violation, got %q", message)
+	}
+	if !strings.Contains(message, "UI_DEMO_PASSWORD uses a weak value in production") {
+		t.Fatalf("expected weak password violation, got %q", message)
+	}
+}
+
+func TestProductionSettingsAcceptHardenedValues(t *testing.T) {
+	settings := baseSettings()
+	settings.AppEnv = "production"
+	settings.AppSessionSecret = strings.Repeat("s", 48)
+	settings.UIDemoPassword = "Strong-production-passphrase-123"
+	settings.MCPTokenPepper = strings.Repeat("m", 48)
+	settings.OAuthClientSecretPepper = strings.Repeat("o", 48)
+	settings.OAuthRequireProtectedRegistration = true
+
+	err := ValidateProductionSecurity(settings)
+	if err != nil {
+		t.Fatalf("expected hardened production settings to pass validation: %v", err)
+	}
+}
+
+func TestOIDCSettingsDisabledAllowsMissingValues(t *testing.T) {
+	settings := baseSettings()
+	settings.OIDCEnabled = false
+
+	if err := ValidateOIDCSettings(settings); err != nil {
+		t.Fatalf("expected oidc validation to pass when disabled: %v", err)
+	}
+}
+
+func TestOIDCSettingsRequireMandatoryFieldsWhenEnabled(t *testing.T) {
+	settings := baseSettings()
+	settings.OIDCEnabled = true
+
+	err := ValidateOIDCSettings(settings)
+	if err == nil {
+		t.Fatalf("expected oidc validation failure")
+	}
+	message := err.Error()
+	if !strings.Contains(message, "OIDC_ISSUER_URL") {
+		t.Fatalf("expected issuer setting in error, got %q", message)
+	}
+	if !strings.Contains(message, "OIDC_CLIENT_ID") {
+		t.Fatalf("expected client id setting in error, got %q", message)
+	}
+	if !strings.Contains(message, "OIDC_CLIENT_SECRET") {
+		t.Fatalf("expected client secret setting in error, got %q", message)
+	}
+	if !strings.Contains(message, "OIDC_REDIRECT_URL") {
+		t.Fatalf("expected redirect setting in error, got %q", message)
+	}
+}
+
+func TestOIDCSettingsAcceptConfiguredValuesWhenEnabled(t *testing.T) {
+	settings := baseSettings()
+	settings.OIDCEnabled = true
+	settings.OIDCIssuerURL = "https://accounts.example.com"
+	settings.OIDCClientID = "engram-web"
+	settings.OIDCClientSecret = "test-secret"
+	settings.OIDCRedirectURL = "http://localhost:8000/login/oidc/callback"
+
+	if err := ValidateOIDCSettings(settings); err != nil {
+		t.Fatalf("expected oidc validation success, got %v", err)
+	}
+}
+
+func TestGraphSettingsRejectOutOfRangeNoiseThreshold(t *testing.T) {
+	settings := baseSettings()
+	settings.GraphLinkNoiseScoreThreshold = -0.1
+	if err := ValidateGraphSettings(settings); err == nil {
+		t.Fatalf("expected negative threshold to fail validation")
+	}
+
+	settings.GraphLinkNoiseScoreThreshold = 1.1
+	if err := ValidateGraphSettings(settings); err == nil {
+		t.Fatalf("expected threshold > 1 to fail validation")
+	}
+}
+
+func TestGraphSettingsAcceptBoundedNoiseThreshold(t *testing.T) {
+	settings := baseSettings()
+	settings.GraphLinkNoiseScoreThreshold = 0.65
+	if err := ValidateGraphSettings(settings); err != nil {
+		t.Fatalf("expected graph settings validation success, got %v", err)
+	}
+}
+
+func TestEmbeddingSettingsValidation(t *testing.T) {
+	settings := baseSettings()
+	settings.EmbeddingProvider = "local"
+	settings.OpenAIAPIKey = ""
+	if err := ValidateEmbeddingSettings(settings); err != nil {
+		t.Fatalf("expected local embedding provider validation success: %v", err)
+	}
+
+	settings.EmbeddingProvider = "openai"
+	settings.OpenAIAPIKey = ""
+	if err := ValidateEmbeddingSettings(settings); err == nil {
+		t.Fatalf("expected openai embedding provider without api key to fail")
+	}
+
+	settings.OpenAIAPIKey = "sk-test"
+	if err := ValidateEmbeddingSettings(settings); err != nil {
+		t.Fatalf("expected openai embedding provider with api key to pass: %v", err)
+	}
+
+	settings.EmbeddingProvider = "unsupported-provider"
+	if err := ValidateEmbeddingSettings(settings); err == nil {
+		t.Fatalf("expected unsupported embedding provider to fail")
+	}
+
+	settings = baseSettings()
+	settings.EmbeddingTimeoutSeconds = 0
+	if err := ValidateEmbeddingSettings(settings); err == nil {
+		t.Fatalf("expected non-positive embedding timeout to fail")
+	}
+}
+
+func TestAuditSettingsRejectRequiredSinkWithoutURL(t *testing.T) {
+	settings := baseSettings()
+	settings.AuditSinkRequired = true
+	settings.AuditSinkURL = ""
+	if err := ValidateAuditSettings(settings); err == nil {
+		t.Fatalf("expected required sink without url to fail validation")
+	}
+}
+
+func TestAuditSettingsRejectInvalidSinkURLAndTimeout(t *testing.T) {
+	settings := baseSettings()
+	settings.AuditSinkURL = "not-a-url"
+	if err := ValidateAuditSettings(settings); err == nil {
+		t.Fatalf("expected invalid sink url to fail validation")
+	}
+
+	settings = baseSettings()
+	settings.AuditSinkURL = "ftp://audit.example.com/ingest"
+	if err := ValidateAuditSettings(settings); err == nil {
+		t.Fatalf("expected non-http sink url to fail validation")
+	}
+
+	settings = baseSettings()
+	settings.AuditSinkURL = "https://audit.example.com/ingest"
+	settings.AuditSinkTimeoutSeconds = 0
+	if err := ValidateAuditSettings(settings); err == nil {
+		t.Fatalf("expected non-positive sink timeout to fail validation")
+	}
+}
+
+func TestAuditSettingsAcceptValidSinkConfiguration(t *testing.T) {
+	settings := baseSettings()
+	settings.AuditSinkURL = "https://audit.example.com/ingest"
+	settings.AuditSinkRequired = true
+	settings.AuditSinkTimeoutSeconds = 3.5
+	if err := ValidateAuditSettings(settings); err != nil {
+		t.Fatalf("expected valid sink configuration to pass: %v", err)
+	}
+}
+
+func assertEqualString(t *testing.T, actual any, expected string) {
+	t.Helper()
+	value, ok := actual.(string)
+	if !ok {
+		t.Fatalf("expected %q to be string, got %T", expected, actual)
+	}
+	if value != expected {
+		t.Fatalf("expected %q, got %q", expected, value)
+	}
+}

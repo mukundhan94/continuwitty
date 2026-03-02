@@ -20,12 +20,22 @@ import {
   updateAdminEngram,
   updateCollection,
 } from '../api/memoryAdmin'
-import { listProjects } from '../api/projects'
+import {
+  addProjectMember,
+  listProjectAuditEvents,
+  listProjectMembers,
+  listProjects,
+  removeProjectMember,
+  updateProjectMember,
+} from '../api/projects'
 import type {
   AdminChatSessionRecord,
   AdminEngramRecord,
   AdminEngramSourceInput,
   EngramCollectionRecord,
+  ProjectAuditEventRecord,
+  ProjectMemberRecord,
+  ProjectMemberRole,
 } from '../api/types'
 import { ErrorText, GlassPane, MutedText, PaneHeader, ScrollColumn, SectionDivider } from '../styles/primitives'
 import { SmartIdDropdown } from './SmartIdDropdown'
@@ -91,6 +101,9 @@ const SourceEditor = styled.div`
 const SESSION_LIMIT = 200
 const ENGRAM_LIMIT = 300
 const COLLECTION_LIMIT = 200
+const PROJECT_MEMBER_LIMIT = 500
+const PROJECT_AUDIT_LIMIT = 200
+const projectMemberRoles: ProjectMemberRole[] = ['owner', 'editor', 'viewer']
 type TextInputChangeEvent = ChangeEvent<HTMLInputElement>
 type TextAreaChangeEvent = ChangeEvent<HTMLTextAreaElement>
 type EngramActionLabel = 'Restored' | 'Deleted'
@@ -252,6 +265,32 @@ interface CollectionListProps {
   onSelectCollection: (collection: EngramCollectionRecord) => void
   onQuickRenameCollection: (collection: EngramCollectionRecord) => void
   onDeleteCollection: (collection: EngramCollectionRecord) => void
+}
+
+interface ProjectMembersSectionProps {
+  projectId: string
+  projectIdOptions: string[]
+  submitting: boolean
+  members: ProjectMemberRecord[]
+  memberUserId: string
+  memberRole: ProjectMemberRole
+  memberRoleDrafts: Record<string, ProjectMemberRole>
+  onProjectChange: (projectId: string) => void
+  onMemberUserIdChange: (event: TextInputChangeEvent) => void
+  onMemberRoleChange: (event: ChangeEvent<HTMLSelectElement>) => void
+  onMemberRoleDraftChange: (userId: string, role: ProjectMemberRole) => void
+  onAddMember: () => void
+  onUpdateMember: (member: ProjectMemberRecord) => void
+  onRemoveMember: (member: ProjectMemberRecord) => void
+}
+
+interface ProjectAuditSectionProps {
+  projectId: string
+  projectIdOptions: string[]
+  events: ProjectAuditEventRecord[]
+  loading: boolean
+  onProjectChange: (projectId: string) => void
+  onRefresh: () => void
 }
 
 function SessionManagementSection({
@@ -700,12 +739,170 @@ function CollectionSection({
   )
 }
 
+function renderAuditEventTarget(event: ProjectAuditEventRecord): string {
+  if (event.target_user_id) {
+    return event.target_user_id
+  }
+  if (event.target_engram_id) {
+    return event.target_engram_id
+  }
+  return event.target_type
+}
+
+function ProjectMembersSection({
+  projectId,
+  projectIdOptions,
+  submitting,
+  members,
+  memberUserId,
+  memberRole,
+  memberRoleDrafts,
+  onProjectChange,
+  onMemberUserIdChange,
+  onMemberRoleChange,
+  onMemberRoleDraftChange,
+  onAddMember,
+  onUpdateMember,
+  onRemoveMember,
+}: ProjectMembersSectionProps) {
+  return (
+    <GlassPane>
+      <PaneHeader>
+        <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Project Members</h2>
+      </PaneHeader>
+      <Field>
+        <span>Project</span>
+        <SmartIdDropdown
+          id="admin-member-project-id-field"
+          value={projectId}
+          options={projectIdOptions}
+          onChange={onProjectChange}
+          placeholder="project id"
+          inputTestId="admin-member-project-id-input"
+          optionsTestId="admin-member-project-id-options"
+          showMatchCount={false}
+        />
+      </Field>
+      <RowActions>
+        <input
+          value={memberUserId}
+          onChange={onMemberUserIdChange}
+          placeholder="user id"
+          data-testid="admin-member-user-id-input"
+        />
+        <select value={memberRole} onChange={onMemberRoleChange} data-testid="admin-member-role-select">
+          {projectMemberRoles.map((role) => (
+            <option key={role} value={role}>
+              {role}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={submitting || !projectId.trim() || !memberUserId.trim()}
+          onClick={onAddMember}
+        >
+          Add member
+        </button>
+      </RowActions>
+      <SectionDivider />
+      <ScrollColumn>
+        <TableLike>
+          {members.map((member) => {
+            const draftRole = memberRoleDrafts[member.user_id] ?? member.role
+            const isOwnerRow = member.role === 'owner'
+            return (
+              <RowCard key={member.user_id}>
+                <div className="font-display text-sm font-semibold text-ink">{member.user_id}</div>
+                <MutedText>{member.role}</MutedText>
+                <RowActions>
+                  <select
+                    value={draftRole}
+                    disabled={submitting || isOwnerRow}
+                    onChange={(event) =>
+                      onMemberRoleDraftChange(member.user_id, event.target.value as ProjectMemberRole)
+                    }
+                  >
+                    {projectMemberRoles.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" disabled={submitting || isOwnerRow} onClick={() => onUpdateMember(member)}>
+                    Update role
+                  </button>
+                  <button type="button" disabled={submitting || isOwnerRow} onClick={() => onRemoveMember(member)}>
+                    Remove
+                  </button>
+                </RowActions>
+              </RowCard>
+            )
+          })}
+          {members.length === 0 ? <MutedText>No members found for selected project.</MutedText> : null}
+        </TableLike>
+      </ScrollColumn>
+    </GlassPane>
+  )
+}
+
+function ProjectAuditSection({
+  projectId,
+  projectIdOptions,
+  events,
+  loading,
+  onProjectChange,
+  onRefresh,
+}: ProjectAuditSectionProps) {
+  return (
+    <GlassPane>
+      <PaneHeader>
+        <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Project Audit Timeline</h2>
+      </PaneHeader>
+      <Toolbar>
+        <SmartIdDropdown
+          id="admin-audit-project-id-field"
+          value={projectId}
+          options={projectIdOptions}
+          onChange={onProjectChange}
+          placeholder="project id"
+          inputTestId="admin-audit-project-id-input"
+          optionsTestId="admin-audit-project-id-options"
+          showMatchCount={false}
+        />
+        <button type="button" disabled={loading} onClick={onRefresh}>
+          Refresh
+        </button>
+      </Toolbar>
+      <SectionDivider />
+      <ScrollColumn>
+        <TableLike>
+          {events.map((event) => (
+            <RowCard key={event.event_id}>
+              <div className="font-display text-sm font-semibold text-ink">{event.event_type}</div>
+              <MutedText>{event.created_at}</MutedText>
+              <MutedText>Target: {renderAuditEventTarget(event)}</MutedText>
+              {event.actor_user_id ? <MutedText>Actor: {event.actor_user_id}</MutedText> : null}
+              {Object.keys(event.metadata).length > 0 ? (
+                <MutedText>{JSON.stringify(event.metadata)}</MutedText>
+              ) : null}
+            </RowCard>
+          ))}
+          {events.length === 0 ? <MutedText>No audit events for selected project.</MutedText> : null}
+        </TableLike>
+      </ScrollColumn>
+    </GlassPane>
+  )
+}
+
 export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminMemoryPageProps) {
   const [includeDeleted, setIncludeDeleted] = useState(false)
   const [queryText, setQueryText] = useState('')
   const [sessions, setSessions] = useState<AdminChatSessionRecord[]>([])
   const [engrams, setEngrams] = useState<AdminEngramRecord[]>([])
   const [collections, setCollections] = useState<EngramCollectionRecord[]>([])
+  const [members, setMembers] = useState<ProjectMemberRecord[]>([])
+  const [auditEvents, setAuditEvents] = useState<ProjectAuditEventRecord[]>([])
   const [selectedEngramId, setSelectedEngramId] = useState<string | null>(null)
   const [selectedEngram, setSelectedEngram] = useState<AdminEngramRecord | null>(null)
   const [editTitle, setEditTitle] = useState('')
@@ -722,6 +919,9 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const [collectionDescription, setCollectionDescription] = useState('')
   const [collectionSelectedId, setCollectionSelectedId] = useState<string | null>(null)
   const [collectionAddEngramId, setCollectionAddEngramId] = useState('')
+  const [memberUserId, setMemberUserId] = useState('')
+  const [memberRole, setMemberRole] = useState<ProjectMemberRole>('viewer')
+  const [memberRoleDrafts, setMemberRoleDrafts] = useState<Record<string, ProjectMemberRole>>({})
   const [deleteLinkedEngrams, setDeleteLinkedEngrams] = useState(false)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -731,6 +931,14 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     () => collections.find((item) => item.collection_id === collectionSelectedId) ?? null,
     [collectionSelectedId, collections],
   )
+
+  useEffect(() => {
+    const drafts: Record<string, ProjectMemberRole> = {}
+    for (const member of members) {
+      drafts[member.user_id] = member.role
+    }
+    setMemberRoleDrafts(drafts)
+  }, [members])
 
   useEffect(() => {
     setCollectionProjectId((current) => (current.trim() ? current : projectId))
@@ -786,7 +994,7 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     setError(null)
     try {
       const projectFilter = projectId.trim() || undefined
-      const [nextSessions, nextEngrams, nextCollections] = await Promise.all([
+      const [nextSessions, nextEngrams, nextCollections, nextMembers, nextAuditEvents] = await Promise.all([
         listAdminSessions({
           project_id: projectFilter,
           include_deleted: includeDeleted,
@@ -806,10 +1014,31 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
           limit: COLLECTION_LIMIT,
           offset: 0,
         }),
+        projectFilter
+          ? listProjectMembers({
+              project_id: projectFilter,
+              params: {
+                include_revoked: false,
+                limit: PROJECT_MEMBER_LIMIT,
+                offset: 0,
+              },
+            })
+          : Promise.resolve<ProjectMemberRecord[]>([]),
+        projectFilter
+          ? listProjectAuditEvents({
+              project_id: projectFilter,
+              params: {
+                limit: PROJECT_AUDIT_LIMIT,
+                offset: 0,
+              },
+            })
+          : Promise.resolve<ProjectAuditEventRecord[]>([]),
       ])
       setSessions(nextSessions)
       setEngrams(nextEngrams)
       setCollections(nextCollections)
+      setMembers(nextMembers)
+      setAuditEvents(nextAuditEvents)
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : 'Failed to load admin memory data.')
     } finally {
@@ -826,7 +1055,10 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
     setSelectedEngramId(engramId)
     setError(null)
     try {
-      const detail = await getAdminEngram(engramId, true)
+      const detail = await getAdminEngram({
+        engram_id: engramId,
+        include_deleted: true,
+      })
       setSelectedEngram(detail)
       setEditTitle(detail.title)
       setEditAbstract(detail.abstract)
@@ -894,14 +1126,17 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
       return
     }
     void runAction(async () => {
-      const updated = await updateAdminEngram(selectedEngram.engram_id, {
-        title: editTitle.trim(),
-        abstract: editAbstract.trim(),
-        detailed_summary_markdown: editMarkdown,
-        tags: parseCommaSeparated({ value: editTags }),
-        keywords: parseCommaSeparated({ value: editKeywords }),
-        expected_updated_at: selectedEngram.updated_at,
-        sources: sourceRows,
+      const updated = await updateAdminEngram({
+        engram_id: selectedEngram.engram_id,
+        payload: {
+          title: editTitle.trim(),
+          abstract: editAbstract.trim(),
+          detailed_summary_markdown: editMarkdown,
+          tags: parseCommaSeparated({ value: editTags }),
+          keywords: parseCommaSeparated({ value: editKeywords }),
+          expected_updated_at: selectedEngram.updated_at,
+          sources: sourceRows,
+        },
       })
       setSelectedEngram(updated)
       onNotice(`Updated engram ${updated.engram_id}`)
@@ -914,10 +1149,13 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
       return
     }
     void runAction(async () => {
-      const moved = await moveAdminEngram(selectedEngram.engram_id, {
-        target_project_id: moveTargetProject.trim(),
-        expected_updated_at: selectedEngram.updated_at,
-        reason: 'admin-ui-move',
+      const moved = await moveAdminEngram({
+        engram_id: selectedEngram.engram_id,
+        payload: {
+          target_project_id: moveTargetProject.trim(),
+          expected_updated_at: selectedEngram.updated_at,
+          reason: 'admin-ui-move',
+        },
       })
       setSelectedEngram(moved)
       onNotice(`Moved engram ${moved.engram_id} to ${moved.project_id}`)
@@ -944,7 +1182,7 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const restoreSelectedEngram = () => {
     runSelectedEngramLifecycleAction(
       async ({ engramId }) => {
-        await restoreAdminEngram(engramId)
+        await restoreAdminEngram({ engram_id: engramId })
       },
       'Restored',
     )
@@ -953,7 +1191,10 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const deleteSelectedEngram = () => {
     runSelectedEngramLifecycleAction(
       async ({ engramId }) => {
-        await deleteAdminEngram(engramId, { reason: 'admin-ui-delete' })
+        await deleteAdminEngram({
+          engram_id: engramId,
+          payload: { reason: 'admin-ui-delete' },
+        })
       },
       'Deleted',
     )
@@ -1000,8 +1241,11 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const addItemToSelectedCollection = () => {
     runSelectedCollectionItemAction(
       async ({ collectionId, engramId }) => {
-        await addCollectionItems(collectionId, {
-          engram_ids: [engramId],
+        await addCollectionItems({
+          collection_id: collectionId,
+          payload: {
+            engram_ids: [engramId],
+          },
         })
       },
       true,
@@ -1011,7 +1255,10 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const removeItemFromSelectedCollection = () => {
     runSelectedCollectionItemAction(
       async ({ collectionId, engramId }) => {
-        await removeCollectionItem(collectionId, engramId)
+        await removeCollectionItem({
+          collection_id: collectionId,
+          engram_id: engramId,
+        })
       },
       false,
     )
@@ -1019,9 +1266,12 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
 
   const renameCollectionQuickly = (collection: EngramCollectionRecord) => {
     void runAction(async () => {
-      await updateCollection(collection.collection_id, {
-        name: `${collection.name} (updated)`,
-        expected_updated_at: collection.updated_at,
+      await updateCollection({
+        collection_id: collection.collection_id,
+        payload: {
+          name: `${collection.name} (updated)`,
+          expected_updated_at: collection.updated_at,
+        },
       })
       onNotice(`Updated collection ${collection.collection_id}`)
       await refresh()
@@ -1031,8 +1281,65 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const deleteCollectionRecord = (collection: EngramCollectionRecord) => {
     const collectionId = collection.collection_id
     void runAction(async () => {
-      await deleteCollection(collectionId, { reason: 'admin-ui-delete' })
+      await deleteCollection({
+        collection_id: collectionId,
+        payload: { reason: 'admin-ui-delete' },
+      })
       onNotice(`Deleted collection ${collectionId}`)
+      await refresh()
+    })
+  }
+
+  const addMemberToProject = () => {
+    const normalizedProjectID = projectId.trim()
+    const normalizedUserID = memberUserId.trim()
+    if (!normalizedProjectID || !normalizedUserID) {
+      return
+    }
+    void runAction(async () => {
+      const added = await addProjectMember({
+        project_id: normalizedProjectID,
+        payload: {
+          user_id: normalizedUserID,
+          role: memberRole,
+        },
+      })
+      setMemberUserId('')
+      onNotice(`Added member ${added.user_id} (${added.role})`)
+      await refresh()
+    })
+  }
+
+  const updateProjectMemberRoleByRecord = (member: ProjectMemberRecord) => {
+    const normalizedProjectID = projectId.trim()
+    if (!normalizedProjectID) {
+      return
+    }
+    const targetRole = memberRoleDrafts[member.user_id] ?? member.role
+    void runAction(async () => {
+      const updated = await updateProjectMember({
+        project_id: normalizedProjectID,
+        user_id: member.user_id,
+        payload: {
+          role: targetRole,
+        },
+      })
+      onNotice(`Updated member ${updated.user_id} to ${updated.role}`)
+      await refresh()
+    })
+  }
+
+  const removeProjectMemberByRecord = (member: ProjectMemberRecord) => {
+    const normalizedProjectID = projectId.trim()
+    if (!normalizedProjectID) {
+      return
+    }
+    void runAction(async () => {
+      await removeProjectMember({
+        project_id: normalizedProjectID,
+        user_id: member.user_id,
+      })
+      onNotice(`Removed member ${member.user_id}`)
       await refresh()
     })
   }
@@ -1044,7 +1351,7 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const restoreSessionById = (session: AdminChatSessionRecord) => {
     const sessionId = session.session_id
     void runAction(async () => {
-      await restoreAdminSession(sessionId)
+      await restoreAdminSession({ session_id: sessionId })
       onNotice(`Restored session ${sessionId}`)
       await refresh()
     })
@@ -1053,9 +1360,12 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
   const deleteSessionById = (session: AdminChatSessionRecord) => {
     const sessionId = session.session_id
     void runAction(async () => {
-      await deleteAdminSession(sessionId, {
-        delete_linked_engrams: deleteLinkedEngrams,
-        reason: 'admin-ui-cleanup',
+      await deleteAdminSession({
+        session_id: sessionId,
+        payload: {
+          delete_linked_engrams: deleteLinkedEngrams,
+          reason: 'admin-ui-cleanup',
+        },
       })
       onNotice(`Deleted session ${sessionId}`)
       await refresh()
@@ -1140,6 +1450,37 @@ export function AdminMemoryPage({ projectId, onProjectChange, onNotice }: AdminM
         onRemoveItem={removeItemFromSelectedCollection}
         onQuickRenameCollection={renameCollectionQuickly}
         onDeleteCollection={deleteCollectionRecord}
+      />
+
+      <ProjectMembersSection
+        projectId={projectId}
+        projectIdOptions={projectIdOptions}
+        submitting={submitting}
+        members={members}
+        memberUserId={memberUserId}
+        memberRole={memberRole}
+        memberRoleDrafts={memberRoleDrafts}
+        onProjectChange={onProjectChange}
+        onMemberUserIdChange={(event) => setMemberUserId(event.target.value)}
+        onMemberRoleChange={(event) => setMemberRole(event.target.value as ProjectMemberRole)}
+        onMemberRoleDraftChange={(userId, role) =>
+          setMemberRoleDrafts((current) => ({
+            ...current,
+            [userId]: role,
+          }))
+        }
+        onAddMember={addMemberToProject}
+        onUpdateMember={updateProjectMemberRoleByRecord}
+        onRemoveMember={removeProjectMemberByRecord}
+      />
+
+      <ProjectAuditSection
+        projectId={projectId}
+        projectIdOptions={projectIdOptions}
+        events={auditEvents}
+        loading={loading}
+        onProjectChange={onProjectChange}
+        onRefresh={refreshView}
       />
 
       {error ? <ErrorText>{error}</ErrorText> : null}

@@ -1,5 +1,6 @@
 import type {
   ChatDebugTrace,
+  EngramTracePath,
   ChatSessionFormPayload,
   ChatSourceReference,
   VisibilityScope,
@@ -19,6 +20,8 @@ export interface StreamMetaPayload {
   session_id: string
   message_id: string
   used_engram_ids: string[]
+  used_engram_link_ids?: string[]
+  engram_trace_paths?: EngramTracePath[]
   used_document_chunk_ids: string[]
   source_references: ChatSourceReference[]
   debug_trace?: ChatDebugTrace | null
@@ -34,9 +37,17 @@ export interface StreamDonePayload {
   reply_message_id: string
   assistant_text: string
   used_engram_ids: string[]
+  used_engram_link_ids?: string[]
+  engram_trace_paths?: EngramTracePath[]
   used_document_chunk_ids: string[]
   source_references: ChatSourceReference[]
   debug_trace?: ChatDebugTrace | null
+}
+
+export interface ChatRecallOptions {
+  link_recall_enabled?: boolean
+  link_recall_depth?: number
+  link_recall_max_neighbors?: number
 }
 
 export interface StreamErrorPayload {

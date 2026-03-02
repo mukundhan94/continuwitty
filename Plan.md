@@ -8,7 +8,7 @@ This file is the canonical roadmap for the project.
 - Chat/MCP/multi-provider roadmap phases are folded into the same timeline.
 - Upcoming work is defined below as the next implementation phases.
 
-> See [checkpoint.md](checkpoint.md) for milestone tracking and [todo.md](todo.md) for pending work.
+> See [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) for milestone tracking and [todo.md](todo.md) for pending work.
 
 ---
 
@@ -32,7 +32,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 1 - Framework and Storage Decisions
 
-- Selected FastAPI + Postgres/pgvector + LangGraph + React.
+- Selected Go + Postgres/pgvector + LangGraph + React (initial FastAPI baseline was later migrated to Go).
 - Chose metadata+vector retrieval as baseline.
 
 ### Phase 2 - Engram Schema and Contracts
@@ -181,6 +181,14 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 19 - Collaboration and Sharing Model
 
+### Status
+
+- Completed: project membership model (`owner`/`editor`/`viewer`) with canonical owner membership backfill.
+- Completed: membership-gated visibility enforcement across engram/chat/document read paths.
+- Completed: explicit engram share/unshare REST + MCP workflows with role-aware authorization.
+- Completed: DB-backed project audit trail for membership changes, share/unshare, and chat pin/unpin events.
+- Completed: admin memory UI panels for project member management and project audit timeline.
+
 ### Goals
 
 - Safely share memory across users/projects.
@@ -199,6 +207,17 @@ Build a local-first memory system where agents and humans can:
 ---
 
 ### Phase 20 - Production Security Hardening
+
+### Status
+
+- Completed (2026-03-01).
+- Completed deliverables:
+  - OIDC login/session mapping baseline (`/login/oidc`, `/login/oidc/callback`) with ID-token verification and session-cookie integration.
+  - OIDC config validation + redaction wiring (`OIDC_*` settings).
+  - OIDC login route coverage in API/session UI tests, including negative abuse-path callback cases.
+  - centralized audit sink rollout baseline with configurable sink URL/token/timeout/required mode and fail-open vs required delivery behavior.
+  - callback hardening to consume pending OIDC state once callback validation succeeds.
+  - OIDC failure audit coverage for provider verification failures and identity-to-user mapping failures.
 
 ### Goals
 
@@ -219,6 +238,17 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 21 - Observability and Reliability
 
+### Status
+
+- Completed (2026-03-01).
+- Completed deliverables:
+  - structured request telemetry middleware with domain/route/status/duration logging.
+  - process-local request metrics aggregation with `/api/v1/metrics` operator endpoint.
+  - stream-health and provider-failure category metrics in `/api/v1/metrics`.
+  - lifecycle trace hooks for chat prepare/provider/persist/lifecycle stages.
+  - provider fallback strategy with transient-error circuit-breaker protection.
+  - regression coverage for fallback, circuit-open behavior, stream outcomes, and telemetry recording.
+
 ### Goals
 
 - Ensure maintainable operations under load/provider failures.
@@ -237,6 +267,15 @@ Build a local-first memory system where agents and humans can:
 ---
 
 ### Phase 22 - Release Automation and Deployment Profiles
+
+### Status
+
+- Completed (2026-03-01).
+- Completed deliverables:
+  - CI split into explicit backend/web/deterministic-acceptance/release-smoke stages.
+  - optional gated live-provider suite for release candidates (`workflow_dispatch` + `run_live_provider`).
+  - compose profiles standardized for `dev`, `acceptance`, and `release-smoke`.
+  - versioned release checklist + rollback runbook docs and Makefile release-gate targets.
 
 ### Goals
 
@@ -257,6 +296,15 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 23 - EvalOps and Prompt/Policy Governance
 
+### Status
+
+- Completed (2026-03-01).
+- Completed deliverables:
+  - versioned governance metadata for chat/MCP/eval surfaces (`chat_prompt_policy_version`, `mcp_tool_policy_version`, `eval_suite_version`).
+  - deterministic EvalOps suite in Go for `continuity`, `citation_trust`, and `memory_drift` (extended in Phase 28 with `graph_trace` coverage).
+  - release/CI regression delta gate with baseline + previous-run threshold enforcement.
+  - historical trend artifacts (`latest.json`, `history.jsonl`, markdown trend report) and operational runbook.
+
 ### Goals
 
 - Keep memory quality stable as features evolve.
@@ -275,6 +323,15 @@ Build a local-first memory system where agents and humans can:
 ---
 
 ### Phase 24 - Engram Graph Foundations (Link Schema + Repository)
+
+### Status
+
+- Completed (2026-03-01).
+- Completed deliverables:
+  - `engram_links` + `engram_link_events` schema foundation in `db/init/001_schema.sql`.
+  - repository baseline for create/list/update/archive and depth-limited traversal with visibility-safe filtering.
+  - typed link models (`relation_type`, `origin`, `status`) and unit tests.
+  - runtime integration proof completed via Phase 25/26 REST + MCP + chat-context wiring.
 
 ### Goals
 
@@ -302,6 +359,15 @@ Build a local-first memory system where agents and humans can:
 ---
 
 ### Phase 25 - Link APIs, MCP Tools, and Suggestion Pipeline
+
+### Status
+
+- Completed (2026-03-01).
+- Completed deliverables:
+  - REST link APIs (`create/list/update/archive/suggest/trace`) under `/api/v1/engrams/*`.
+  - MCP link tools (`engram.link_*`, `engram.trace_path`) with scoped token policy integration.
+  - hybrid suggestion service combining semantic overlap, source overlap, lexical continuity, and recency components.
+  - same-project + visibility parity enforcement aligned with existing engram access model.
 
 ### Goals
 
@@ -334,6 +400,20 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 26 - Graph-Aware Context Assembly (Configurable Recall Depth)
 
+### Status
+
+- Completed backend baseline (2026-03-01).
+- Completed deliverables:
+  - chat context assembler now includes linked-neighbor recall (default depth `1`) with bounded controls:
+    - `link_recall_enabled`
+    - `link_recall_depth`
+    - `link_recall_max_neighbors`
+  - pruning/ranking policy combines seed relevance, link quality (weight/confidence/temporal), recency, and depth-aware penalties.
+  - chat response + stream metadata now include:
+    - `used_engram_link_ids`
+    - `engram_trace_paths`
+  - REST + MCP `chat.send_message` paths accept optional per-message link recall overrides.
+
 ### Goals
 
 - Use linked engrams in response context without overloading prompt budgets.
@@ -362,6 +442,16 @@ Build a local-first memory system where agents and humans can:
 
 ### Phase 27 - Memory Graph UX and Traceability
 
+### Status
+
+- Completed (2026-03-01).
+- Completed deliverables in this phase:
+  - chat-composer recall controls for linked-memory context (`link recall`, `depth`, `max neighbors`).
+  - transcript trace strip and compact provenance chain rendering from `used_engram_link_ids` and `engram_trace_paths`.
+  - linked-memory panel showing relation type, weight/confidence, status/origin, and freshness/age cues.
+  - suggestion queue UX with accept/reject actions backed by link create mutations (`active`/`rejected` status paths).
+  - explainability summary cards unifying seed-engram count, trace-path count, linked-edge count, and citation count.
+
 ### Goals
 
 - Make link graph navigation clear in UI so users can understand where responses come from.
@@ -386,6 +476,19 @@ Build a local-first memory system where agents and humans can:
 ---
 
 ### Phase 28 - Temporal Dynamics and Graph Quality Controls
+
+### Status
+
+- Completed (2026-03-01).
+- Completed in this checkpoint:
+  - temporal decay now affects effective link quality scoring during graph-aware context assembly.
+  - successful chat send/stream paths now reinforce used links (`last_reinforced_at` + boosted decayed `temporal_weight`).
+  - suggested links that are reinforced through successful usage are promoted to `active`.
+  - graph hygiene recommendation engine now detects duplicate-target links, relation conflicts, and stale low-value links.
+  - authenticated hygiene API route is available at `POST /api/v1/engrams/{engram_id}/links/hygiene`.
+  - graph-focused EvalOps coverage now includes `graph_trace` dimension checks (`used_engram_link_count`, `required_trace_targets`) with updated baseline fixtures (8 deterministic cases across 4 dimensions).
+  - scheduled hygiene execution now runs on successful link reinforcement with per-source cadence, and stale/low-value recommendations are auto-archived from hygiene outputs.
+  - configurable noisy-link suppression controls are available via policy settings and bounded request overrides (`link_noise_suppression_enabled`, `link_noise_score_threshold`).
 
 ### Goals
 
@@ -501,7 +604,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress (2026-02-19 checkpoint).
+- Completed (2026-03-01).
 - Completed subphases:
   - 31.0 roadmap scaffolding in `Plan.md` and `README.md`
   - 31.1 schema/repository foundation (`projects`, default-project persistence, soft-delete metadata, collections)
@@ -510,8 +613,7 @@ Build a local-first memory system where agents and humans can:
   - 31.4 MCP organization tools with scope/owner/admin/project-policy enforcement
   - 31.5 web routing + admin memory management page + workspace default-project control
   - 31.6 backend/web/acceptance test additions for phase behavior
-- Remaining subphase:
-  - 31.7 docs/skills closeout (`AGENT.md`, skills updates, final acceptance-test-mock rerun and log sync).
+  - 31.7 docs/skills closeout (`AGENT.md`, skills updates, final acceptance-test-mock rerun and log sync)
 
 ### Goals
 
@@ -546,7 +648,7 @@ Build a local-first memory system where agents and humans can:
 - [x] `/api/v1/engrams*` endpoints are authenticated and actor-scoped.
 - [x] Web admin memory route is implemented (`/admin/memory`) with management workflows.
 - [x] Backend/web test coverage added for project defaults, memory admin APIs, schema backfill, MCP organization, and admin UI route behavior.
-- [ ] Phase closeout docs still pending (`AGENT.md`/skills final pass + final acceptance mock evidence append).
+- [x] Phase closeout docs synced (`AGENT.md`/skills final pass + final acceptance mock evidence appended).
 
 ### Completed In Current Checkpoint
 
@@ -554,9 +656,8 @@ Build a local-first memory system where agents and humans can:
    - `db/init/001_schema.sql` now includes first-class `projects`, user `default_project_id`, soft-delete metadata for sessions/engrams, and collection tables.
    - Added idempotent backfill logic so existing project IDs are promoted into `projects`.
 2. Backend module layout for maintainability:
-   - Added `api/app/projects/` (api/repository/service/models).
-   - Added `api/app/memory_admin/` (api/repository/service/models).
-   - Wired routers into `api/app/main.py`.
+   - Added `internal/projects/` (service + model boundaries) and `internal/admin/` for memory-admin workflows.
+   - Added `internal/api/admin_memory*.go` route modules plus runtime dependency wiring in `cmd/api/main.go`.
 3. Behavior and security changes:
    - `/api/v1/engrams*` now requires authenticated actors.
    - Missing `project_id` on engram creation now resolves via caller default project with explicit response metadata.
@@ -592,7 +693,15 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- Planned.
+- Completed (2026-03-01).
+- Completed in this phase:
+  - Added `cw>` query protocol parsing and normalization in `internal/chat/query_protocol.go`.
+  - Added runtime integration to strip directives from persisted/context query text while preserving a normalized `cw_plan_applied` plan in send/stream metadata.
+  - Extended REST + MCP send-message payload surfaces with additive `cw_plan_applied` metadata in responses.
+  - Added parser/runtime regression coverage for directive forms and payload metadata propagation.
+  - Enabled federated cross-project link traversal/read SQL paths with per-node access filters (same-project restriction removed from link visibility/traversal queries).
+  - Added fused semantic + trace ranking for federated engram candidates with resilient context packing backfill when higher-ranked candidates cannot be rehydrated.
+  - Added retrieval audit telemetry signals (`retrieval_audit`) for blocked candidate filtering, suppressed/filtered/truncated trace paths, and cross-project path usage counts.
 - This phase introduces a lightweight query protocol for users/agents (`cw>`) and extends linked-memory retrieval to cross-project associations with strict access-aware filtering.
 
 ### Why This Phase
@@ -642,6 +751,7 @@ Build a local-first memory system where agents and humans can:
      - `used_engram_ids`
      - `used_engram_link_ids`
      - `engram_trace_paths`
+     - `retrieval_audit`
      - optional `cw_plan_applied` summary.
 5. UI affordances:
    - add optional helper/hint near composer describing `cw>` usage patterns.
@@ -734,7 +844,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Deliverables
 
-1. Backend export/import domain module under `api/app/export/` with typed bundle contracts and services.
+1. Backend export/import domain module under `internal/export/` with typed bundle contracts and services.
 2. REST endpoints for export and import bound to project context.
 3. MCP tools for export/import with scope + ownership checks.
 4. Web actions for project export/import with optional collection subset selection.
@@ -778,10 +888,115 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Memory Improvements Alignment (docs/memory-improvements.md)
+
+### Status
+
+- Aligned on 2026-03-01 so execution tracking lives in one canonical roadmap.
+- `docs/memory-improvements.md` remains the detailed blueprint.
+- `Plan.md` is the implementation contract and phase gate source.
+
+### Mapping
+
+1. Blueprint Phase 1 (Foundation) maps to:
+   - Phase 35: engagement/access tracking baseline.
+   - Phase 36: feedback loop + relevance/freshness scoring.
+   - Phase 37: time-decay and consolidation suggestions.
+2. Blueprint Phase 2 (LLM safety/intelligence) maps to:
+   - Phase 38: contradiction detection and warning flows.
+   - Phase 39: temporal query extensions + cost-aware context assembly.
+3. Blueprint Phase 3 (autonomous intelligence) maps to:
+   - Phase 40: autonomous memory suggestions and action workflows.
+
+---
+
+### Phase 35 - Memory Engagement Tracking Baseline
+
+### Status
+
+- In Progress (2026-03-01).
+- Scope is intentionally limited to telemetry + counters that can be safely integrated into existing chat send/stream paths.
+
+### Goals
+
+1. Track when engrams are used during successful chat responses.
+2. Persist durable access events suitable for future scoring/feedback features.
+3. Add forward-compatible schema fields required by the memory-improvements foundation.
+
+### Deliverables
+
+1. Schema:
+   - add `engram` engagement counters (`access_count`, `last_accessed_at`) and forward-compatible aggregates (`useful_count`, `contradiction_count`).
+   - add `engram_access_events` with retrieval-safe indexes.
+2. Repository:
+   - add write path to append access events and update engram aggregate counters atomically per event.
+3. Chat runtime:
+   - record used engram access on successful `chat.send_message` and successful stream completion.
+   - preserve non-blocking behavior (access telemetry failures must not fail chat response generation).
+4. Tests:
+   - repository tests for event persistence + aggregate updates.
+   - chat service tests for send/stream access recording and failure isolation.
+
+### Exit Criteria
+
+1. Every successful chat response with `used_engram_ids` records access events.
+2. Access counters are monotonically updated and queryable for ranking inputs.
+3. Regression tests cover send, stream, and recorder-failure cases.
+
+---
+
+### Phase 36 - Feedback Loop + Relevance Scoring
+
+### Status
+
+- Planned.
+
+### Goals
+
+1. Capture explicit memory usefulness/contradiction feedback.
+2. Extend retrieval ranking beyond dense+lexical with engagement + freshness factors.
+
+### Deliverables
+
+1. `engram_feedback` storage and aggregation paths.
+2. feedback MCP/API surfaces.
+3. composite scoring rollout with deterministic weighting + tests.
+
+### Exit Criteria
+
+1. Feedback updates aggregate counters deterministically.
+2. Relevance scoring remains stable and benchmarked under current latency targets.
+
+---
+
+### Phase 37 - Time-Decay + Consolidation Suggestions
+
+### Status
+
+- Planned.
+
+### Goals
+
+1. Introduce freshness decay and maintenance heuristics for stale/redundant memory.
+2. Generate deterministic consolidation suggestions with operator-safe review workflows.
+
+### Deliverables
+
+1. freshness score maintenance job + repository updates.
+2. consolidation suggestion schema/services + MCP/API tooling.
+3. acceptance and precision/recall benchmark coverage for duplicate/theme grouping.
+
+### Exit Criteria
+
+1. Stale memory receives updated freshness scores over time.
+2. Consolidation candidates are generated with test-covered deterministic criteria.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
-2. Update `docs/implementation-log.md` and `checkpoint.md` in every completed phase.
+2. Update `docs/implementation-log.md` and `migration/checkpoints/checkpoint.md` in every completed phase.
 3. Add/extend tests for every non-trivial behavior change.
 4. Keep schema migrations forward-only and idempotent.
 5. Preserve stable API contracts or version intentionally.
@@ -791,18 +1006,18 @@ Build a local-first memory system where agents and humans can:
 
 ## Near-Term Execution Order
 
-1. Phase 33 cross-surface closeout and round-trip hardening
-2. Phase 19 (sharing model) and Phase 20 (security hardening) parallel planning
-3. Phase 21 onward after security and data-sharing model stabilize
-4. After phase 23, execute link-graph roadmap in order:
-   - Phase 24 (graph foundations)
-   - Phase 25 (link APIs/MCP + suggestions)
-   - Phase 26 (graph-aware recall)
-   - Phase 27 (traceability UX)
-   - Phase 28 (temporal dynamics + graph quality)
-5. Execute Phase 32 after Phase 19 + Phase 24-28 baselines are in place:
-   - add `cw>` query protocol
-   - enable access-aware federated linked recall across projects
-6. Execute Phase 34 after Phase 33 foundations land:
-   - remediate security audit backlog by priority
-   - enforce production-safe defaults and distributed protection controls
+1. Phase 20 (production security hardening) completed on 2026-03-01.
+2. Phase 23 (EvalOps and prompt/policy governance) completed on 2026-03-01.
+3. Execute link-graph roadmap in order:
+   - Phase 24 (graph foundations) completed on 2026-03-01.
+   - Phase 25 (link APIs/MCP + suggestions) completed on 2026-03-01.
+   - Phase 26 (graph-aware recall) backend baseline completed on 2026-03-01.
+   - Phase 27 (traceability UX) completed on 2026-03-01.
+   - Phase 28 (temporal dynamics + graph quality) completed on 2026-03-01.
+4. Execute Phase 32 after Phase 24-28 baselines are in place:
+   - [x] add `cw>` query protocol baseline (parser + runtime metadata)
+   - [x] enable access-aware federated linked recall across projects
+5. Execute memory-intelligence foundation in order:
+   - [ ] Phase 35: memory engagement tracking baseline.
+   - [ ] Phase 36: feedback loop + relevance/freshness scoring.
+   - [ ] Phase 37: time-decay + consolidation suggestions.

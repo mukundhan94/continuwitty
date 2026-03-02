@@ -6,63 +6,60 @@ description: Use this skill when implementing or modifying MCP personal access t
 # MCP Token Authz
 
 ## Use This Skill When
-- Adding or changing MCP token APIs, storage, or UI management flows.
+- Adding or changing MCP token APIs, storage, or admin UI flows.
 - Debugging bearer-token failures on `/api/v1/mcp/stream`.
-- Updating read/write scope, tool allowlist, or project allowlist authorization behavior.
-- Implementing OAuth compatibility for MCP clients (metadata discovery, dynamic client registration, and token exchange).
+- Updating read/write scope, tool allowlist, or project allowlist enforcement.
+- Updating OAuth compatibility flows that mint MCP-compatible bearer tokens.
 
 ## Core Rules
 - Never store plaintext token secrets at rest.
 - Generate token as `engram_mcp_<token_id_hex>_<secret>` and store only hashed secret + hint.
-- Keep token auth additive: bearer-token preferred, session-cookie fallback retained.
-- Keep OAuth compatibility additive: `.well-known` discovery + `/oauth/*` flows should issue bearer tokens that reuse the same MCP authorization guards.
-- Enforce authorization in MCP service before tool dispatch.
-- Return JSON-RPC `-32003` for scope/allowlist/project policy violations.
+- Keep token auth additive: bearer preferred, session-cookie fallback retained.
+- Keep OAuth compatibility additive: `.well-known` metadata and `/oauth/*` flows must reuse the same MCP authorization guards.
+- Enforce authorization before MCP dispatch.
+- Return structured JSON-RPC errors for scope/allowlist/project policy violations.
 - Keep `initialize` and `tools/list` usable for token-authenticated clients.
 
 ## Scope Model
 - `read`: read-only tools (`chat.list_*`, `chat.get_*`, `engram.query`, `engram.rehydrate`, `user.*`).
-- `write`: includes all read tools + write tools (`chat.create_session`, `chat.send_message`, `engram.create`, etc.).
-- If `allowed_tools` is empty: allow all tools in scope.
-- If `allowed_tools` is non-empty: allow only listed tools (canonical aliases included).
+- `write`: includes all read tools plus mutating tools (`chat.create_session`, `chat.send_message`, `engram.create`, etc.).
+- Empty `allowed_tools`: allow all tools in scope.
+- Non-empty `allowed_tools`: allow only listed tools (canonical aliases included).
 
 ## Project Allowlist Model
-- If `allowed_project_ids` is empty: no token-level project restriction.
-- If non-empty: resolve project from request (`project_id` or derived from `session_id`/`engram_id`) and enforce membership.
-- For optional-project tools (`engram.query`, `chat.list_sessions`, `chat.list_project_documents`):
-  - if token has one allowed project and caller omits `project_id`, auto-fill it.
-  - if token has multiple allowed projects and caller omits `project_id`, return invalid params.
+- Empty `allowed_project_ids`: no token-level project restriction.
+- Non-empty `allowed_project_ids`: resolve project from request (`project_id` or derived entity ID) and enforce policy.
+- For optional-project tools, auto-fill only when policy resolves a single project; otherwise return invalid params.
 
 ## Files to Update Together
-- `api/app/mcp_tokens/models.py`
-- `api/app/mcp_tokens/repository.py`
-- `api/app/mcp_tokens/service.py`
-- `api/app/mcp/auth.py`
-- `api/app/mcp/service.py`
-- `api/app/oauth/api.py`
-- `api/app/oauth/repository.py`
-- `api/app/oauth/service.py`
-- `api/app/oauth/models.py`
-- `api/app/main.py`
-- `api/app/models.py`
-- `api/app/templates/admin.html`
+- `internal/models/mcp_token*.go`
+- `internal/repository/mcp_token*.go`
+- `internal/mcptokens/service*.go`
+- `internal/mcp/auth*.go`
+- `internal/mcp/token_authorization_policy.go`
+- `internal/mcp/token_project_scope_policy.go`
+- `internal/mcp/compatibility_service*.go`
+- `internal/api/session_mcp_tokens.go`
+- `internal/api/mcp_stream*.go`
+- `internal/oauth/*.go`
+- `internal/api/oauth_*.go`
+- `cmd/api/main.go` + `cmd/api/mcp_*_adapter.go`
 - `db/init/001_schema.sql`
 - `web/src/api/mcpTokens.ts`
 - `web/src/components/AdminMcpTokenPanel.tsx`
-- `web/src/App.tsx`
 
 ## Required Tests
-- `api/tests/test_mcp_token_service.py`
-- `api/tests/test_mcp_token_api_integration.py`
-- `api/tests/test_mcp_api_integration.py`
-- `api/tests/test_mcp_oauth_integration.py`
-- `api/tests/test_oauth_service.py`
-- `api/tests/test_admin_mcp_tokens_ui.py`
-- `acceptance-tests/features/mcp-token-auth-mock.feature`
-- `web/src/components/AdminMcpTokenPanel.test.tsx`
+- `internal/mcptokens/service_test.go`
+- `internal/repository/mcp_token_test.go`
+- MCP token policy tests in `internal/mcp/*token*test.go`
+- MCP stream/token route tests in `internal/api/mcp_stream*_test.go`
+- OAuth tests in `internal/oauth/*_test.go` + `internal/api/oauth_*_test.go`
+- Web tests: `web/src/components/AdminMcpTokenPanel.test.tsx`, `web/src/api/mcpTokens.test.ts`
+- Acceptance: `acceptance-tests/features/mcp-token-auth-mock.feature`, `acceptance-tests/features/admin-mcp-token-ui.feature`
 
 ## Validation Commands
-- `make -C /Users/mukundhan/Projects/engram check`
-- `make -C /Users/mukundhan/Projects/engram acceptance-bddgen`
-- `make -C /Users/mukundhan/Projects/engram acceptance-typecheck`
-- `make -C /Users/mukundhan/Projects/engram acceptance-test-mock`
+- `go test ./internal/mcptokens ./internal/mcp ./internal/api ./internal/oauth -count=1`
+- `go test ./... -count=1`
+- `make acceptance-bddgen`
+- `make acceptance-typecheck`
+- `make acceptance-test-mock`

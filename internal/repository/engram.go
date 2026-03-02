@@ -1,0 +1,596 @@
+package repository
+
+import (
+	"fmt"
+	"math"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+
+	"engram/internal/embeddings"
+	"engram/internal/models"
+
+	"github.com/google/uuid"
+)
+
+var tokenPattern = regexp.MustCompile(`[a-z0-9]{2,}`)
+
+var genericChatAbstracts = map[string]struct{}{
+	"":                                   {},
+	"snapshot from active chat session.": {},
+	"snapshot from active chat session":  {},
+	"chat snapshot":                      {},
+	"session snapshot":                   {},
+}
+
+type rehydrationContextParts struct {
+	Title           string
+	CompactSummary  string
+	DetailedExcerpt string
+	Decisions       []map[string]any
+	OpenQuestions   []string
+	Citations       []models.RehydrationCitation
+}
+
+type textLimitInput struct {
+	value    string
+	maxChars int
+}
+
+type detailedExcerptInput struct {
+	markdown string
+	maxChars int
+}
+
+type sectionBodyInput struct {
+	lines []string
+	start int
+}
+
+type compactSummaryInput struct {
+	abstract                string
+	detailedSummaryMarkdown string
+	maxChars                int
+}
+
+type lexicalOverlapInput struct {
+	query          string
+	candidateParts []string
+}
+
+type rankScoreInput struct {
+	distance       float64
+	lexicalOverlap float64
+}
+
+type citationPackInput struct {
+	citations []models.RehydrationCitation
+	limit     int
+}
+
+type rerankRowsInput struct {
+	rows  []map[string]any
+	query string
+	topK  int
+}
+
+func vectorLiteral(values []float64) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, fmt.Sprintf("%.6f", value))
+	}
+	return "[" + strings.Join(parts, ",") + "]"
+}
+
+// BuildLocalQueryLiteral creates a pgvector-compatible literal for query search.
+func BuildLocalQueryLiteral(query string, embeddingDim int) (string, error) {
+	provider := embeddings.LocalDeterministicEmbeddingProvider{}
+	vector, err := provider.Embed(query, embeddingDim)
+	if err != nil {
+		return "", err
+	}
+	return vectorLiteral(vector), nil
+}
+
+func buildRetrievalText(payload models.MemoryEngramCreate) string {
+	if payload.RetrievalText != nil && *payload.RetrievalText != "" {
+		return *payload.RetrievalText
+	}
+
+	decisionParts := make([]string, 0, len(payload.Decisions))
+	for _, decision := range payload.Decisions {
+		decisionParts = append(decisionParts, decision.Decision)
+	}
+	claimParts := make([]string, 0, len(payload.Claims))
+	for _, claim := range payload.Claims {
+		claimParts = append(claimParts, claim.Claim)
+	}
+
+	combined := strings.Join(
+		[]string{
+			payload.Title,
+			payload.Abstract,
+			strings.Join(decisionParts, " "),
+			strings.Join(payload.OpenQuestions, " "),
+			strings.Join(claimParts, " "),
+		},
+		" ",
+	)
+	return strings.TrimSpace(combined)
+}
+
+func tokenize(text string) map[string]struct{} {
+	matches := tokenPattern.FindAllString(strings.ToLower(text), -1)
+	tokens := make(map[string]struct{}, len(matches))
+	for _, match := range matches {
+		tokens[match] = struct{}{}
+	}
+	return tokens
+}
+
+func normalizeSpaces(input textLimitInput) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(input.value)), " ")
+}
+
+func truncateText(input textLimitInput) string {
+	if input.maxChars <= 0 || len(input.value) <= input.maxChars {
+		return input.value
+	}
+	if input.maxChars <= 3 {
+		return input.value[:input.maxChars]
+	}
+	return strings.TrimSpace(input.value[:input.maxChars-3]) + "..."
+}
+
+func extractDetailedExcerpt(input detailedExcerptInput) string {
+	text := strings.TrimSpace(input.markdown)
+	if text == "" {
+		return ""
+	}
+
+	excerpt := assistantExcerpt(text)
+	if excerpt == "" {
+		excerpt = text
+	}
+	return truncateText(textLimitInput{value: excerpt, maxChars: input.maxChars})
+}
+
+func assistantExcerpt(markdown string) string {
+	lines := strings.Split(markdown, "\n")
+	assistantStart := assistantSectionStart(lines)
+	if assistantStart < 0 {
+		return ""
+	}
+	return sectionBody(sectionBodyInput{lines: lines, start: assistantStart})
+}
+
+func assistantSectionStart(lines []string) int {
+	for index, line := range lines {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "## assistant") {
+			return index + 1
+		}
+	}
+	return -1
+}
+
+func sectionBody(input sectionBodyInput) string {
+	bodyLines := make([]string, 0)
+	for index := input.start; index < len(input.lines); index++ {
+		if strings.HasPrefix(strings.TrimSpace(input.lines[index]), "## ") {
+			break
+		}
+		bodyLines = append(bodyLines, input.lines[index])
+	}
+	return strings.TrimSpace(strings.Join(bodyLines, "\n"))
+}
+
+func resolveCompactSummary(input compactSummaryInput) string {
+	if input.maxChars <= 0 {
+		input.maxChars = 800
+	}
+
+	abstractClean := normalizeSpaces(textLimitInput{value: input.abstract})
+	if _, isGeneric := genericChatAbstracts[strings.ToLower(abstractClean)]; !isGeneric {
+		return truncateText(textLimitInput{value: abstractClean, maxChars: input.maxChars})
+	}
+
+	fallback := normalizeSpaces(
+		textLimitInput{
+			value: extractDetailedExcerpt(
+				detailedExcerptInput{
+					markdown: input.detailedSummaryMarkdown,
+					maxChars: input.maxChars,
+				},
+			),
+		},
+	)
+	if fallback != "" {
+		return fallback
+	}
+	if abstractClean != "" {
+		return truncateText(textLimitInput{value: abstractClean, maxChars: input.maxChars})
+	}
+	return "No summary available."
+}
+
+func lexicalOverlapScore(input lexicalOverlapInput) float64 {
+	queryTokens := tokenize(input.query)
+	if len(queryTokens) == 0 {
+		return 0
+	}
+
+	documentTokens := collectTokens(input.candidateParts)
+	if len(documentTokens) == 0 {
+		return 0
+	}
+
+	return float64(overlapCount(queryTokens, documentTokens)) / float64(len(queryTokens))
+}
+
+func collectTokens(parts []string) map[string]struct{} {
+	tokens := make(map[string]struct{})
+	for _, part := range parts {
+		for token := range tokenize(part) {
+			tokens[token] = struct{}{}
+		}
+	}
+	return tokens
+}
+
+func overlapCount(source map[string]struct{}, target map[string]struct{}) int {
+	overlap := 0
+	for token := range source {
+		if _, exists := target[token]; exists {
+			overlap += 1
+		}
+	}
+	return overlap
+}
+
+func combinedRankScore(input rankScoreInput) float64 {
+	denseScore := 1.0 / (1.0 + math.Max(input.distance, 0))
+	return (denseScore * 0.8) + (input.lexicalOverlap * 0.2)
+}
+
+func packCitations(input citationPackInput) []models.RehydrationCitation {
+	if input.limit <= 0 {
+		return []models.RehydrationCitation{}
+	}
+
+	packed := make([]models.RehydrationCitation, 0, min(input.limit, len(input.citations)))
+	seenURLs := make(map[string]struct{}, len(input.citations))
+	for _, citation := range input.citations {
+		urlKey := strings.ToLower(strings.TrimSpace(citation.URL))
+		if _, exists := seenURLs[urlKey]; exists {
+			continue
+		}
+		seenURLs[urlKey] = struct{}{}
+		packed = append(packed, citation)
+		if len(packed) >= input.limit {
+			break
+		}
+	}
+	return packed
+}
+
+func buildEngramQueryWhere(
+	request models.EngramQueryRequest,
+	actorUserID *uuid.UUID,
+	queryLiteral string,
+) (string, []any) {
+	whereClauses := []string{"deleted_at IS NULL"}
+	params := []any{queryLiteral}
+
+	nextPlaceholder := func() string {
+		return pgxPlaceholder(len(params) + 1)
+	}
+
+	if request.ProjectID != nil && *request.ProjectID != "" {
+		whereClauses = append(whereClauses, fmt.Sprintf("project_id = %s", nextPlaceholder()))
+		params = append(params, *request.ProjectID)
+	}
+	if actorUserID != nil {
+		actorPlaceholder := nextPlaceholder()
+		whereClauses = append(
+			whereClauses,
+			buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "owner_user_id", visibilityColumn: "visibility_scope", projectColumn: "project_id", actorPlaceholder: actorPlaceholder, includeOwnerless: true}),
+		)
+		params = append(params, *actorUserID)
+	}
+	if len(request.Tags) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("tags && %s", nextPlaceholder()))
+		params = append(params, request.Tags)
+	}
+	if len(request.Keywords) > 0 {
+		whereClauses = append(whereClauses, fmt.Sprintf("keywords && %s", nextPlaceholder()))
+		params = append(params, request.Keywords)
+	}
+	if request.CreatedAfter != nil {
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at >= %s", nextPlaceholder()))
+		params = append(params, *request.CreatedAfter)
+	}
+	if request.CreatedBefore != nil {
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at <= %s", nextPlaceholder()))
+		params = append(params, *request.CreatedBefore)
+	}
+
+	return "WHERE " + strings.Join(whereClauses, " AND "), params
+}
+
+func rerankByCombinedScore(input rerankRowsInput) []map[string]any {
+	type rankedRow struct {
+		score     float64
+		createdAt time.Time
+		row       map[string]any
+	}
+
+	ranked := make([]rankedRow, 0, len(input.rows))
+	for _, row := range input.rows {
+		lexicalScore := lexicalOverlapScore(
+			lexicalOverlapInput{
+				query: input.query,
+				candidateParts: []string{
+					stringFromAny(row["title"]),
+					stringFromAny(row["abstract"]),
+					stringFromAny(row["retrieval_text"]),
+					strings.Join(stringSliceFromAny(row["tags"]), " "),
+					strings.Join(stringSliceFromAny(row["keywords"]), " "),
+				},
+			},
+		)
+		ranked = append(
+			ranked,
+			rankedRow{
+				score: combinedRankScore(
+					rankScoreInput{
+						distance:       float64FromAny(row["distance"]),
+						lexicalOverlap: lexicalScore,
+					},
+				),
+				createdAt: timeFromAny(row["created_at"]),
+				row:       row,
+			},
+		)
+	}
+
+	sort.Slice(ranked, func(left, right int) bool {
+		if ranked[left].score == ranked[right].score {
+			return ranked[left].createdAt.After(ranked[right].createdAt)
+		}
+		return ranked[left].score > ranked[right].score
+	})
+
+	if input.topK <= 0 || input.topK > len(ranked) {
+		input.topK = len(ranked)
+	}
+	trimmed := make([]map[string]any, 0, input.topK)
+	for _, row := range ranked[:input.topK] {
+		trimmed = append(trimmed, row.row)
+	}
+	return trimmed
+}
+
+func formatCitations(citations []models.RehydrationCitation) string {
+	lines := make([]string, 0, len(citations))
+	for _, citation := range citations {
+		label := citation.URL
+		if citation.Title != nil && *citation.Title != "" {
+			label = *citation.Title
+		}
+		snippet := strings.TrimSpace(strings.ReplaceAll(citation.Snippet, "\n", " "))
+		if len(snippet) > 140 {
+			snippet = snippet[:137] + "..."
+		}
+		line := fmt.Sprintf("- %s (%s)", label, citation.URL)
+		if snippet != "" {
+			line += ": " + snippet
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return "- No citations available"
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatDecisions(decisions []map[string]any) string {
+	lines := make([]string, 0, len(decisions))
+	for _, decision := range decisions {
+		lines = append(
+			lines,
+			fmt.Sprintf(
+				"- %s: %s",
+				stringFromAny(decision["decision"]),
+				stringFromAny(decision["rationale"]),
+			),
+		)
+	}
+	if len(lines) == 0 {
+		return "- None"
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatOpenQuestions(openQuestions []string) string {
+	if len(openQuestions) == 0 {
+		return "- None"
+	}
+	lines := make([]string, 0, len(openQuestions))
+	for _, question := range openQuestions {
+		lines = append(lines, "- "+question)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func buildRehydrationContextMarkdown(parts rehydrationContextParts) string {
+	sections := []string{
+		fmt.Sprintf("# Rehydration Context: %s", parts.Title),
+		fmt.Sprintf("## Compact Summary\n%s", parts.CompactSummary),
+	}
+	if strings.TrimSpace(parts.DetailedExcerpt) != "" {
+		sections = append(sections, fmt.Sprintf("## Detailed Notes Excerpt\n%s", parts.DetailedExcerpt))
+	}
+
+	sections = append(
+		sections,
+		fmt.Sprintf("## Key Decisions\n%s", formatDecisions(parts.Decisions)),
+		fmt.Sprintf("## Open Questions\n%s", formatOpenQuestions(parts.OpenQuestions)),
+		fmt.Sprintf("## Top Citations\n%s", formatCitations(parts.Citations)),
+	)
+	return strings.Join(sections, "\n\n")
+}
+
+func buildEngramJSONPayload(
+	payload models.MemoryEngramCreate,
+	enrichmentReport map[string]any,
+	createdAt time.Time,
+) map[string]any {
+	return map[string]any{
+		"schema_version":            "1.0",
+		"project_id":                payload.ProjectID,
+		"thread_id":                 threadIDValue(payload),
+		"title":                     payload.Title,
+		"abstract":                  payload.Abstract,
+		"detailed_summary_markdown": payload.DetailedSummaryMarkdown,
+		"decisions":                 decisionPayload(payload.Decisions),
+		"assumptions":               payload.Assumptions,
+		"open_questions":            payload.OpenQuestions,
+		"claims":                    claimPayload(payload.Claims),
+		"tags":                      payload.Tags,
+		"keywords":                  payload.Keywords,
+		"artifacts":                 artifactPayload(payload.Artifacts),
+		"visibility_scope":          visibilityScopeValue(payload),
+		"source_session_id":         sourceSessionIDValue(payload),
+		"auto_metadata":             enrichmentReport,
+		"created_at":                createdAt.Format("2006-01-02T15:04:05-07:00"),
+	}
+}
+
+func decisionPayload(decisions []models.Decision) []map[string]any {
+	payload := make([]map[string]any, 0, len(decisions))
+	for _, decision := range decisions {
+		payload = append(
+			payload,
+			map[string]any{
+				"decision":  decision.Decision,
+				"rationale": decision.Rationale,
+			},
+		)
+	}
+	return payload
+}
+
+func claimPayload(claims []models.Claim) []map[string]any {
+	payload := make([]map[string]any, 0, len(claims))
+	for _, claim := range claims {
+		payload = append(
+			payload,
+			map[string]any{
+				"claim":              claim.Claim,
+				"supporting_sources": supportingSourcePayload(claim.SupportingSources),
+			},
+		)
+	}
+	return payload
+}
+
+func supportingSourcePayload(sources []models.SupportingSource) []map[string]any {
+	payload := make([]map[string]any, 0, len(sources))
+	for _, source := range sources {
+		payload = append(
+			payload,
+			map[string]any{
+				"url":         source.URL,
+				"title":       source.Title,
+				"snippet":     source.Snippet,
+				"captured_at": source.CapturedAt,
+			},
+		)
+	}
+	return payload
+}
+
+func artifactPayload(artifacts []models.ArtifactIn) []map[string]any {
+	payload := make([]map[string]any, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		payload = append(
+			payload,
+			map[string]any{
+				"artifact_type": artifact.ArtifactType,
+				"storage_uri":   artifact.StorageURI,
+				"metadata":      artifact.Metadata,
+			},
+		)
+	}
+	return payload
+}
+
+func visibilityScopeValue(payload models.MemoryEngramCreate) string {
+	if payload.VisibilityScope == "" {
+		return "private"
+	}
+	return payload.VisibilityScope
+}
+
+func threadIDValue(payload models.MemoryEngramCreate) any {
+	if payload.ThreadID == nil {
+		return nil
+	}
+	return *payload.ThreadID
+}
+
+func sourceSessionIDValue(payload models.MemoryEngramCreate) any {
+	if payload.SourceSessionID == nil {
+		return nil
+	}
+	return payload.SourceSessionID.String()
+}
+
+func stringFromAny(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		return ""
+	}
+}
+
+func stringSliceFromAny(value any) []string {
+	switch typed := value.(type) {
+	case []string:
+		return typed
+	case []any:
+		values := make([]string, 0, len(typed))
+		for _, item := range typed {
+			values = append(values, stringFromAny(item))
+		}
+		return values
+	default:
+		return []string{}
+	}
+}
+
+func float64FromAny(value any) float64 {
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	default:
+		return 0
+	}
+}
+
+func timeFromAny(value any) time.Time {
+	if typed, ok := value.(time.Time); ok {
+		return typed
+	}
+	return time.Time{}
+}

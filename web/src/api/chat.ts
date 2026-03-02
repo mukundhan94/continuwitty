@@ -1,4 +1,5 @@
 export type {
+  ChatRecallOptions,
   ChatStreamEvent,
   CreateSessionPayload,
   SaveEngramPayload,
@@ -34,3 +35,9 @@ export {
   sendChatMessage,
   streamChatMessage,
 } from './chatMessagesApi'
+
+export {
+  createEngramLink,
+  listEngramLinks,
+  suggestEngramLinks,
+} from './engramLinks'

@@ -20,11 +20,11 @@ make web
 
 Use `make stack-up` as an occasional debugging mode when you specifically need the full containerized stack.
 
-Open [localhost:5173](http://localhost:5173) (React chat) or [localhost:8000/docs](http://localhost:8000/docs) (API).
+Open [localhost:5173](http://localhost:5173) (React chat) or [localhost:8000/healthz](http://localhost:8000/healthz) (API health).
 
 Default credentials: `admin` / `admin123`
 
-Prerequisites: Docker, `uv`, Node 18+. See [docs/env-reference.md](docs/env-reference.md) for all env vars.
+Prerequisites: Docker, Go 1.25+, Node 18+. See [docs/env-reference.md](docs/env-reference.md) for all env vars.
 
 ## Documentation
 
@@ -32,16 +32,22 @@ Prerequisites: Docker, `uv`, Node 18+. See [docs/env-reference.md](docs/env-refe
 |-------|--------|
 | [Plan.md](Plan.md) | Canonical roadmap and phase status |
 | [AGENT.md](AGENT.md) | Contribution and maintenance contract |
-| [checkpoint.md](checkpoint.md) | Milestone tracking and phase progress |
+| [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) | Milestone tracking and phase progress |
+| [migration/migrate.md](migration/migrate.md) | Go migration plan and completion checklist |
 | [todo.md](todo.md) | Forward-looking work items |
 | [docs/api-reference.md](docs/api-reference.md) | REST endpoints, request/response schemas |
 | [docs/mcp-guide.md](docs/mcp-guide.md) | MCP transport, auth, tools, and typed clients |
 | [docs/testing-guide.md](docs/testing-guide.md) | Test suites, acceptance tests, eval harness |
+| [docs/evalops-governance-v1.md](docs/evalops-governance-v1.md) | Phase 23 EvalOps governance contract and delta-gate operations |
 | [docs/user-workflows.md](docs/user-workflows.md) | Docker stack, local validation, admin runbook, CLI |
 | [docs/env-reference.md](docs/env-reference.md) | Environment variables and configuration |
 | [docs/implementation-log.md](docs/implementation-log.md) | Detailed per-phase implementation history |
 | [docs/architecture-playbook.md](docs/architecture-playbook.md) | Architecture diagrams and multi-model runbooks |
 | [docs/mcp-client-integrations.md](docs/mcp-client-integrations.md) | LibreChat, Copilot, and Codex MCP config |
+| [docs/go-migration-test-matrix.md](docs/go-migration-test-matrix.md) | Go migration parity gate mapping |
+| [docs/go-rollout-playbook.md](docs/go-rollout-playbook.md) | Staged Go traffic rollout + rollback criteria |
+| [docs/release-checklist-v1.md](docs/release-checklist-v1.md) | Versioned release checklist and required gates |
+| [docs/release-rollback-runbook-v1.md](docs/release-rollback-runbook-v1.md) | Versioned rollback procedure for incidents |
 
 ## Architecture
 
@@ -54,7 +60,7 @@ Prerequisites: Docker, `uv`, Node 18+. See [docs/env-reference.md](docs/env-refe
               | REST API + MCP (JSON-RPC/SSE)           |
               v                                         v
        +-------------------------------------------------------+
-       | FastAPI Engram Vault API                              |
+       | Go Engram Vault API                                   |
        | - Provider adapters (OpenAI, Anthropic, Bedrock)      |
        | - Context assembly (engrams + document chunks)        |
        | - Embedding, retrieval, reranking                     |
@@ -78,11 +84,11 @@ Prerequisites: Docker, `uv`, Node 18+. See [docs/env-reference.md](docs/env-refe
 
 ## Current Status
 
-Phases 0-18, 29-31 implemented. See [checkpoint.md](checkpoint.md) for details.
+Phases 0-19, 21-23, and 29-34 implemented; Phase 20 is in progress. Go migration checkpoints are complete through CP188. See [migration/checkpoints/checkpoint.md](migration/checkpoints/checkpoint.md) for details.
 
 **Completed:** foundation, schema, retrieval, durability, chat continuity, providers (OpenAI/Anthropic/Bedrock), MCP stream, React UI, acceptance testing, theme/UX, MCP developer experience, document ingestion (RAG), memory lifecycle, auto-metadata enrichment, MCP tokens, enterprise memory management.
 
-**In progress:** Phase 31 docs closeout. **Next:** collaboration (19), production security (20), observability (21).
+**Current focus:** Phase 20 security closeout, then Phase 24 engram-link graph foundations.
 
 ## Repository Layout
 
@@ -91,7 +97,7 @@ engram/
   README.md          # this file
   AGENT.md           # contribution contract
   Plan.md            # roadmap
-  checkpoint.md      # milestone tracking
+  migration/         # migration plan + checkpoints
   todo.md            # work items
   Makefile           # dev commands (make help)
   docker-compose.yml # local stack
@@ -99,11 +105,9 @@ engram/
   docs/              # guides (see table above)
   agents/            # agent definitions (sentinel)
   skills/            # workflow skills for AI agents
+  cmd/api/           # Go API entrypoint
+  internal/          # Go backend packages
   db/init/           # schema SQL
-  api/               # FastAPI backend (Python/uv)
-    app/             # domain modules
-    evals/           # eval harness
-    tests/           # backend tests
   web/               # React frontend (Vite/TS)
     src/             # components, API clients, styles
   acceptance-tests/  # Playwright-BDD features
@@ -123,12 +127,14 @@ Skills are accessible to Claude Code (`.claude/` symlinks), OpenAI Codex (`AGENT
 make help          # list all targets
 make dev           # DB + API + web (single terminal)
 make test          # backend tests
-make lint          # ruff check
+make eval          # eval suite + delta regression gate
+make lint          # go vet
 make web-check     # frontend tests
-make eval          # eval harness
 make acceptance-test-mock   # acceptance tests (dockerized)
 make stack-up      # full containerized stack
 make stack-down    # tear down
+make stack-smoke   # db + api container smoke check
+make release-gate  # deterministic release candidate gate
 ```
 
 ## Success Checklist
@@ -141,7 +147,7 @@ make stack-down    # tear down
 - [x] Local UI login workflow for testing endpoints
 - [x] Inspect stored provenance sources via API/UI
 - [x] Multi-user auth with role-based access controls
-- [x] Local eval scenarios (fact/cross/temporal/abstention)
+- [x] EvalOps suite with continuity/citation-trust/memory-drift delta gates
 - [x] CLI upload/search/rehydrate from terminal
 - [x] Reranking and citation-packing for retrieval quality
 - [x] Background consolidation maintenance jobs

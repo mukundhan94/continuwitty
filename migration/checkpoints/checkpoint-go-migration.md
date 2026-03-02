@@ -1,0 +1,6586 @@
+# Go Migration Checkpoints
+
+> Track incremental migration from Python/FastAPI to Go using `../migrate.md`.
+> This file is intentionally phase-specific and complements `checkpoint.md`.
+
+## Scope
+
+- Source plan: `../migrate.md`
+- Migration style: side-by-side runtime with parity-first tests.
+- Commit policy: one focused checkpoint commit per migration slice.
+
+## Checkpoint Timeline
+
+| Checkpoint | Date | Status | Scope |
+|---|---|---|---|
+| CP1 | 2026-02-22 | Completed | Go module scaffold + `internal/config` port + migrated config tests |
+| CP2 | 2026-02-22 | Completed | `internal/db` port + migrated db tests |
+| CP3 | 2026-02-22 | Completed | API entrypoint scaffold + health/version route parity tests |
+| CP4 | 2026-02-22 | Completed | Auth baseline (`password` + CSRF) parity with migrated tests |
+| CP5 | 2026-02-22 | Completed | User models + user repository parity tests |
+| CP6 | 2026-02-22 | Completed | Embeddings baseline (local + fallback service parity tests) |
+| CP7 | 2026-02-22 | Completed | Repository helper baseline for engram query/rerank/rehydration formatting parity |
+| CP8 | 2026-02-22 | Completed | Engram repository DB read parity (`list_engrams` + `query_engrams`) with migrated tests |
+| CP9 | 2026-02-22 | Completed | Engram rehydration/source read parity (`get_rehydration_bundle` + `get_engram_sources`) |
+| CP10 | 2026-02-22 | Completed | Engram write-path parity (`create_engram_with_report` + `create_engram`) with source/artifact insert tests |
+| CP11 | 2026-02-22 | Completed | Chat session repository baseline (`create/list/get/update`) with migrated unit tests |
+| CP12 | 2026-02-22 | Completed | Project repository baseline (`list/get/create/ensure/default-project`) with migrated unit tests |
+| CP13 | 2026-02-22 | Completed | Chat repository continuation (`chat_messages`, session-linked engrams, autosave pruning, and session pinning) with migrated unit tests |
+| CP14 | 2026-02-22 | Completed | Document repository baseline (`upsert/list/query`) with chunk replacement and lexical rerank parity tests |
+| CP15 | 2026-02-22 | Completed | MCP token repository baseline (`create/list/get/revoke/touch`) with migrated unit tests |
+| CP16 | 2026-02-22 | Completed | OAuth repository baseline (`oauth_clients` + `oauth_authorization_codes`) with migrated unit tests |
+| CP17 | 2026-02-22 | Completed | Collection repository baseline (`engram_collections` + `engram_collection_items`) with migrated unit tests |
+| CP18 | 2026-02-22 | Completed | Memory-admin session repository baseline (`chat_sessions` admin ops + linked engram soft-delete) with migrated unit tests |
+| CP19 | 2026-02-22 | Completed | Memory-admin engram repository baseline (`list/get/sources/move/delete/restore`) with migrated unit tests |
+| CP20 | 2026-02-22 | Completed | Memory-admin engram update/source-replacement parity (`update` + source rewrite) with migrated unit tests |
+| CP21 | 2026-02-22 | Completed | Memory-admin service baseline (`internal/admin` service orchestration + migrated unit tests) |
+| CP22 | 2026-02-22 | Completed | Memory-admin API route baseline (`/api/v1/admin/memory` handlers + migrated unit tests) |
+| CP23 | 2026-02-22 | Completed | API integration baseline (dependency-aware router composition for memory-admin route mounting) |
+| CP24 | 2026-02-22 | Completed | Runtime integration baseline (DB-backed memory-admin router deps + migration-time actor/project resolver bridges) |
+| CP25 | 2026-02-22 | Completed | Runtime hardening baseline (context-first admin actor resolution with dev header bridge adapter) |
+| CP26 | 2026-02-22 | Completed | Auth/session integration baseline (session-cookie middleware populates canonical admin actor context) |
+| CP27 | 2026-02-22 | Completed | Auth/session route baseline (`/api/v1/session/*` + `/api/v1/me`) with cookie + CSRF login/logout parity wiring |
+| CP28 | 2026-02-22 | Completed | Auth/session hardening baseline (session TTL/issued-at validation + secure cookie attributes + route handler health refactor) |
+| CP29 | 2026-02-22 | Completed | UI/login parity baseline (`/`, `/login`, `/logout`, `/ui`) with form CSRF/session contract on hardened auth state |
+| CP30 | 2026-02-22 | Completed | Login guard + audit parity baseline (rate-limit lockout semantics and auth audit events wired in Go runtime/UI flow) |
+| CP31 | 2026-02-22 | Completed | Distributed limiter parity baseline (`rate_limit_state`-backed auth limiter state + process-local fallback hardening) |
+| CP32 | 2026-02-22 | Completed | UI/admin auth integration hardening (`/ui/admin` role-gating parity + auth/session code-health uplift) |
+| CP33 | 2026-02-22 | Completed | Auth/session continuation (`/api/v1/users` role-aware API parity + session/user route health uplift) |
+| CP34 | 2026-02-22 | Completed | Auth/session continuation follow-up (incremental non-checkpoint file code-health uplift toward >9.5 baseline; superseded by CP35+ uplift checkpoints) |
+| CP80 | 2026-02-26 | Completed | Phase 3 chat API session-derivative route baseline (`save-engram` + `continue`) with migrated unit tests and >9.5 code-health gate |
+| CP81 | 2026-02-26 | Completed | Phase 3 chat API session CRUD route baseline (`create/list/get/update`) with query defaults and >9.5 code-health gate |
+| CP82 | 2026-02-26 | Completed | Phase 3 chat API lifecycle/timeline route baseline (`lifecycle-policy` + `timeline`) with migrated unit tests and >9.5 code-health gate |
+| CP83 | 2026-02-26 | Completed | Phase 3 chat API message route baseline (`messages` list/send + stream mount refactor) with migrated unit tests and >9.5 code-health gate |
+| CP84 | 2026-02-26 | Completed | Phase 3 chat API pinned-resource route baseline (`engrams/documents` list/pin/unpin) with migrated unit tests and >9.5 code-health gate |
+| CP85 | 2026-02-26 | Completed | Phase 3 router integration baseline (chat router dependency mounting in top-level API router) with migrated router tests and >9.5 code-health gate |
+| CP86 | 2026-02-26 | Completed | Phase 4 runtime chat integration baseline (`cmd/api` wires DB-backed chat services/router deps into runtime assembly) with migrated unit tests and >9.5 code-health gate |
+| CP87 | 2026-02-26 | Completed | Phase 4 projects API baseline (`/api/v1/projects` + `/api/v1/projects/default`) with runtime adapter wiring, migrated route tests, and >9.5 code-health gate |
+| CP88 | 2026-02-26 | Completed | Phase 4 ingestion API baseline (`/api/v1/ingestion/text`, `/documents`, `/query`, `/query/blended`) with runtime adapter wiring, migrated route tests, and >9.5 code-health gate |
+| CP89 | 2026-02-26 | Completed | Phase 4 ingestion file-upload API baseline (`POST /api/v1/ingestion/file`) with multipart validation/options wiring, migrated route tests, and >9.5 code-health gate |
+| CP90 | 2026-02-26 | Completed | Phase 4 OAuth metadata + registration route baseline (`/.well-known/*` + `POST /oauth/register`) with runtime wiring, migrated route tests, and >9.5 code-health gate |
+| CP91 | 2026-02-26 | Completed | Phase 4 OAuth authorization route baseline (`GET /oauth/authorize`) with runtime wiring, migrated route/service tests, and >9.5 code-health gate |
+| CP92 | 2026-02-26 | Completed | Phase 4 OAuth token route baseline (`POST /oauth/token`) with runtime wiring, migrated route/service tests, and >9.5 code-health gate |
+| CP93 | 2026-02-26 | Completed | Phase 4 MCP token service baseline (`internal/mcptokens/service.go`) with migrated unit tests and >9.5 code-health gate |
+| CP94 | 2026-02-26 | Completed | Phase 4 MCP token API route baseline (`/api/v1/mcp/tokens` + revoke) with runtime wiring, migrated router/session tests, and >9.5 code-health gate |
+| CP95 | 2026-02-26 | Completed | Phase 3 workflow service baseline (`internal/workflow/agent.go`) with migrated unit tests and >9.5 code-health gate |
+| CP96 | 2026-02-26 | Completed | Phase 4 agent workflow API route baseline (`/api/v1/agent-runs*`) with runtime wiring, migrated route tests, and >9.5 code-health gate |
+| CP97 | 2026-02-26 | Completed | Phase 3 export/import API baseline (`/api/v1/projects/{project_id}/export|import`) with dependency-aware router mount, migrated route tests, and >9.5 code-health gate |
+| CP98 | 2026-02-26 | Completed | Phase 3 export/import service baseline (`internal/export/service*`) with migrated unit tests and >9.5 code-health gate |
+| CP99 | 2026-02-26 | Completed | Phase 4 export/import runtime integration baseline (`cmd/api` wiring + router mount tests) with >9.5 code-health gate |
+| CP100 | 2026-02-26 | Completed | Phase 4 export/import API error-mapping hardening (service error -> HTTP status parity) with migrated route tests and >9.5 code-health gate |
+| CP101 | 2026-02-26 | Completed | Phase 4 MCP stream transport baseline (`/api/v1/mcp/stream`) with compatibility service, router/runtime wiring, and >9.5 code-health gate |
+| CP102 | 2026-02-26 | Completed | Phase 4 MCP stream actor-auth baseline (bearer token + session fallback) with router/runtime wiring, migrated tests, and >9.5 code-health gate |
+| CP103 | 2026-02-26 | Completed | Phase 4 MCP stream transport rate-limit baseline (429 + `Retry-After`) with router/runtime wiring, migrated tests, and >9.5 code-health gate |
+| CP104 | 2026-02-26 | Completed | Phase 4 MCP catalog visibility baseline (`tools/list` + scope/allowlist policy filtering) with migrated tests and >9.5 code-health gate |
+| CP105 | 2026-02-26 | Completed | Phase 4 MCP direct-method compatibility baseline (dotted/underscore tool methods + token policy parity) with migrated tests and >9.5 code-health gate |
+| CP106 | 2026-02-26 | Completed | Phase 4 MCP first dispatched-tools baseline (`user.get_profile` + `project.list`) with `tools/call` envelope parity, runtime project-service wiring, migrated tests, and >9.5 code-health gate |
+| CP107 | 2026-02-26 | Completed | Phase 4 MCP project-default dispatch baseline (`project.get_default` + `project.set_default`) with direct/`tools/call` parity, service-error mapping, migrated tests, and >9.5 code-health gate |
+| CP108 | 2026-02-26 | Completed | Phase 4 MCP project-create dispatch baseline (`project.create`) with direct/`tools/call` parity, owner UUID validation, migrated tests, and >9.5 code-health gate |
+| CP109 | 2026-02-26 | Completed | Phase 4 MCP user-project dispatch baseline (`user.list_projects`) with session-derived sorted project IDs, direct/`tools/call` parity, runtime session-list wiring, migrated tests, and >9.5 code-health gate |
+| CP110 | 2026-02-26 | Completed | Phase 4 MCP chat session-query baseline (`chat.list_sessions`) with direct/`tools/call` parity, optional project filter + paging defaults, runtime session-list request-shape hardening, migrated tests, and >9.5 code-health gate |
+| CP111 | 2026-02-26 | Completed | Phase 4 MCP chat session-get baseline (`chat.get_session`) with direct/`tools/call` parity, required UUID validation, not-found mapping, runtime session-get wiring, migrated tests, and >9.5 code-health gate |
+| CP112 | 2026-02-26 | Completed | Phase 4 MCP chat lifecycle-policy query baseline (`chat.get_lifecycle_policy`) with direct/`tools/call` parity, required UUID validation, session-based policy projection, migrated tests, and >9.5 code-health gate |
+| CP113 | 2026-02-26 | Completed | Phase 4 MCP chat messages-query baseline (`chat.list_messages`) with direct/`tools/call` parity, required session lookup, paging defaults, runtime message-list wiring, migrated tests, and >9.5 code-health gate |
+| CP114 | 2026-02-26 | Completed | Phase 4 MCP chat timeline-query baseline (`chat.list_timeline`) with direct/`tools/call` parity, required session lookup, timeline event projection wiring, migrated tests, and >9.5 code-health gate |
+| CP115 | 2026-02-26 | Completed | Phase 4 MCP chat pinned-engrams query baseline (`chat.list_pinned_engrams`) with direct/`tools/call` parity, required session lookup, runtime pinned-engram wiring, migrated tests, and >9.5 code-health gate |
+| CP116 | 2026-02-26 | Completed | Phase 4 MCP chat pinned-documents query baseline (`chat.list_pinned_documents`) with direct/`tools/call` parity, required session lookup, runtime pinned-document wiring, migrated tests, and >9.5 code-health gate |
+| CP117 | 2026-02-26 | Completed | Phase 4 MCP chat pin-engram mutation baseline (`chat.pin_engram` / `engram.pin_to_session`) with direct/`tools/call` parity, runtime pin adapter wiring, dispatch modularization for >9.5 code-health, migrated tests, and safeguard pass |
+| CP118 | 2026-02-26 | Completed | Phase 4 MCP chat unpin-engram mutation baseline (`chat.unpin_engram`) with direct/`tools/call` parity, runtime unpin adapter wiring, migrated tests, and >9.5 code-health gate |
+| CP119 | 2026-02-26 | Completed | Phase 4 MCP chat pin-document mutation baseline (`chat.pin_document`) with direct/`tools/call` parity, runtime pin-document adapter wiring, migrated tests, and >9.5 code-health gate |
+| CP120 | 2026-02-26 | Completed | Phase 4 MCP chat unpin-document mutation baseline (`chat.unpin_document`) with direct/`tools/call` parity, runtime unpin-document adapter wiring, migrated tests, and >9.5 code-health gate |
+| CP121 | 2026-02-26 | Completed | Phase 4 MCP chat project-document query baseline (`chat.list_project_documents`) with direct/`tools/call` parity, paging defaults, runtime document-list wiring, migrated tests, and >9.5 code-health gate |
+| CP122 | 2026-02-26 | Completed | Phase 4 MCP chat create-session baseline (`chat.create_session`) with direct/`tools/call` parity, required project/title validation, runtime session-create wiring, migrated tests, and >9.5 code-health gate |
+| CP123 | 2026-02-26 | Completed | Phase 4 MCP chat lifecycle-policy update baseline (`chat.update_lifecycle_policy`) with direct/`tools/call` parity, required session validation, partial field updates, runtime update wiring, migrated tests, and >9.5 code-health gate |
+| CP124 | 2026-02-26 | Completed | Phase 4 MCP chat continue-session baseline (`chat.continue_session`) with direct/`tools/call` parity, required session validation, optional title passthrough, runtime continuation wiring, migrated tests, and >9.5 code-health gate |
+| CP125 | 2026-02-26 | Completed | Phase 4 MCP chat delete-session baseline (`chat.delete_session`) with direct/`tools/call` parity, required session validation, optional delete controls, runtime memory-admin wiring, migrated tests, and >9.5 code-health gate |
+| CP126 | 2026-02-26 | Completed | Phase 4 MCP chat restore-session baseline (`chat.restore_session`) with direct/`tools/call` parity and owner/admin lifecycle access hardening across restore/delete, migrated tests, runtime wiring, and >9.5 code-health gate |
+| CP127 | 2026-02-26 | Completed | Phase 4 MCP chat send-message baseline (`chat.send_message`) with direct/`tools/call` parity, runtime chat-service wiring, migrated tests, and chat/provider error mapping parity under >9.5 code-health gate |
+| CP128 | 2026-02-26 | Completed | Phase 4 MCP chat save-as-engram baseline (`chat.save_as_engram`) with direct/`tools/call` parity, runtime save-session adapter wiring, defaults/validation parity for visibility + metadata fields, migrated tests, and >9.5 code-health gate |
+| CP129 | 2026-02-26 | Completed | Phase 4 MCP engram read-access baseline (`engram.list`, `engram.get`, `engram.collection_list`) with direct/`tools/call` parity, runtime memory-admin adapter wiring, owner/admin visibility parity, migrated tests, and >9.5 code-health gate |
+| CP130 | 2026-02-26 | Completed | Phase 4 MCP engram query/rehydrate baseline (`engram.query`, `engram.rehydrate`) with direct/`tools/call` parity, runtime query+rehydrate adapter wiring, validation/defaults parity, and `-32004` rehydrate not-found mapping under >9.5 code-health gate |
+| CP131 | 2026-02-26 | Completed | Phase 4 MCP engram create baseline (`engram.create`) with direct/`tools/call` parity, runtime project-resolution + repository write wiring, payload normalization/validation parity, and project-resolution error mapping under >9.5 code-health gate |
+| CP132 | 2026-02-26 | Completed | Phase 4 MCP engram conversation-create baseline (`engram.create_from_conversation`) with direct/`tools/call` parity, runtime conversation-write + enrichment report shaping, payload normalization/validation parity, and project-resolution error mapping under >9.5 code-health gate |
+| CP133 | 2026-02-26 | Completed | Phase 4 MCP engram mutation baseline (`engram.delete`, `engram.restore`) with direct/`tools/call` parity, runtime memory-admin mutation wiring, `-32004` not-found mapping with `engram_id`, migrated tests, and >9.5 code-health gate |
+| CP134 | 2026-02-26 | Completed | Phase 4 MCP engram update baseline (`engram.update`) with direct/`tools/call` parity, runtime memory-admin update wiring, stale-write (`409`) error mapping, migrated tests, and >9.5 code-health gate |
+| CP135 | 2026-02-26 | Completed | Phase 4 MCP engram move-project baseline (`engram.move_project`) with direct/`tools/call` parity, runtime memory-admin move wiring, stale/project-resolution error mapping parity, migrated tests, and >9.5 code-health gate |
+| CP136 | 2026-02-27 | Completed | Phase 4 MCP engram collection mutation baseline (`engram.collection_create`, `engram.collection_update`, `engram.collection_delete`, `engram.collection_add_items`, `engram.collection_remove_items`) with direct/`tools/call` parity, runtime memory-admin collection mutation wiring, project/duplicate/stale/not-found error mapping parity, migrated tests, and >9.5 code-health gate |
+| CP137 | 2026-02-27 | Completed | Phase 4 MCP project transfer baseline (`project.export_bundle`, `project.import_bundle`) with direct/`tools/call` parity, runtime export/import adapter wiring, bundle/conflict-policy validation parity, export/import error mapping parity (`404`/`422`), migrated tests, and >9.5 code-health gate |
+| CP138 | 2026-02-27 | Completed | Phase 4 MCP chat send-message stream parity (`chat.send_message`) with `mcp.event` frame emission, direct/`tools/call` stream routing parity, non-stream fallback preservation, runtime stream adapter wiring, migrated tests, and >9.5 code-health gate |
+| CP139 | 2026-02-27 | Completed | Phase 4 MCP stream transport multi-frame parity tests (`/api/v1/mcp/stream`) for event+terminal frame handling in JSON and SSE modes with >9.5 code-health gate |
+| CP140 | 2026-02-27 | Completed | Phase 4 MCP token project-scope dispatch parity for project-scoped tools (single-project autofill, multi-project explicit-selection guard, allowlist rejection) with migrated chat-session token policy tests and >9.5 code-health gate |
+| CP141 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity extension for session-scoped and engram-scoped tools via dispatch-time project resolution checks with migrated scope-enforcement tests and >9.5 code-health gate |
+| CP142 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity hardening for `chat.save_as_engram` session precedence plus `engram.move_project` dual source/target allowlist enforcement with migrated edge-policy tests and >9.5 code-health gate |
+| CP143 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity extension for collection-scoped mutation tools (`engram.collection_update/delete/add_items/remove_items`) via `collection_id`-derived project resolution with runtime collection-lookup adapter wiring, migrated policy tests, and >9.5 code-health gate |
+| CP144 | 2026-02-27 | Completed | Phase 4 MCP token project-scope parity hardening for `engram.rehydrate` by resolving allowlist project scope from rehydration-bundle project metadata (instead of engram-admin lookup), with migrated policy tests and >9.5 code-health gate |
+| CP145 | 2026-02-27 | Completed | Phase 4 MCP `chat.save_as_engram` no-session conversation fallback parity (conversation create path + enrichment payload) with migrated parity/error/default tests and >9.5 code-health gate |
+| CP146 | 2026-02-27 | Completed | Phase 4 MCP catalog metadata parity (`tools/list` descriptions + input schemas) ported from Python catalog with schema-clone safety and migrated parity tests under >9.5 code-health gate |
+| CP147 | 2026-02-27 | Completed | Phase 4 MCP conversation-create enrichment-origin parity (`mcp.chat.save_as_engram` fallback origin + explicit `engram.create_from_conversation` origin wiring) with migrated request-shape tests and >9.5 code-health gate |
+| CP148 | 2026-02-27 | Completed | Phase 4 MCP chat-save no-session error-payload parity (`data.missing=conversation_markdown`) with migrated validation-data tests and >9.5 code-health gate |
+| CP149 | 2026-02-27 | Completed | Phase 4 MCP token-policy parity test hardening for no-session `chat.save_as_engram` (single-project autofill + multi-project explicit-project guard) with >9.5 code-health gate |
+| CP150 | 2026-02-27 | Completed | Phase 4 MCP top-level invalid-request parity test hardening for no-session `chat.save_as_engram` missing `conversation_markdown` with >9.5 code-health gate |
+| CP151 | 2026-02-27 | Completed | Phase 4 MCP stream-route token policy parity tests (`tools/list` allowlist visibility + read-scope write denial) with >9.5 code-health gate |
+| CP152 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback parity tests for `engram.create` (single-project autofill + multi-project explicit-project guard) with >9.5 code-health gate |
+| CP153 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback parity extension for `engram.create_from_conversation` with table-driven autofill/validation tests and >9.5 code-health gate |
+| CP154 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback parity extension for no-session `chat.save_as_engram` (single-project autofill + multi-project explicit-project guard) with table-driven route tests and >9.5 code-health gate |
+| CP155 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback direct-method parity for `engram.create_from_conversation` and no-session `chat.save_as_engram` (single-project autofill + multi-project explicit-project guard) with >9.5 code-health gate |
+| CP156 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope denial parity for create tools (`engram.create`, `engram.create_from_conversation`, no-session `chat.save_as_engram`) across `tools/call` and direct methods with `project_id` denial payload checks and >9.5 code-health gate |
+| CP157 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope session-precedence parity for `chat.save_as_engram` with `session_id` (out-of-scope `project_id` tolerated when session project is allowlisted) across `tools/call` and direct methods under >9.5 code-health gate |
+| CP158 | 2026-02-27 | Completed | Phase 4 MCP stream-route token read-scope parity extension for direct write-tool methods (`chat.send_message` dotted + underscore alias) with scope-detail payload checks and >9.5 code-health gate |
+| CP159 | 2026-02-27 | Completed | Phase 4 MCP stream-route token `allowed_tools` parity extension for disallowed write-tool invocations (`chat.send_message`) across `tools/call` and direct methods with policy-error payload checks and >9.5 code-health gate |
+| CP160 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `chat.list_sessions` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
+| CP161 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `engram.query` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
+| CP162 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `engram.list` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
+| CP163 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `chat.list_project_documents` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
+| CP164 | 2026-02-27 | Completed | Phase 4 MCP stream-route token optional-project autofill parity for `engram.collection_list` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
+| CP165 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback parity extension for `engram.collection_create` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
+| CP166 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope denial parity extension for `engram.collection_create` across `tools/call` and direct methods with denied `project_id` payload checks under >9.5 code-health gate |
+| CP167 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope denial parity extension for transfer tools (`project.export_bundle`, `project.import_bundle`) across `tools/call` and direct methods with denied `project_id` payload checks under >9.5 code-health gate |
+| CP168 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-fallback parity extension for `chat.create_session` across `tools/call` and direct methods (single-project autofill + multi-project explicit-project guard with reason payload) under >9.5 code-health gate |
+| CP169 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope denial parity extension for `chat.create_session` and `project.set_default` across `tools/call` and direct methods with denied `project_id` payload checks under >9.5 code-health gate |
+| CP170 | 2026-02-27 | Completed | Phase 4 MCP stream-route token project-scope denial parity extension for optional-project read tools (`chat.list_sessions`, `engram.query`, `engram.list`, `chat.list_project_documents`, `engram.collection_list`) across `tools/call` and direct methods with denied `project_id` payload checks under >9.5 code-health gate |
+| CP171 | 2026-02-27 | Completed | Phase 5 runtime cutover baseline: added root Go API `Dockerfile`, switched compose `api` service build from Python to Go, and replaced Python healthcheck with HTTP probe while preserving existing service contracts under >9.5 code-health gate |
+| CP172 | 2026-02-27 | Completed | Phase 5 developer workflow cutover baseline: switched Makefile backend defaults (`sync`, `dev`, `api`, `lint`, `format`, `format-check`, `test`, `check`) to Go commands and retained Python runtime commands under explicit legacy targets (`py-*`) under >9.5 code-health gate |
+| CP173 | 2026-02-27 | Completed | Phase 5 docs cutover baseline: updated top-level runbook docs (`README.md`, `docs/user-workflows.md`) for Go-first API/runtime commands and health endpoints while preserving explicit legacy Python notes under >9.5 code-health gate |
+| CP174 | 2026-02-27 | Completed | Phase 5 runtime verification baseline: added `make stack-smoke` target for Go API container smoke validation (`db+api` build/start + `/healthz` + `/api/v1/version` checks) and validated success locally under >9.5 code-health gate |
+| CP175 | 2026-02-27 | Completed | Phase 5 CI cutover baseline: added GitHub Actions Go backend pipeline (`gofmt` + `go vet` + `go test`) and updated migration checklist completion markers for Docker/compose/CI cutover items under >9.5 code-health gate |
+| CP176 | 2026-02-27 | Completed | Phase 5 acceptance-parity hardening baseline: fixed `engram.create_from_conversation` empty-metadata failures by normalizing nil `tags`/`keywords` at repository write-time and restoring deterministic fill-empty metadata enrichment (`abstract`/`tags`/`keywords`) with migrated repository regression tests under >9.5 code-health gate |
+| CP177 | 2026-02-27 | Completed | Phase 5 acceptance-parity closure baseline: fixed lockout acceptance determinism (wait-for-result loop + unique username) and restored admin-memory `deleted_at: null` JSON parity for active linked engrams with migrated route serialization regression coverage; validated with full `go test ./...` and `make acceptance-test-mock-docker` (`20 passed`) under >9.5 code-health gate |
+| CP178 | 2026-02-27 | Completed | Migration checklist reconciliation baseline: synchronized `migrate.md` phase checkboxes with completed CP-backed work through Phase 4 and Phase 5 cutover artifacts, while leaving operational rollout tasks (OpenAPI contract diff, shadow traffic, benchmarking, gradual traffic shift, Python archive) explicitly pending under >9.5 code-health gate |
+| CP179 | 2026-02-27 | Completed | OpenAPI contract validation baseline: added reproducible Python contract export (`scripts/export_python_openapi.py`), Go route validation against contract paths (`scripts/validate_go_openapi_routes.py`), and Makefile workflow (`make openapi-check`), then reconciled `migrate.md` OpenAPI checklist items with passing contract checks under >9.5 code-health gate |
+| CP180 | 2026-02-27 | Completed | Shadow-routing parity baseline: added `shadow` compose profile with side-by-side Go/Python services plus nginx path proxy (`/go/*`, `/py/*`) and shadow status-family comparator (`scripts/shadow_compare.py`, `make shadow-compare`), then reconciled migration checklist reverse-proxy and shadow-traffic items with executable passing workflow under >9.5 code-health gate |
+| CP181 | 2026-02-27 | Completed | Migration closeout baseline: added repeatable Go-vs-Python benchmark workflow (`scripts/benchmark_compare.py`, `make benchmark-compare`) with recorded report output, published staged rollout playbook (`docs/go-rollout-playbook.md`), added migration test matrix (`docs/go-migration-test-matrix.md`), marked legacy Python API archive status (`api/ARCHIVE.md`), and reconciled remaining Phase 5 checklist items to complete `migrate.md` under >9.5 code-health gate |
+| CP182 | 2026-02-27 | Completed | Migration runbook/doc alignment baseline: updated primary developer docs (`README.md`, `docs/user-workflows.md`) to reflect completed Go migration status and added first-class command references for contract, shadow, and benchmark workflows (`make openapi-check`, `make shadow-compare`, `make benchmark-compare`) under >9.5 code-health gate |
+| CP183 | 2026-02-27 | Completed | Go-only runtime cleanup baseline: removed legacy Python runtime artifacts (`api/`, Python migration parity scripts, shadow proxy config, Python contract/benchmark outputs), simplified `docker-compose.yml` and `Makefile` to Go-only flows, and updated docs/checkpoint links to `migration/` paths under >9.5 code-health gate |
+| CP184 | 2026-02-28 | Completed | Phase 19 collaboration parity baseline: added `project_members` + `project_audit_events` persistence/read models, membership-gated read predicates across engram/chat/document repositories, project member/audit REST routes, engram share/unshare REST routes, MCP tool parity (`project.member_*`, `engram.share`, `engram.unshare`), chat pin/unpin audit emission, and admin memory UI member/audit controls with targeted Go + web test pass under >9.5 code-health gate |
+| CP185 | 2026-02-28 | Completed | Phase 20 security kickoff baseline: added optional OIDC login provider (`internal/auth/oidc_login.go`), wired `/login/oidc` + `/login/oidc/callback` session mapping routes, extended config/env validation + redaction for `OIDC_*`, and shipped targeted OIDC route/config tests plus full `go test ./...` pass under >9.5 code-health gate |
+| CP186 | 2026-03-01 | Completed | Phase 21 observability kickoff baseline: added request telemetry middleware with structured route/domain/status/duration logging, introduced process-local in-memory request metrics and `/api/v1/metrics` route wiring, extended config/env toggles for request logging/metrics, and shipped router+middleware tests plus full `go test ./...` pass under >9.5 code-health gate |
+| CP187 | 2026-03-01 | Completed | Phase 21 reliability primitives baseline: added provider circuit policy (`internal/chat/provider_circuit.go`) with transient-failure cooldown behavior, added ordered provider fallback strategy (`internal/chat/provider_fallback.go`) with model selection rules, and shipped focused unit coverage for both modules under >9.5 code-health gate |
+| CP188 | 2026-03-01 | Completed | Phase 21 observability/reliability closure: wired fallback+circuit logic into chat send/stream flows, added lifecycle trace hooks and provider/stream observability callbacks, expanded `/api/v1/metrics` snapshot with provider-failure/stream-health/lifecycle counters, wired REST+MCP runtime dependencies, and shipped regression coverage with `go test ./cmd/api ./internal/api ./internal/chat` under >9.5 code-health gate |
+| CP189 | 2026-03-01 | Completed | Phase 22 release automation closure: split CI into backend/web/deterministic acceptance/release-smoke stages, added optional workflow-dispatched live-provider release gate, standardized compose profiles (`dev`, `acceptance`, `release-smoke`) with smoke probe service, and published versioned release checklist + rollback runbook docs under >9.5 code-health gate |
+
+## Checkpoint Details
+
+### CP1 - Module + Config Baseline
+
+- Added Go module and dependency baseline.
+- Added `internal/config/config.go` with:
+  - env-backed settings loading (`envconfig`)
+  - production hardening validation parity
+  - debug snapshot redaction parity
+  - environment helpers (`ShouldLogSettings`, `IsProductionEnv`)
+- Ported `api/tests/test_config_settings.py` to `internal/config/config_test.go`.
+- Executed migrated tests one-by-one:
+  - `TestBuildDebugSettingsSnapshotRedactsSecrets`
+  - `TestShouldLogSettingsOnlyForDevModes`
+  - `TestProductionSettingsRejectInsecureDefaults`
+  - `TestProductionSettingsAcceptHardenedValues`
+
+### CP2 - DB Baseline
+
+- Added `internal/db/db.go` with:
+  - transaction wrapper semantics (`WithTransaction`) with commit/rollback parity
+  - schema bootstrap entrypoint (`EnsureSchemaInitialized`) and default schema path resolver
+  - production bootstrap-admin hash hardening parity
+  - pgx pool helper wiring (`NewPool`, `Ping`, `PgxPoolBeginner`)
+- Ported `api/tests/test_db.py` behavior to `internal/db/db_test.go`.
+- Executed migrated tests one-by-one:
+  - `TestWithTransactionCommitsOnSuccess`
+  - `TestWithTransactionRollsBackOnError`
+  - `TestEnsureSchemaInitializedExecutesSchemaSQL`
+  - `TestHardenBootstrapAdminCredentialsUpdatesDefaultHash`
+  - `TestHardenBootstrapAdminCredentialsSkipsNonDefaultHash`
+
+### CP3 - API Entrypoint Scaffold
+
+- Added API runtime entrypoint:
+  - `cmd/api/main.go`
+- Added initial Chi router wiring:
+  - `internal/api/router.go`
+  - `/healthz`
+  - `/api/v1/version`
+- Ported basic API unit tests from `api/tests/test_api_unit.py`:
+  - `internal/api/router_test.go`
+- Executed migrated tests one-by-one:
+  - `TestHealthz`
+  - `TestVersionEndpoint`
+- Ran file-level CodeScene checks for all migrated Go files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+
+### CP4 - Auth Baseline
+
+- Added `internal/auth/password.go` with Python-parity behavior:
+  - `GenerateCSRFToken` (URL-safe random token)
+  - `HashPassword` (`pbkdf2_sha256$390000$<salt>$<digest>`)
+  - `VerifyPassword` parser + constant-time compare
+- Ported auth tests to `internal/auth/password_test.go`.
+- Executed migrated tests one-by-one:
+  - `TestHashPasswordWithProvidedSaltProducesExpectedFormat`
+  - `TestVerifyPasswordRoundTrip`
+  - `TestVerifyPasswordMatchesBootstrapAdminHash`
+  - `TestVerifyPasswordRejectsInvalidEncodings`
+  - `TestGenerateCSRFTokenIsURLSafeAndRandom`
+- Ran file-level CodeScene checks for current Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+
+### CP5 - User Repository Baseline
+
+- Added user model primitives:
+  - `internal/models/user.go`
+- Added user repository operations:
+  - `internal/repository/user.go`
+  - auth lookup by username/id
+  - list users
+  - create user (duplicate username mapping)
+  - update user (nullable patch fields)
+- Ported tests from `api/tests/test_user_repository.py`:
+  - `internal/repository/user_test.go`
+- Executed migrated tests one-by-one:
+  - `TestGetUserAuthRecordLooksUpUsername`
+  - `TestListUsersReturnsRecords`
+  - `TestCreateUserReturnsCreatedUser`
+  - `TestCreateUserReturnsUsernameExistsOnDuplicate`
+  - `TestUpdateUserReturnsNilWhenNotFound`
+  - `TestUpdateUserAppliesProvidedFields`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP6 - Embeddings Baseline
+
+- Added embeddings package:
+  - `internal/embeddings/errors.go`
+  - `internal/embeddings/local.go`
+  - `internal/embeddings/service.go`
+- Ported deterministic local embedding algorithm parity (`embed_text_local`).
+- Added fallback embedding service parity for provider failures.
+- Ported tests from:
+  - `api/tests/test_embedding.py`
+  - `api/tests/test_embeddings_service.py`
+  - new files:
+    - `internal/embeddings/local_test.go`
+    - `internal/embeddings/service_test.go`
+- Executed migrated tests one-by-one:
+  - `TestEmbedTextLocalIsDeterministicAndFixedDim`
+  - `TestEmbedTextLocalHandlesEmptyText`
+  - `TestEmbedTextLocalRejectsInvalidDim`
+  - `TestEmbeddingServiceFallsBackToLocalProvider`
+  - `TestEmbeddingServiceEmbedManyUsesProviderIDFromActiveProvider`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service_test.go` → 10.0
+
+### CP7 - Repository Helper Baseline
+
+- Added engram model primitives required for repository layer migration:
+  - `internal/models/engram.go`
+- Added engram repository helper baseline:
+  - `internal/repository/engram.go`
+  - helper parity for:
+    - retrieval text assembly
+    - vector literal formatting
+    - lexical overlap + combined rerank score
+    - query `WHERE` clause builder
+    - citation/decision/open-question formatting
+    - rehydration context markdown composition
+    - compact summary + assistant excerpt extraction
+    - engram JSON payload serialization
+- Ported helper/unit tests from:
+  - `api/tests/test_repository_helpers.py`
+  - `api/tests/test_repository_unit.py`
+  - new files:
+    - `internal/repository/engram_helpers_test.go`
+    - `internal/repository/engram_unit_test.go`
+- Executed migrated tests one-by-one:
+  - `TestVectorLiteralFormat`
+  - `TestBuildRetrievalTextUsesOverride`
+  - `TestBuildRetrievalTextFallbackComposesFields`
+  - `TestLexicalOverlapScorePrefersMatchingTerms`
+  - `TestCombinedRankScoreUsesDenseAndLexicalSignals`
+  - `TestPackCitationsDeduplicatesURLs`
+  - `TestResolveCompactSummaryUsesDetailedForGenericChatSnapshot`
+  - `TestExtractDetailedExcerptPrefersAssistantSection`
+  - `TestBuildEngramQueryWhereIncludesAllFilters`
+  - `TestRerankByCombinedScorePrefersLexicalOverlap`
+  - `TestFormatCitationsTruncatesAndStripsNewlines`
+  - `TestFormatCitationsReturnsDefaultForEmptyList`
+  - `TestFormatDecisionsFormatsEntriesAndDefaults`
+  - `TestFormatOpenQuestionsFormatsEntriesAndDefaults`
+  - `TestBuildRehydrationContextMarkdownIncludesExpectedSections`
+  - `TestBuildEngramJSONPayloadSerializesReportAndSourceSessionID`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/engram.go` → 9.11
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP8 - Engram Repository DB Read Parity
+
+- Added engram repository DB operations baseline:
+  - `internal/repository/engram_store.go`
+  - `ListEngrams` with actor/project visibility filtering and pagination parity
+  - `QueryEngrams` with vector candidate query + lexical reranking parity
+  - introduced input wrappers to reduce call-site argument coupling:
+    - `ListEngramsInput`
+    - `QueryEngramsInput`
+- Refactored repository cohesion:
+  - moved DB-facing code out of `internal/repository/engram.go` into `internal/repository/engram_store.go`
+  - extracted payload/summary helpers in `internal/repository/engram.go` to keep helper methods small and maintainable
+- Added DB-path tests:
+  - `internal/repository/engram_repository_test.go`
+  - `TestListEngramsAppliesVisibilityAndProjectFilters`
+  - `TestListEngramsWithoutActorOmitsVisibilityClause`
+  - `TestQueryEngramsBuildsQueryAndReranks`
+- Executed migrated tests one-by-one:
+  - `TestListEngramsAppliesVisibilityAndProjectFilters`
+  - `TestListEngramsWithoutActorOmitsVisibilityClause`
+  - `TestQueryEngramsBuildsQueryAndReranks`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP9 - Engram Rehydration/Source Read Parity
+
+- Added rehydration/source repository operations:
+  - `internal/repository/engram_rehydration.go`
+  - `GetRehydrationBundle`
+  - `GetEngramSources`
+  - actor-scoped visibility checks for read-path access control parity
+- Added model shapes for rehydration/source responses:
+  - `internal/models/engram.go`
+  - `RehydrationBundle`
+  - `EngramSourceRecord`
+- Added DB-path tests:
+  - `internal/repository/engram_rehydration_test.go`
+  - `TestGetRehydrationBundleReturnsNilWhenNotFound`
+  - `TestGetRehydrationBundleBuildsContextWithVisibilityFilter`
+  - `TestGetEngramSourcesReturnsRowsWhenVisible`
+  - `TestGetEngramSourcesReturnsEmptyWhenNotVisible`
+- Executed migrated tests one-by-one:
+  - `TestGetRehydrationBundleReturnsNilWhenNotFound`
+  - `TestGetRehydrationBundleBuildsContextWithVisibilityFilter`
+  - `TestGetEngramSourcesReturnsRowsWhenVisible`
+  - `TestGetEngramSourcesReturnsEmptyWhenNotVisible`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP10 - Engram Write Path Parity
+
+- Added engram write-path repository operations:
+  - `internal/repository/engram_write.go`
+  - `CreateEngramWithReport`
+  - `CreateEngram`
+  - insert helpers:
+    - `insertEngramRow`
+    - `insertClaimSources`
+    - `insertArtifacts`
+- Added create response model:
+  - `internal/models/engram.go`
+  - `EngramCreateResponse`
+- Added deterministic write seams for testability:
+  - UUID generation hooks (`newEngramUUID`, `newWriteUUID`)
+  - clock hook (`nowUTC`)
+  - embedding hook (`embedEngramText`)
+  - enrichment payload resolver hook (`resolveEnrichedPayload`)
+- Added write-path tests:
+  - `internal/repository/engram_write_test.go`
+  - `TestCreateEngramWithReportPersistsEngramSourcesAndArtifacts`
+  - `TestCreateEngramWithReportReturnsEmbedErrorAndSkipsWrites`
+  - `TestCreateEngramReturnsCreatedResponse`
+- Executed migrated tests one-by-one:
+  - `TestCreateEngramWithReportPersistsEngramSourcesAndArtifacts`
+  - `TestCreateEngramWithReportReturnsEmbedErrorAndSkipsWrites`
+  - `TestCreateEngramReturnsCreatedResponse`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP11 - Chat Repository Baseline
+
+- Added chat models:
+  - `internal/models/chat.go`
+  - provider/visibility/autosave enums + parsers
+  - request/response structs for chat sessions
+- Added chat session repository operations:
+  - `internal/repository/chat.go`
+  - `CreateChatSession`
+  - `ListChatSessions`
+  - `GetChatSession`
+  - `UpdateChatSession`
+- Added chat repository tests:
+  - `internal/repository/chat_test.go`
+  - `TestCreateChatSessionReturnsInsertedRecord`
+  - `TestListChatSessionsAppliesVisibilityAndProjectFilter`
+  - `TestGetChatSessionReturnsNilWhenMissing`
+  - `TestUpdateChatSessionReturnsNilWhenNoRows`
+  - `TestUpdateChatSessionValidatesProviderValue`
+  - `TestNormalizeCreatePayloadRejectsInvalidVisibility`
+- Executed migrated tests one-by-one:
+  - `TestCreateChatSessionReturnsInsertedRecord`
+  - `TestListChatSessionsAppliesVisibilityAndProjectFilter`
+  - `TestGetChatSessionReturnsNilWhenMissing`
+  - `TestUpdateChatSessionReturnsNilWhenNoRows`
+  - `TestUpdateChatSessionValidatesProviderValue`
+  - `TestNormalizeCreatePayloadRejectsInvalidVisibility`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP12 - Project Repository Baseline
+
+- Added project model:
+  - `internal/models/project.go`
+  - `ProjectRecord`
+- Added project repository operations:
+  - `internal/repository/project.go`
+  - `ListProjectsForActor`
+  - `GetProjectForActor`
+  - `CreateProject`
+  - `EnsureProjectExists`
+  - `GetUserDefaultProjectID`
+  - `SetUserDefaultProjectID`
+- Added project repository tests:
+  - `internal/repository/project_test.go`
+  - `TestListProjectsForActorScopesNonAdminAndArchived`
+  - `TestGetProjectForActorReturnsNilWhenMissing`
+  - `TestCreateProjectReturnsRecord`
+  - `TestEnsureProjectExistsReturnsExistingBeforeCreate`
+  - `TestGetUserDefaultProjectIDReturnsValueAndNil`
+  - `TestSetUserDefaultProjectIDReturnsBool`
+- Executed migrated tests one-by-one:
+  - `TestListProjectsForActorScopesNonAdminAndArchived`
+  - `TestGetProjectForActorReturnsNilWhenMissing`
+  - `TestCreateProjectReturnsRecord`
+  - `TestEnsureProjectExistsReturnsExistingBeforeCreate`
+  - `TestGetUserDefaultProjectIDReturnsValueAndNil`
+  - `TestSetUserDefaultProjectIDReturnsBool`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP13 - Chat Repository Continuation
+
+- Extended chat models for repository parity:
+  - `internal/models/chat.go`
+  - `ChatSessionAdminRecord`
+  - `ChatMessageRecord`
+  - `PinnedEngramRecord`
+  - `PinnedDocumentRecord`
+- Added chat message repository operations:
+  - `internal/repository/chat_message.go`
+  - `CreateChatMessage`
+  - `ListChatMessages`
+  - `ListSessionLinkedEngrams`
+  - `CountSessionMessagesByRole`
+  - `DeleteSessionAutosaveEngrams`
+- Added chat pinning repository operations:
+  - `internal/repository/chat_pinning.go`
+  - `PinEngramToSession`
+  - `UnpinEngramFromSession`
+  - `ListPinnedEngrams`
+  - `ListPinnedEngramSummaries`
+  - `PinDocumentToSession`
+  - `UnpinDocumentFromSession`
+  - `ListPinnedDocuments`
+- Added admin session lookup parity operation:
+  - `internal/repository/chat.go`
+  - `GetChatSessionAdminRecord`
+- Added migrated repository tests:
+  - `internal/repository/chat_message_test.go`
+  - `internal/repository/chat_pinning_test.go`
+  - `internal/repository/chat_test.go` (new `GetChatSessionAdminRecord` coverage)
+- Executed migrated tests one-by-one:
+  - `TestCreateChatMessageReturnsInsertedRecord`
+  - `TestCreateChatMessageReturnsNilWhenSessionNotVisible`
+  - `TestListChatMessagesParsesJSONAndDefaults`
+  - `TestListSessionLinkedEngramsAppliesVisibilityFilters`
+  - `TestCountSessionMessagesByRoleReturnsValue`
+  - `TestDeleteSessionAutosaveEngramsReturnsDeletedIDs`
+  - `TestDeleteSessionAutosaveEngramsSkipsQueryWhenNoIDs`
+  - `TestPinEngramToSessionReturnsPinnedRecord`
+  - `TestPinDocumentToSessionReturnsNilWhenResourceNotVisible`
+  - `TestUnpinEngramFromSessionReturnsTrueWhenRemoved`
+  - `TestUnpinDocumentFromSessionReturnsFalseWhenMissing`
+  - `TestListPinnedEngramsReturnsRows`
+  - `TestListPinnedDocumentsAppliesVisibilityFilter`
+  - `TestListPinnedEngramSummariesAppliesVisibilityFilters`
+  - `TestGetChatSessionAdminRecordReturnsRecord`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP14 - Document Repository Baseline
+
+- Added document models required by ingestion repository migration:
+  - `internal/models/document.go`
+  - `DocumentSourceType` + parser
+  - `DocumentRecord`
+  - `DocumentChunkQueryRequest`
+  - `DocumentChunkQueryResult`
+- Added document repository operations:
+  - `internal/repository/document.go`
+  - `UpsertDocumentWithChunks`
+  - `ListDocuments`
+  - `QueryDocumentChunks`
+  - helper parity for:
+    - document chunk replacement
+    - document chunk `WHERE` clause construction
+    - dense+lexical rerank
+- Added migrated document repository tests:
+  - `internal/repository/document_test.go`
+  - `TestUpsertDocumentWithChunksPersistsDocumentAndChunks`
+  - `TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch`
+  - `TestListDocumentsAppliesProjectFilter`
+  - `TestQueryDocumentChunksBuildsQueryAndReranks`
+  - `TestBuildDocumentChunkWhereDefaultsToActorScopeOnly`
+  - `TestUpsertDocumentWithChunksRejectsInvalidVisibility`
+- Executed migrated tests one-by-one:
+  - `TestUpsertDocumentWithChunksPersistsDocumentAndChunks`
+  - `TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch`
+  - `TestListDocumentsAppliesProjectFilter`
+  - `TestQueryDocumentChunksBuildsQueryAndReranks`
+  - `TestBuildDocumentChunkWhereDefaultsToActorScopeOnly`
+  - `TestUpsertDocumentWithChunksRejectsInvalidVisibility`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP15 - MCP Token Repository Baseline
+
+- Added MCP token models:
+  - `internal/models/mcp_token.go`
+  - `MCPTokenScope` + parser
+  - `MCPTokenRecord`
+  - `MCPTokenAuthContext`
+- Added MCP token repository operations:
+  - `internal/repository/mcp_token.go`
+  - `CreateMCPToken`
+  - `ListMCPTokens`
+  - `GetMCPTokenByID`
+  - `RevokeMCPToken`
+  - `TouchMCPTokenLastUsed`
+- Added migrated MCP token repository tests:
+  - `internal/repository/mcp_token_test.go`
+  - `TestCreateMCPTokenUsesGeneratedIDAndReturnsRecord`
+  - `TestCreateMCPTokenRejectsInvalidScope`
+  - `TestListMCPTokensReturnsDefaultsForNilArrays`
+  - `TestGetMCPTokenByIDReturnsNilWhenMissing`
+  - `TestRevokeMCPTokenReturnsNilWhenMissing`
+  - `TestTouchMCPTokenLastUsedUsesCurrentTimestamp`
+- Executed migrated tests one-by-one:
+  - `TestCreateMCPTokenUsesGeneratedIDAndReturnsRecord`
+  - `TestCreateMCPTokenRejectsInvalidScope`
+  - `TestListMCPTokensReturnsDefaultsForNilArrays`
+  - `TestGetMCPTokenByIDReturnsNilWhenMissing`
+  - `TestRevokeMCPTokenReturnsNilWhenMissing`
+  - `TestTouchMCPTokenLastUsedUsesCurrentTimestamp`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP16 - OAuth Repository Baseline
+
+- Added OAuth models:
+  - `internal/models/oauth.go`
+  - `OAuthClientRecord`
+  - `OAuthAuthorizationCodeRecord`
+- Added OAuth repository operations:
+  - `internal/repository/oauth.go`
+  - `CreateOAuthClient`
+  - `GetOAuthClient`
+  - `CreateOAuthAuthorizationCode`
+  - `GetOAuthAuthorizationCodeByHash`
+  - `ConsumeOAuthAuthorizationCode`
+- Added migrated OAuth repository tests:
+  - `internal/repository/oauth_test.go`
+  - `TestCreateOAuthClientReturnsCreatedRecord`
+  - `TestGetOAuthClientReturnsNilWhenMissing`
+  - `TestCreateOAuthAuthorizationCodeReturnsRecord`
+  - `TestGetOAuthAuthorizationCodeByHashReturnsRecord`
+  - `TestConsumeOAuthAuthorizationCodeReturnsNilWhenAlreadyConsumed`
+- Executed migrated tests one-by-one:
+  - `TestCreateOAuthClientReturnsCreatedRecord`
+  - `TestGetOAuthClientReturnsNilWhenMissing`
+  - `TestCreateOAuthAuthorizationCodeReturnsRecord`
+  - `TestGetOAuthAuthorizationCodeByHashReturnsRecord`
+  - `TestConsumeOAuthAuthorizationCodeReturnsNilWhenAlreadyConsumed`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP17 - Collection Repository Baseline
+
+- Added collection model:
+  - `internal/models/collection.go`
+  - `EngramCollectionRecord`
+- Added collection repository operations:
+  - `internal/repository/collection.go`
+  - `ListCollections`
+  - `GetCollection`
+  - `CreateCollection`
+  - `UpdateCollection`
+  - `SoftDeleteCollection`
+  - `AddCollectionItems`
+  - `RemoveCollectionItem`
+- Added duplicate-name error mapping:
+  - `ErrCollectionNameExists` (unique constraint parity with Python repository behavior)
+- Added migrated collection repository tests:
+  - `internal/repository/collection_test.go`
+  - `TestListCollectionsBuildsFilters`
+  - `TestGetCollectionReturnsNilWhenMissing`
+  - `TestCreateCollectionUsesGeneratedID`
+  - `TestCreateCollectionMapsDuplicateNameError`
+  - `TestUpdateCollectionReturnsNilWhenMissing`
+  - `TestSoftDeleteCollectionReturnsBool`
+  - `TestAddCollectionItemsReturnsCountAndSkipsEmpty`
+  - `TestRemoveCollectionItemReturnsBool`
+- Executed migrated tests one-by-one:
+  - `TestListCollectionsBuildsFilters`
+  - `TestGetCollectionReturnsNilWhenMissing`
+  - `TestCreateCollectionUsesGeneratedID`
+  - `TestCreateCollectionMapsDuplicateNameError`
+  - `TestUpdateCollectionReturnsNilWhenMissing`
+  - `TestSoftDeleteCollectionReturnsBool`
+  - `TestAddCollectionItemsReturnsCountAndSkipsEmpty`
+  - `TestRemoveCollectionItemReturnsBool`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP18 - Memory-Admin Session Repository Baseline
+
+- Added admin session model parity in Go:
+  - `internal/models/chat.go`
+  - `AdminChatSessionRecord`
+- Added memory-admin session repository operations:
+  - `internal/repository/admin_session.go`
+  - `ListAdminSessions`
+  - `GetAdminSession`
+  - `SoftDeleteSession`
+  - `RestoreSession`
+  - `SoftDeleteLinkedEngrams`
+- Added migrated admin session repository tests:
+  - `internal/repository/admin_session_test.go`
+  - `TestListAdminSessionsBuildsFiltersAndParsesEnums`
+  - `TestGetAdminSessionReturnsNilWhenMissing`
+  - `TestSoftDeleteSessionReturnsRecord`
+  - `TestRestoreSessionReturnsBool`
+  - `TestSoftDeleteLinkedEngramsReturnsCount`
+- Executed migrated tests one-by-one:
+  - `TestListAdminSessionsBuildsFiltersAndParsesEnums`
+  - `TestGetAdminSessionReturnsNilWhenMissing`
+  - `TestSoftDeleteSessionReturnsRecord`
+  - `TestRestoreSessionReturnsBool`
+  - `TestSoftDeleteLinkedEngramsReturnsCount`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP19 - Memory-Admin Engram Repository Baseline
+
+- Added admin engram model parity in Go:
+  - `internal/models/engram.go`
+  - `AdminEngramSourceInput`
+  - `AdminEngramSourceRecord`
+  - `AdminEngramRecord`
+- Added memory-admin engram repository operations:
+  - `internal/repository/admin_engram.go`
+  - `ListAdminEngrams`
+  - `ListAdminEngramSources`
+  - `GetAdminEngram`
+  - `MoveAdminEngramProject`
+  - `SoftDeleteEngram`
+  - `RestoreEngram`
+- Added migrated admin engram repository tests:
+  - `internal/repository/admin_engram_test.go`
+  - `TestListAdminEngramsBuildsFiltersAndSearch`
+  - `TestListAdminEngramSourcesReturnsRows`
+  - `TestGetAdminEngramReturnsNilWhenMissing`
+  - `TestGetAdminEngramHydratesSources`
+  - `TestMoveAdminEngramProjectReturnsUpdatedRecordAndRunsDetachQuery`
+  - `TestMoveAdminEngramProjectReturnsNilWhenNotFound`
+  - `TestSoftDeleteEngramReturnsBool`
+  - `TestRestoreEngramReturnsBool`
+- Executed migrated tests one-by-one:
+  - `TestListAdminEngramsBuildsFiltersAndSearch`
+  - `TestListAdminEngramSourcesReturnsRows`
+  - `TestGetAdminEngramReturnsNilWhenMissing`
+  - `TestGetAdminEngramHydratesSources`
+  - `TestMoveAdminEngramProjectReturnsUpdatedRecordAndRunsDetachQuery`
+  - `TestMoveAdminEngramProjectReturnsNilWhenNotFound`
+  - `TestSoftDeleteEngramReturnsBool`
+  - `TestRestoreEngramReturnsBool`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP20 - Memory-Admin Engram Update/Source Replacement Parity
+
+- Added memory-admin engram update repository operations:
+  - `internal/repository/admin_engram_update.go`
+  - `UpdateAdminEngram`
+  - `replaceAdminEngramSources`
+  - helper parity for:
+    - update-field merge defaults
+    - retrieval text composition
+    - engram JSON payload refresh
+    - embedding + vector literal persistence
+- Added migrated update-focused repository tests:
+  - `internal/repository/admin_engram_update_test.go`
+  - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+  - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+  - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+  - `TestReplaceAdminEngramSourcesReplacesRows`
+  - `TestUpdateAdminEngramReturnsNilWhenMissing`
+  - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+- Executed migrated tests one-by-one:
+  - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+  - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+  - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+  - `TestReplaceAdminEngramSourcesReplacesRows`
+  - `TestUpdateAdminEngramReturnsNilWhenMissing`
+  - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP21 - Memory-Admin Service Baseline
+
+- Added memory-admin service package:
+  - `internal/admin/service.go`
+  - service orchestration for session, engram, and collection operations
+  - stale-update conflict checks for engram/collection updates
+  - project-resolution integration contract for write-path calls
+  - typed service-level request/response and error contracts
+- Added migrated memory-admin service tests:
+  - `internal/admin/service_test.go`
+  - `TestListSessionsForwardsSharedRequestObject`
+  - `TestListCollectionsForwardsSharedRequestObject`
+  - `TestListEngramsUsesRequestObject`
+  - `TestUpdateCollectionRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramUsesRepositoryRequestObject`
+- Executed migrated tests one-by-one:
+  - `TestListSessionsForwardsSharedRequestObject`
+  - `TestListCollectionsForwardsSharedRequestObject`
+  - `TestListEngramsUsesRequestObject`
+  - `TestUpdateCollectionRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramUsesRepositoryRequestObject`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/admin/service.go` → 8.54
+  - `internal/admin/service_test.go` → 9.38
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP22 - Memory-Admin API Route Baseline
+
+- Added memory-admin HTTP route module:
+  - `internal/api/admin_memory.go`
+  - Chi route parity for:
+    - `/api/v1/admin/memory/sessions*`
+    - `/api/v1/admin/memory/engrams*`
+    - `/api/v1/admin/memory/collections*`
+  - request parsing for query/body payloads, actor-resolution hook, and error/status mapping parity.
+- Added migrated API handler tests:
+  - `internal/api/admin_memory_test.go`
+  - `TestMountMemoryAdminRoutesListSessionsForwardsQueryAndActorCheck`
+  - `TestMountMemoryAdminRoutesDeleteSessionUsesActorAndPayload`
+  - `TestMountMemoryAdminRoutesListEngramsUsesRequestObject`
+  - `TestMountMemoryAdminRoutesUpdateEngramMapsStaleTo409`
+  - `TestMountMemoryAdminRoutesCreateCollectionReturns201`
+  - `TestMountMemoryAdminRoutesReturnsForbiddenWhenActorCheckFails`
+- Executed migrated tests one-by-one:
+  - `TestMountMemoryAdminRoutesListSessionsForwardsQueryAndActorCheck`
+  - `TestMountMemoryAdminRoutesDeleteSessionUsesActorAndPayload`
+  - `TestMountMemoryAdminRoutesListEngramsUsesRequestObject`
+  - `TestMountMemoryAdminRoutesUpdateEngramMapsStaleTo409`
+  - `TestMountMemoryAdminRoutesCreateCollectionReturns201`
+  - `TestMountMemoryAdminRoutesReturnsForbiddenWhenActorCheckFails`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/admin/service.go` → 8.54
+  - `internal/admin/service_test.go` → 9.38
+  - `internal/api/admin_memory.go` → 6.88
+  - `internal/api/admin_memory_test.go` → 9.68
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP23 - API Integration Baseline
+
+- Added dependency-aware API router composition for memory-admin route mounting:
+  - `internal/api/router.go`
+  - Introduced `RouterDependencies` and `NewRouterWithDependencies`.
+  - Kept `NewRouter(settings)` backward-compatible while allowing explicit dependency injection.
+  - Mounted memory-admin routes only when both `MemoryAdminService` and `RequireAdminActor` are provided.
+- Added migrated router composition tests:
+  - `internal/api/router_test.go`
+  - `TestMemoryAdminRoutesNotMountedWithoutDependencies`
+  - `TestMemoryAdminRoutesMountedWithDependencies`
+- Executed migrated tests one-by-one:
+  - `TestMemoryAdminRoutesNotMountedWithoutDependencies`
+  - `TestMemoryAdminRoutesMountedWithDependencies`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/admin/service.go` → 8.54
+  - `internal/admin/service_test.go` → 9.38
+  - `internal/api/admin_memory.go` → 6.88
+  - `internal/api/admin_memory_test.go` → 9.68
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+
+### CP24 - Runtime Integration Baseline
+
+- Added runtime composition wiring for memory-admin routes:
+  - `cmd/api/main.go`
+  - DB pool initialization + ping on startup.
+  - `NewRouterWithDependencies` wiring with DB-backed `admin.Service`.
+  - non-production route enablement with migration-time actor bridge; production keeps routes disabled pending auth/session migration.
+- Added migration-time actor resolver bridge:
+  - `internal/api/admin_actor.go`
+  - parses `X-Engram-Actor-User-ID` + `X-Engram-Actor-Role`, allowing only `admin`.
+- Added migration-time project resolver bridge:
+  - `internal/admin/project_resolver.go`
+  - `PassthroughProjectResolver` validates/returns explicit project IDs for admin write flows.
+- Added/updated migrated tests:
+  - `internal/api/admin_actor_test.go`
+    - `TestRequireAdminActorFromHeadersReturnsActor`
+    - `TestRequireAdminActorFromHeadersRejectsMissingHeaders`
+    - `TestRequireAdminActorFromHeadersRejectsInvalidUserID`
+    - `TestRequireAdminActorFromHeadersRejectsNonAdminRole`
+  - `internal/admin/project_resolver_test.go`
+    - `TestPassthroughProjectResolverReturnsTrimmedProjectID`
+    - `TestPassthroughProjectResolverRejectsEmptyProjectID`
+  - `internal/api/admin_memory_test.go`
+    - `TestMountMemoryAdminRoutesCreateCollectionMapsMissingProjectTo400`
+- Executed migrated tests one-by-one:
+  - `TestPassthroughProjectResolverReturnsTrimmedProjectID`
+  - `TestPassthroughProjectResolverRejectsEmptyProjectID`
+  - `TestRequireAdminActorFromHeadersReturnsActor`
+  - `TestRequireAdminActorFromHeadersRejectsMissingHeaders`
+  - `TestRequireAdminActorFromHeadersRejectsInvalidUserID`
+  - `TestRequireAdminActorFromHeadersRejectsNonAdminRole`
+  - `TestMountMemoryAdminRoutesCreateCollectionMapsMissingProjectTo400`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/admin/project_resolver.go` → 10.0
+  - `internal/admin/project_resolver_test.go` → 10.0
+  - `internal/admin/service.go` → 8.54
+  - `internal/admin/service_test.go` → 9.38
+  - `internal/api/admin_actor.go` → 10.0
+  - `internal/api/admin_actor_test.go` → 10.0
+  - `internal/api/admin_memory.go` → 6.88
+  - `internal/api/admin_memory_test.go` → 9.68
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+- Pre-commit safeguard:
+  - `quality_gates=passed` (stable complexity advisory in `internal/api/admin_memory.go`; no gate failure).
+
+### CP25 - Runtime Hardening Baseline
+
+- Hardened admin actor resolution to context-first flow:
+  - `internal/api/admin_actor.go`
+  - added `WithAdminActor`, `AdminActorFromContext`, and `RequireAdminActorFromContext`.
+  - retained header parsing (`RequireAdminActorFromHeaders`) only as a migration adapter.
+  - added `AdminActorHeaderBridge` middleware to inject context actor when migration-time headers are present.
+- Updated runtime wiring to use context-based actor resolution:
+  - `cmd/api/main.go`
+  - `RouterDependencies.RequireAdminActor` now uses `RequireAdminActorFromContext`.
+  - non-production keeps a temporary `AdminActorHeaderBridge` adapter; production now expects authenticated actor context.
+- Expanded migrated tests for context-first actor behavior:
+  - `internal/api/admin_actor_test.go`
+  - `TestAdminActorResolversReturnActor`
+  - `TestRequireAdminActorFromHeadersRejectsMissingHeaders`
+  - `TestRequireAdminActorFromHeadersRejectsInvalidUserID`
+  - `TestRequireAdminActorFromHeadersRejectsNonAdminRole`
+  - `TestRequireAdminActorFromContextRejectsMissingActor`
+  - `TestRequireAdminActorFromContextRejectsNonAdminRole`
+  - `TestAdminActorHeaderBridgeInjectsContextActor`
+  - `TestAdminActorHeaderBridgeLeavesRequestUnauthenticatedWhenHeadersMissing`
+- Executed migrated tests one-by-one:
+  - `TestAdminActorResolversReturnActor`
+  - `TestRequireAdminActorFromHeadersRejectsMissingHeaders`
+  - `TestRequireAdminActorFromHeadersRejectsInvalidUserID`
+  - `TestRequireAdminActorFromHeadersRejectsNonAdminRole`
+  - `TestRequireAdminActorFromContextRejectsMissingActor`
+  - `TestRequireAdminActorFromContextRejectsNonAdminRole`
+  - `TestAdminActorHeaderBridgeInjectsContextActor`
+  - `TestAdminActorHeaderBridgeLeavesRequestUnauthenticatedWhenHeadersMissing`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/admin/project_resolver.go` → 10.0
+  - `internal/admin/project_resolver_test.go` → 10.0
+  - `internal/admin/service.go` → 8.54
+  - `internal/admin/service_test.go` → 9.38
+  - `internal/api/admin_actor.go` → 10.0
+  - `internal/api/admin_actor_test.go` → 10.0
+  - `internal/api/admin_memory.go` → 6.88
+  - `internal/api/admin_memory_test.go` → 9.68
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+- Pre-commit safeguard:
+  - `quality_gates=passed`.
+
+### CP26 - Auth/Session Integration Baseline
+
+- Added canonical Go session primitives:
+  - `internal/auth/session.go`
+  - signed session cookie encoder/decoder with `SessionManager` (`session` cookie default), `SessionState`, and `SessionUser`.
+- Added session middleware for actor context hydration:
+  - `internal/api/session_actor_middleware.go`
+  - decodes session cookie, resolves canonical user record from DB, and injects `AdminActor` into request context.
+- Updated actor bridge behavior:
+  - `internal/api/admin_actor.go`
+  - header bridge now preserves an existing context actor instead of overriding it.
+- Updated runtime composition to consume session middleware:
+  - `cmd/api/main.go`
+  - added session manager wiring + DB-backed lookup for `GetUserAuthRecordByID`.
+  - non-production retains temporary header bridge as fallback adapter only.
+- Added/updated migrated tests:
+  - `internal/auth/session_test.go`
+    - `TestSessionManagerEncodeDecodeRoundTrip`
+    - `TestSessionManagerDecodeRejectsTamperedToken`
+    - `TestSessionManagerDecodeRequestReadsCookie`
+    - `TestNewSessionManagerRejectsEmptySecret`
+  - `internal/api/session_actor_middleware_test.go`
+    - `TestSessionActorMiddlewareInjectsActorFromSessionCookie`
+    - `TestSessionActorMiddlewareSkipsInactiveUsers`
+    - `TestSessionActorMiddlewareIgnoresInvalidSessionCookie`
+  - `internal/api/admin_actor_test.go`
+    - `TestAdminActorHeaderBridgeResolvesActor`
+    - `TestAdminActorHeaderBridgeLeavesRequestUnauthenticatedWhenHeadersMissing`
+- Executed migrated tests one-by-one:
+  - `TestSessionManagerEncodeDecodeRoundTrip`
+  - `TestSessionManagerDecodeRejectsTamperedToken`
+  - `TestSessionManagerDecodeRequestReadsCookie`
+  - `TestNewSessionManagerRejectsEmptySecret`
+  - `TestSessionActorMiddlewareInjectsActorFromSessionCookie`
+  - `TestSessionActorMiddlewareSkipsInactiveUsers`
+  - `TestSessionActorMiddlewareIgnoresInvalidSessionCookie`
+  - `TestAdminActorHeaderBridgeResolvesActor`
+  - `TestAdminActorHeaderBridgeLeavesRequestUnauthenticatedWhenHeadersMissing`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/admin/project_resolver.go` → 10.0
+  - `internal/admin/project_resolver_test.go` → 10.0
+  - `internal/admin/service.go` → 8.54
+  - `internal/admin/service_test.go` → 9.38
+  - `internal/api/admin_actor.go` → 10.0
+  - `internal/api/admin_actor_test.go` → 10.0
+  - `internal/api/admin_memory.go` → 6.88
+  - `internal/api/admin_memory_test.go` → 9.68
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/api/session_actor_middleware.go` → 9.38
+  - `internal/api/session_actor_middleware_test.go` → 9.68
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/auth/session.go` → 9.38
+  - `internal/auth/session_test.go` → 10.0
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+- Pre-commit safeguard:
+  - `quality_gates=passed`.
+
+### CP27 - Auth/Session Route Baseline
+
+- Added session-auth route module:
+  - `internal/api/session_auth.go`
+  - endpoints:
+    - `GET /api/v1/session/csrf`
+    - `POST /api/v1/session/login`
+    - `POST /api/v1/session/logout`
+    - `GET /api/v1/me`
+  - login flow uses signed cookie session state + CSRF verification.
+  - `/api/v1/me` uses middleware-populated actor context and canonical DB lookup.
+- Updated router composition to mount session-auth routes when dependencies are configured:
+  - `internal/api/router.go`
+  - `RouterDependencies` now includes `SessionAuth`.
+- Updated runtime wiring for canonical session-auth path:
+  - `cmd/api/main.go`
+  - injects `SessionAuthDependencies` (session manager, user lookups, password verification, CSRF token generator).
+  - removed runtime dependency on temporary header bridge; actor context now comes from session middleware path.
+- Added migrated tests:
+  - `internal/api/session_auth_test.go`
+    - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+    - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+    - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+    - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+  - `internal/api/router_test.go`
+    - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+    - `TestSessionAuthRoutesMountedWithDependencies`
+- Executed migrated tests one-by-one:
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+- Ran file-level CodeScene checks for all Go migration files before commit:
+  - `cmd/api/main.go` → 10.0
+  - `internal/admin/project_resolver.go` → 10.0
+  - `internal/admin/project_resolver_test.go` → 10.0
+  - `internal/admin/service.go` → 8.54
+  - `internal/admin/service_test.go` → 9.38
+  - `internal/api/admin_actor.go` → 10.0
+  - `internal/api/admin_actor_test.go` → 10.0
+  - `internal/api/admin_memory.go` → 6.88
+  - `internal/api/admin_memory_test.go` → 9.68
+  - `internal/api/router.go` → 10.0
+  - `internal/api/router_test.go` → 10.0
+  - `internal/api/session_actor_middleware.go` → 9.38
+  - `internal/api/session_actor_middleware_test.go` → 9.68
+  - `internal/api/session_auth.go` → 8.15
+  - `internal/api/session_auth_test.go` → 10.0
+  - `internal/auth/password.go` → 10.0
+  - `internal/auth/password_test.go` → 9.68
+  - `internal/auth/session.go` → 9.38
+  - `internal/auth/session_test.go` → 10.0
+  - `internal/config/config.go` → 9.68
+  - `internal/config/config_test.go` → 10.0
+  - `internal/db/db.go` → 10.0
+  - `internal/db/db_test.go` → 9.61
+  - `internal/embeddings/errors.go` → 10.0
+  - `internal/embeddings/local.go` → 10.0
+  - `internal/embeddings/local_test.go` → 9.68
+  - `internal/embeddings/service.go` → 9.09
+  - `internal/embeddings/service_test.go` → 10.0
+  - `internal/models/chat.go` → 10.0
+  - `internal/models/collection.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/document.go` → 10.0
+  - `internal/models/engram.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/mcp_token.go` → 10.0
+  - `internal/models/oauth.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/project.go` → N/A (struct-only file; score unavailable)
+  - `internal/models/user.go` → 10.0
+  - `internal/repository/admin_engram.go` → 9.68
+  - `internal/repository/admin_engram_test.go` → 9.38
+  - `internal/repository/admin_engram_update.go` → 9.61
+  - `internal/repository/admin_engram_update_test.go` → 9.25
+  - `internal/repository/admin_session.go` → 9.68
+  - `internal/repository/admin_session_test.go` → 9.68
+  - `internal/repository/chat.go` → 9.02
+  - `internal/repository/chat_message.go` → 10.0
+  - `internal/repository/chat_message_test.go` → 10.0
+  - `internal/repository/chat_pinning.go` → 8.81
+  - `internal/repository/chat_pinning_test.go` → 9.38
+  - `internal/repository/chat_test.go` → 9.09
+  - `internal/repository/collection.go` → 9.68
+  - `internal/repository/collection_test.go` → 9.09
+  - `internal/repository/document.go` → 8.81
+  - `internal/repository/document_test.go` → 8.72
+  - `internal/repository/engram.go` → 9.68
+  - `internal/repository/engram_helpers_test.go` → 10.0
+  - `internal/repository/engram_rehydration.go` → 9.68
+  - `internal/repository/engram_rehydration_test.go` → 10.0
+  - `internal/repository/engram_repository_test.go` → 10.0
+  - `internal/repository/engram_store.go` → 10.0
+  - `internal/repository/engram_unit_test.go` → 10.0
+  - `internal/repository/engram_write.go` → 10.0
+  - `internal/repository/engram_write_test.go` → 9.26
+  - `internal/repository/mcp_token.go` → 10.0
+  - `internal/repository/mcp_token_test.go` → 9.68
+  - `internal/repository/oauth.go` → 9.38
+  - `internal/repository/oauth_test.go` → 9.38
+  - `internal/repository/project.go` → 10.0
+  - `internal/repository/project_test.go` → 10.0
+  - `internal/repository/user.go` → 9.38
+  - `internal/repository/user_test.go` → 10.0
+- Pre-commit safeguard:
+  - `quality_gates=passed`.
+
+### CP28 - Auth/Session Hardening Baseline
+
+- Hardened session token lifecycle:
+  - `internal/auth/session.go`
+  - added `IssuedAt` to `SessionState`.
+  - added manager options (`CookieName`, `TTL`, `Now`) via `NewSessionManagerWithOptions`.
+  - default manager constructor now uses a 24-hour TTL baseline.
+  - decode now rejects missing/invalid/expired issued-at values.
+- Hardened session-auth cookie handling and route maintainability:
+  - `internal/api/session_auth.go`
+  - cookie write path now sets `Secure`, `MaxAge`, and `Expires` from runtime/session TTL settings.
+  - logout clear-cookie path now preserves secure flag parity.
+  - extracted login/logout/csrf/me route handlers from `MountSessionAuthRoutes` to clear complexity gate violations.
+- Updated runtime wiring for environment-aware secure cookies:
+  - `cmd/api/main.go`
+  - session-auth deps now set `CookieSecure` in production mode.
+- Added/updated migrated tests:
+  - `internal/auth/session_test.go`
+    - `TestSessionManagerEncodeDecodeRoundTrip` validates `IssuedAt` population.
+    - `TestSessionManagerDecodeRejectsExpiredToken` validates TTL expiry behavior.
+  - `internal/api/session_auth_test.go`
+    - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+    - strengthened CSRF cookie assertions for positive `MaxAge`.
+- Executed migrated tests one-by-one:
+  - `TestSessionManagerEncodeDecodeRoundTrip`
+  - `TestSessionManagerDecodeRejectsExpiredToken`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - all `.go` files in the repository were scored.
+  - struct-only models with unavailable score were explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - changed-file score highlights:
+    - `internal/api/session_auth.go` -> `8.28`
+    - `internal/api/session_auth_test.go` -> `10.0`
+    - `internal/auth/session.go` -> `9.38`
+    - `internal/auth/session_test.go` -> `10.0`
+    - `cmd/api/main.go` -> `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - notes: `MountSessionAuthRoutes` complex-method gate was fixed via handler extraction; no blocking findings remained.
+
+### CP29 - UI/Login Parity Baseline
+
+- Added migration UI auth routes:
+  - `internal/api/session_ui.go`
+  - `GET /` redirects to `/login` when unauthenticated and `/ui` when authenticated.
+  - `GET /login` renders form-based login page with hidden `csrf_token` and optional `next` sanitization.
+  - `POST /login` authenticates using canonical session dependencies and redirects with refreshed session state.
+  - `POST /logout` validates form CSRF token and clears session cookie.
+  - `GET /ui` serves authenticated dashboard with logout form CSRF token.
+- Updated router composition to mount UI/session routes with session auth dependencies:
+  - `internal/api/router.go`
+- Refactored shared session helpers for UI/API cohesion:
+  - `internal/api/session_auth.go`
+  - extracted reusable CSRF session-state helper and authenticated-session state builder.
+- Added migrated tests:
+  - `internal/api/session_ui_test.go`
+    - `TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated`
+    - `TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated`
+    - `TestMountSessionUIRoutesLoginRejectsInvalidCredentials`
+    - `TestMountSessionUIRoutesLoginRejectsInvalidCSRF`
+    - `TestMountSessionUIRoutesLoginAndLogoutWorkflow`
+    - `TestMountSessionUIRoutesLoginRedirectPathSanitization`
+    - `TestMountSessionUIRoutesLogoutRejectsInvalidCSRF`
+  - `internal/api/router_test.go`
+    - session-auth route mount tests now also assert `/login` route availability parity.
+- Executed migrated tests one-by-one:
+  - `TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCredentials`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginAndLogoutWorkflow`
+  - `TestMountSessionUIRoutesLoginRedirectPathSanitization`
+  - `TestMountSessionUIRoutesLogoutRejectsInvalidCSRF`
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+  - `TestSessionManagerEncodeDecodeRoundTrip`
+  - `TestSessionManagerDecodeRejectsExpiredToken`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - all `.go` files in the repository were scored.
+  - struct-only models with unavailable score were explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - changed-file score highlights:
+    - `internal/api/router.go` -> `10.0`
+    - `internal/api/router_test.go` -> `10.0`
+    - `internal/api/session_auth.go` -> `8.28`
+    - `internal/api/session_ui.go` -> `8.81`
+    - `internal/api/session_ui_test.go` -> `8.81`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP30 - Login Guard + Audit Parity Baseline
+
+- Added login/rate-limit primitives:
+  - `internal/auth/ratelimit.go`
+  - `LoginAttemptGuard` with failure-window pruning, lockout expiry checks, and success-reset semantics.
+  - `RequestRateLimiter` with fixed-block and window-bound blocking modes.
+- Added audit logging primitives:
+  - `internal/audit/audit.go`
+  - JSONL request event logger with payload sanitization/truncation behavior and configurable stdout mirroring.
+- Added/updated tests:
+  - `internal/auth/ratelimit_test.go`
+    - `TestRegisterFailureLocksAfterMaxAttempts`
+    - `TestCheckUnlocksAfterLockoutExpiry`
+    - `TestFailureWindowDropsStaleAttempts`
+    - `TestRegisterSuccessClearsPriorFailures`
+    - `TestRequestRateLimiterThresholdBehavior`
+  - `internal/audit/audit_test.go`
+    - `TestLogRequestEventWritesJSONLine`
+    - `TestLogRequestEventTruncatesOversizedPayload`
+  - `internal/api/session_ui_test.go`
+    - added `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+    - added `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+- Wired runtime/session dependencies:
+  - `cmd/api/main.go`
+  - injects login attempt guard using config values:
+    - `LOGIN_RATE_LIMIT_MAX_ATTEMPTS`
+    - `LOGIN_RATE_LIMIT_WINDOW_SECONDS`
+    - `LOGIN_LOCKOUT_SECONDS`
+  - injects audit logger using:
+    - `AUDIT_LOG_PATH`
+    - `AUDIT_LOG_MAX_EVENT_BYTES`
+    - `AUDIT_LOG_STDOUT_ENABLED`
+- Updated session UI/auth flow:
+  - `internal/api/session_auth.go`
+    - added session auth dependency hooks for login guard + audit logger.
+    - refactored audit dispatch helper to satisfy CodeScene argument-count gate.
+  - `internal/api/session_ui.go`
+    - login preconditions now enforce CSRF + login-attempt guard checks.
+    - login flow now records success/failure/rate-limit/csrf audit events.
+    - logout flow now records success/csrf-rejected audit events.
+    - lockout response parity: `429` with `Too many login attempts...` detail.
+- Executed migrated tests one-by-one:
+  - `TestRegisterFailureLocksAfterMaxAttempts`
+  - `TestCheckUnlocksAfterLockoutExpiry`
+  - `TestFailureWindowDropsStaleAttempts`
+  - `TestRegisterSuccessClearsPriorFailures`
+  - `TestRequestRateLimiterThresholdBehavior`
+  - `TestLogRequestEventWritesJSONLine`
+  - `TestLogRequestEventTruncatesOversizedPayload`
+  - `TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCredentials`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+  - `TestMountSessionUIRoutesLoginAndLogoutWorkflow`
+  - `TestMountSessionUIRoutesLoginRedirectPathSanitization`
+  - `TestMountSessionUIRoutesLogoutRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+  - `TestSessionManagerEncodeDecodeRoundTrip`
+  - `TestSessionManagerDecodeRejectsExpiredToken`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - scored all `.go` files in repository (73 files at this checkpoint).
+  - struct-only models explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - changed-file score highlights:
+    - `internal/auth/ratelimit.go` -> `10.0`
+    - `internal/auth/ratelimit_test.go` -> `9.61`
+    - `internal/audit/audit.go` -> `9.68`
+    - `internal/audit/audit_test.go` -> `10.0`
+    - `internal/api/session_ui.go` -> `8.81`
+    - `internal/api/session_auth.go` -> `8.28`
+    - `cmd/api/main.go` -> `10.0`
+- Pre-commit safeguard:
+  - first run failed on `handleLoginSubmit` method complexity and `logAuditEventRequest` argument count.
+  - applied local refactor and reran safeguards.
+  - final result: `quality_gates=passed`
+
+### CP31 - Distributed Limiter Parity Baseline
+
+- Added distributed limiter state persistence for Go auth limiters:
+  - `internal/auth/ratelimit_store_pgx.go`
+  - new `PGXRateLimitStore` backed by `rate_limit_state` with row-lock mutation semantics.
+- Refactored auth limiter internals for maintainability while preserving CP30 behavior:
+  - split limiter code into focused modules:
+    - `internal/auth/ratelimit.go` (shared limiter state/contracts/helpers)
+    - `internal/auth/login_guard.go` (`LoginAttemptGuard`)
+    - `internal/auth/request_limiter.go` (`RequestRateLimiter`)
+  - added options-based constructors and explicit distributed-store enablement methods:
+    - `SetDistributedStore(...)` for login and request limiters.
+  - retained local in-memory fallback semantics when distributed store is unavailable.
+- Wired runtime login guard to distributed store:
+  - `cmd/api/main.go`
+  - creates `auth.NewPGXRateLimitStore(pool)` and injects it into login guard configuration.
+- Expanded migrated tests:
+  - `internal/auth/ratelimit_test.go`
+  - added distributed-state coverage:
+    - `TestLoginAttemptGuardDistributedStateSharedAcrossInstances`
+    - `TestLoginAttemptGuardFallsBackToLocalStateWhenDistributedStoreFails`
+    - `TestRequestRateLimiterDistributedStateSharedAcrossInstances`
+    - `TestRequestRateLimiterFallsBackToLocalStateWhenDistributedStoreFails`
+  - refactored threshold test helpers to satisfy CodeScene complexity gate while preserving assertions.
+- Executed migrated tests one-by-one:
+  - `TestRegisterFailureLocksAfterMaxAttempts`
+  - `TestCheckUnlocksAfterLockoutExpiry`
+  - `TestFailureWindowDropsStaleAttempts`
+  - `TestRegisterSuccessClearsPriorFailures`
+  - `TestLoginAttemptGuardDistributedStateSharedAcrossInstances`
+  - `TestLoginAttemptGuardFallsBackToLocalStateWhenDistributedStoreFails`
+  - `TestRequestRateLimiterThresholdBehavior`
+  - `TestRequestRateLimiterDistributedStateSharedAcrossInstances`
+  - `TestRequestRateLimiterFallsBackToLocalStateWhenDistributedStoreFails`
+  - `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+  - `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - scored all `.go` files in repository (78 files at this checkpoint).
+  - struct-only models explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - checkpoint-touched file scores (all above 9.5):
+    - `cmd/api/main.go` -> `10.0`
+    - `internal/auth/ratelimit.go` -> `10.0`
+    - `internal/auth/login_guard.go` -> `9.68`
+    - `internal/auth/request_limiter.go` -> `10.0`
+    - `internal/auth/ratelimit_store_pgx.go` -> `10.0`
+    - `internal/auth/ratelimit_test.go` -> `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: one non-blocking test helper argument-count warning in `internal/auth/ratelimit_test.go`
+
+### CP32 - UI/Admin Auth Integration Hardening
+
+- Added UI admin route with role gating:
+  - `internal/api/session_ui.go`
+  - `GET /ui/admin` now:
+    - redirects unauthenticated users to `/login`
+    - returns `403` (`Admin role required`) for non-admin authenticated users
+    - serves admin migration page for admin users
+- Hardened and simplified session auth/UI helpers:
+  - `internal/api/session_auth.go`
+    - consolidated CSRF validation logic for required vs optional flows
+    - extracted auth-record checks to reduce conditional complexity
+  - `internal/api/session_ui.go`
+    - added shared session+csrf resolution helper for UI routes
+    - reduced argument-heavy helpers via request structs
+    - encapsulated auth/session conditionals for clarity
+- Expanded migrated tests:
+  - `internal/api/session_ui_test.go`
+    - added:
+      - `TestMountSessionUIRoutesAdminRedirectsToLoginWhenUnauthenticated`
+      - `TestMountSessionUIRoutesAdminRejectsNonAdminRole`
+      - `TestMountSessionUIRoutesAdminAllowsAdminRole`
+    - refactored test helpers to reduce complexity and duplication while preserving assertions
+  - `internal/api/router_test.go`
+    - updated route composition assertions for `/ui/admin` mount behavior
+- Executed migrated tests one-by-one:
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesAdminRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCredentials`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+  - `TestMountSessionUIRoutesLoginAndLogoutWorkflow`
+  - `TestMountSessionUIRoutesAdminRejectsNonAdminRole`
+  - `TestMountSessionUIRoutesAdminAllowsAdminRole`
+  - `TestMountSessionUIRoutesLoginRedirectPathSanitization`
+  - `TestMountSessionUIRoutesLogoutRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - scored all `.go` files in repository (78 files at this checkpoint).
+  - struct-only models explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - checkpoint-touched file scores (all above 9.5):
+    - `internal/api/session_ui.go` -> `10.0`
+    - `internal/api/session_auth.go` -> `10.0`
+    - `internal/api/session_ui_test.go` -> `10.0`
+    - `internal/api/router_test.go` -> `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP33 - Auth/Session Continuation
+
+- Added role-aware user-management API parity on session-auth routes:
+  - `internal/api/session_auth.go`
+  - `internal/api/session_users.go`
+  - mounted:
+    - `GET /api/v1/users` (admin-only list with `limit`/`offset` parity bounds)
+    - `POST /api/v1/users` (admin-only create with username/password/role/is_active validation + conflict mapping)
+    - `PATCH /api/v1/users/{user_id}` (admin-only update with partial field semantics + empty-update guard)
+  - preserved `/api/v1/me` behavior while reusing shared authenticated actor resolution.
+  - added auth audit event parity for user-management flows:
+    - `user_created`
+    - `user_create_conflict`
+    - `user_updated`
+    - `user_update_missing`
+- Wired runtime dependencies for new routes:
+  - `cmd/api/main.go`
+  - injected repository-backed list/create/update user callbacks and password hashing dependency into `SessionAuthDependencies`.
+- Expanded migrated tests:
+  - `internal/api/session_users_test.go` (new)
+    - `TestMountSessionAuthRoutesAdminCanManageUsers`
+    - `TestMountSessionAuthRoutesNonAdminCannotAccessAdminRoutes`
+    - `TestMountSessionAuthRoutesCreateUserReturnsConflictForDuplicateUsername`
+    - `TestMountSessionAuthRoutesUpdateUserRequiresFields`
+  - `internal/api/router_test.go`
+    - updated session route mount assertions for `/api/v1/users` with and without session-auth dependencies.
+- Additional code-health uplift (non-checkpoint file improvement during this slice):
+  - `internal/api/session_actor_middleware.go`
+    - refactored actor resolution path into focused helpers to reduce complexity.
+  - `cmd/api/main.go`
+    - refactored runtime auth/session dependency construction into smaller helpers to satisfy pre-commit quality gate.
+- Executed migrated tests one-by-one:
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesAdminRedirectsToLoginWhenUnauthenticated`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCredentials`
+  - `TestMountSessionUIRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginRateLimitAfterRepeatedFailures`
+  - `TestMountSessionUIRoutesLoginAndLogoutWorkflow`
+  - `TestMountSessionUIRoutesAdminRejectsNonAdminRole`
+  - `TestMountSessionUIRoutesAdminAllowsAdminRole`
+  - `TestMountSessionUIRoutesLoginRedirectPathSanitization`
+  - `TestMountSessionUIRoutesLogoutRejectsInvalidCSRF`
+  - `TestMountSessionUIRoutesLoginFailureWritesAuditLog`
+  - `TestMountSessionAuthRoutesCSRFIssuesTokenAndCookie`
+  - `TestMountSessionAuthRoutesCSRFCookieHonorsSecureFlag`
+  - `TestMountSessionAuthRoutesLoginSetsSessionCookie`
+  - `TestMountSessionAuthRoutesLoginRejectsInvalidCSRF`
+  - `TestMountSessionAuthRoutesMeUsesSessionActorMiddleware`
+  - `TestSessionActorMiddlewareInjectsActorFromSessionCookie`
+  - `TestSessionActorMiddlewareSkipsInactiveUsers`
+  - `TestSessionActorMiddlewareIgnoresInvalidSessionCookie`
+  - `TestMountSessionAuthRoutesAdminCanManageUsers`
+  - `TestMountSessionAuthRoutesNonAdminCannotAccessAdminRoutes`
+  - `TestMountSessionAuthRoutesCreateUserReturnsConflictForDuplicateUsername`
+  - `TestMountSessionAuthRoutesUpdateUserRequiresFields`
+- Full Go verification:
+  - `go test ./...` passed.
+- Ran file-level CodeScene checks for all Go files before commit:
+  - scored all `.go` files in repository (79 files at this checkpoint).
+  - struct-only models explicitly reviewed:
+    - `internal/models/oauth.go`
+    - `internal/models/project.go`
+    - `internal/models/collection.go`
+    - `internal/models/engram.go`
+    - `code_health_review` returned `score=null` and no findings.
+  - CP33-touched and uplifted file scores (all above 9.5):
+    - `cmd/api/main.go` -> `10.0`
+    - `internal/api/session_auth.go` -> `10.0`
+    - `internal/api/session_users.go` -> `10.0`
+    - `internal/api/session_users_test.go` -> `9.68`
+    - `internal/api/session_actor_middleware.go` -> `9.68`
+    - `internal/api/router_test.go` -> `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP34 - Session Engram Route Parity + Code-Health Gate
+
+- Added authenticated engram API parity on session-auth routes:
+  - `internal/api/session_auth.go`
+  - `internal/api/session_engrams.go` (new)
+  - mounted:
+    - `POST /api/v1/engrams`
+    - `GET /api/v1/engrams`
+    - `POST /api/v1/engrams/query`
+    - `GET /api/v1/engrams/{engram_id}/sources`
+    - `GET /api/v1/engrams/{engram_id}/rehydrate`
+- Wired runtime dependencies for engram session routes:
+  - `cmd/api/main.go`
+  - added repository-backed dependencies for create/list/query/rehydrate/sources and project resolution.
+  - refactored route dependency construction into smaller helpers to preserve maintainability.
+- Added repository helper for session query literal parity:
+  - `internal/repository/engram.go`
+  - `BuildLocalQueryLiteral(query string, embeddingDim int)`.
+- Expanded migrated tests:
+  - `internal/api/session_engrams_test.go` (new)
+    - `TestMountSessionAuthRoutesEngramCollectionRoutesUseRepository`
+    - `TestMountSessionAuthRoutesCreateEngramUsesProjectResolution`
+    - `TestMountSessionAuthRoutesRehydrateReturns404WhenMissing`
+    - `TestMountSessionAuthRoutesListEngramSourcesUsesRepository`
+    - `TestMountSessionAuthRoutesCreateEngramRequiresProjectOrDefault`
+  - `internal/api/router_test.go`
+    - added `/api/v1/engrams` mount assertions with and without engram-session dependencies.
+- Executed migrated tests one-by-one:
+  - `TestMountSessionAuthRoutesEngramCollectionRoutesUseRepository`
+  - `TestMountSessionAuthRoutesCreateEngramUsesProjectResolution`
+  - `TestMountSessionAuthRoutesRehydrateReturns404WhenMissing`
+  - `TestMountSessionAuthRoutesListEngramSourcesUsesRepository`
+  - `TestMountSessionAuthRoutesCreateEngramRequiresProjectOrDefault`
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- File-level CodeScene checks (checkpoint-touched files, all above 9.5):
+  - `cmd/api/main.go` -> `10.0`
+  - `internal/api/session_auth.go` -> `10.0`
+  - `internal/api/session_engrams.go` -> `10.0`
+  - `internal/api/session_engrams_test.go` -> `10.0`
+  - `internal/api/router_test.go` -> `10.0`
+  - `internal/repository/engram.go` -> `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - finding: non-blocking unchanged `Primitive Obsession` note in `internal/repository/engram.go`.
+
+### CP35 - Non-Checkpoint Code-Health Uplift (`internal/auth/session.go`)
+
+- Improved legacy non-checkpoint auth session utility file:
+  - `internal/auth/session.go`
+  - refactored `Decode` into focused helpers:
+    - `parseSessionToken`
+    - `validateSessionTokenSignature`
+    - `decodeSessionStatePayload`
+    - `validateSessionTTL`
+  - preserved token parsing/signature validation/TTL semantics while reducing method complexity.
+- Executed migrated tests one-by-one:
+  - `TestSessionManagerEncodeDecodeRoundTrip`
+  - `TestSessionManagerDecodeRejectsTamperedToken`
+  - `TestSessionManagerDecodeRequestReadsCookie`
+  - `TestNewSessionManagerRejectsEmptySecret`
+  - `TestSessionManagerDecodeRejectsExpiredToken`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/auth/session.go` score improved from `9.38` -> `9.68`
+  - `code_health_review` no remaining complexity findings; only non-blocking module-level `String Heavy Function Arguments`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed `Complex Method` and `Complex Conditional` in `Decode`
+    - introduced non-blocking `String Heavy Function Arguments` module note.
+
+### CP36 - Non-Checkpoint Code-Health Uplift (`internal/repository/user.go`)
+
+- Improved legacy non-checkpoint repository utility file:
+  - `internal/repository/user.go`
+  - removed duplicated scan-to-model mapping between:
+    - `userRecordFromScan`
+    - `userAuthRecordFromScan`
+  - introduced shared helper:
+    - `buildScannedUserRecord`
+- Executed migrated tests one-by-one:
+  - `TestGetUserAuthRecordLooksUpUsername`
+  - `TestListUsersReturnsRecords`
+  - `TestCreateUserReturnsCreatedUser`
+  - `TestCreateUserReturnsUsernameExistsOnDuplicate`
+  - `TestUpdateUserReturnsNilWhenNotFound`
+  - `TestUpdateUserAppliesProvidedFields`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/user.go` score improved from `9.38` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP37 - Non-Checkpoint Code-Health Uplift (`internal/embeddings/service.go`)
+
+- Improved legacy non-checkpoint embeddings service file:
+  - `internal/embeddings/service.go`
+  - removed duplicated fallback flow between:
+    - `embedWithFallback`
+    - `embedManyWithFallback`
+  - introduced shared generic helper:
+    - `callWithFallback[T any]`
+- Executed migrated tests one-by-one:
+  - `TestEmbeddingServiceFallsBackToLocalProvider`
+  - `TestEmbeddingServiceEmbedManyUsesProviderIDFromActiveProvider`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/embeddings/service.go` score improved from `9.09` -> `9.68`
+  - `code_health_review` shows only non-blocking module-level `String Heavy Function Arguments`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP38 - Non-Checkpoint Code-Health Uplift (`internal/repository/oauth.go`)
+
+- Improved legacy non-checkpoint OAuth repository file:
+  - `internal/repository/oauth.go`
+  - removed duplicated optional row-fetch logic across:
+    - `GetOAuthClient`
+    - `GetOAuthAuthorizationCodeByHash`
+    - `ConsumeOAuthAuthorizationCode`
+  - introduced shared helper:
+    - `queryOptionalRecord[T any]`
+- Executed migrated tests one-by-one:
+  - `TestCreateOAuthClientReturnsCreatedRecord`
+  - `TestGetOAuthClientReturnsNilWhenMissing`
+  - `TestCreateOAuthAuthorizationCodeReturnsRecord`
+  - `TestGetOAuthAuthorizationCodeByHashReturnsRecord`
+  - `TestConsumeOAuthAuthorizationCodeReturnsNilWhenAlreadyConsumed`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/oauth.go` score improved from `9.38` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP39 - Non-Checkpoint Code-Health Uplift (`internal/repository/chat_test.go`)
+
+- Improved legacy non-checkpoint chat repository test file:
+  - `internal/repository/chat_test.go`
+  - removed duplicated nil-result test logic by consolidating:
+    - `TestGetChatSessionReturnsNilWhenMissing`
+    - `TestUpdateChatSessionReturnsNilWhenNoRows`
+    - into `TestChatSessionGetAndUpdateReturnNilWhenRowMissing` (subtests).
+  - removed excessive-arguments row helper by replacing:
+    - `chatSessionRowValues(...)` (16 args)
+    - with fixture struct:
+      - `chatSessionRowFixture`
+      - `chatSessionRowValues(fixture chatSessionRowFixture)`
+- Executed migrated tests one-by-one:
+  - `TestCreateChatSessionReturnsInsertedRecord`
+  - `TestListChatSessionsAppliesVisibilityAndProjectFilter`
+  - `TestGetChatSessionAdminRecordReturnsRecord`
+  - `TestChatSessionGetAndUpdateReturnNilWhenRowMissing`
+  - `TestUpdateChatSessionValidatesProviderValue`
+  - `TestNormalizeCreatePayloadRejectsInvalidVisibility`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/chat_test.go` score improved from `9.09` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP40 - Non-Checkpoint Code-Health Uplift (`internal/repository/chat.go`)
+
+- Improved legacy non-checkpoint chat repository implementation file:
+  - `internal/repository/chat.go`
+  - refactored payload normalization and enum validation helpers:
+    - split defaults from validation for create payload normalization.
+    - extracted shared optional enum normalization for update payload fields.
+  - new helpers:
+    - `applyCreatePayloadDefaults`
+    - `validateCreatePayloadEnums`
+    - `normalizeOptionalEnum[T ~string]`
+- Executed migrated tests one-by-one:
+  - `TestCreateChatSessionReturnsInsertedRecord`
+  - `TestListChatSessionsAppliesVisibilityAndProjectFilter`
+  - `TestGetChatSessionAdminRecordReturnsRecord`
+  - `TestChatSessionGetAndUpdateReturnNilWhenRowMissing`
+  - `TestUpdateChatSessionValidatesProviderValue`
+  - `TestNormalizeCreatePayloadRejectsInvalidVisibility`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/chat.go` score improved from `9.02` -> `9.68`
+  - `code_health_review` shows a non-blocking remaining `Complex Method` note on `applyCreatePayloadDefaults` (`cc = 9`).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed `Bumpy Road Ahead` and `Overall Code Complexity`
+    - replaced one `Complex Method` finding with another non-blocking threshold-edge note.
+
+### CP41 - Non-Checkpoint Code-Health Uplift (`internal/repository/oauth_test.go`)
+
+- Improved legacy non-checkpoint OAuth repository test file:
+  - `internal/repository/oauth_test.go`
+  - replaced excessive-argument test row helper functions with fixture structs:
+    - `oauthClientRowFixture`
+    - `oauthAuthorizationCodeRowFixture`
+  - updated:
+    - `oauthClientRowValues`
+    - `oauthAuthorizationCodeRowValues`
+    - all call sites to pass typed fixtures instead of long positional argument lists.
+- Executed migrated tests one-by-one:
+  - `TestCreateOAuthClientReturnsCreatedRecord`
+  - `TestGetOAuthClientReturnsNilWhenMissing`
+  - `TestCreateOAuthAuthorizationCodeReturnsRecord`
+  - `TestGetOAuthAuthorizationCodeByHashReturnsRecord`
+  - `TestConsumeOAuthAuthorizationCodeReturnsNilWhenAlreadyConsumed`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/oauth_test.go` score improved from `9.38` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP42 - Non-Checkpoint Code-Health Uplift (`internal/repository/collection_test.go`)
+
+- Improved legacy non-checkpoint collection repository test file:
+  - `internal/repository/collection_test.go`
+  - replaced high-argument row helper input with fixture struct:
+    - `collectionRowFixture`
+    - `collectionRowValues(fixture collectionRowFixture)`
+  - consolidated duplicated nil-result tests:
+    - merged get/update missing-row assertions into `TestGetAndUpdateCollectionReturnNilWhenMissing`.
+- Executed migrated tests one-by-one:
+  - `TestListCollectionsBuildsFilters`
+  - `TestGetAndUpdateCollectionReturnNilWhenMissing`
+  - `TestCreateCollectionUsesGeneratedID`
+  - `TestCreateCollectionMapsDuplicateNameError`
+  - `TestSoftDeleteCollectionReturnsBool`
+  - `TestAddCollectionItemsReturnsCountAndSkipsEmpty`
+  - `TestRemoveCollectionItemReturnsBool`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/collection_test.go` score improved from `9.09` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none
+
+### CP43 - Non-Checkpoint Code-Health Uplift (`internal/repository/document_test.go`)
+
+- Improved legacy non-checkpoint document repository test file:
+  - `internal/repository/document_test.go`
+  - replaced high-argument document row helper inputs with fixture struct:
+    - `documentRecordRowFixture`
+    - `documentRecordRowValues(fixture documentRecordRowFixture)`
+  - reduced large test methods by extracting focused helpers for:
+    - deterministic timestamp + embedding stubs
+    - payload construction
+    - result/assertion blocks for upsert/query behavior
+- Executed migrated tests one-by-one:
+  - `TestUpsertDocumentWithChunksPersistsDocumentAndChunks`
+  - `TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch`
+  - `TestListDocumentsAppliesProjectFilter`
+  - `TestQueryDocumentChunksBuildsQueryAndReranks`
+  - `TestBuildDocumentChunkWhereDefaultsToActorScopeOnly`
+  - `TestUpsertDocumentWithChunksRejectsInvalidVisibility`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/document_test.go` score improved from `8.72` -> `9.68`
+  - `code_health_review` now reports only non-blocking helper arg-count findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed both `Large Method` findings from the two primary document tests
+    - replaced old argument-heavy helper finding with new helper arg-count threshold-edge notes.
+
+### CP44 - Non-Checkpoint Code-Health Uplift (`internal/repository/document.go`)
+
+- Improved legacy non-checkpoint document repository implementation file:
+  - `internal/repository/document.go`
+  - reduced query-path complexity by extracting focused helpers:
+    - `normalizeDocumentChunkTopK`
+    - `buildDocumentChunkQuerySQLAndParams`
+    - `queryDocumentChunkCandidates`
+    - `buildDocumentChunkQueryResults`
+  - replaced argument-heavy chunk replacement call with structured input:
+    - `documentChunkReplaceInput`
+  - split chunk replacement responsibilities into dedicated helpers:
+    - `deleteDocumentChunks`
+    - `insertDocumentChunk`
+- Executed migrated tests one-by-one:
+  - `TestUpsertDocumentWithChunksPersistsDocumentAndChunks`
+  - `TestUpsertDocumentWithChunksFailsOnEmbeddingCountMismatch`
+  - `TestListDocumentsAppliesProjectFilter`
+  - `TestQueryDocumentChunksBuildsQueryAndReranks`
+  - `TestBuildDocumentChunkWhereDefaultsToActorScopeOnly`
+  - `TestUpsertDocumentWithChunksRejectsInvalidVisibility`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/document.go` score improved from `8.81` -> `9.68`
+  - `code_health_review` now reports only a non-blocking argument-count note on `insertDocumentChunk`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed `Complex Method` (`QueryDocumentChunks`)
+    - fixed `Overall Code Complexity`
+    - replaced previous arg-count finding on `replaceDocumentChunks` with a non-blocking helper arg-count note.
+
+### CP45 - Non-Checkpoint Code-Health Uplift (`internal/repository/chat_pinning.go`)
+
+- Improved legacy non-checkpoint chat pinning repository implementation file:
+  - `internal/repository/chat_pinning.go`
+  - reduced duplicated wrapper logic across pin/unpin/list operations by extracting generic resource helpers:
+    - `pinResourceRecord`
+    - `listPinnedResourceRecords`
+    - `mapPinnedResourceRows`
+  - introduced shared typed mutation builders:
+    - `engramMutationInput`
+    - `documentMutationInput`
+  - replaced high-argument internal mutation helpers with structured input:
+    - `pinnedResourceMutationInput`
+- Executed migrated tests one-by-one:
+  - `TestPinEngramToSessionReturnsPinnedRecord`
+  - `TestPinDocumentToSessionReturnsNilWhenResourceNotVisible`
+  - `TestUnpinEngramFromSessionReturnsTrueWhenRemoved`
+  - `TestUnpinDocumentFromSessionReturnsFalseWhenMissing`
+  - `TestListPinnedEngramsReturnsRows`
+  - `TestListPinnedDocumentsAppliesVisibilityFilter`
+  - `TestListPinnedEngramSummariesAppliesVisibilityFilters`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/chat_pinning.go` score improved from `8.81` -> `9.68`
+  - `code_health_review` now reports only a non-blocking argument-count note on `listPinnedResourceRecords`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed code-duplication findings across pin/unpin/list wrappers
+    - fixed argument-count findings on `pinResourceToSession` and `unpinResourceFromSession`
+    - introduced one non-blocking helper arg-count note on `listPinnedResourceRecords`.
+
+### CP46 - Non-Checkpoint Code-Health Uplift (`internal/repository/engram_write_test.go`)
+
+- Improved legacy non-checkpoint engram write repository test file:
+  - `internal/repository/engram_write_test.go`
+  - reduced large/complex primary write-path test by extracting fixture-driven helpers:
+    - `buildCreateEngramWithReportFixture`
+    - `buildCreateEngramWithReportFakeQueryer`
+    - `setupCreateEngramWithReportStubs`
+    - `assertCreateEngramWithReportResult`
+    - `assertCreateEngramWithReportWrites`
+  - preserved all behavioral assertions around SQL shape, embedded payload args, and enrichment report contract.
+- Executed migrated tests one-by-one:
+  - `TestCreateEngramWithReportPersistsEngramSourcesAndArtifacts`
+  - `TestCreateEngramWithReportReturnsEmbedErrorAndSkipsWrites`
+  - `TestCreateEngramReturnsCreatedResponse`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/engram_write_test.go` score improved from `9.26` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP118 - Phase 4 MCP Chat Unpin-Engram Mutation Baseline (`chat.unpin_engram`)
+
+- Migrated `chat.unpin_engram` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"removed": true}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented required mutation parameter behavior parity:
+  - required `session_id` UUID
+  - required `engram_id` UUID
+  - missing/invalid values return `-32602` invalid params.
+- Implemented unpin result/error parity:
+  - successful unpin returns `removed=true`
+  - missing pin returns `-32602` with `status_code=404` and `detail="Pinned engram not found for session"`.
+- Added runtime unpin mutation adapter wiring in Go API runtime:
+  - `cmd/api/mcp_unpin_engram_adapter.go`
+  - `cmd/api/main.go` passes unpin-engram dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_unpin_engram_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_unpin_engram_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_mutation_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_unpin_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_unpin_engram_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP119 - Phase 4 MCP Chat Pin-Document Mutation Baseline (`chat.pin_document`)
+
+- Migrated `chat.pin_document` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"pinned": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented required mutation parameter behavior parity:
+  - required `session_id` UUID
+  - required `document_id` UUID
+  - missing/invalid values return `-32602` invalid params.
+- Implemented mutation result/error parity:
+  - success payload returns `{"pinned": {...}}`
+  - missing/inaccessible target returns `-32602` with `status_code=404` and `detail="Document not found or session inaccessible"`.
+- Added runtime pin-document mutation adapter wiring in Go API runtime:
+  - `cmd/api/mcp_pin_document_adapter.go`
+  - `cmd/api/main.go` passes pin-document dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_pin_document_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_pin_document_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_mutation_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_pin_document_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_pin_document_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP120 - Phase 4 MCP Chat Unpin-Document Mutation Baseline (`chat.unpin_document`)
+
+- Migrated `chat.unpin_document` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"removed": true}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented required mutation parameter behavior parity:
+  - required `session_id` UUID
+  - required `document_id` UUID
+  - missing/invalid values return `-32602` invalid params.
+- Implemented unpin result/error parity:
+  - successful unpin returns `removed=true`
+  - missing pin returns `-32602` with `status_code=404` and `detail="Pinned document not found for session"`.
+- Added runtime unpin-document mutation adapter wiring in Go API runtime:
+  - `cmd/api/mcp_unpin_document_adapter.go`
+  - `cmd/api/main.go` passes unpin-document dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_unpin_document_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_unpin_document_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_mutation_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_unpin_document_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_unpin_document_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP121 - Phase 4 MCP Chat Project-Document Query Baseline (`chat.list_project_documents`)
+
+- Migrated `chat.list_project_documents` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"documents": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented project-document query parameter behavior parity:
+  - optional `project_id` filter support
+  - paging defaults (`limit=200`, `offset=0`)
+  - invalid paging values return `-32602` invalid params.
+- Added runtime project-document list adapter wiring in Go API runtime:
+  - `cmd/api/mcp_project_document_list_adapter.go`
+  - `cmd/api/main.go` passes project-document-list dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_project_documents_test.go`
+  - `internal/mcp/compatibility_service_chat_project_documents_support_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_project_document_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_collection_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_project_documents_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_project_documents_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_project_documents_support_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP122 - Phase 4 MCP Chat Create-Session Baseline (`chat.create_session`)
+
+- Migrated `chat.create_session` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"session": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented create-session parameter behavior parity:
+  - required `project_id` and `title`
+  - enum validation for `provider`, `visibility_scope`, and `autosave_strategy`
+  - default application for optional create fields (`model_id`, `system_prompt`, autosave and retention values)
+  - invalid params return `-32602`.
+- Added runtime session-create adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_create_adapter.go`
+  - `cmd/api/main.go` passes session-create dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_create_session_test.go`
+  - `internal/mcp/compatibility_service_chat_create_session_support_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `9.55`
+  - `cmd/api/mcp_session_create_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_create_session_support.go`: `9.68`
+  - `internal/mcp/compatibility_service_chat_create_session_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_create_session_support_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP123 - Phase 4 MCP Chat Lifecycle-Policy Update Baseline (`chat.update_lifecycle_policy`)
+
+- Migrated `chat.update_lifecycle_policy` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"lifecycle_policy": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented lifecycle-update parameter behavior parity:
+  - required `session_id` UUID
+  - optional partial lifecycle update fields (`autosave_*`, `retention_*`) with strict type validation
+  - invalid values return `-32602` invalid params.
+- Implemented lifecycle-update result/error parity:
+  - empty update payload returns current policy snapshot
+  - missing session returns `-32602` with `status_code=404` and `detail="Chat session not found"`
+  - service failures map to `-32603`.
+- Added runtime lifecycle-policy update adapter wiring in Go API runtime:
+  - `cmd/api/mcp_lifecycle_policy_update_adapter.go`
+  - `cmd/api/main.go` passes lifecycle-policy-update dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_lifecycle_policy_update_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_lifecycle_policy_update_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_lifecycle_policy_update_support.go`: `9.68`
+  - `internal/mcp/compatibility_service_chat_lifecycle_policy_update_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP124 - Phase 4 MCP Chat Continue-Session Baseline (`chat.continue_session`)
+
+- Migrated `chat.continue_session` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"continuation": {"session": {...}, "carried_engram_ids": [...]}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented continue-session parameter behavior parity:
+  - required `session_id` UUID
+  - optional `title` passthrough (`nil` when omitted)
+  - invalid values return `-32602` invalid params.
+- Implemented continue-session result/error parity:
+  - successful continuation returns created session + carried engram IDs
+  - missing source session returns `-32602` with `status_code=404` and `detail="Chat session not found"`
+  - service failures map to `-32603`.
+- Added runtime continue-session adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_continue_adapter.go`
+  - `cmd/api/main.go` passes session-continue dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_continue_session_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_continue_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_continue_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_continue_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP125 - Phase 4 MCP Chat Delete-Session Baseline (`chat.delete_session`)
+
+- Migrated `chat.delete_session` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"result": {"session_id": ..., "deleted": true, "linked_engrams_deleted": ...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented delete-session parameter behavior parity:
+  - required `session_id` UUID
+  - optional `delete_linked_engrams` (default `false`)
+  - optional `reason` string
+  - invalid values return `-32602` invalid params.
+- Implemented delete-session result/error parity:
+  - successful deletes return session delete result payload
+  - missing session returns `-32602` with `status_code=404` and `detail="Session not found"`
+  - service failures map to `-32603`.
+- Added runtime session-delete adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_delete_adapter.go`
+  - `cmd/api/main.go` passes session-delete dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_delete_session_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_delete_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_lifecycle_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_delete_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_delete_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP126 - Phase 4 MCP Chat Restore-Session Baseline (`chat.restore_session`)
+
+- Migrated `chat.restore_session` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"result": {"session_id": ..., "restored": true}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented restore-session parameter behavior parity:
+  - required `session_id` UUID
+  - invalid values return `-32602` invalid params.
+- Implemented session lifecycle access hardening for both restore and delete:
+  - owner/admin guard added in runtime lifecycle adapter before mutation calls
+  - inaccessible sessions return not-found parity payload (`-32602`, `status_code=404`, `detail="Session not found"`).
+- Implemented restore-session result/error parity:
+  - successful restores return session restore result payload
+  - missing session returns `-32602` with 404 detail
+  - service failures map to `-32603`.
+- Added runtime session-restore adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_delete_adapter.go` now provides both delete + restore adapters with access checks
+  - `cmd/api/main.go` passes session-restore dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_restore_session_test.go`
+  - updated `internal/mcp/compatibility_service_chat_delete_session_test.go` for actor-role forwarding.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_delete_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_lifecycle_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_delete_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_restore_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_delete_session_test.go`: `9.68`
+  - `internal/mcp/compatibility_service_chat_restore_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP127 - Phase 4 MCP Chat Send-Message Baseline (`chat.send_message`)
+
+- Migrated `chat.send_message` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"message": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented send-message parameter behavior parity:
+  - required `session_id` UUID
+  - `content_text` defaults to empty string when omitted
+  - invalid `session_id` values return `-32602` invalid params.
+- Implemented structured error mapping parity for chat send failures:
+  - provider execution errors -> `-32020` with `status_code` + `error_code`
+  - chat service errors -> `-32010` with `status_code`
+  - untyped/internal errors -> `-32603`.
+- Added runtime send-message adapter wiring in Go API runtime:
+  - `cmd/api/mcp_message_send_adapter.go`
+  - `cmd/api/main.go` passes send-message dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_send_message_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_message_send_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_send_message_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_send_message_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP128 - Phase 4 MCP Chat Save-As-Engram Baseline (`chat.save_as_engram`)
+
+- Migrated `chat.save_as_engram` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"saved_engram": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented save-as-engram parameter behavior parity:
+  - required `session_id` UUID
+  - default `title="Session Snapshot"` and `abstract=""` when omitted
+  - default `visibility_scope="private"` when omitted
+  - default `tags=[]` and `keywords=[]` when omitted
+  - invalid `session_id`, `visibility_scope`, `tags`, or `keywords` values return `-32602` invalid params.
+- Implemented save-as-engram result/error parity:
+  - successful saves return `saved_engram` payload
+  - missing/inaccessible sessions return `-32602` with `status_code=404` and `detail="Chat session not found"`
+  - chat service errors map through compatibility chat error mapping (`-32010` / `-32020` / `-32603`).
+- Added runtime save-session adapter wiring in Go API runtime:
+  - `cmd/api/mcp_save_session_as_engram_adapter.go`
+  - `cmd/api/main.go` passes save-as-engram dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_save_session_as_engram_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP129 - Phase 4 MCP Engram Read-Access Baseline (`engram.list`, `engram.get`, `engram.collection_list`)
+
+- Migrated engram read-access MCP dispatch paths into Go compatibility mode:
+  - `engram.list`
+  - `engram.get`
+  - `engram.collection_list`.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return payloads directly.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented engram list behavior parity:
+  - defaults: `include_deleted=false`, `limit=200`, `offset=0`
+  - optional filters: `project_id`, `session_id`, `q`
+  - invalid `include_deleted`, paging, `session_id`, or `q` values return `-32602` invalid params.
+- Implemented engram get behavior parity:
+  - required `engram_id` UUID
+  - default `include_deleted=true`
+  - missing/inaccessible records return `-32602` with `status_code=404` and `detail="Engram not found"`.
+- Implemented collection list behavior parity:
+  - defaults: `include_deleted=false`, `limit=200`, `offset=0`
+  - optional `project_id` filter
+  - invalid `include_deleted` or paging values return `-32602` invalid params.
+- Added runtime memory-admin adapter wiring in Go API runtime:
+  - `cmd/api/mcp_engram_admin_adapter.go`
+  - `cmd/api/main.go` passes engram list/get/collection-list dependencies to compatibility MCP service.
+- Added owner/admin visibility parity in runtime adapter:
+  - non-admin calls are owner-scoped for list/collection-list
+  - non-admin `engram.get` returns not-found parity for non-owned engrams.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_list_test.go`
+  - `internal/mcp/compatibility_service_engram_get_test.go`
+  - `internal/mcp/compatibility_service_engram_collection_list_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_read_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_read_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_list_test.go`: `9.68`
+  - `internal/mcp/compatibility_service_engram_get_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_collection_list_test.go`: `9.55`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP130 - Phase 4 MCP Engram Query/Rehydrate Baseline (`engram.query`, `engram.rehydrate`)
+
+- Migrated engram query/rehydrate MCP dispatch paths into Go compatibility mode:
+  - `engram.query`
+  - `engram.rehydrate`.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return payloads directly.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented engram query behavior parity:
+  - required `query` and default `top_k=5`
+  - `top_k` validation range parity (`1..50`)
+  - optional filters: `project_id`, `tags`, `keywords`, `created_after`, `created_before`
+  - invalid query/filter values return `-32602` invalid params.
+- Implemented engram rehydrate behavior parity:
+  - required `engram_id` UUID
+  - missing bundles return `-32004` with `message="Engram not found"` and `data.engram_id`.
+- Added runtime repository-backed adapter wiring in Go API runtime:
+  - `cmd/api/mcp_engram_read_adapter.go`
+  - `cmd/api/main.go` passes engram query + rehydrate dependencies to compatibility MCP service.
+- Refactored engram dispatch registration/query parsing internals for CodeScene compliance:
+  - generic engram dispatch binding in handler registration
+  - extracted query parsing helpers to keep per-function complexity within >9.5 code-health gate.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_query_test.go`
+  - `internal/mcp/compatibility_service_engram_rehydrate_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_read_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_read_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_read_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_query_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_query_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_rehydrate_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP131 - Phase 4 MCP Engram Create Baseline (`engram.create`)
+
+- Migrated `engram.create` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"engram": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented engram create payload behavior parity:
+  - map-to-typed payload decoding from MCP params
+  - normalization parity for trimmed text/default arrays/default visibility scope (`private`)
+  - required `title` + `detailed_summary_markdown` validation
+  - invalid payload/fields return `-32602` invalid params.
+- Added runtime project-resolution + write-path adapter wiring:
+  - `cmd/api/mcp_engram_create_adapter.go`
+  - resolves project context via `projects.Service.ResolveProjectIDForWrite`
+  - persists engram via `repository.CreateEngram` with `mcp.engram.create` enrichment origin
+  - returns `resolved_project_id` + `used_default_project` on response payload.
+- Implemented project-resolution error mapping parity:
+  - missing/inaccessible default project -> `-32602` with `status_code=422`
+  - missing project -> `-32602` with `status_code=404`
+  - unexpected failures -> `-32603`.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_create_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_create_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_create_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_create_test.go`: `9.54`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP132 - Phase 4 MCP Engram Conversation-Create Baseline (`engram.create_from_conversation`)
+
+- Migrated `engram.create_from_conversation` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"engram": {...}, "enrichment_report": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented conversation-create payload behavior parity:
+  - map-to-typed payload decoding from MCP params
+  - normalization parity for trimmed text/default arrays/default visibility scope (`private`)
+  - required `title` + `conversation_markdown` validation
+  - invalid payload/fields return `-32602` invalid params.
+- Added runtime conversation-to-engram adapter wiring:
+  - `cmd/api/mcp_engram_create_adapter.go` now supports both `engram.create` and `engram.create_from_conversation`
+  - resolves project context for writes
+  - persists via `repository.CreateEngramWithReport` (`mcp.engram.create_from_conversation`)
+  - emits condensed enrichment report fields plus resolved project metadata.
+- Implemented project-resolution error mapping parity for conversation-create:
+  - missing/inaccessible default project -> `-32602` with `status_code=422`
+  - missing project -> `-32602` with `status_code=404`
+  - unexpected failures -> `-32603`.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_create_conversation_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_create_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_create_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_create_conversation_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_create_conversation_test.go`: `9.68`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP133 - Phase 4 MCP Engram Mutation Baseline (`engram.delete`, `engram.restore`)
+
+- Migrated `engram.delete` and `engram.restore` MCP dispatch paths into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls: `engram.delete`, `engram.restore`
+  - `tools/call` aliases: `engram_delete`, `engram_restore`
+  - success payload shape parity: `{"result": {...}}`.
+- Implemented mutation payload parity:
+  - required `engram_id` UUID for both tools
+  - optional `reason` string for delete
+  - invalid/missing params return `-32602`.
+- Added mutation not-found parity:
+  - both tools return `-32004` with `data.engram_id` when target engram is missing/inaccessible.
+- Added runtime mutation adapter wiring and access gating:
+  - wired `EngramDelete` and `EngramRestore` dependencies in `cmd/api/main.go`
+  - added runtime adapters for delete/restore operations
+  - enforced owner/admin visibility parity for mutation pre-checks via shared admin adapter visibility lookup.
+- Added dispatch registration/support modules:
+  - `internal/mcp/compatibility_dispatch_engram_mutation_handlers.go`
+  - `internal/mcp/compatibility_dispatch_engram_state_mutation_support.go`.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_delete_test.go`
+  - `internal/mcp/compatibility_service_engram_restore_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_adapter.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_delete_adapter.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_mutation_support.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_restore_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_mutation_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_state_mutation_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_delete_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_restore_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP134 - Phase 4 MCP Engram Update Baseline (`engram.update`)
+
+- Migrated `engram.update` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct call: `engram.update`
+  - `tools/call` alias: `engram_update`
+  - success payload shape parity: `{"engram": {...}}`.
+- Implemented update payload parsing/validation parity:
+  - required `engram_id` UUID
+  - optional fields: `title`, `abstract`, `detailed_summary_markdown`, `tags`, `keywords`, `visibility_scope`, `expected_updated_at`, `sources`
+  - invalid payload fields return `-32602`.
+- Implemented mutation error mapping parity:
+  - missing/inaccessible engram -> `-32004` with `data.engram_id`
+  - stale update (`admin.ErrEngramStale`) -> `-32602` with `status_code=409`
+  - unexpected failures -> `-32603`.
+- Added runtime update adapter wiring:
+  - `cmd/api/mcp_engram_admin_update_adapter.go`
+  - dependency wiring in `cmd/api/main.go`
+  - owner/admin visibility pre-check parity before update execution.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_update_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_update_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_update_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_update_test.go`: `9.68`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP135 - Phase 4 MCP Engram Move-Project Baseline (`engram.move_project`)
+
+- Migrated `engram.move_project` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct call: `engram.move_project`
+  - `tools/call` alias: `engram_move_project`
+  - success payload shape parity: `{"engram": {...}}`.
+- Implemented move payload parsing/validation parity:
+  - required `engram_id` UUID
+  - optional `target_project_id`, `reason`, and `expected_updated_at` fields
+  - invalid payload fields return `-32602`.
+- Implemented move error mapping parity:
+  - missing/inaccessible engram -> `-32004` with `data.engram_id`
+  - stale move (`admin.ErrEngramStale`) -> `-32602` with `status_code=409`
+  - project resolution failures mapped to MCP validation errors:
+    - `projects.ErrProjectIDMustNotBeBlank` -> invalid `target_project_id`
+    - `projects.ErrProjectNotFound` -> `status_code=404`
+    - `projects.ErrProjectIDRequiredWhenNoDefaultProject` -> `status_code=422`
+    - `projects.ErrDefaultProjectNotAccessible` -> `status_code=422`
+  - unexpected failures -> `-32603`.
+- Added runtime move adapter wiring:
+  - `cmd/api/mcp_engram_admin_move_adapter.go`
+  - dependency wiring in `cmd/api/main.go`
+  - owner/admin visibility pre-check parity before move execution.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_engram_move_project_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_move_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_primary_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_move_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_move_project_test.go`: `9.51`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP136 - Phase 4 MCP Engram Collection Mutation Baseline (`engram.collection_*`)
+
+- Migrated MCP engram collection mutation dispatch into Go compatibility mode for:
+  - `engram.collection_create`
+  - `engram.collection_update`
+  - `engram.collection_delete`
+  - `engram.collection_add_items`
+  - `engram.collection_remove_items`
+- Added direct and `tools/call` parity for all five collection mutation tools.
+- Implemented collection create parity:
+  - optional project resolution/default-project fallback semantics
+  - create response payload parity with `collection`, `resolved_project_id`, and `used_default_project`.
+- Implemented collection mutation parity for update/delete/add/remove:
+  - required `collection_id` validation
+  - mutation-specific parameter validation (`engram_ids`, `engram_id`, `reason`, `expected_updated_at`)
+  - owner/admin visibility checks via runtime adapters before applying mutations.
+- Implemented collection error mapping parity:
+  - missing/inaccessible collection -> `-32004` with `data.collection_id`
+  - stale/duplicate updates -> `-32602` with `status_code=409`
+  - collection-create project resolution failures mapped to MCP validation status payloads (`404`/`422`).
+- Added runtime adapter wiring and focused support files in `cmd/api` for collection create/update/delete/add/remove mutation flows.
+- Added MCP compatibility test coverage:
+  - `internal/mcp/compatibility_service_engram_collection_create_test.go`
+  - `internal/mcp/compatibility_service_engram_collection_update_test.go`
+  - `internal/mcp/compatibility_service_engram_collection_delete_test.go`
+  - `internal/mcp/compatibility_service_engram_collection_add_items_test.go`
+  - `internal/mcp/compatibility_service_engram_collection_remove_item_test.go`
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - all touched Go files scored `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP137 - Phase 4 MCP Project Transfer Baseline (`project.export_bundle`, `project.import_bundle`)
+
+- Migrated MCP project transfer dispatch into Go compatibility mode for:
+  - `project.export_bundle`
+  - `project.import_bundle`
+- Added direct and `tools/call` parity for both project transfer tools.
+- Implemented project export parity:
+  - required `project_id`
+  - optional `collection_ids` UUID list
+  - optional `include_embeddings` boolean
+  - success payload shape: `{"bundle": {...}}`.
+- Implemented project import parity:
+  - required `project_id`
+  - optional `conflict_policy` (`skip`, `overwrite`, `rename`, default=`skip`)
+  - bundle payload parsing parity (`bundle` object or `bundle_json` string)
+  - success payload shape: `{"summary": {...}}`.
+- Implemented transfer error mapping parity:
+  - project/collection missing -> `-32602` with `status_code=404`
+  - import decode/validation failures -> `-32602` with `status_code=422`
+  - unexpected failures -> `-32603`.
+- Added runtime export/import adapter wiring:
+  - `cmd/api/mcp_project_transfer_adapter.go`
+  - dependency wiring in `cmd/api/main.go`.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_project_export_bundle_test.go`
+  - `internal/mcp/compatibility_service_project_import_bundle_test.go`.
+- Added catalog coverage guard test:
+  - `internal/mcp/compatibility_dispatch_catalog_coverage_test.go`
+  - verifies all tools in `toolCatalogOrder` have implemented handlers.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_project_transfer_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_project_transfer_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_project_transfer_export_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_project_transfer_import_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_project_transfer_error_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_project_export_bundle_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_project_import_bundle_test.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_catalog_coverage_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP138 - Phase 4 MCP Chat Send-Message Stream Parity (`chat.send_message`)
+
+- Migrated MCP `chat.send_message` stream behavior into Go compatibility mode with parity for:
+  - direct tool method calls (`chat.send_message` / underscore alias)
+  - `tools/call` requests for `chat_send_message` when `stream` is truthy.
+- Implemented stream transport parity:
+  - emits `mcp.event` frames with `{id, tool, event, data}` payloads for stream progress (`meta`/`chunk`/`done`/`error`)
+  - emits a terminal JSON-RPC success/error frame after stream completion.
+- Implemented terminal stream parity semantics:
+  - `error` stream events map to `-32020` with provider detail payload
+  - stream completion without `done` maps to `-32021`
+  - direct and `tools/call` stream result payloads include `{"message": ...}` from the `done` event data.
+- Preserved non-stream compatibility behavior:
+  - direct calls with `stream=false` use non-stream send flow
+  - `tools/call` with `stream=false` remains on non-stream dispatch path.
+- Added runtime stream adapter wiring:
+  - `cmd/api/mcp_message_send_adapter.go` now exposes both non-stream send and stream event adapter behavior
+  - `cmd/api/main.go` wires both `MessageSend` and `MessageStream` dependencies to compatibility service.
+- Added MCP compatibility stream tests:
+  - `internal/mcp/compatibility_service_chat_send_message_stream_test.go`
+  - validates direct and `tools/call` stream paths, non-stream fallback, stream error mapping, and missing-`done` guard.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_message_send_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_stream_chat_send_message_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_send_message_stream_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP139 - Phase 4 MCP Stream Transport Multi-Frame Parity Tests (`/api/v1/mcp/stream`)
+
+- Added MCP transport regression tests for multi-frame stream responses carrying:
+  - one or more `mcp.event` frames
+  - followed by a terminal JSON-RPC `result` frame with matching request `id`.
+- Verified JSON response mode terminal-frame selection parity:
+  - JSON mode ignores intermediate `mcp.event` frames and returns the terminal result payload for the request ID.
+- Verified SSE response mode frame passthrough parity:
+  - SSE mode emits both `mcp.event` and terminal result frames in-order.
+- Refactored test setup helpers to keep transport coverage high while preserving file code health:
+  - shared router/frame/request helpers for multi-frame stream scenarios.
+- Updated file:
+  - `internal/api/mcp_stream_test.go`
+- Full verification:
+  - `go test ./internal/api ./internal/mcp ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/api/mcp_stream_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP140 - Phase 4 MCP Token Project-Scope Dispatch Parity
+
+- Added token project-scope parameter normalization/enforcement to Go MCP dispatch paths (`direct` and `tools/call`):
+  - single allowed token project now autofills `project_id` for project-scoped optional/fallback tools
+  - multi-project token scope now returns `-32602` with
+    - `data.missing = "project_id"`
+    - `data.reason = "token_has_multiple_allowed_projects"`
+    when explicit project selection is required
+  - explicit project values outside the token allowlist now return `-32003` with `data.project_id`.
+- Applied dispatch-level normalization before tool handlers run so project-scoped handlers receive token-compliant params.
+- Added migrated chat session token-policy coverage:
+  - `internal/mcp/compatibility_service_chat_sessions_test.go`
+  - validates single-project autofill, multi-project explicit-selection validation, and allowlist rejection behavior.
+- Added dedicated token policy helper module to keep catalog/dispatch code health above threshold:
+  - `internal/mcp/token_authorization_policy.go`
+  - `internal/mcp/catalog.go` retains core catalog/scope policy responsibilities.
+- Updated:
+  - `internal/mcp/compatibility_service.go`
+  - `internal/mcp/catalog.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/catalog.go`: `9.68`
+  - `internal/mcp/token_authorization_policy.go`: `9.68`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_sessions_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP141 - Phase 4 MCP Token Project-Scope Parity Extension (Session/Engram-Scoped Tools)
+
+- Extended token project-scope enforcement beyond explicit `project_id` tools by adding dispatch-time project resolution for:
+  - session-scoped tools (resolve project through `session_id`)
+  - engram-scoped tools (resolve project through `engram_id`).
+- Added session/engram project resolution policy module:
+  - `internal/mcp/token_project_scope_policy.go`
+  - resolves scoped project context and enforces token allowlist consistency before handler execution.
+- Refactored MCP compatibility dispatch entrypoints to keep code health high while applying both:
+  - token param normalization (`normalizeTokenToolParams`)
+  - scoped project policy enforcement (`enforceTokenProjectPolicy`)
+  via a shared authorized-dispatch path.
+- Added migrated scope-enforcement tests:
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`
+  - validates:
+    - session-scoped deny on project mismatch
+    - session-scoped allow on matching project
+    - engram-scoped deny on project mismatch.
+- Updated:
+  - `internal/mcp/compatibility_service.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/token_project_scope_policy.go`: `9.68`
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP142 - Phase 4 MCP Token Project-Scope Parity Hardening (Save-As-Engram + Move-Project Edge Policy)
+
+- Hardened token project-scope normalization and enforcement to match Python edge-policy behavior:
+  - `chat.save_as_engram` now treats `session_id` presence as non-empty semantics for token project autofill/precedence decisions.
+  - `engram.move_project` now enforces target-project allowlist checks while also enforcing source-project allowlist checks when `target_project_id` is supplied (parity with Python dispatch guard behavior).
+  - `engram_id` validation is now enforced before move-project token project resolution to preserve invalid-param precedence.
+- Refactored token project-scope policy flow to maintain >9.5 code health:
+  - replaced duplicated primary/secondary enforcement methods with shared resolver-driven project-policy validation.
+  - reduced argument-heavy policy entrypoint via `tokenProjectPolicyRequest`.
+- Refactored token project-scope tests into shared/table-driven helpers to remove duplication and keep health at 10.0.
+- Added/updated migrated edge-policy tests:
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`
+  - validates:
+    - `chat.save_as_engram` prefers session-scoped project over conflicting `project_id`
+    - `engram.move_project` target-project denial (`project_id=target_project_id`)
+    - `engram.move_project` source-project denial when target is allowed.
+- Updated:
+  - `internal/mcp/token_authorization_policy.go`
+  - `internal/mcp/token_project_scope_policy.go`
+  - `internal/mcp/compatibility_service.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/token_authorization_policy.go`: `9.68`
+  - `internal/mcp/token_project_scope_policy.go`: `10.0`
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP143 - Phase 4 MCP Token Project-Scope Parity Extension (Collection-Scoped Mutation Tools)
+
+- Extended token project-scope enforcement to collection-scoped mutation tools by resolving project scope from `collection_id` for:
+  - `engram.collection_update`
+  - `engram.collection_delete`
+  - `engram.collection_add_items`
+  - `engram.collection_remove_items`.
+- Added collection lookup dependency contract for policy-time scope resolution:
+  - `internal/mcp/compatibility_service.go`
+  - new `EngramCollectionGetService` + `EngramCollectionGetRequest`
+  - compatibility service dependency/runtime wiring for collection lookup.
+- Added runtime adapter wiring to expose owner/admin-scoped collection lookup from memory-admin service:
+  - `cmd/api/mcp_engram_admin_adapter.go`
+  - `cmd/api/main.go`.
+- Refactored token project-scope resolver internals to maintain >9.5 code health while adding collection scope:
+  - shared scoped-resource project resolver with resource-kind routing
+  - shared lookup execution helper to avoid duplication/complexity regressions.
+- Added migrated policy coverage:
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`
+  - validates collection-scoped deny behavior with `project_id` sourced from collection lookup.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/token_project_scope_policy.go`: `10.0`
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `cmd/api/mcp_engram_admin_adapter.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP144 - Phase 4 MCP Token Project-Scope Parity Hardening (`engram.rehydrate` Bundle-Scoped Policy Resolution)
+
+- Hardened token project-scope resolution for `engram.rehydrate` to match Python parity:
+  - allowlist project scope is now resolved from rehydration bundle metadata (`bundle.project_id`) via `engramRehydrate` dependency
+  - replaced prior admin-engram scoped resolution path for this tool.
+- Expanded token scope policy test coverage to assert rehydrate-scoped denial based on bundle project resolution:
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`
+  - new deny case for `engram.rehydrate` with disallowed bundle project.
+- Refactored token project-lookup internals to keep code health above gate while extending parity:
+  - shared lookup resolver routing for session and rehydrate project resolution
+  - shared scoped project lookup execution helper reuse across scoped policy paths.
+- Updated:
+  - `internal/mcp/token_project_scope_policy.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/token_project_scope_policy.go`: `10.0`
+  - `internal/mcp/compatibility_service_token_project_scope_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP145 - Phase 4 MCP Chat Save-As-Engram No-Session Conversation Fallback Parity (`chat.save_as_engram`)
+
+- Extended `chat.save_as_engram` dispatch to match Python dual-mode behavior:
+  - when `session_id` is present/non-empty: preserve existing session snapshot save flow
+  - when `session_id` is absent: route to conversation create flow requiring `conversation_markdown`.
+- Added no-session fallback payload parity:
+  - default fallback title is `"Conversation Snapshot"` when title is missing/blank
+  - response now returns:
+    - `saved_engram` (conversation-created engram payload)
+    - `enrichment_report` (conversation enrichment metadata payload).
+- Preserved session mode behavior and mappings:
+  - existing `session_id` path keeps `SaveSessionAsEngram` payload defaults and `mapChatSendError` mappings.
+- Added migrated test coverage for chat-save dual-mode parity:
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`
+  - coverage includes:
+    - direct + `tools/call` parity for conversation fallback
+    - fallback default-title behavior
+    - fallback project-resolution/internal error mappings
+    - validation matrix updates for no-session conversation path.
+- Updated:
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP146 - Phase 4 MCP Catalog Metadata Parity (`tools/list`)
+
+- Ported Python MCP tool catalog metadata into Go `tools/list` responses:
+  - descriptions now match Python catalog tool descriptions
+  - `inputSchema` now includes full per-tool JSON schema parity (required fields, nested properties, enums, formats, min/max constraints).
+- Added metadata indirection layer to preserve code health while supporting full catalog payloads:
+  - new cloned-entry resolver to prevent cross-request schema mutation side effects
+  - default fallback metadata retained for unknown/unmapped tools.
+- Added generated catalog metadata data module from Python source:
+  - `internal/mcp/catalog_metadata_data.go`
+  - includes all 44 tool definitions from `api/app/mcp/catalog.py`.
+- Updated tools-list build flow to use resolved catalog metadata:
+  - `internal/mcp/catalog.go`.
+- Added parity + safety tests:
+  - `internal/mcp/compatibility_service_test.go`
+  - validates:
+    - `chat_save_as_engram` tools-list metadata parity for description/schema keys
+    - defensive schema cloning across repeated `tools/list` calls.
+- Added helper module:
+  - `internal/mcp/catalog_metadata.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/catalog.go`: `9.68`
+  - `internal/mcp/catalog_metadata.go`: `10.0`
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
+  - `internal/mcp/catalog_metadata_data.go`: `Code Health score: None` (data-only generated catalog table).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP147 - Phase 4 MCP Conversation-Create Enrichment-Origin Parity
+
+- Aligned MCP conversation-create enrichment origin semantics with Python behavior:
+  - `chat.save_as_engram` no-session fallback now forwards `EnrichmentOrigin="mcp.chat.save_as_engram"`
+  - direct `engram.create_from_conversation` dispatch now explicitly forwards `EnrichmentOrigin="mcp.engram.create_from_conversation"`.
+- Extended compatibility request contract to carry origin metadata:
+  - `internal/mcp/compatibility_service.go`
+  - added `EnrichmentOrigin` on `EngramCreateFromConversationRequest`.
+- Updated runtime adapter to honor forwarded origin while preserving backward compatibility:
+  - `cmd/api/mcp_engram_create_adapter.go`
+  - uses forwarded origin when set, with default fallback to `mcp.engram.create_from_conversation`.
+- Updated dispatch logic:
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`
+  - `internal/mcp/compatibility_dispatch_engram_create_conversation_support.go`.
+- Migrated request-shape parity tests to assert origin forwarding:
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`
+  - `internal/mcp/compatibility_service_engram_create_conversation_test.go`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_engram_create_conversation_support.go`: `10.0`
+  - `cmd/api/mcp_engram_create_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_engram_create_conversation_test.go`: `9.68`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP148 - Phase 4 MCP Chat-Save Missing-Field Error Payload Parity (`chat.save_as_engram`)
+
+- Aligned no-session `chat.save_as_engram` validation payload with Python behavior:
+  - when `conversation_markdown` is missing, MCP now returns:
+    - `code=-32602`
+    - `data.missing="conversation_markdown"`
+  - instead of generic `data.invalid`.
+- Added dedicated missing-parameter helper for parity-preserving dispatch payloads:
+  - `internal/mcp/compatibility_dispatch_support.go`
+  - `missingParamError(field)` produces MCP invalid-params payload with `missing` key.
+- Updated chat-save conversation fallback parser:
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`
+  - missing conversation markdown now uses `missingParamError("conversation_markdown")`.
+- Added validation-data coverage:
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`
+  - explicit assertion for `data.missing == "conversation_markdown"`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_dispatch_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_save_session_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP149 - Phase 4 MCP Token-Policy Parity Test Hardening (`chat.save_as_engram` No-Session Path)
+
+- Added targeted token-policy parity coverage for no-session `chat.save_as_engram` conversation fallback:
+  - single-project token allowlist autofills `project_id` and forwards it into conversation-create request shape
+  - multi-project token allowlist without explicit `project_id` returns parity validation payload:
+    - `data.missing="project_id"`
+    - `data.reason="token_has_multiple_allowed_projects"`.
+- Extended chat-save compatibility tests:
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`
+  - added:
+    - `TestCompatibilityServiceChatSaveSessionAsEngramConversationFallbackTokenProjectAutofill`
+    - `TestCompatibilityServiceChatSaveSessionAsEngramConversationFallbackRequiresProjectForMultiProjectToken`.
+- Refactored shared conversation-fallback test setup helpers to keep CodeScene safeguard at 10.0:
+  - extracted reusable fake service builder and request runner helpers.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched file, >= 9.5):
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP150 - Phase 4 MCP Top-Level Invalid-Request Parity Test Hardening (`chat.save_as_engram`)
+
+- Added parity coverage at the compatibility-service dispatch layer for Python-equivalent invalid-request behavior:
+  - direct method `chat.save_as_engram` with no params now explicitly validated in top-level error mapping tests
+  - asserts `-32602` and `data.missing="conversation_markdown"` payload semantics.
+- Added test coverage:
+  - `internal/mcp/compatibility_service_test.go`
+  - new test:
+    - `TestCompatibilityServiceErrorMappingsChatSaveMissingConversationMarkdown`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_save_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP151 - Phase 4 MCP Stream-Route Token Policy Parity Tests (`/api/v1/mcp/stream`)
+
+- Added MCP transport-level token policy parity tests using the real compatibility service behind `/api/v1/mcp/stream`:
+  - `tools/list` honors token `allowed_tools` visibility at route level
+  - read-scope tokens are denied on write `tools/call` with expected scope details.
+- Added tests:
+  - `internal/api/mcp_stream_test.go`
+  - `TestMountMCPRoutesTokenAllowedToolsFiltersToolsList`
+  - `TestMountMCPRoutesTokenReadScopeRejectsWriteTool`.
+- Added token-scoped actor resolver helper for route tests:
+  - `newTokenScopedMCPActorResolver(...)`.
+- Refactored assertion conditionals to keep CodeScene guardrail at 10.0.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched file, >= 9.5):
+  - `internal/api/mcp_stream_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP152 - Phase 4 MCP Stream-Route Token Project-Fallback Parity Tests (`engram.create`)
+
+- Added MCP stream-route token project-fallback parity tests for `engram.create` using the real compatibility service:
+  - single-project token allowlist autofills `project_id` on `engram.create` when omitted
+  - multi-project token allowlist requires explicit `project_id` and returns `data.missing="project_id"`.
+- Added dedicated route test module to keep CodeScene health at 10.0:
+  - `internal/api/mcp_stream_token_project_fallback_test.go`.
+- Rebalanced existing stream test module after extraction:
+  - `internal/api/mcp_stream_test.go`.
+- Added lightweight capture fake for create request-shape assertions:
+  - `capturingMCPCreateEngramService`.
+- Full verification:
+  - `go test ./internal/mcp ./cmd/api ./internal/api -count=1`
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/api/mcp_stream_test.go`: `10.0`
+  - `internal/api/mcp_stream_token_project_fallback_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP117 - Phase 4 MCP Chat Pin-Engram Mutation Baseline (`chat.pin_engram` / `engram.pin_to_session`)
+
+- Migrated write-path pin tool dispatch into Go compatibility mode:
+  - canonical method: `chat.pin_engram`
+  - direct alias parity: `engram.pin_to_session`
+  - `tools/call` alias parity: `engram_pin_to_session`.
+- Implemented required mutation parameter behavior parity:
+  - required `session_id` UUID
+  - required `engram_id` UUID
+  - missing/invalid values return `-32602` invalid params.
+- Implemented mutation result/error parity:
+  - success payload returns `{"pinned": {...}}`
+  - missing/inaccessible target returns `-32602` with `status_code=404` and `detail="Engram not found or session inaccessible"`.
+- Added runtime pin mutation adapter wiring in Go API runtime:
+  - `cmd/api/mcp_pin_engram_adapter.go`
+  - `cmd/api/main.go` passes pin-engram dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_pin_engram_test.go`.
+- Refactored MCP dispatch for code-health compliance while preserving behavior:
+  - split dispatch helpers into focused chat registration/support files
+  - preserved full tool-map behavior with table-driven handler registration.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_pin_engram_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_registration.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_collection_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_mutation_handlers.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_session_lookup.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_collection_support.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch_chat_pin_support.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_pin_engram_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP47 - Non-Checkpoint Code-Health Uplift (`internal/repository/admin_engram_update_test.go`)
+
+- Improved legacy non-checkpoint admin engram update repository test file:
+  - `internal/repository/admin_engram_update_test.go`
+  - reduced large/complex update-path test via fixture-driven extraction:
+    - `buildUpdateAdminEngramFixture`
+    - `buildUpdateAdminEngramFakeQueryer`
+    - `setupUpdateAdminEngramStubs`
+    - `assertUpdateAdminEngramRecord`
+    - `assertUpdateAdminEngramWrites`
+  - preserved update payload JSON assertions, SQL argument checks, source replacement verification, and embedding contract checks.
+- Executed migrated tests one-by-one:
+  - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+  - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+  - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+  - `TestReplaceAdminEngramSourcesReplacesRows`
+  - `TestUpdateAdminEngramReturnsNilWhenMissing`
+  - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/admin_engram_update_test.go` score improved from `9.25` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP48 - Non-Checkpoint Code-Health Uplift (`internal/repository/admin_engram_test.go`)
+
+- Improved legacy non-checkpoint admin engram repository test file:
+  - `internal/repository/admin_engram_test.go`
+  - replaced high-argument row helper signatures with fixture structs:
+    - `adminEngramRowFixture`
+    - `adminEngramSourceRowFixture`
+  - updated all admin engram and admin engram update test call sites to pass typed fixtures instead of long positional argument lists.
+- Executed migrated tests one-by-one:
+  - `TestListAdminEngramsBuildsFiltersAndSearch`
+  - `TestListAdminEngramSourcesReturnsRows`
+  - `TestGetAdminEngramReturnsNilWhenMissing`
+  - `TestGetAdminEngramHydratesSources`
+  - `TestMoveAdminEngramProjectReturnsUpdatedRecordAndRunsDetachQuery`
+  - `TestMoveAdminEngramProjectReturnsNilWhenNotFound`
+  - `TestSoftDeleteEngramReturnsBool`
+  - `TestRestoreEngramReturnsBool`
+  - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+  - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+  - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+  - `TestReplaceAdminEngramSourcesReplacesRows`
+  - `TestUpdateAdminEngramReturnsNilWhenMissing`
+  - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/admin_engram_test.go` score improved from `9.38` -> `10.0`
+  - `internal/repository/admin_engram_update_test.go` remains `10.0` after helper signature migration.
+  - `code_health_review` shows no remaining findings for either file.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP49 - Non-Checkpoint Code-Health Uplift (`internal/admin/service_test.go`)
+
+- Improved legacy non-checkpoint admin service test file:
+  - `internal/admin/service_test.go`
+  - consolidated duplicated list-forwarding tests into one table-driven test:
+    - `TestListMemoryAdminRequestsForwardSharedObject`
+  - introduced shared capture struct for forwarding assertions:
+    - `sharedListRequestCapture`
+- Executed migrated tests one-by-one:
+  - `TestListMemoryAdminRequestsForwardSharedObject`
+  - `TestListEngramsUsesRequestObject`
+  - `TestUpdateCollectionRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramUsesRepositoryRequestObject`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/admin/service_test.go` score improved from `9.38` -> `10.0`
+  - `code_health_review` shows no remaining findings.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP50 - Non-Checkpoint Code-Health Uplift (`internal/admin/service.go`)
+
+- Improved legacy non-checkpoint admin service implementation file:
+  - `internal/admin/service.go`
+  - reduced duplicated list input construction across:
+    - `ListSessions`
+    - `ListEngrams`
+    - `ListCollections`
+    via shared request mapping helpers:
+    - `sharedListRequestInput`
+    - `toSharedListRequestInput`
+    - `sessionInput`
+    - `engramInput`
+    - `collectionInput`
+  - centralized repeated bool-result/not-found checks in:
+    - `boolResultNotFoundError`
+  - centralized project resolution for write paths in:
+    - `resolveProjectIDForWrite`
+  - extracted actor-structured move implementation:
+    - `moveEngramWithActor`
+    while preserving public `MoveEngram` API compatibility.
+- Executed migrated tests one-by-one:
+  - `TestListMemoryAdminRequestsForwardSharedObject`
+  - `TestListEngramsUsesRequestObject`
+  - `TestUpdateCollectionRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramRejectsStaleExpectedUpdatedAt`
+  - `TestUpdateEngramUsesRepositoryRequestObject`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/admin/service.go` score improved from `8.54` -> `9.68`
+  - remaining note is a non-blocking argument-count threshold edge on public `MoveEngram`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP51 - Non-Checkpoint Code-Health Uplift (`internal/repository/chat_pinning_test.go`)
+
+- Improved legacy non-checkpoint chat pinning repository test file:
+  - `internal/repository/chat_pinning_test.go`
+  - consolidated duplicated missing-row tests into:
+    - `TestPinnedDocumentOperationsReturnZeroValueWhenRowMissing`
+  - consolidated duplicated pinned-list assertions into:
+    - `TestListPinnedResourcesBuildsExpectedQueryAndArgs`
+  - preserved query/argument assertions for engram and document paths.
+- Executed migrated tests one-by-one:
+  - `TestPinEngramToSessionReturnsPinnedRecord`
+  - `TestUnpinEngramFromSessionReturnsTrueWhenRemoved`
+  - `TestPinnedDocumentOperationsReturnZeroValueWhenRowMissing`
+  - `TestListPinnedResourcesBuildsExpectedQueryAndArgs`
+  - `TestListPinnedEngramSummariesAppliesVisibilityFilters`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/chat_pinning_test.go` score improved from `9.38` -> `9.51`
+  - remaining note is a non-blocking large-test threshold edge (`88` lines).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed previous duplication findings in four pinning tests
+    - introduced one non-blocking large-method note in consolidated list test.
+
+### CP52 - Memory Admin Route Refactor (`internal/api/admin_memory*.go` + parser call-site normalization)
+
+- Refactored memory-admin API routes into focused files while preserving endpoint behavior:
+  - `internal/api/admin_memory.go`
+  - `internal/api/admin_memory_sessions.go`
+  - `internal/api/admin_memory_engrams.go`
+  - `internal/api/admin_memory_collections.go`
+- Centralized shared parsing and error mapping in `internal/api/admin_memory.go` and reduced route-level duplication through focused collection-route composition.
+- Normalized optional int query parser usage in session route files:
+  - `internal/api/session_engrams.go`
+  - `internal/api/session_users.go`
+- Executed migrated tests one-by-one:
+  - `TestMountMemoryAdminRoutesListSessionsForwardsQueryAndActorCheck`
+  - `TestMountMemoryAdminRoutesDeleteSessionUsesActorAndPayload`
+  - `TestMountMemoryAdminRoutesListEngramsUsesRequestObject`
+  - `TestMountMemoryAdminRoutesUpdateEngramMapsStaleTo409`
+  - `TestMountMemoryAdminRoutesCreateCollectionReturns201`
+  - `TestMountMemoryAdminRoutesCreateCollectionMapsMissingProjectTo400`
+  - `TestMountMemoryAdminRoutesReturnsForbiddenWhenActorCheckFails`
+  - `TestMountSessionAuthRoutesListEngramSourcesUsesRepository`
+  - `TestMountSessionAuthRoutesEngramCollectionRoutesUseRepository`
+  - `TestMountSessionAuthRoutesAdminCanManageUsers`
+  - `TestMountSessionAuthRoutesNonAdminCannotAccessAdminRoutes`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/admin_memory.go`: `7.78` -> `10.0`
+  - `internal/api/admin_memory_sessions.go`: `10.0`
+  - `internal/api/admin_memory_engrams.go`: `10.0`
+  - `internal/api/admin_memory_collections.go`: `10.0`
+  - `internal/api/session_engrams.go`: `10.0`
+  - `internal/api/session_users.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP53 - Admin Engram Update Uplift (`internal/repository/admin_engram_update.go`)
+
+- Improved legacy non-checkpoint admin engram update repository implementation file:
+  - `internal/repository/admin_engram_update.go`
+- Reduced complexity in `UpdateAdminEngram` by extracting DB update execution into:
+  - `updateAdminEngramRecord`
+- Reduced nested branching in source replacement flow via:
+  - `replaceAdminEngramSourcesIfProvided`
+  - `deleteAdminEngramSources`
+  - `insertAdminEngramSources`
+  - `insertAdminEngramSource`
+- Executed migrated tests one-by-one:
+  - `TestBuildAdminEngramUpdateFieldsUsesPayloadValuesAndDefaults`
+  - `TestBuildAdminEngramRetrievalTextUsesUpdateFields`
+  - `TestBuildAdminEngramJSONPayloadOverridesMutableFields`
+  - `TestReplaceAdminEngramSourcesReplacesRows`
+  - `TestUpdateAdminEngramReturnsNilWhenMissing`
+  - `TestUpdateAdminEngramPersistsFieldsAndOptionallySources`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/admin_engram_update.go`: `9.61` -> `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings:
+    - fixed `Complex Method` in `UpdateAdminEngram`
+    - fixed `Bumpy Road Ahead` in `replaceAdminEngramSources`
+    - introduced one non-blocking helper arg-count note in `updateAdminEngramRecord`.
+- Additional scan:
+  - no production file under `internal/` scored below `9.5` in the current CodeScene file-level check.
+
+### CP54 - Admin Engram List Query Uplift (`internal/repository/admin_engram.go`)
+
+- Improved legacy non-checkpoint admin engram repository implementation file:
+  - `internal/repository/admin_engram.go`
+- Reduced `ListAdminEngrams` complexity by extracting composable query builder primitives:
+  - `adminEngramListQueryBuilder`
+  - `newAdminEngramListQueryBuilder`
+  - `addClause`
+  - `addParam`
+  - `addOptionalStringFilter`
+  - `addOptionalUUIDFilter`
+  - `addOptionalQueryTextFilter`
+  - `buildAdminEngramListQuery`
+- Preserved filter SQL shape and parameter ordering semantics verified by existing tests.
+- Executed migrated tests one-by-one:
+  - `TestListAdminEngramsBuildsFiltersAndSearch`
+  - `TestListAdminEngramSourcesReturnsRows`
+  - `TestGetAdminEngramReturnsNilWhenMissing`
+  - `TestGetAdminEngramHydratesSources`
+  - `TestMoveAdminEngramProjectReturnsUpdatedRecordAndRunsDetachQuery`
+  - `TestMoveAdminEngramProjectReturnsNilWhenNotFound`
+  - `TestSoftDeleteEngramReturnsBool`
+  - `TestRestoreEngramReturnsBool`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/admin_engram.go`: `9.68` -> `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP55 - Chat Payload Defaulting Uplift (`internal/repository/chat.go`)
+
+- Improved legacy non-checkpoint chat repository implementation file:
+  - `internal/repository/chat.go`
+- Reduced complexity in create payload defaulting by extracting focused defaults helpers:
+  - `defaultCreateProvider`
+  - `defaultCreateVisibilityScope`
+  - `defaultCreateAutosaveStrategy`
+  - `defaultString`
+  - `defaultInt`
+- Preserved create-session default semantics for provider/model/visibility/autosave/retention fields.
+- Executed migrated tests one-by-one:
+  - `TestCreateChatSessionReturnsInsertedRecord`
+  - `TestListChatSessionsAppliesVisibilityAndProjectFilter`
+  - `TestGetChatSessionAdminRecordReturnsRecord`
+  - `TestChatSessionGetAndUpdateReturnNilWhenRowMissing`
+  - `TestUpdateChatSessionValidatesProviderValue`
+  - `TestNormalizeCreatePayloadRejectsInvalidVisibility`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/chat.go`: `9.68` -> `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP56 - Collection List Query Uplift (`internal/repository/collection.go`)
+
+- Improved legacy non-checkpoint collection repository implementation file:
+  - `internal/repository/collection.go`
+- Reduced `ListCollections` complexity by extracting composable list-query builder primitives:
+  - `collectionListQueryBuilder`
+  - `newCollectionListQueryBuilder`
+  - `addClause`
+  - `addParam`
+  - `addOptionalProjectFilter`
+  - `addOptionalOwnerFilter`
+  - `buildCollectionListQuery`
+- Preserved filter SQL behavior and argument ordering across project/owner/deleted/limit/offset handling.
+- Executed migrated tests one-by-one:
+  - `TestListCollectionsBuildsFilters`
+  - `TestGetAndUpdateCollectionReturnNilWhenMissing`
+  - `TestCreateCollectionUsesGeneratedID`
+  - `TestCreateCollectionMapsDuplicateNameError`
+  - `TestSoftDeleteCollectionReturnsBool`
+  - `TestAddCollectionItemsReturnsCountAndSkipsEmpty`
+  - `TestRemoveCollectionItemReturnsBool`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/repository/collection.go`: `9.68` -> `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP57 - Phase 3 Provider Baseline (`internal/providers/*`)
+
+- Started Phase 3 (Services + LLM Providers) with provider adapter baseline.
+- Added provider contracts and normalized request/response types:
+  - `internal/providers/provider.go`
+- Added provider error hierarchy and status-code mapping:
+  - `internal/providers/errors.go`
+- Ported provider adapters:
+  - `internal/providers/openai.go`
+  - `internal/providers/anthropic.go`
+  - `internal/providers/bedrock.go`
+- Added provider registry wiring from application settings:
+  - `internal/providers/registry.go`
+- Added migrated provider tests:
+  - `internal/providers/registry_test.go`
+  - `internal/providers/adapters_test.go`
+- Executed migrated tests one-by-one:
+  - `TestBuildProviderRegistryCreatesAllAdapters`
+  - `TestGetProviderAdapterReturnsRequestedProvider`
+  - `TestTextProvidersGenerateNormalizeResponse`
+  - `TestBedrockProviderGenerateNormalizesResponse`
+  - `TestOpenAIHealthcheckRequiresAPIKey`
+  - `TestAnthropicHealthcheckRequiresAPIKey`
+  - `TestBedrockHealthcheckRequiresRegion`
+  - `TestBedrockProviderReportsMissingCredentials`
+  - `TestBedrockProviderMapsClientErrors`
+  - `TestBedrockProviderExtractTextIgnoresNonTextContent`
+  - `TestOpenAIProviderBuildsRequestPayloadWithSystemPrompt`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/providers/errors.go`: `10.0`
+  - `internal/providers/openai.go`: `9.68`
+  - `internal/providers/anthropic.go`: `10.0`
+  - `internal/providers/bedrock.go`: `9.68`
+  - `internal/providers/registry.go`: `10.0`
+  - `internal/providers/adapters_test.go`: `9.92`
+  - `internal/providers/registry_test.go`: `9.68`
+  - `internal/providers/provider.go`: score unavailable (declarations-only file)
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP58 - Phase 3 Project Service Port (`internal/projects/service.go`)
+
+- Ported `api/app/projects/service.py` into Go service layer:
+  - `internal/projects/service.go`
+- Added project business logic parity for:
+  - actor-scoped list/get
+  - create owner resolution (admin override vs actor-owned)
+  - default project read/write validation
+  - explicit/default project resolution for write flows
+- Added migrated tests:
+  - `internal/projects/service_test.go`
+- Executed migrated tests one-by-one:
+  - `TestListProjectsForwardsRepositoryInput`
+  - `TestGetProjectReturnsNilForBlankProjectID`
+  - `TestCreateProjectRejectsBlankProjectID`
+  - `TestCreateProjectUsesActorOwnerWhenNonAdmin`
+  - `TestCreateProjectAllowsAdminOwnerOverride`
+  - `TestSetDefaultProjectIDRequiresVisibleProject`
+  - `TestSetDefaultProjectIDRequiresUserUpdate`
+  - `TestResolveProjectIDForWriteEnsuresExplicitProjectWhenHidden`
+  - `TestResolveProjectIDForWriteUsesVisibleDefaultProject`
+  - `TestResolveProjectIDForWriteHandlesMissingAndInaccessibleDefault`
+  - `TestResolveOwnerUserIDUsesAdminOverrideOnly`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/projects/service.go`: `9.68`
+  - `internal/projects/service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP59 - Phase 3 Project Service Runtime Wiring (`cmd/api/project_resolution.go`)
+
+- Integrated Phase 3 `internal/projects` service into runtime dependency graph:
+  - Added project-resolution adapters in `cmd/api/project_resolution.go`.
+  - Updated `cmd/api/main.go` to instantiate `projects.NewService(pool)` and pass adapters to:
+    - session `ResolveProjectIDForWrite` dependency
+    - admin `ProjectResolver` dependency
+- Removed duplicated project-resolution helpers from `cmd/api/main.go` in favor of shared service logic.
+- Added migrated adapter tests:
+  - `cmd/api/project_resolution_test.go`
+- Executed migrated tests one-by-one:
+  - `TestProjectResolutionAdaptersReturnServiceResolution`
+  - `TestMapSessionProjectResolutionErrorMapsKnownErrors`
+  - `TestMapSessionProjectResolutionErrorReturnsUnknownError`
+  - `TestMapAdminProjectResolutionErrorMapsKnownErrors`
+  - `TestMapAdminProjectResolutionErrorReturnsUnknownError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/project_resolution.go`: `10.0`
+  - `cmd/api/project_resolution_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP60 - Phase 3 Ingestion Chunking Port (`internal/ingestion/chunking.go`)
+
+- Ported `api/app/ingestion/chunking.py` to Go:
+  - `internal/ingestion/chunking.go`
+- Added deterministic ingestion chunking behavior for:
+  - document normalization and hash generation
+  - deterministic document/chunk IDs
+  - chunk boundary selection with semantic break preference
+  - overlap stepping, snippet generation, token estimates, and metadata
+- Added migrated tests:
+  - `internal/ingestion/chunking_test.go`
+- Executed migrated tests one-by-one:
+  - `TestChunkDocumentTextIsDeterministicForSameInput`
+  - `TestBuildDocumentIDIsStableForSameFingerprint`
+  - `TestNormalizeDocumentTextFlattensMixedNewlines`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/ingestion/chunking.go`: `9.68`
+  - `internal/ingestion/chunking_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP61 - Phase 3 Ingestion Service Port (`internal/ingestion/service.go`)
+
+- Ported ingestion service + error surface to Go:
+  - `internal/ingestion/errors.go`
+  - `internal/ingestion/service.go`
+- Added ingestion orchestration parity for:
+  - chunk shape checks
+  - text/file size limits
+  - file MIME/UTF-8 validation
+  - text/file ingest document upsert flow with deterministic chunking
+  - blended retrieval wrappers for engrams + document chunks
+- Added migrated ingestion service tests:
+  - `internal/ingestion/service_test.go`
+- Executed tests one-by-one:
+  - `TestChunkDocumentTextIsDeterministicForSameInput`
+  - `TestBuildDocumentIDIsStableForSameFingerprint`
+  - `TestNormalizeDocumentTextFlattensMixedNewlines`
+  - `TestIngestTextRejectsOverlapNotSmallerThanChunkSize`
+  - `TestIngestFileValidationErrors`
+  - `TestIngestTextPersistsChunkedDocument`
+  - `TestIngestFilePersistsFileMetadataAndFallbackTitle`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/ingestion/errors.go`: `10.0`
+  - `internal/ingestion/service.go`: `9.68`
+  - `internal/ingestion/service_test.go`: `10.0`
+  - `internal/ingestion/chunking.go`: `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP62 - Phase 3 OAuth Utility Service Port (`internal/oauth/service.go`)
+
+- Ported `api/app/oauth/service.py` utility layer to Go:
+  - `internal/oauth/service.go`
+- Added OAuth utility parity for:
+  - scope normalization and scope-token mapping
+  - PKCE validation (S256)
+  - OAuth secret hash + verification
+  - authorization code hashing and active-state checks
+  - client ID/secret and authorization code generation
+  - redirect URI allowlist checks
+- Added migrated tests:
+  - `internal/oauth/service_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeScopeDefaultsToMCPRead`
+  - `TestNormalizeScopeAliasesAndDeduplicates`
+  - `TestTokenScopeMapsWriteScope`
+  - `TestValidatePKCES256Only`
+  - `TestOAuthSecretHashAndVerifyRoundTrip`
+  - `TestAuthorizationCodeIsActiveHonorsExpiryAndConsumption`
+  - `TestGeneratedClientCredentialsAreNonEmpty`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/oauth/service.go`: `10.0`
+  - `internal/oauth/service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP63 - Phase 3 OAuth Registration Service Port (`internal/oauth/registration.go`)
+
+- Ported `api/app/oauth/registration.py` into Go service layer:
+  - `internal/oauth/registration.go`
+- Added registration service parity for:
+  - metadata list dedup/sanitization
+  - protected registration auth checks
+  - grant/response/token-auth-method validation
+  - confidential client secret issuance and hashing
+  - OAuth client persistence via repository input mapping
+- Added migrated tests:
+  - `internal/oauth/registration_test.go`
+- Executed tests one-by-one:
+  - `TestDedupStringListTrimsAndDeduplicates`
+  - `TestHandleRegisterNormalizesListsAndIssuesSecret`
+  - `TestHandleRegisterRejectsUnauthorizedSessionUser`
+  - `TestNormalizeScopeDefaultsToMCPRead`
+  - `TestNormalizeScopeAliasesAndDeduplicates`
+  - `TestTokenScopeMapsWriteScope`
+  - `TestValidatePKCES256Only`
+  - `TestOAuthSecretHashAndVerifyRoundTrip`
+  - `TestAuthorizationCodeIsActiveHonorsExpiryAndConsumption`
+  - `TestGeneratedClientCredentialsAreNonEmpty`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/oauth/registration.go`: `10.0`
+  - `internal/oauth/registration_test.go`: `10.0`
+  - `internal/oauth/service.go`: `10.0`
+  - `internal/oauth/service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP64 - Phase 3 Chat Lifecycle Policy Port (`internal/chat/lifecycle_policy.go`)
+
+- Ported `api/app/chat/lifecycle_policy.py` to Go:
+  - `internal/chat/lifecycle_policy.go`
+- Added lifecycle policy parity for:
+  - autosave policy normalization
+  - interval/message-count snapshot triggers
+  - duplicate + low-value snapshot guards
+  - timeline event classification semantics
+  - retention prune-id selection
+- Added migrated tests:
+  - `internal/chat/lifecycle_policy_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeAutosavePolicyKeepsBackwardCompatibility`
+  - `TestIntervalSnapshotTriggerRules`
+  - `TestMessageCountSnapshotTriggerRules`
+  - `TestDuplicateAndLowValueGuards`
+  - `TestRetentionPruningRespectsAgeAndMaxCount`
+  - `TestTimelineEventClassification`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/lifecycle_policy.go`: `9.68`
+  - `internal/chat/lifecycle_policy_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP65 - Phase 3 Chat Session Lifecycle Port (`internal/chat/session_lifecycle.go`)
+
+- Ported `api/app/chat/session_lifecycle.py` to Go:
+  - `internal/chat/session_lifecycle.go`
+- Added lifecycle orchestration parity for:
+  - snapshot abstract derivation
+  - autosave disabled/threshold skip reasons
+  - snapshot creation and duplicate/low-value guards
+  - retention prune-id deletion flow
+- Added migrated tests:
+  - `internal/chat/session_lifecycle_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeAutosavePolicyKeepsBackwardCompatibility`
+  - `TestIntervalSnapshotTriggerRules`
+  - `TestMessageCountSnapshotTriggerRules`
+  - `TestDuplicateAndLowValueGuards`
+  - `TestRetentionPruningRespectsAgeAndMaxCount`
+  - `TestTimelineEventClassification`
+  - `TestDeriveChatSnapshotAbstractPrefersLatestAssistant`
+  - `TestRunSessionLifecycleReturnsDisabledWithoutSideEffects`
+  - `TestRunSessionLifecycleSkipsMessageCountThreshold`
+  - `TestRunSessionLifecycleCreatesSnapshotWhenThresholdIsMet`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/lifecycle_policy.go`: `9.68`
+  - `internal/chat/lifecycle_policy_test.go`: `10.0`
+  - `internal/chat/session_lifecycle.go`: `9.61`
+  - `internal/chat/session_lifecycle_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP66 - Phase 3 Chat Context Assembly Port (`internal/chat/context.go`)
+
+- Ported `api/app/chat/context.py` to Go:
+  - `internal/chat/context.go`
+- Added context assembly parity for:
+  - pinned and retrieval-based engram context merge with deterministic dedupe order
+  - pinned-document scoped chunk retrieval behavior (one representative chunk per pin)
+  - merged pinned/retrieved document chunk budget and dedupe behavior
+  - markdown context sections for engram retrieval and document retrieval
+  - source reference collection and cross-source dedupe semantics
+- Added migrated tests:
+  - `internal/chat/context_test.go`
+- Executed tests one-by-one:
+  - `TestAssembleChatContextMergesPinnedAndRetrieved`
+  - `TestAssembleChatContextDedupesDuplicateSourceURLs`
+  - `TestAssembleChatContextDedupesMultipleChunksFromSameDocument`
+  - `TestAssembleChatContextUsesAllPinnedDocuments`
+  - `TestBundleSectionTruncatesDetailedExcerpt`
+  - `TestAssembleChatContextReturnsEmptyWhenNoSources`
+  - `TestAssembleChatContextUsesDocumentTopKForRetrieval`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/context.go`: `10.0`
+  - `internal/chat/context_test.go`: `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP67 - Phase 3 Chat Error Surface Port (`internal/chat/errors.go`)
+
+- Ported `api/app/chat/errors.py` to Go:
+  - `internal/chat/errors.go`
+- Added typed chat error parity for:
+  - service error detail + status-code transport
+  - session-not-found default detail and 404 status
+  - validation error 400 status handling
+  - provider execution error default/override status + error code
+- Added migrated tests:
+  - `internal/chat/errors_test.go`
+- Executed tests one-by-one:
+  - `TestNewChatServiceErrorDefaultsStatusCodeToBadRequest`
+  - `TestNewChatSessionNotFoundErrorDefaultsDetail`
+  - `TestNewChatValidationErrorUsesBadRequestStatus`
+  - `TestNewChatProviderExecutionErrorDefaultsAndOverrides`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/errors.go`: `10.0`
+  - `internal/chat/errors_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP68 - Phase 3 Chat Runtime Helper Port (`internal/chat/message_runtime_helpers.go`)
+
+- Ported `api/app/chat/message_runtime.py` helper behavior to Go:
+  - `internal/chat/message_runtime_helpers.go`
+- Added helper parity for:
+  - provider token usage preference + fallback token estimation logic
+  - provider exception mapping to chat provider execution errors with expected status-code map
+  - unknown runtime error passthrough semantics
+- Added migrated tests:
+  - `internal/chat/message_runtime_helpers_test.go`
+- Executed tests one-by-one:
+  - `TestResolveTokenUsagePrefersProviderTotal`
+  - `TestResolveTokenUsageEstimatesWhenTotalMissing`
+  - `TestMapProviderErrorMapsProviderExceptions`
+  - `TestMapProviderErrorReturnsOriginalForUnknownError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/message_runtime_helpers.go`: `10.0`
+  - `internal/chat/message_runtime_helpers_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP69 - Phase 3 Chat Runtime Helper Extension (`internal/chat/message_runtime_helpers.go`)
+
+- Extended `api/app/chat/message_runtime.py` helper parity in Go:
+  - `internal/chat/message_runtime_helpers.go`
+- Added helper parity for:
+  - provider history message shaping from persisted chat message records
+  - system prompt assembly with retrieval-context guidance text
+  - preview text normalization/truncation for debug payloads
+- Expanded migrated tests:
+  - `internal/chat/message_runtime_helpers_test.go`
+- Executed tests one-by-one:
+  - `TestResolveTokenUsagePrefersProviderTotal`
+  - `TestResolveTokenUsageEstimatesWhenTotalMissing`
+  - `TestMapProviderErrorMapsProviderExceptions`
+  - `TestMapProviderErrorReturnsOriginalForUnknownError`
+  - `TestHistoryAsProviderMessagesFiltersRolesAndAppliesLimit`
+  - `TestBuildSystemPromptCombinesBaseAndContext`
+  - `TestPreviewTextNormalizesWhitespaceAndTruncates`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/message_runtime_helpers.go`: `10.0`
+  - `internal/chat/message_runtime_helpers_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP70 - Phase 3 Chat Runtime Payload Type Port (`internal/chat/message_runtime.go`)
+
+- Ported `api/app/chat/message_runtime.py` stream payload surface to Go:
+  - `internal/chat/message_runtime.go`
+- Added runtime parity for:
+  - prepared generation transport structure
+  - stream meta payload assembly for session/message/context identifiers
+  - stream done payload assembly for reply, context identifiers, and optional debug trace
+- Added migrated tests:
+  - `internal/chat/message_runtime_test.go`
+- Executed tests one-by-one:
+  - `TestBuildStreamMetaPayloadIncludesContextReferences`
+  - `TestBuildStreamDonePayloadIncludesReplyAndContextFields`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/message_runtime.go`: `10.0`
+  - `internal/chat/message_runtime_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP71 - Phase 3 Chat Runtime Operation Port (`internal/chat/message_runtime.go`)
+
+- Extended `api/app/chat/message_runtime.py` operation parity in Go:
+  - `internal/chat/message_runtime.go`
+- Added runtime operation parity for:
+  - payload validation and prepare-generation flow
+  - session/user-message resolution and not-found handling semantics
+  - context + history loading with provider request assembly
+  - assistant reply persistence with provider/model/token metadata and used engram IDs
+- Expanded migrated tests:
+  - `internal/chat/message_runtime_test.go`
+- Executed tests one-by-one:
+  - `TestBuildStreamMetaPayloadIncludesContextReferences`
+  - `TestBuildStreamDonePayloadIncludesReplyAndContextFields`
+  - `TestPrepareGenerationBuildsProviderRequestFromHistoryAndContext`
+  - `TestPrepareGenerationRejectsEmptyPayload`
+  - `TestPersistAssistantReplyWritesProviderMetadata`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/message_runtime.go`: `10.0`
+  - `internal/chat/message_runtime_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP72 - Phase 3 Chat Runtime Streaming Port (`internal/chat/message_runtime.go`)
+
+- Extended `api/app/chat/message_runtime.py` streaming parity in Go:
+  - `internal/chat/message_runtime.go`
+- Added stream runtime parity for:
+  - stream chunk event emission with empty-token filtering
+  - streamed full-text aggregation for completion payloads
+  - provider startup error mapping into chat provider execution errors
+- Expanded migrated tests:
+  - `internal/chat/message_runtime_test.go`
+- Executed tests one-by-one:
+  - `TestBuildStreamMetaPayloadIncludesContextReferences`
+  - `TestBuildStreamDonePayloadIncludesReplyAndContextFields`
+  - `TestPrepareGenerationBuildsProviderRequestFromHistoryAndContext`
+  - `TestPrepareGenerationRejectsEmptyPayload`
+  - `TestPersistAssistantReplyWritesProviderMetadata`
+  - `TestYieldStreamChunksEmitsChunkEventsAndAggregatesText`
+  - `TestYieldStreamChunksMapsProviderErrors`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/message_runtime.go`: `10.0`
+  - `internal/chat/message_runtime_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP73 - Phase 3 Chat Service Orchestration Port (`internal/chat/service.go`)
+
+- Ported `api/app/chat/service.py` orchestration slice to Go:
+  - `internal/chat/service.go`
+- Added service parity for:
+  - send-message orchestration through runtime prepare/generate/persist/lifecycle
+  - stream-message event orchestration with `meta`/`chunk`/`done` sequencing
+  - provider and persistence error event payload mapping during streaming
+- Added migrated tests:
+  - `internal/chat/service_test.go`
+- Executed tests one-by-one:
+  - `TestSendMessageReturnsUsedEngramIDsAndSources`
+  - `TestStreamMessageEventsEmitsMetaChunksAndDone`
+  - `TestStreamMessageEventsEmitsProviderErrorEvent`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/service.go`: `9.68`
+  - `internal/chat/service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP74 - Phase 3 Chat Session Operations Foundation Port (`internal/chat/session_operations.go`)
+
+- Ported `api/app/chat/session_operations.py` foundational operations to Go:
+  - `internal/chat/session_operations.go`
+- Added session-operations parity for:
+  - session create/list/get/update orchestration over repository layer
+  - create/update autosave normalization behavior
+  - lifecycle policy read/update flow including empty-update fast path
+  - typed list request abstraction for lower coupling and improved code health
+- Added migrated tests:
+  - `internal/chat/session_operations_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeSessionCreatePayloadAppliesAutosavePolicy`
+  - `TestNormalizeSessionUpdatePayloadKeepsNonAutosaveUpdatesUntouched`
+  - `TestNormalizeSessionUpdatePayloadDerivesAutosaveFields`
+  - `TestGetSessionReturnsNotFoundErrorWhenMissing`
+  - `TestCreateSessionEnsuresProjectAndCreatesSession`
+  - `TestUpdateLifecyclePolicyReturnsCurrentWhenPayloadIsEmpty`
+  - `TestUpdateLifecyclePolicyMapsPayloadToSessionUpdate`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/session_operations.go`: `10.0`
+  - `internal/chat/session_operations_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP75 - Phase 3 Chat Session Operations Continuation Port (`internal/chat/session_operations.go`)
+
+- Ported `api/app/chat/session_operations.py` session-operations continuation slice to Go:
+  - `internal/chat/session_operations.go`
+- Added session-operations parity for:
+  - message listing with session visibility checks
+  - pinned engram and pinned document listing for visible sessions
+  - engram/document pin and unpin behavior with typed validation/not-found mapping
+  - shared pin/unpin action abstractions to maintain CodeScene compliance
+- Added migrated tests:
+  - `internal/chat/session_operations_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeSessionCreatePayloadAppliesAutosavePolicy`
+  - `TestNormalizeSessionUpdatePayloadKeepsNonAutosaveUpdatesUntouched`
+  - `TestNormalizeSessionUpdatePayloadDerivesAutosaveFields`
+  - `TestGetSessionReturnsNotFoundErrorWhenMissing`
+  - `TestCreateSessionEnsuresProjectAndCreatesSession`
+  - `TestUpdateLifecyclePolicyReturnsCurrentWhenPayloadIsEmpty`
+  - `TestUpdateLifecyclePolicyMapsPayloadToSessionUpdate`
+  - `TestListMessagesRequiresVisibleSession`
+  - `TestPinDocumentReturnsPinnedRecord`
+  - `TestPinEngramReturnsValidationErrorWhenNotAccessible`
+  - `TestUnpinReturnsNotFoundWhenMissing`
+  - `TestListPinnedEngramsAndDocuments`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/session_operations.go`: `10.0`
+  - `internal/chat/session_operations_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP76 - Phase 3 Chat Session Timeline Events Port (`internal/chat/session_operations.go`)
+
+- Extended chat model parity for timeline event payload:
+  - `internal/models/chat.go`
+- Ported `api/app/chat/session_operations.py` timeline-events slice to Go:
+  - `internal/chat/session_operations.go`
+- Added session-operations parity for:
+  - timeline event listing with session visibility checks
+  - linked engram reads through repository list input
+  - timeline semantics mapping (`event_type`, consolidation group key/count) via lifecycle policy classifier
+- Added migrated tests:
+  - `internal/chat/session_operations_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeSessionCreatePayloadAppliesAutosavePolicy`
+  - `TestNormalizeSessionUpdatePayloadKeepsNonAutosaveUpdatesUntouched`
+  - `TestNormalizeSessionUpdatePayloadDerivesAutosaveFields`
+  - `TestGetSessionReturnsNotFoundErrorWhenMissing`
+  - `TestCreateSessionEnsuresProjectAndCreatesSession`
+  - `TestUpdateLifecyclePolicyReturnsCurrentWhenPayloadIsEmpty`
+  - `TestUpdateLifecyclePolicyMapsPayloadToSessionUpdate`
+  - `TestListMessagesRequiresVisibleSession`
+  - `TestListTimelineEventsExposesConsolidationMergeSemantics`
+  - `TestPinDocumentReturnsPinnedRecord`
+  - `TestPinEngramReturnsValidationErrorWhenNotAccessible`
+  - `TestUnpinReturnsNotFoundWhenMissing`
+  - `TestListPinnedEngramsAndDocuments`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/session_operations.go`: `10.0`
+  - `internal/chat/session_operations_test.go`: `10.0`
+  - `internal/models/chat.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP77 - Phase 3 Chat Session Save-as-Engram Port (`internal/chat/session_operations_save.go`)
+
+- Extended chat model parity for save-session payloads:
+  - `internal/models/chat.go`
+- Ported `api/app/chat/session_operations.py` save-session slice to Go:
+  - `internal/chat/session_operations_save.go`
+- Added session-operations parity for:
+  - save-session empty-message validation behavior
+  - abstract normalization with generic snapshot fallback from latest assistant content
+  - engram creation payload mapping including `source_session_id`, `thread_id`, transcript markdown, and retrieval text
+  - dedicated save-session operation file split to preserve >9.5 CodeScene quality constraints
+- Added migrated tests:
+  - `internal/chat/session_operations_save_test.go`
+  - `internal/chat/session_operations_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeSessionCreatePayloadAppliesAutosavePolicy`
+  - `TestNormalizeSessionUpdatePayloadKeepsNonAutosaveUpdatesUntouched`
+  - `TestNormalizeSessionUpdatePayloadDerivesAutosaveFields`
+  - `TestGetSessionReturnsNotFoundErrorWhenMissing`
+  - `TestCreateSessionEnsuresProjectAndCreatesSession`
+  - `TestUpdateLifecyclePolicyReturnsCurrentWhenPayloadIsEmpty`
+  - `TestUpdateLifecyclePolicyMapsPayloadToSessionUpdate`
+  - `TestListMessagesRequiresVisibleSession`
+  - `TestListTimelineEventsExposesConsolidationMergeSemantics`
+  - `TestSaveSessionAsEngramSetsSourceSessionID`
+  - `TestSaveSessionAsEngramDerivesAbstractFromLatestAssistant`
+  - `TestSaveSessionAsEngramRejectsEmptySession`
+  - `TestPinDocumentReturnsPinnedRecord`
+  - `TestPinEngramReturnsValidationErrorWhenNotAccessible`
+  - `TestUnpinReturnsNotFoundWhenMissing`
+  - `TestListPinnedEngramsAndDocuments`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/session_operations.go`: `10.0`
+  - `internal/chat/session_operations_save.go`: `10.0`
+  - `internal/chat/session_operations_test.go`: `10.0`
+  - `internal/chat/session_operations_save_test.go`: `10.0`
+  - `internal/models/chat.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP78 - Phase 3 Chat Session Continue Port (`internal/chat/session_operations_continue.go`)
+
+- Extended chat model parity for continue-session payloads:
+  - `internal/models/chat.go`
+- Ported `api/app/chat/session_operations.py` continue-session slice to Go:
+  - `internal/chat/session_operations_continue.go`
+- Added session-operations parity for:
+  - continued session creation with inherited provider/model/policy settings
+  - pinned engram carry-forward and `carried_engram_ids` response behavior
+  - pinned document carry-forward behavior
+  - default continuation title fallback (`<source title> (continued)`) when title is absent/blank
+- Added migrated tests:
+  - `internal/chat/session_operations_continue_test.go`
+- Executed tests one-by-one:
+  - `TestNormalizeSessionCreatePayloadAppliesAutosavePolicy`
+  - `TestNormalizeSessionUpdatePayloadKeepsNonAutosaveUpdatesUntouched`
+  - `TestNormalizeSessionUpdatePayloadDerivesAutosaveFields`
+  - `TestGetSessionReturnsNotFoundErrorWhenMissing`
+  - `TestCreateSessionEnsuresProjectAndCreatesSession`
+  - `TestUpdateLifecyclePolicyReturnsCurrentWhenPayloadIsEmpty`
+  - `TestUpdateLifecyclePolicyMapsPayloadToSessionUpdate`
+  - `TestListMessagesRequiresVisibleSession`
+  - `TestListTimelineEventsExposesConsolidationMergeSemantics`
+  - `TestSaveSessionAsEngramSetsSourceSessionID`
+  - `TestSaveSessionAsEngramDerivesAbstractFromLatestAssistant`
+  - `TestSaveSessionAsEngramRejectsEmptySession`
+  - `TestContinueSessionCopiesPinnedEngramsAndDocuments`
+  - `TestContinueSessionUsesDefaultTitleWhenBlank`
+  - `TestPinDocumentReturnsPinnedRecord`
+  - `TestPinEngramReturnsValidationErrorWhenNotAccessible`
+  - `TestUnpinReturnsNotFoundWhenMissing`
+  - `TestListPinnedEngramsAndDocuments`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/chat/session_operations_continue.go`: `10.0`
+  - `internal/chat/session_operations_continue_test.go`: `10.0`
+  - `internal/models/chat.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP79 - Phase 3 Chat API Unit Baseline Port (`internal/api/chat_api.go`)
+
+- Ported `api/app/chat/api.py` helper + stream route registration baseline to Go:
+  - `internal/api/chat_api.go`
+- Added chat API parity for:
+  - actor user-id resolution from API actor payload
+  - chat service error mapping into HTTP-oriented error shape
+  - SSE event line encoding behavior
+  - chat stream endpoint route registration (`/api/v1/chat/sessions/{session_id}/messages/stream`)
+- Added migrated tests:
+  - `internal/api/chat_api_test.go`
+- Executed tests one-by-one:
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersStreamEndpoint`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api.go`: `10.0`
+  - `internal/api/chat_api_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP80 - Phase 3 Chat API Session-Derivative Routes Baseline (`internal/api/chat_api.go`)
+
+- Extended `api/app/chat/api.py` route parity to Go for session-derivative operations:
+  - `POST /api/v1/chat/sessions/{session_id}/save-engram`
+  - `POST /api/v1/chat/sessions/{session_id}/continue`
+- Refactored chat API handler composition to keep file-level code health above threshold:
+  - introduced shared generic created-route handler
+  - reduced duplicated route-handler wrappers via generic route binding
+- Expanded migrated tests:
+  - `internal/api/chat_api_test.go`
+  - route registration for stream/derivative/all-route configurations
+  - save-session handler success payload/argument forwarding
+  - continue-session handler success payload/argument forwarding
+  - continue-session error mapping parity
+- Executed tests one-by-one:
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersConfiguredEndpoints`
+  - `TestSaveSessionAsEngramHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerMapsChatServiceError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api.go`: `10.0`
+  - `internal/api/chat_api_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP81 - Phase 3 Chat API Session CRUD Routes Baseline (`internal/api/chat_api_sessions.go`)
+
+- Extended `api/app/chat/api.py` route parity to Go for session CRUD routes:
+  - `POST /api/v1/chat/sessions`
+  - `GET /api/v1/chat/sessions`
+  - `GET /api/v1/chat/sessions/{session_id}`
+  - `PATCH /api/v1/chat/sessions/{session_id}`
+- Added chat session API route module:
+  - `internal/api/chat_api_sessions.go`
+  - session list query parsing with defaults:
+    - `limit=50` default with bounds `1..200`
+    - `offset=0` default with non-negative bounds
+  - invalid query handling (`400`, `"Invalid query parameters"`)
+  - shared generic payload-route handler for actor-only and actor+session routes.
+- Updated chat router composition to mount session CRUD routes when session service is configured:
+  - `internal/api/chat_api.go`
+- Added migrated tests:
+  - `internal/api/chat_api_sessions_test.go`
+  - updated chat API baseline tests for router signature:
+    - `internal/api/chat_api_test.go`
+- Executed tests one-by-one:
+  - `TestCreateChatRouterRegistersSessionRoutesWhenSessionServiceConfigured`
+  - `TestCreateSessionHandlerWritesCreatedResponse`
+  - `TestListSessionsHandlerUsesDefaultPaging`
+  - `TestListSessionsHandlerRejectsInvalidLimit`
+  - `TestGetSessionHandlerMapsChatServiceError`
+  - `TestUpdateSessionHandlerWritesUpdatedResponse`
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersConfiguredEndpoints`
+  - `TestSaveSessionAsEngramHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerMapsChatServiceError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api.go`: `10.0`
+  - `internal/api/chat_api_test.go`: `10.0`
+  - `internal/api/chat_api_sessions.go`: `10.0`
+  - `internal/api/chat_api_sessions_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP82 - Phase 3 Chat API Lifecycle + Timeline Routes Baseline (`internal/api/chat_api_lifecycle.go`)
+
+- Extended `api/app/chat/api.py` route parity to Go for lifecycle/timeline operations:
+  - `GET /api/v1/chat/sessions/{session_id}/lifecycle-policy`
+  - `PATCH /api/v1/chat/sessions/{session_id}/lifecycle-policy`
+  - `GET /api/v1/chat/sessions/{session_id}/timeline`
+- Added lifecycle route module:
+  - `internal/api/chat_api_lifecycle.go`
+  - lifecycle get/update handlers with chat-service error mapping parity
+  - timeline list handler with query defaults:
+    - `limit=100` default with bounds `1..500`
+    - `offset=0` default with non-negative bounds
+  - invalid query handling (`400`, `"Invalid query parameters"`).
+- Extended chat session route service contract and registration:
+  - `internal/api/chat_api_sessions.go`
+  - `registerChatSessionRoutes` now mounts lifecycle/timeline routes.
+- Added and updated migrated tests:
+  - `internal/api/chat_api_lifecycle_test.go`
+  - `internal/api/chat_api_sessions_test.go` (service test double expanded for lifecycle/timeline methods).
+- Executed tests one-by-one:
+  - `TestCreateChatRouterRegistersLifecycleRoutesWhenSessionServiceConfigured`
+  - `TestGetLifecyclePolicyHandlerWritesResponse`
+  - `TestUpdateLifecyclePolicyHandlerWritesResponse`
+  - `TestListTimelineEventsHandlerUsesDefaultPaging`
+  - `TestListTimelineEventsHandlerRejectsInvalidLimit`
+  - `TestCreateChatRouterRegistersSessionRoutesWhenSessionServiceConfigured`
+  - `TestCreateSessionHandlerWritesCreatedResponse`
+  - `TestListSessionsHandlerUsesDefaultPaging`
+  - `TestListSessionsHandlerRejectsInvalidLimit`
+  - `TestGetSessionHandlerMapsChatServiceError`
+  - `TestUpdateSessionHandlerWritesUpdatedResponse`
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersConfiguredEndpoints`
+  - `TestSaveSessionAsEngramHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerMapsChatServiceError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api.go`: `10.0`
+  - `internal/api/chat_api_test.go`: `10.0`
+  - `internal/api/chat_api_sessions.go`: `10.0`
+  - `internal/api/chat_api_sessions_test.go`: `10.0`
+  - `internal/api/chat_api_lifecycle.go`: `10.0`
+  - `internal/api/chat_api_lifecycle_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP83 - Phase 3 Chat API Message Routes Baseline (`internal/api/chat_api_messages.go`)
+
+- Extended `api/app/chat/api.py` route parity to Go for message operations:
+  - `GET /api/v1/chat/sessions/{session_id}/messages`
+  - `POST /api/v1/chat/sessions/{session_id}/messages`
+  - existing `POST /api/v1/chat/sessions/{session_id}/messages/stream` moved under shared message-route registration.
+- Added message route module:
+  - `internal/api/chat_api_messages.go`
+  - non-stream send-message handler (`201`) mapped to `ChatStreamService.SendMessage`
+  - list-messages handler with query defaults:
+    - `limit=200` default with bounds `1..500`
+    - `offset=0` default with non-negative bounds
+  - invalid query handling (`400`, `"Invalid query parameters"`).
+- Updated service contracts and route registration wiring:
+  - `internal/api/chat_api.go`
+  - `internal/api/chat_api_sessions.go`
+  - `internal/api/chat_api_sessions_test.go`
+- Added/updated migrated tests:
+  - `internal/api/chat_api_messages_test.go`
+  - `internal/api/chat_api_test.go` (message-route registration expectations + stream test double update)
+  - existing lifecycle/session tests re-validated.
+- Executed tests one-by-one:
+  - `TestCreateChatRouterRegistersMessageRoutesWhenServicesConfigured`
+  - `TestSendMessageHandlerWritesCreatedResponse`
+  - `TestListMessagesHandlerUsesDefaultPaging`
+  - `TestListMessagesHandlerRejectsInvalidLimit`
+  - `TestCreateChatRouterRegistersLifecycleRoutesWhenSessionServiceConfigured`
+  - `TestGetLifecyclePolicyHandlerWritesResponse`
+  - `TestUpdateLifecyclePolicyHandlerWritesResponse`
+  - `TestListTimelineEventsHandlerUsesDefaultPaging`
+  - `TestListTimelineEventsHandlerRejectsInvalidLimit`
+  - `TestCreateChatRouterRegistersSessionRoutesWhenSessionServiceConfigured`
+  - `TestCreateSessionHandlerWritesCreatedResponse`
+  - `TestListSessionsHandlerUsesDefaultPaging`
+  - `TestListSessionsHandlerRejectsInvalidLimit`
+  - `TestGetSessionHandlerMapsChatServiceError`
+  - `TestUpdateSessionHandlerWritesUpdatedResponse`
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersConfiguredEndpoints`
+  - `TestSaveSessionAsEngramHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerMapsChatServiceError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api.go`: `10.0`
+  - `internal/api/chat_api_test.go`: `10.0`
+  - `internal/api/chat_api_sessions.go`: `10.0`
+  - `internal/api/chat_api_sessions_test.go`: `10.0`
+  - `internal/api/chat_api_lifecycle.go`: `10.0`
+  - `internal/api/chat_api_lifecycle_test.go`: `10.0`
+  - `internal/api/chat_api_messages.go`: `10.0`
+  - `internal/api/chat_api_messages_test.go`: `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP84 - Phase 3 Chat API Pinned Resource Routes Baseline (`internal/api/chat_api_pinned.go`)
+
+- Extended `api/app/chat/api.py` route parity to Go for pinned resource operations:
+  - `GET /api/v1/chat/sessions/{session_id}/engrams`
+  - `POST /api/v1/chat/sessions/{session_id}/engrams/pin`
+  - `DELETE /api/v1/chat/sessions/{session_id}/engrams/{engram_id}`
+  - `GET /api/v1/chat/sessions/{session_id}/documents`
+  - `POST /api/v1/chat/sessions/{session_id}/documents/pin`
+  - `DELETE /api/v1/chat/sessions/{session_id}/documents/{document_id}`
+- Added pinned-route module:
+  - `internal/api/chat_api_pinned.go`
+  - generic pinned resource route registration (`registerPinnedResourceRoutes`)
+  - shared pin/unpin request mapping helper (`buildPinnedSpec`) with typed request factories
+  - consistent unpin behavior (`204 No Content`) and bad resource-id handling (`400`).
+- Extended chat session route service contract:
+  - `internal/api/chat_api_sessions.go`
+- Added pinned payload models:
+  - `internal/models/chat.go`
+  - `PinEngramRequest`
+  - `PinDocumentRequest`
+- Added and updated migrated tests:
+  - `internal/api/chat_api_pinned_test.go`
+  - `internal/api/chat_api_sessions_test.go` (session service double expanded for pin/list/unpin methods).
+- Executed tests one-by-one:
+  - `TestCreateChatRouterRegistersPinnedRoutesWhenSessionServiceConfigured`
+  - `TestPinEngramHandlerWritesPinnedRecord`
+  - `TestListPinnedDocumentsHandlerWritesRecords`
+  - `TestUnpinDocumentHandlerReturnsNoContent`
+  - `TestCreateChatRouterRegistersMessageRoutesWhenServicesConfigured`
+  - `TestSendMessageHandlerWritesCreatedResponse`
+  - `TestListMessagesHandlerUsesDefaultPaging`
+  - `TestListMessagesHandlerRejectsInvalidLimit`
+  - `TestCreateChatRouterRegistersLifecycleRoutesWhenSessionServiceConfigured`
+  - `TestGetLifecyclePolicyHandlerWritesResponse`
+  - `TestUpdateLifecyclePolicyHandlerWritesResponse`
+  - `TestListTimelineEventsHandlerUsesDefaultPaging`
+  - `TestListTimelineEventsHandlerRejectsInvalidLimit`
+  - `TestCreateChatRouterRegistersSessionRoutesWhenSessionServiceConfigured`
+  - `TestCreateSessionHandlerWritesCreatedResponse`
+  - `TestListSessionsHandlerUsesDefaultPaging`
+  - `TestListSessionsHandlerRejectsInvalidLimit`
+  - `TestGetSessionHandlerMapsChatServiceError`
+  - `TestUpdateSessionHandlerWritesUpdatedResponse`
+  - `TestActorUserIDResolvesUUIDFromActorPayload`
+  - `TestHandleChatServiceErrorReturnsSuccessResult`
+  - `TestHandleChatServiceErrorMapsChatServiceException`
+  - `TestSSEEventEncodesPayloadLine`
+  - `TestCreateChatRouterRegistersConfiguredEndpoints`
+  - `TestSaveSessionAsEngramHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerWritesCreatedResponse`
+  - `TestContinueSessionHandlerMapsChatServiceError`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/chat_api_sessions.go`: `10.0`
+  - `internal/api/chat_api_sessions_test.go`: `10.0`
+  - `internal/api/chat_api_pinned.go`: `10.0`
+  - `internal/api/chat_api_pinned_test.go`: `10.0`
+  - `internal/models/chat.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP85 - Phase 3 Router Integration Baseline (`internal/api/router.go`)
+
+- Added top-level API router support for mounting chat routes via dependencies:
+  - `RouterDependencies.ChatRouter` (`chi.Router`)
+  - mounted at:
+    - `/api/v1/chat`
+    - `/api/v1/chat/*`
+- Updated router composition:
+  - `internal/api/router.go`
+  - chat routes can now be injected into runtime router assembly without changing existing health/version/admin/session route behavior.
+- Added/updated router tests:
+  - `internal/api/router_test.go`
+  - new mounted-route coverage:
+    - `TestChatRoutesMountedWithDependencies`
+  - not-mounted coverage includes chat route assertion in:
+    - `TestMemoryAdminRoutesNotMountedWithoutDependencies`
+- Executed tests one-by-one:
+  - `TestHealthz`
+  - `TestVersionEndpoint`
+  - `TestMemoryAdminRoutesNotMountedWithoutDependencies`
+  - `TestMemoryAdminRoutesMountedWithDependencies`
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+  - `TestChatRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP86 - Phase 4 Runtime Chat Integration Baseline (`cmd/api/main.go`)
+
+- Added runtime chat wiring and dependency composition:
+  - new file: `cmd/api/chat_runtime.go`
+  - builds DB-backed chat router dependencies for:
+    - `chat.SessionOperationsService`
+    - `chat.ChatMessageRuntime` with repository/context adapters
+    - `chat.ChatService` with provider resolution + lifecycle maintenance
+  - added context actor bridge for chat routes:
+    - `chatActorResolverFromContext` maps request actor context to chat actor payload.
+- Updated API runtime assembly:
+  - `cmd/api/main.go`
+  - injects `RouterDependencies.ChatRouter` via `buildChatRouter(settings, pool)` so `/api/v1/chat/*` routes are active in runtime composition.
+- Added migrated runtime wiring tests:
+  - `cmd/api/chat_runtime_test.go`
+  - coverage includes:
+    - runtime chat route registration
+    - provider resolver behavior (known + unknown provider)
+    - actor resolver mapping + missing-actor failure
+    - runtime metadata mapping copy semantics.
+- Executed tests one-by-one:
+  - `TestBuildChatRouterRegistersRuntimeRoutes`
+  - `TestResolveChatProviderDependencyResolvesConfiguredProvider`
+  - `TestResolveChatProviderDependencyRejectsUnknownProvider`
+  - `TestChatActorResolverFromContextReturnsActorPayload`
+  - `TestChatActorResolverFromContextRejectsMissingActor`
+  - `TestMapRuntimeMessageMetadataConvertsTokenUsageAndCopiesSlices`
+  - `TestChatRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/chat_runtime.go`: `10.0`
+  - `cmd/api/chat_runtime_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP87 - Phase 4 Projects API Baseline (`internal/api/projects_api.go`)
+
+- Added projects API route module for migration parity:
+  - `internal/api/projects_api.go`
+  - mounted endpoints:
+    - `GET /api/v1/projects`
+    - `POST /api/v1/projects`
+    - `GET /api/v1/projects/default`
+    - `PATCH /api/v1/projects/default`
+  - includes:
+    - actor resolution from session context
+    - project query/payload decoding and validation
+    - parity error mapping (`422` for validation, `404` for missing project/user).
+- Added projects route models:
+  - `internal/models/project.go`
+  - `ProjectCreateRequest`
+  - `ProjectDefaultResponse`
+  - `ProjectDefaultUpdateRequest`
+- Added runtime adapter wiring for project routes:
+  - `cmd/api/project_routes_adapter.go`
+  - adapts `projects.Service` to API route contract.
+- Updated runtime/router composition:
+  - `cmd/api/main.go`
+  - `internal/api/router.go`
+  - `internal/api/router_test.go`
+  - `RouterDependencies.ProjectsService` now mounts project routes when configured.
+- Added migrated tests:
+  - `internal/api/projects_api_test.go`
+  - route registration + happy paths + error mapping + actor requirement.
+- Executed tests one-by-one:
+  - `TestMountProjectRoutesRegistersEndpoints`
+  - `TestListProjectsHandlerUsesDefaultPaging`
+  - `TestCreateProjectHandlerWritesCreatedResponse`
+  - `TestGetDefaultProjectHandlerWritesResponse`
+  - `TestSetDefaultProjectHandlerMapsProjectNotFound`
+  - `TestProjectRoutesRequireAuthenticatedActor`
+  - `TestMemoryAdminRoutesNotMountedWithoutDependencies`
+  - `TestProjectRoutesMountedWithDependencies`
+  - `TestChatRoutesMountedWithDependencies`
+  - `TestBuildChatRouterRegistersRuntimeRoutes`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/project_routes_adapter.go`: `10.0`
+  - `internal/api/projects_api.go`: `10.0`
+  - `internal/api/projects_api_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+  - `internal/models/project.go`: `N/A` (no CodeScene score returned).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP88 - Phase 4 Ingestion API Baseline (`internal/api/ingestion_api.go`)
+
+- Added ingestion API route module for migration parity:
+  - `internal/api/ingestion_api.go`
+  - mounted endpoints:
+    - `POST /api/v1/ingestion/text`
+    - `GET /api/v1/ingestion/documents`
+    - `POST /api/v1/ingestion/query`
+    - `POST /api/v1/ingestion/query/blended`
+  - includes:
+    - actor resolution from session context
+    - payload/query normalization + defaults + bounds validation
+    - ingestion service error mapping to HTTP responses.
+- Added runtime adapter wiring for ingestion routes:
+  - `cmd/api/ingestion_routes_adapter.go`
+  - adapts `ingestion.Service` to API route contract.
+- Updated runtime/router composition:
+  - `cmd/api/main.go`
+  - `internal/api/router.go`
+  - `internal/api/router_test.go`
+  - `RouterDependencies.IngestionService` mounts ingestion routes when configured.
+- Added migrated tests:
+  - `internal/api/ingestion_api_test.go`
+  - route registration + defaults + error mapping + actor requirement.
+- Executed tests one-by-one:
+  - `TestMountIngestionRoutesRegistersEndpoints`
+  - `TestIngestTextHandlerWritesCreatedResponse`
+  - `TestListDocumentsHandlerUsesDefaultPaging`
+  - `TestQueryDocumentsHandlerAppliesDefaultTopK`
+  - `TestQueryBlendedHandlerAppliesDefaultTopK`
+  - `TestIngestionRoutesRequireAuthenticatedActor`
+  - `TestIngestTextHandlerMapsServiceError`
+  - `TestMemoryAdminRoutesNotMountedWithoutDependencies`
+  - `TestDataRoutesMountedWithDependencies`
+  - `TestBuildChatRouterRegistersRuntimeRoutes`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/ingestion_routes_adapter.go`: `10.0`
+  - `internal/api/ingestion_api.go`: `10.0`
+  - `internal/api/ingestion_api_test.go`: `9.68`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP89 - Phase 4 Ingestion File-Upload Route Baseline (`internal/api/ingestion_api.go`)
+
+- Extended ingestion API route module for file-upload parity:
+  - `internal/api/ingestion_api.go`
+  - added endpoint:
+    - `POST /api/v1/ingestion/file`
+  - includes:
+    - multipart form parsing (`file` + route fields)
+    - `metadata_json` decoding with route-level max-byte guard
+    - chunk/default normalization parity and service error mapping.
+- Added route-level ingestion options wiring:
+  - `internal/api/router.go`
+  - `cmd/api/main.go`
+  - `RouterDependencies.IngestionOptions` now provides parser limits for ingestion routes.
+- Updated runtime ingestion adapter contract:
+  - `cmd/api/ingestion_routes_adapter.go`
+  - added `IngestFile` adapter path to `ingestion.Service.IngestFile`.
+- Expanded migrated tests:
+  - `internal/api/ingestion_api_test.go`
+  - added file-upload happy path and metadata rejection coverage.
+- Executed tests one-by-one:
+  - `TestMountIngestionRoutesRegistersEndpoints`
+  - `TestIngestTextHandlerWritesCreatedResponse`
+  - `TestIngestFileHandlerWritesCreatedResponse`
+  - `TestIngestFileHandlerRejectsInvalidMetadataJSON`
+  - `TestListDocumentsHandlerUsesDefaultPaging`
+  - `TestQueryDocumentsHandlerAppliesDefaultTopK`
+  - `TestQueryBlendedHandlerAppliesDefaultTopK`
+  - `TestIngestionRoutesRequireAuthenticatedActor`
+  - `TestIngestTextHandlerMapsServiceError`
+  - `TestDataRoutesMountedWithDependencies`
+  - `TestBuildChatRouterRegistersRuntimeRoutes`
+  - `TestProjectResolutionAdaptersReturnServiceResolution`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/ingestion_routes_adapter.go`: `10.0`
+  - `internal/api/ingestion_api.go`: `10.0`
+  - `internal/api/ingestion_api_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP90 - Phase 4 OAuth Metadata + Registration Route Baseline (`internal/api/oauth_api.go`)
+
+- Added OAuth route module for discovery + dynamic registration parity:
+  - new file: `internal/api/oauth_api.go`
+  - mounted endpoints:
+    - `GET /.well-known/oauth-authorization-server`
+    - `GET /.well-known/openid-configuration`
+    - `GET /.well-known/oauth-protected-resource`
+    - `GET /.well-known/oauth-protected-resource/*`
+    - `POST /oauth/register`
+  - includes:
+    - OAuth enabled/disabled gating for metadata endpoints
+    - issuer derivation via `internal/oauth.IssuerURLForRequest`
+    - OAuth metadata payload parity for server/openid/protected-resource responses
+    - registration payload decoding/defaulting + registration error mapping (`error` + `error_description`).
+- Updated top-level router dependency composition:
+  - `internal/api/router.go`
+  - `RouterDependencies.OAuthRegistration` now mounts OAuth routes when configured.
+- Updated runtime assembly wiring:
+  - `cmd/api/main.go`
+  - injects `oauth.NewRegistrationService(pool)` into router dependencies.
+- Added migrated route tests:
+  - new file: `internal/api/oauth_api_test.go`
+  - validates route registration, metadata responses, registration success/error mapping, and validation failures.
+- Extended router integration tests:
+  - `internal/api/router_test.go`
+  - added `TestOAuthRoutesMountedWithDependencies`.
+- Executed tests one-by-one:
+  - `TestMountOAuthRoutesRegistersEndpoints`
+  - `TestOAuthAuthorizationServerMetadataUsesConfiguredIssuer`
+  - `TestOpenIDConfigurationAddsOIDCFields`
+  - `TestOAuthProtectedResourceMetadataScopedPath`
+  - `TestOAuthRegisterClientWritesCreatedResponse`
+  - `TestOAuthRegisterClientMapsRegistrationErrors`
+  - `TestOAuthRouteValidationErrors`
+  - `TestOAuthRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `internal/api/oauth_api.go`: `10.0`
+  - `internal/api/oauth_api_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP91 - Phase 4 OAuth Authorization Route Baseline (`internal/api/oauth_authorize_api.go`)
+
+- Added OAuth authorization route module:
+  - new file: `internal/api/oauth_authorize_api.go`
+  - mounted endpoint:
+    - `GET /oauth/authorize`
+  - includes:
+    - OAuth enabled/disabled gating
+    - required query validation for `response_type`, `client_id`, and `redirect_uri`
+    - request decoding for scope/state/PKCE/resource values
+    - redirect vs OAuth error mapping from authorization service outputs.
+- Added OAuth authorization service layer:
+  - new files:
+    - `internal/oauth/authorization.go`
+    - `internal/oauth/authorization_test.go`
+  - behavior includes:
+    - OAuth client + redirect validation
+    - public-client PKCE enforcement
+    - login redirect fallback for unauthenticated actor context
+    - authorization code creation + hashed persistence through repository
+    - success/error redirect URL composition parity helpers.
+- Updated top-level router/runtime wiring:
+  - `internal/api/router.go`
+  - `internal/api/router_test.go`
+  - `cmd/api/main.go`
+  - new dependency: `RouterDependencies.OAuthAuthorization`
+  - runtime now injects `oauth.NewAuthorizationService(pool)`.
+- Added migrated authorization route tests:
+  - new file: `internal/api/oauth_authorize_api_test.go`
+  - route registration, redirect path, OAuth error mapping, required-field checks, and request-context forwarding.
+- Executed tests one-by-one:
+  - `TestHandleAuthorizeReturnsJSONErrorWhenClientMissing`
+  - `TestHandleAuthorizeRedirectsOnUnsupportedResponseType`
+  - `TestHandleAuthorizeRedirectsToLoginWhenSessionMissing`
+  - `TestHandleAuthorizeCreatesCodeAndReturnsRedirect`
+  - `TestMountOAuthAuthorizationRoutesRegistersEndpoint`
+  - `TestOAuthAuthorizeRouteHandlesServiceResult`
+  - `TestOAuthAuthorizeRouteRejectsMissingRequiredFields`
+  - `TestOAuthAuthorizeRouteReturnsNotFoundWhenDisabled`
+  - `TestOAuthAuthorizeRouteBuildsRequestContext`
+  - `TestOAuthAuthorizationRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `internal/api/oauth_authorize_api.go`: `10.0`
+  - `internal/api/oauth_authorize_api_test.go`: `9.92`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+  - `internal/oauth/authorization.go`: `10.0`
+  - `internal/oauth/authorization_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP92 - Phase 4 OAuth Token Route Baseline (`internal/api/oauth_token_api.go`)
+
+- Added OAuth token route module:
+  - new file: `internal/api/oauth_token_api.go`
+  - mounted endpoint:
+    - `POST /oauth/token`
+  - includes:
+    - OAuth enabled/disabled gating
+    - form payload parsing for token exchange fields
+    - required field validation for token exchange
+    - OAuth error/success response mapping.
+- Added OAuth token exchange service layer:
+  - new files:
+    - `internal/oauth/token.go`
+    - `internal/oauth/token_test.go`
+  - behavior includes:
+    - grant type validation (`authorization_code` only)
+    - OAuth client lookup + confidential-client secret validation
+    - authorization code lookup/hash validation + PKCE checks
+    - authorization code consume semantics
+    - MCP token issuance + scope mapping from OAuth scopes
+    - access token response composition (`access_token`, `token_type`, `expires_in`, `scope`).
+- Updated top-level router/runtime wiring:
+  - `internal/api/router.go`
+  - `internal/api/router_test.go`
+  - `cmd/api/main.go`
+  - new dependency: `RouterDependencies.OAuthToken`
+  - runtime injection: `oauth.NewTokenService(pool)`.
+- Added migrated OAuth token route tests:
+  - new file: `internal/api/oauth_token_api_test.go`
+  - route registration, success response, OAuth error mapping, and validation behavior.
+- Executed tests one-by-one:
+  - `TestHandleTokenRejectsUnsupportedGrantType`
+  - `TestHandleTokenReturnsInvalidClientWhenMissing`
+  - `TestHandleTokenRejectsInvalidClientSecret`
+  - `TestHandleTokenIssuesAccessToken`
+  - `TestBuildOAuthTokenSecretHintFormatsLongSecret`
+  - `TestMountOAuthTokenRoutesRegistersEndpoint`
+  - `TestOAuthTokenRouteWritesSuccessResponse`
+  - `TestOAuthTokenRouteMapsOAuthErrors`
+  - `TestOAuthTokenRouteValidationErrors`
+  - `TestOAuthTokenRoutesMountedWithDependencies`
+- Full Go verification:
+  - `go test ./...` passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `internal/api/oauth_token_api.go`: `10.0`
+  - `internal/api/oauth_token_api_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+  - `internal/oauth/token.go`: `10.0`
+  - `internal/oauth/token_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP93 - Phase 4 MCP Token Service Baseline (`internal/mcptokens/service.go`)
+
+- Added MCP token service layer parity for `api/app/mcp_tokens/service.py`:
+  - new files:
+    - `internal/mcptokens/service.go`
+    - `internal/mcptokens/errors.go`
+    - `internal/mcptokens/service_test.go`
+  - service behaviors:
+    - token material helpers (`token_hash`, secret hint, plaintext compose/parse, verify)
+    - normalized policy-list handling for `allowed_tools` and `allowed_project_ids`
+    - token active-state evaluation (`expires_at` + `revoked_at`)
+    - owner-scoped create/list/revoke orchestration over `internal/repository/mcp_token.go`.
+- Added API DTO models used by service and upcoming route layer:
+  - new file: `internal/models/mcp_token_api.go`
+  - includes:
+    - `MCPTokenCreateRequest`
+    - `MCPTokenCreateResponse`
+    - `MCPTokenSummary`
+    - `MCPTokenRevokeRequest`.
+- Executed migrated tests one-by-one:
+  - `TestIssueTokenParseAndVerifyRoundTrip`
+  - `TestTokenIsActiveHandlesExpiryAndRevocation`
+  - `TestCreateTokenForOwnerNormalizesLists`
+  - `TestListTokenSummariesAndRevokeTokenForOwner`
+- Focused and full verification:
+  - `go test ./internal/mcptokens ./internal/models ./internal/oauth`
+  - `go test ./...`
+  - both passed.
+- CodeScene checks:
+  - `internal/mcptokens/service.go`: `9.68`
+  - `internal/mcptokens/service_test.go`: `10.0`
+  - `internal/mcptokens/errors.go`: `N/A` (const/error declarations only)
+  - `internal/models/mcp_token_api.go`: `N/A` (struct-only DTO file)
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP94 - Phase 4 MCP Token API Route Baseline (`internal/api/session_mcp_tokens.go`)
+
+- Added session-auth MCP token API routes:
+  - new file: `internal/api/session_mcp_tokens.go`
+  - mounted endpoints:
+    - `POST /api/v1/mcp/tokens`
+    - `GET /api/v1/mcp/tokens`
+    - `POST /api/v1/mcp/tokens/{token_id}/revoke`
+  - behavior includes:
+    - admin-only authorization gate via existing session actor context
+    - create payload validation/defaulting (`name`, `scope`, `expires_in_days`)
+    - revoke payload validation (`reason` length)
+    - owner-scoped create/list/revoke service dispatch
+    - audit event emission for create/revoke actions.
+- Updated session auth dependency contracts and route mounting:
+  - `internal/api/session_auth.go`
+  - added MCP token service callbacks + pepper wiring into dependency shape.
+- Updated runtime dependency wiring for MCP token service:
+  - `cmd/api/main.go`
+  - runtime now injects `mcptokens.NewService(pool)` through session-auth dependency adapters.
+- Extended router coverage for session-auth mounted/unmounted behavior:
+  - `internal/api/router_test.go`
+  - confirms `/api/v1/mcp/tokens` returns:
+    - `404` when session auth routes are not mounted
+    - `500` when mounted but MCP token dependencies are intentionally absent.
+- Executed tests one-by-one:
+  - `TestSessionAuthRoutesNotMountedWithoutDependencies`
+  - `TestSessionAuthRoutesMountedWithDependencies`
+- Focused/full verification:
+  - `go test ./internal/api ./internal/mcptokens ./cmd/api`
+  - `go test ./...`
+  - both passed.
+- CodeScene checks:
+  - `internal/api/session_auth.go`: `10.0`
+  - `internal/api/session_mcp_tokens.go`: `9.68`
+  - `internal/api/router_test.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP95 - Phase 3 Workflow Service Baseline (`internal/workflow/agent.go`)
+
+- Added workflow state-machine service parity for `api/app/agent_workflow.py`:
+  - new files:
+    - `internal/workflow/agent.go`
+    - `internal/workflow/agent_test.go`
+  - behavior includes:
+    - run lifecycle stages: collect -> synthesize -> snapshot -> persist
+    - in-memory thread checkpoint storage (`Run`, `GetState`, `Resume`)
+    - resume merge semantics for notes/assumptions/tags/keywords/sources
+    - snapshot threshold logic (`snapshot_enabled`, `snapshot_every_n_notes`)
+    - engram persistence hooks for snapshot/final outputs via injected creator callback.
+- Executed tests one-by-one:
+  - `TestRunCreatesEngramAndStoresState`
+  - `TestResumeAppendsNotesWithoutPersistence`
+  - `TestSnapshotCreationOnNoteThreshold`
+  - `TestSnapshotCreationContinuesAcrossResume`
+  - `TestGetStateAndResumeNotFound`
+- Focused/full verification:
+  - `go test ./internal/workflow ./internal/api ./cmd/api`
+  - `go test ./...`
+  - both passed.
+- CodeScene checks:
+  - `internal/workflow/agent.go`: `10.0`
+  - `internal/workflow/agent_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP96 - Phase 4 Agent Workflow API Route Baseline (`internal/api/agent_workflow_api.go`)
+
+- Added agent workflow API routes:
+  - new file: `internal/api/agent_workflow_api.go`
+  - mounted endpoints:
+    - `POST /api/v1/agent-runs`
+    - `GET /api/v1/agent-runs/{thread_id}`
+    - `POST /api/v1/agent-runs/{thread_id}/resume`
+  - behavior includes:
+    - request decoding/defaults for workflow run/resume payloads
+    - validation for required run fields and snapshot interval bounds
+    - thread-not-found handling parity (`404`, `Thread state not found`)
+    - run/get/resume response mapping with workflow state payload.
+- Added route-level tests:
+  - new file: `internal/api/agent_workflow_api_test.go`
+  - covers endpoint registration, validation, not-found/error mapping, and response snapshot copy semantics.
+- Updated top-level router dependency graph:
+  - `internal/api/router.go`
+  - new dependency: `RouterDependencies.AgentWorkflow`.
+- Updated runtime assembly wiring:
+  - `cmd/api/main.go`
+  - runtime now injects `workflow.NewService(...)` and repository-backed engram creator callback for snapshot/persist outputs.
+- Extended router integration tests:
+  - `internal/api/router_test.go`
+  - added `TestAgentWorkflowRoutesMountedWithDependencies`.
+- Executed tests one-by-one:
+  - `TestMountAgentWorkflowRoutesRegistersEndpoints`
+  - `TestAgentWorkflowRoutesValidationErrors`
+  - `TestAgentWorkflowRoutesNotFoundAndErrors`
+  - `TestBuildAgentRunResponseCopiesSnapshotIDs`
+  - `TestAgentWorkflowRoutesMountedWithDependencies`
+- Focused/full verification:
+  - `go test ./internal/api ./internal/workflow ./cmd/api`
+  - `go test ./...`
+  - both passed.
+- CodeScene checks:
+  - `internal/api/agent_workflow_api.go`: `10.0`
+  - `internal/api/agent_workflow_api_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `internal/api/router_test.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP97 - Phase 3 Export/Import API Route Baseline (`internal/api/export_api.go`)
+
+- Added export/import route module:
+  - new file: `internal/api/export_api.go`
+  - mounted endpoints:
+    - `GET /api/v1/projects/{project_id}/export`
+    - `POST /api/v1/projects/{project_id}/import`
+  - behavior includes:
+    - admin-actor auth requirement via existing request context actor
+    - export query parsing/validation for `format`, `collection_ids`, and `include_embeddings`
+    - import multipart file parsing and `conflict_policy` validation/defaulting
+    - JSON export payload responses and ZIP export payload responses (`export.json`)
+    - service-driven export/import orchestration with API-level error mapping.
+- Added export package contract/types baseline:
+  - new file: `internal/export/types.go`
+  - includes:
+    - export format parsing (`json`, `zip`)
+    - import conflict policy parsing (`skip`, `overwrite`, `rename`)
+    - export/import request/response models and service interface.
+- Updated top-level router dependency graph:
+  - `internal/api/router.go`
+  - new dependency: `RouterDependencies.ExportService`
+  - conditional dependency route mount: `mountExportDependencyRoutes(...)`.
+- Added migrated export/import route tests:
+  - new file: `internal/api/export_api_test.go`
+  - coverage for JSON/ZIP responses, multipart import payload forwarding, validation failures, and auth failures.
+- Executed tests one-by-one:
+  - `TestMountExportRoutesJSONResponse`
+  - `TestMountExportRoutesZIPResponse`
+  - `TestMountExportRoutesImportReadsFile`
+  - `TestMountExportRoutesValidationAndAuthErrors`
+- Focused/full verification:
+  - `go test ./internal/api ./internal/export ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks:
+  - `internal/api/export_api.go`: `9.68`
+  - `internal/api/export_api_test.go`: `9.53`
+  - `internal/api/router.go`: `10.0`
+  - `internal/export/types.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP98 - Phase 3 Export/Import Service Baseline (`internal/export/service*`)
+
+- Added export/import service implementation and supporting modules:
+  - `internal/export/service.go`
+  - `internal/export/service_export.go`
+  - `internal/export/service_import.go`
+  - `internal/export/service_import_engrams.go`
+  - `internal/export/service_bundle.go`
+  - `internal/export/service_store_lookup.go`
+  - `internal/export/service_store_list.go`
+  - `internal/export/service_store_sources.go`
+  - `internal/export/service_values.go`
+- Added migrated unit tests for export/import behavior:
+  - `internal/export/service_export_test.go`
+  - `internal/export/service_bundle_test.go`
+  - `internal/export/service_import_skip_test.go`
+  - `internal/export/service_import_rename_test.go`
+  - `internal/export/service_import_fixture_common_test.go`
+  - `internal/export/service_import_skip_fixture_test.go`
+  - `internal/export/service_import_rename_fixture_test.go`
+  - `internal/export/service_test_helpers_test.go`
+- Service behaviors included in this checkpoint:
+  - project visibility resolution with actor-role validation
+  - export bundle assembly for full-project and collection-filtered modes
+  - ZIP/JSON import bundle parsing (`export.json`) with format validation errors
+  - import conflict policies (`skip`, `overwrite`, `rename`) for engrams and collections
+  - source replacement on imported engrams and collection-item remapping.
+- Executed tests one-by-one:
+  - `TestBuildProjectExportBundleCollectionFilter`
+  - `TestBuildProjectExportBundleWithoutCollectionFilterAttachesSources`
+  - `TestBuildProjectExportBundleValidationErrors`
+  - `TestImportProjectBundleSkipPolicyReusesExistingRecords`
+  - `TestImportProjectBundleRenamePolicyCreatesRows`
+  - `TestParseProjectExportBundleValidationErrors`
+  - `TestParseProjectExportBundleFromZIP`
+- Focused/full verification:
+  - `go test ./internal/export ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks:
+  - `internal/export/service.go`: `10.0`
+  - `internal/export/service_export.go`: `10.0`
+  - `internal/export/service_import.go`: `10.0`
+  - `internal/export/service_import_engrams.go`: `10.0`
+  - `internal/export/service_bundle.go`: `10.0`
+  - `internal/export/service_store_lookup.go`: `9.68`
+  - `internal/export/service_store_list.go`: `10.0`
+  - `internal/export/service_store_sources.go`: `10.0`
+  - `internal/export/service_values.go`: `10.0`
+  - `internal/export/service_export_test.go`: `9.53`
+  - `internal/export/service_bundle_test.go`: `10.0`
+  - `internal/export/service_import_skip_test.go`: `10.0`
+  - `internal/export/service_import_rename_test.go`: `10.0`
+  - `internal/export/service_import_fixture_common_test.go`: `10.0`
+  - `internal/export/service_import_skip_fixture_test.go`: `10.0`
+  - `internal/export/service_import_rename_fixture_test.go`: `10.0`
+  - `internal/export/service_test_helpers_test.go`: `9.68`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP99 - Phase 4 Export/Import Runtime Integration Baseline (`cmd/api/main.go`)
+
+- Wired export/import service into runtime dependency assembly:
+  - updated `cmd/api/main.go`
+  - runtime now builds:
+    - shared `memoryAdminService`
+    - `export.NewService(pool, projectService, memoryAdminService, settings.EmbeddingDim)`
+  - injects export service into `RouterDependencies.ExportService`.
+- Added router-level dependency mount coverage:
+  - new file: `internal/api/export_router_test.go`
+  - tests:
+    - export routes are absent (`404`) without dependency wiring
+    - export route is mounted and callable (`200`) when `ExportService` is injected.
+- Executed tests one-by-one:
+  - `TestExportRoutesNotMountedWithoutDependencies`
+  - `TestExportRoutesMountedWithDependencies`
+- Focused/full verification:
+  - `go test ./internal/export ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks:
+  - `cmd/api/main.go`: `10.0`
+  - `internal/api/export_router_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP100 - Phase 4 Export/Import API Error Mapping Hardening (`internal/api/export_api.go`)
+
+- Updated export/import API route error mapping:
+  - `internal/api/export_api.go`
+  - service errors from `internal/export` now map to expected HTTP statuses:
+    - `ErrProjectNotFound` -> `404`
+    - `ErrCollectionNotFoundForProject` -> `404`
+    - `ErrImportFileEmpty` -> `422`
+    - `ErrImportZipMissingExportJSON` -> `422`
+    - `ErrUnsupportedImportFileFormat` -> `422`
+    - `ErrInvalidExportBundle` -> `422`
+    - fallback remains `500` for unexpected errors.
+- Added route-level tests for service-error mapping:
+  - new file: `internal/api/export_api_errors_test.go`
+  - covers both export (`GET`) and import (`POST`) service-error response mapping.
+- Executed tests one-by-one:
+  - `TestMountExportRoutesJSONResponse`
+  - `TestMountExportRoutesZIPResponse`
+  - `TestMountExportRoutesImportReadsFile`
+  - `TestMountExportRoutesValidationAndAuthErrors`
+  - `TestMountExportRoutesMapsProjectAndCollectionErrors`
+  - `TestMountExportRoutesMapsImportBundleErrors`
+- Focused/full verification:
+  - `go test ./internal/api ./internal/export ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks:
+  - `internal/api/export_api.go`: `9.68`
+  - `internal/api/export_api_errors_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP101 - Phase 4 MCP Stream Transport Baseline (`/api/v1/mcp/stream`)
+
+- Added MCP transport/domain baseline in Go:
+  - `internal/mcp/types.go` for JSON-RPC request/frame contracts.
+  - `internal/mcp/compatibility_service.go` with compatibility behavior for:
+    - `initialize`
+    - `tools/list`
+    - notification acceptance (`notifications/initialized` and other no-op notifications)
+  - `internal/mcp/service.go` now compiles against concrete request/frame types.
+- Added MCP stream route module:
+  - `internal/api/mcp_stream.go`
+  - mounted endpoints:
+    - `GET /api/v1/mcp/stream` (probe payload)
+    - `HEAD /api/v1/mcp/stream`
+    - `POST /api/v1/mcp/stream`
+  - behavior includes:
+    - notification handling (`202 Accepted`) with no response frames
+    - request/response JSON mode for MCP initialize/tool calls
+    - SSE mode (`text/event-stream`) with `jsonrpc` events
+    - Accept-header quality parsing parity (`application/json` preferred on tie)
+    - fallback terminal error frame when no matching terminal response is emitted.
+- Updated router/runtime dependency wiring:
+  - `internal/api/router.go`
+    - new optional dependency: `RouterDependencies.MCPService`
+    - conditional route mounting via `mountMCPDependencyRoutes`.
+  - `cmd/api/main.go`
+    - runtime now injects `mcp.NewCompatibilityService(settings.AppSemanticVersion)`.
+- Added migrated MCP tests:
+  - `internal/mcp/compatibility_service_test.go`
+  - `internal/api/mcp_stream_test.go`
+  - `internal/api/mcp_router_test.go`
+- Focused/full verification:
+  - `go test ./internal/mcp ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5 where scored):
+  - `internal/mcp/types.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
+  - `internal/api/mcp_stream.go`: `10.0`
+  - `internal/api/mcp_stream_test.go`: `10.0`
+  - `internal/api/mcp_router_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`
+  - `internal/mcp/service.go`: `Code Health score: None` (interface-only file; no degradations).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP102 - Phase 4 MCP Stream Actor-Auth Baseline (`internal/mcp/auth.go`)
+
+- Added MCP actor-resolution auth module in Go:
+  - new files:
+    - `internal/mcp/auth.go`
+    - `internal/mcp/auth_errors.go`
+  - behavior includes:
+    - bearer token parsing for `Authorization: Bearer ...`
+    - token record resolution + active-state checks (`expired`/`revoked` handling)
+    - constant-time token secret verification via existing MCP token hashing semantics
+    - owner user active-state validation
+    - token last-used touch on successful bearer auth
+    - session-actor fallback when bearer token is not provided
+    - OAuth-aware `WWW-Authenticate` header on unauthorized responses.
+- Extended MCP request context model:
+  - `internal/mcp/types.go`
+  - stream call requests now carry:
+    - resolved actor identity (`user_id`, `username`, `role`)
+    - optional MCP token auth context claims.
+- Updated MCP stream route auth flow:
+  - `internal/api/mcp_stream.go`
+  - now resolves actor context before notification/request dispatch and maps auth failures to route responses.
+- Updated dependency wiring for auth resolver injection:
+  - `internal/api/router.go`
+    - added `RouterDependencies.MCPActorResolver`
+    - MCP route mount now requires both `MCPService` and `MCPActorResolver`.
+  - `cmd/api/main.go`
+    - runtime now builds `mcp.NewActorResolver(...)` with session-context fallback bridge and injects it into router dependencies.
+- Added/updated migrated tests:
+  - new file: `internal/mcp/auth_test.go`
+  - updated files:
+    - `internal/api/mcp_stream_test.go`
+    - `internal/api/mcp_router_test.go`
+  - coverage includes:
+    - session fallback actor resolution
+    - bearer parsing and unauthorized scheme handling
+    - OAuth `WWW-Authenticate` metadata header behavior
+    - successful bearer token actor/claim propagation and last-used touch
+    - route-level auth error mapping and actor forwarding into stream dispatch.
+- Focused/full verification:
+  - `go test ./internal/mcp ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - both passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5 where scored):
+  - `internal/mcp/auth.go`: `9.68`
+  - `internal/mcp/auth_test.go`: `10.0`
+  - `internal/mcp/types.go`: `10.0`
+  - `internal/api/mcp_stream.go`: `10.0`
+  - `internal/api/mcp_stream_test.go`: `10.0`
+  - `internal/api/mcp_router_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`
+  - `internal/mcp/auth_errors.go`: `Code Health score: None` (constants-only helper file).
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP103 - Phase 4 MCP Stream Transport Rate-Limit Baseline (`internal/api/mcp_stream.go`)
+
+- Added MCP transport request rate-limit support to stream routes:
+  - `internal/api/mcp_stream.go`
+  - behavior includes:
+    - rate-limit gate applied on MCP POST stream requests before dispatch
+    - deterministic rate-limit key derivation using client IP + authorization fingerprint
+    - `429` response mapping with:
+      - detail: `Too many MCP transport requests. Retry in N seconds.`
+      - `Retry-After` response header.
+- Added transport limiter abstraction for MCP route dependencies:
+  - `internal/api/mcp_stream.go`
+    - new `MCPTransportRateLimiter` interface (`Consume(key) -> allowed,retrySeconds`).
+  - `internal/api/router.go`
+    - new optional dependency: `RouterDependencies.MCPTransportLimiter`
+    - routed into `MountMCPRoutes(...)`.
+- Updated runtime wiring for distributed MCP transport limiter:
+  - `cmd/api/main.go`
+    - new `newMCPTransportRateLimiter(...)` helper using:
+      - `MCP_TRANSPORT_RATE_LIMIT_*` settings
+      - namespace `mcp_transport`
+      - `rate_limit_state` distributed store (`auth.NewPGXRateLimitStore`).
+- Added/updated migrated tests:
+  - `internal/api/mcp_stream_test.go`
+    - rate-limit response/headers
+    - transport key derivation behavior (ip + authorization fingerprint)
+    - anonymous fingerprint fallback when authorization is missing.
+- Focused/full verification:
+  - `go test ./internal/api ./cmd/api -count=1`
+  - `go test ./internal/mcp -count=1`
+  - `go test ./... -count=1`
+  - all passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/api/mcp_stream.go`: `10.0`
+  - `internal/api/mcp_stream_test.go`: `10.0`
+  - `internal/api/router.go`: `10.0`
+  - `cmd/api/main.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP104 - Phase 4 MCP Catalog Visibility Baseline (`internal/mcp/catalog.go`)
+
+- Added MCP catalog primitives for compatibility service:
+  - new file: `internal/mcp/catalog.go`
+  - includes:
+    - read/write tool scope sets
+    - deterministic catalog ordering
+    - dotted/underscore tool-name normalization
+    - alias mapping (`engram.pin_to_session` -> `chat.pin_engram`)
+    - token-aware `tools/list` visibility filtering (scope + allowed-tools policy).
+- Updated compatibility MCP service behavior:
+  - `internal/mcp/compatibility_service.go`
+  - `tools/list` now returns a non-empty public catalog (`chat_*`, `engram_*`, `project_*`, `user_*`)
+  - `tools/call` behavior now distinguishes:
+    - unknown tool -> `-32601`
+    - known but not yet ported in Go dispatch -> `-32000` (`Tool not implemented`)
+    - token policy failures (scope/allowlist) -> `-32003`.
+- Added migrated MCP compatibility tests:
+  - `internal/mcp/compatibility_service_test.go`
+  - coverage includes:
+    - initialize contract
+    - tool catalog visibility defaults
+    - read-scope filtering for write tools
+    - error mapping for missing name / unknown method / not-implemented tool
+    - scope-based write rejection.
+- Focused/full verification:
+  - `go test ./internal/mcp -count=1`
+  - `go test ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - all passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/catalog.go`: `9.68`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP105 - Phase 4 MCP Direct-Method Compatibility Baseline (`internal/mcp/compatibility_service.go`)
+
+- Extended compatibility MCP dispatch behavior for direct tool methods:
+  - `internal/mcp/compatibility_service.go`
+  - now supports:
+    - dotted direct methods (for example `chat.send_message`)
+    - underscore direct methods (for example `engram_query`)
+  - policy behavior now mirrors `tools/call` path:
+    - unknown direct methods -> `-32601`
+    - known but not yet migrated in Go dispatch -> `-32000` (`Tool not implemented`)
+    - scope/allowlist policy violations -> `-32003`.
+- Hardened MCP compatibility tests with direct-method coverage:
+  - `internal/mcp/compatibility_service_test.go`
+  - added/updated assertions for:
+    - direct method not-implemented path
+    - read-scope write-tool rejection for both direct and `tools/call` paths
+    - consolidated error-mapping table coverage.
+- Focused/full verification:
+  - `go test ./internal/mcp -count=1`
+  - `go test ./internal/api ./cmd/api -count=1`
+  - `go test ./... -count=1`
+  - all passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/catalog.go`: `9.68`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP106 - Phase 4 MCP First Dispatched-Tools Baseline (`internal/mcp/compatibility_*`)
+
+- Migrated the first non-stub MCP tool dispatch paths into Go compatibility mode:
+  - `user.get_profile` now returns actor profile payload for both direct method and `tools/call` paths.
+  - `project.list` now dispatches into Go `projects.Service` through injected dependencies.
+- Added `tools/call` result envelope parity for implemented tools:
+  - `tool_name`
+  - `structuredContent`
+  - `content` text JSON payload
+  - `isError=false`.
+- Added dependency-backed compatibility service wiring:
+  - `cmd/api/main.go` now constructs MCP compatibility service with `ProjectService` dependency.
+- Refactored compatibility dispatch into focused files to keep code health >= 9.5 and pass safeguard gates:
+  - `internal/mcp/compatibility_service.go`
+  - `internal/mcp/compatibility_dispatch.go`.
+- Added migrated tests for implemented tool paths and argument forwarding:
+  - `internal/mcp/compatibility_service_test.go`
+  - `internal/mcp/compatibility_service_dispatch_test.go`
+  - `internal/mcp/compatibility_service_project_list_test.go`
+  - `internal/mcp/compatibility_service_project_list_support_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_dispatch_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_project_list_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_project_list_support_test.go`: `9.68`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP107 - Phase 4 MCP Project-Default Dispatch Baseline (`internal/mcp/compatibility_dispatch.go`)
+
+- Migrated project-default MCP dispatch paths into Go compatibility mode:
+  - `project.get_default`
+  - `project.set_default`
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return payloads directly
+  - `tools/call` wraps implemented tool payloads in the MCP compatibility envelope.
+- Added project-service error mapping for default-project updates:
+  - blank `project_id` -> `-32602` invalid params
+  - project/user not found -> `-32602` with status/detail payload
+  - unexpected failures -> `-32603` internal error.
+- Extended compatibility tests:
+  - `internal/mcp/compatibility_service_project_default_test.go`
+  - updated `internal/mcp/compatibility_service_project_list_support_test.go` stubs to satisfy expanded project-service interface.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_project_list_support_test.go`: `9.68`
+  - `internal/mcp/compatibility_service_project_default_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP108 - Phase 4 MCP Project-Create Dispatch Baseline (`internal/mcp/compatibility_dispatch.go`)
+
+- Migrated `project.create` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"project": ...}`
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Added project-create parameter handling parity:
+  - `project_id`, `name`, `description` now follow permissive string coercion behavior.
+  - optional `owner_user_id` now validates as UUID and returns `-32602` on invalid values.
+- Added project-create service error mapping:
+  - blank `project_id` -> `-32602` invalid params
+  - unexpected failures -> `-32603` internal error.
+- Extended compatibility tests:
+  - `internal/mcp/compatibility_service_project_create_test.go`
+  - updated `internal/mcp/compatibility_service_project_list_support_test.go` stubs to satisfy expanded project-service interface.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_project_list_support_test.go`: `9.68`
+  - `internal/mcp/compatibility_service_project_create_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP109 - Phase 4 MCP User-Projects Dispatch Baseline (`user.list_projects`)
+
+- Migrated `user.list_projects` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"project_ids": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented session-derived project ID behavior parity:
+  - list sessions for actor with window `(limit=1000, offset=0)`
+  - collect non-empty project IDs
+  - deduplicate and return sorted ascending IDs.
+- Added runtime session-list adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_list_adapter.go`
+  - `cmd/api/main.go` passes session-list service dependency to compatibility MCP service.
+- Extended compatibility tests:
+  - `internal/mcp/compatibility_service_user_projects_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_user_projects_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP110 - Phase 4 MCP Chat Session-Query Baseline (`chat.list_sessions`)
+
+- Migrated `chat.list_sessions` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"sessions": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented chat session list parameter behavior parity:
+  - optional `project_id` filter support
+  - paging defaults (`limit=50`, `offset=0`)
+  - invalid paging values return `-32602` invalid params.
+- Hardened MCP session-list dependency shape for code-health/safeguard compliance:
+  - replaced high-argument list calls with request struct:
+    - `internal/mcp.SessionListRequest`
+    - updated runtime adapter and tests accordingly.
+- Added/updated MCP tests:
+  - `internal/mcp/compatibility_service_chat_sessions_test.go`
+  - `internal/mcp/compatibility_service_user_projects_test.go`
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_user_projects_test.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_sessions_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP111 - Phase 4 MCP Chat Session-Get Baseline (`chat.get_session`)
+
+- Migrated `chat.get_session` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"session": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented `session_id` parameter behavior parity:
+  - required UUID parsing
+  - invalid/missing values return `-32602` invalid params.
+- Implemented not-found mapping parity:
+  - missing/hidden session returns `-32602` with `status_code=404` and `detail="Chat session not found"`.
+- Added runtime session-get adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_list_adapter.go`
+  - `cmd/api/main.go` passes both session-list and session-get compatibility dependencies.
+- Hardened tool dispatch shape for CodeScene safeguard compliance:
+  - replaced high-branch switch dispatch with table-driven handler map in `internal/mcp/compatibility_dispatch.go`.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_get_session_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_chat_get_session_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP112 - Phase 4 MCP Chat Lifecycle-Policy Query Baseline (`chat.get_lifecycle_policy`)
+
+- Migrated `chat.get_lifecycle_policy` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"lifecycle_policy": {...}}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented lifecycle policy query behavior using session lookup projection:
+  - fetch session by actor/session ID visibility
+  - map session autosave/retention fields into lifecycle policy payload.
+- Reused session UUID validation + not-found mapping behavior parity:
+  - required `session_id` UUID
+  - missing/invalid values return `-32602` invalid params
+  - missing/hidden session returns `-32602` with `status_code=404`.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_lifecycle_policy_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `internal/mcp/compatibility_dispatch.go`: `9.68`
+  - `internal/mcp/compatibility_service_chat_lifecycle_policy_test.go`: `9.68`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP113 - Phase 4 MCP Chat Messages-Query Baseline (`chat.list_messages`)
+
+- Migrated `chat.list_messages` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"messages": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented session-scoped message-query behavior:
+  - required `session_id` UUID validation with existing session visibility checks
+  - paging defaults (`limit=200`, `offset=0`)
+  - invalid paging values return `-32602` invalid params.
+- Added runtime message-list adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_list_adapter.go`
+  - `cmd/api/main.go` passes message-list dependency to compatibility MCP service.
+- Refactored compatibility dispatch internals to preserve code-health constraints:
+  - session-derived dispatch helper extraction
+  - shared paging parser
+  - simplified integer parameter parsing.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_messages_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_messages_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP114 - Phase 4 MCP Chat Timeline-Query Baseline (`chat.list_timeline`)
+
+- Migrated `chat.list_timeline` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"events": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented session-scoped timeline-query behavior:
+  - required `session_id` UUID validation with existing session visibility checks
+  - paging defaults (`limit=100`, `offset=0`)
+  - invalid paging values return `-32602` invalid params.
+- Added runtime timeline adapter wiring in Go API runtime:
+  - `cmd/api/mcp_session_list_adapter.go` with timeline projection from linked engrams
+  - `cmd/api/main.go` passes timeline-list dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_timeline_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_session_list_adapter.go`: `10.0`
+  - `cmd/api/mcp_message_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_timeline_test.go`: `9.55`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP115 - Phase 4 MCP Chat Pinned-Engrams Query Baseline (`chat.list_pinned_engrams`)
+
+- Migrated `chat.list_pinned_engrams` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"pinned_engrams": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented session-scoped pinned-engram query behavior:
+  - required `session_id` UUID validation with existing session visibility checks
+  - invalid/missing session IDs return `-32602` invalid params.
+- Added runtime pinned-engram adapter wiring in Go API runtime:
+  - `cmd/api/mcp_pinned_engram_list_adapter.go`
+  - `cmd/api/main.go` passes pinned-engram-list dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_pinned_engrams_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_pinned_engram_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_pinned_engrams_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP116 - Phase 4 MCP Chat Pinned-Documents Query Baseline (`chat.list_pinned_documents`)
+
+- Migrated `chat.list_pinned_documents` MCP dispatch path into Go compatibility mode.
+- Added compatibility parity for both direct-method and `tools/call` entrypoints:
+  - direct calls return `{"pinned_documents": [...]}`.
+  - `tools/call` wraps payload in compatibility envelope with `structuredContent`.
+- Implemented session-scoped pinned-document query behavior:
+  - required `session_id` UUID validation with existing session visibility checks
+  - invalid/missing session IDs return `-32602` invalid params.
+- Added runtime pinned-document adapter wiring in Go API runtime:
+  - `cmd/api/mcp_pinned_document_list_adapter.go`
+  - `cmd/api/main.go` passes pinned-document-list dependency to compatibility MCP service.
+- Added MCP compatibility tests:
+  - `internal/mcp/compatibility_service_chat_pinned_documents_test.go`.
+- Full verification:
+  - `go test ./... -count=1`
+  - passed.
+- CodeScene checks (checkpoint-touched files, all >= 9.5):
+  - `cmd/api/main.go`: `10.0`
+  - `cmd/api/mcp_pinned_document_list_adapter.go`: `10.0`
+  - `internal/mcp/compatibility_service.go`: `10.0`
+  - `internal/mcp/compatibility_dispatch.go`: `10.0`
+  - `internal/mcp/compatibility_service_chat_pinned_documents_test.go`: `10.0`.
+- Pre-commit safeguard:
+  - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+  - result: `quality_gates=passed`
+  - findings: none.
+
+### CP187 - Phase 21 Reliability Primitives Baseline
+
+- Added provider circuit policy module:
+  - `internal/chat/provider_circuit.go`
+  - transient failure tracking by provider, threshold-triggered circuit opening, and cooldown-based recovery.
+- Added ordered provider fallback strategy module:
+  - `internal/chat/provider_fallback.go`
+  - deterministic candidate ordering and fallback model resolution behavior.
+- Added focused unit tests:
+  - `internal/chat/provider_circuit_test.go`
+  - `internal/chat/provider_fallback_test.go`.
+- Full verification:
+  - `go test ./internal/chat -count=1`
+  - passed.
+
+### CP188 - Phase 21 Observability/Reliability Closure
+
+- Wired fallback + circuit strategy into chat service execution:
+  - `internal/chat/service.go`
+  - transient provider failures now attempt ordered fallback providers; open circuits short-circuit failed providers.
+- Added lifecycle trace hooks + chat observability contracts:
+  - `internal/chat/observability.go`
+  - lifecycle stages emitted for prepare/provider/persist/lifecycle in both send and stream paths.
+- Expanded `/api/v1/metrics` observability payload:
+  - `internal/api/request_observability.go`
+  - added provider failure categories, stream-health outcomes, and lifecycle trace counters.
+- Wired observability into REST + MCP runtime composition:
+  - `cmd/api/chat_runtime.go`
+  - `cmd/api/main.go`
+  - `cmd/api/mcp_message_send_adapter.go`.
+- Added regression coverage:
+  - `internal/chat/service_test.go`
+  - `internal/api/request_observability_test.go`
+  - `cmd/api/chat_runtime_test.go`.
+- Full verification:
+  - `go test ./cmd/api ./internal/api ./internal/chat -count=1`
+  - passed.
+
+### CP189 - Phase 22 Release Automation and Deployment Profiles Closure
+
+- Split CI into explicit phase-22 gates:
+  - `.github/workflows/ci.yml`
+  - `Go Backend Checks`, `Web Frontend Checks`, `Acceptance Deterministic Suite`, and `Release Smoke (Compose Profile)`.
+- Added optional gated live-provider release suite:
+  - `.github/workflows/ci.yml` `workflow_dispatch` input `run_live_provider`.
+  - `Release Live-Provider Gate` runs only when manually requested and secrets are present.
+- Standardized compose profiles:
+  - `docker-compose.yml` now declares `dev`, `acceptance`, `release-smoke`.
+  - added `release-smoke` probe service that validates API health/version/metrics plus web availability.
+- Added release automation Makefile targets:
+  - `release-smoke-docker`
+  - `release-gate`
+  - `release-live-provider-gate`.
+- Added versioned release operational docs:
+  - `docs/release-checklist-v1.md`
+  - `docs/release-rollback-runbook-v1.md`.
+- Aligned docs and roadmap references:
+  - `README.md`
+  - `docs/testing-guide.md`
+  - `docs/user-workflows.md`
+  - `docs/go-rollout-playbook.md`
+  - `Plan.md`
+  - `todo.md`
+  - `migration/checkpoints/checkpoint.md`.
+- Verification:
+  - `docker compose --profile acceptance config` passed.
+  - `docker compose --profile release-smoke config` passed.
+  - `go test ./... -count=1` passed.

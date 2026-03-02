@@ -11,26 +11,25 @@ description: Use this skill when implementing or extending document ingestion, c
 - Blending document retrieval with engram retrieval in chat/query flows.
 
 ## Workflow
-1. Normalize text before hashing/chunking to keep deterministic IDs stable.
+1. Normalize text before hashing/chunking so IDs remain deterministic.
 2. Generate content hash and deterministic document/chunk IDs.
 3. Persist document metadata and replace chunk rows atomically.
-4. Store chunk embeddings via embedding abstraction (never call provider SDK from repository code).
-5. Blend document chunk results with engram retrieval for downstream chat context.
-6. If sessions support pinning, query pinned documents first and then merge with normal retrieval.
-7. Emit source references that identify chunk provenance (`document_id`, `chunk_id`, `chunk_index`).
-8. When adding pinning, carry pinned documents across continuation flows the same way pinned engrams are carried.
+4. Store chunk embeddings through `internal/embeddings` abstraction.
+5. Blend document chunk results with engram retrieval for chat context.
+6. Merge pinned-document context with normal retrieval where supported.
+7. Emit source references with `document_id`, `chunk_id`, and `chunk_index`.
 
 ## Module Layout (Current)
-- `api/app/ingestion/chunking.py`: deterministic text normalization/hash/chunking.
-- `api/app/ingestion/repository.py`: document/chunk persistence and vector query.
-- `api/app/ingestion/service.py`: validation, file decode guards, blended query orchestration.
-- `api/app/ingestion/api.py`: HTTP routes for text/file intake and retrieval.
-- `api/app/embeddings/`: embedding provider routing and fallback behavior.
-- `api/app/chat/context.py`: merges pinned-document chunk context with engram retrieval context.
-- `api/app/chat_repository.py`: `session_pinned_documents` persistence and visibility enforcement.
-- `api/app/chat/api.py`: pinned-document session routes.
+- `internal/ingestion/chunking.go`: deterministic chunking/hash behavior.
+- `internal/ingestion/service.go`: validation, decode guards, orchestration.
+- `internal/repository/document*.go`: document/chunk persistence.
+- `internal/api/ingestion_api.go`: ingestion REST routes.
+- `internal/chat/context*.go`: merges document evidence into chat context.
+- `internal/repository/chat_pinning*.go`: session pinned documents.
+- `web/src/api/ingestion.ts`: frontend ingestion client.
 
 ## Validation
-- Unit tests for chunking determinism and ingestion service validation.
-- Integration tests for text/file ingestion + blended query path.
-- Chat context tests covering document chunk inclusion and source references.
+- Unit tests: `internal/ingestion/chunking_test.go`, `internal/ingestion/service_test.go`.
+- Integration tests: `internal/api/ingestion_api_test.go`, repository tests.
+- Chat-context tests: `internal/chat/context_test.go`, `internal/api/chat_api_messages*_test.go`.
+- Run `go test ./... -count=1` and `make check`.

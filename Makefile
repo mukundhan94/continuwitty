@@ -1,4 +1,4 @@
-SHELL := /bin/zsh
+SHELL := /bin/bash
 
 -include .env
 export
@@ -23,7 +23,7 @@ NC = \033[0m
 
 WEB_PORT ?= 5173
 
-.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api cli consolidate lint format format-check check test test-unit test-integration coverage eval web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke release-smoke-docker release-gate release-live-provider-gate acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api lint format format-check check test test-unit test-integration coverage eval eval-report web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
 help: ## Print all Makefile commands with categorized descriptions and usage hints
 	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
@@ -42,10 +42,11 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 			if (target ~ /^db-/) return "Database"; \
 			if (target ~ /^stack-/) return "Stack"; \
 			if (target == "dev") return "Local Dev"; \
+			if (target ~ /^release-/) return "Release"; \
 			if (target ~ /^acceptance-/) return "Acceptance"; \
 			if (target ~ /^web-/ || target == "web") return "Web"; \
 			if (target ~ /^diagram-/) return "Diagrams"; \
-			if (target == "sync" || target == "api" || target == "cli" || target == "consolidate" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "coverage" || target == "eval" || target == "check") return "API/Backend"; \
+			if (target == "sync" || target == "api" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "coverage" || target == "eval" || target == "eval-report" || target == "check") return "API/Backend"; \
 			return "Other"; \
 		} \
 		/^[a-zA-Z0-9_.-]+:.*## / { \
@@ -74,6 +75,7 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 	@printf '  $(INFO)make stack-up$(NC)                               Container stack (use sparingly)\n'
 	@printf '  $(INFO)make check && make web-check$(NC)                Run backend + web quality gates\n'
 	@printf '  $(INFO)make acceptance-bddgen && make acceptance-test-mock$(NC)  Run deterministic acceptance tests\n'
+	@printf '  $(INFO)make release-gate$(NC)                            Run release candidate deterministic gates\n'
 	@printf '\n'
 	@$(MAKE) --no-print-directory print-config
 
@@ -128,6 +130,33 @@ stack-reset: ## Recreate full stack and wipe local checkpoints/artifacts
 stack-logs: ## Tail combined logs for db, api, and web
 	@printf '$(PROGRESS)Tailing stack logs (db, api, web). Press Ctrl+C to exit.$(NC)\n'
 	@$(DOCKER_COMPOSE) logs -f db api web
+
+stack-smoke: ## Build/start db + api and verify Go API health/version endpoints
+	@printf '$(PROGRESS)Starting db + api for smoke verification...$(NC)\n'
+	@$(DOCKER_COMPOSE) up -d --build --force-recreate db api
+	@printf '$(PROGRESS)Waiting for API health endpoint...$(NC)\n'
+	@ready=0; \
+	for attempt in $$(seq 1 30); do \
+		if curl -fsS "http://127.0.0.1:$${API_PORT:-8000}/healthz" >/dev/null 2>&1; then \
+			ready=1; \
+			break; \
+		fi; \
+		sleep 1; \
+	done; \
+	if [ "$$ready" -ne 1 ]; then \
+		printf '$(ERROR)API healthcheck did not become ready in time$(NC)\n'; \
+		exit 1; \
+	fi
+	@curl -fsS "http://127.0.0.1:$${API_PORT:-8000}/api/v1/version" >/dev/null
+	@printf '$(SUCCESS)✓ Go API container smoke checks passed$(NC)\n'
+
+release-smoke-docker: ## Run release smoke checks in Docker compose profile "release-smoke"
+	@printf '$(PROGRESS)Running release smoke checks in Docker profile "release-smoke"...$(NC)\n'
+	@exit_code=0; \
+	$(DOCKER_COMPOSE) --profile release-smoke up --build --force-recreate --abort-on-container-exit release-smoke || exit_code=$$?; \
+	$(DOCKER_COMPOSE) --profile release-smoke down; \
+	exit $$exit_code
+	@printf '$(SUCCESS)✓ Docker release smoke checks completed$(NC)\n'
 
 acceptance-sync: ## Install acceptance test dependencies
 	@printf '$(PROGRESS)Installing acceptance test dependencies...$(NC)\n'
@@ -196,12 +225,18 @@ acceptance-test-triage-live-docker: ## Run live triage acceptance in docker (ACC
 	exit $$exit_code
 	@printf '$(SUCCESS)✓ Docker triage acceptance suite completed$(NC)\n'
 
-sync: ## Sync Python dependencies via uv (including dev group)
-	@printf '$(PROGRESS)Syncing Python dependencies with uv...$(NC)\n'
-	@cd api && uv sync --group dev
-	@printf '$(SUCCESS)✓ Python dependencies synced$(NC)\n'
+release-live-provider-gate: ## Run optional live-provider release gate (Bedrock + triage)
+	@printf '$(PROGRESS)Running optional live-provider release gate...$(NC)\n'
+	@$(MAKE) --no-print-directory acceptance-test-bedrock-live-docker
+	@$(MAKE) --no-print-directory acceptance-test-triage-live-docker
+	@printf '$(SUCCESS)✓ Live-provider release gate completed$(NC)\n'
 
-dev: ## Start DB (docker) + API + Web together in one terminal (Ctrl+C stops both local servers)
+sync: ## Sync Go module dependencies
+	@printf '$(PROGRESS)Syncing Go module dependencies...$(NC)\n'
+	@go mod download
+	@printf '$(SUCCESS)✓ Go dependencies synced$(NC)\n'
+
+dev: ## Start DB (docker) + Go API + Web together in one terminal (Ctrl+C stops both local servers)
 	@printf '$(PROGRESS)Ensuring database container is running...$(NC)\n'
 	@$(DOCKER_COMPOSE) up -d --build --force-recreate db
 	@printf '$(SUCCESS)✓ Database ready$(NC)\n'
@@ -209,65 +244,78 @@ dev: ## Start DB (docker) + API + Web together in one terminal (Ctrl+C stops bot
 	@printf '  $(INFO)API:$(NC) http://localhost:%s\n' "$${API_PORT:-8000}"
 	@printf '  $(INFO)WEB:$(NC) http://localhost:%s\n' "$${WEB_PORT:-5173}"
 	@trap 'printf "\n$(PROGRESS)Stopping local dev servers...$(NC)\n"; kill $$api_pid $$web_pid >/dev/null 2>&1 || true' INT TERM EXIT; \
-		(cd api && uv run uvicorn app.main:app --host $${API_HOST:-0.0.0.0} --port $${API_PORT:-8000} --reload 2>&1 | sed -e "s/^/[api] /") & api_pid=$$!; \
+		(go run ./cmd/api 2>&1 | sed -e "s/^/[api] /") & api_pid=$$!; \
 		(cd web && npm run dev -- --host --port $${WEB_PORT:-5173} 2>&1 | sed -e "s/^/[web] /") & web_pid=$$!; \
 		wait $$api_pid $$web_pid
 
-api: ## Run FastAPI in local dev mode with reload
-	@printf '$(PROGRESS)Starting FastAPI dev server (reload enabled)...$(NC)\n'
+api: ## Run Go API server in local dev mode
+	@printf '$(PROGRESS)Starting Go API server...$(NC)\n'
 	@printf '  $(INFO)Host:$(NC) %s\n' "$${API_HOST:-0.0.0.0}"
 	@printf '  $(INFO)Port:$(NC) %s\n' "$${API_PORT:-8000}"
-	@cd api && uv run uvicorn app.main:app --host $${API_HOST:-0.0.0.0} --port $${API_PORT:-8000} --reload
+	@go run ./cmd/api
 
-cli: ## Run API CLI entrypoint (pass args with ARGS="...")
-	@printf '$(PROGRESS)Running CLI: python -m app.cli %s$(NC)\n' "$(ARGS)"
-	@cd api && uv run python -m app.cli $(ARGS)
+lint: ## Run Go vet checks
+	@printf '$(PROGRESS)Running go vet checks...$(NC)\n'
+	@go vet ./...
+	@printf '$(SUCCESS)✓ go vet checks passed$(NC)\n'
 
-consolidate: ## Run consolidation workflow via CLI (pass args with ARGS="...")
-	@printf '$(PROGRESS)Running consolidation CLI: python -m app.cli consolidate %s$(NC)\n' "$(ARGS)"
-	@cd api && uv run python -m app.cli consolidate $(ARGS)
+format: ## Apply gofmt to backend Go files
+	@printf '$(PROGRESS)Applying gofmt...$(NC)\n'
+	@find cmd internal -name '*.go' -type f -print0 | xargs -0 gofmt -w
+	@printf '$(SUCCESS)✓ gofmt applied$(NC)\n'
 
-lint: ## Run Ruff lint checks
-	@printf '$(PROGRESS)Running Ruff lint checks...$(NC)\n'
-	@cd api && uv run ruff check .
-	@printf '$(SUCCESS)✓ Lint checks passed$(NC)\n'
+format-check: ## Verify backend Go formatting without changing files
+	@printf '$(PROGRESS)Checking Go code formatting...$(NC)\n'
+	@unformatted="$$(gofmt -l $$(find cmd internal -name '*.go' -type f))"; \
+	if [ -n "$$unformatted" ]; then \
+		printf '$(ERROR)Go files require formatting. Run make format$(NC)\n'; \
+		printf '%s\n' "$$unformatted"; \
+		exit 1; \
+	fi
+	@printf '$(SUCCESS)✓ Go format check passed$(NC)\n'
 
-format: ## Apply Ruff formatting fixes
-	@printf '$(PROGRESS)Applying Ruff formatting...$(NC)\n'
-	@cd api && uv run ruff format .
-	@printf '$(SUCCESS)✓ Formatting applied$(NC)\n'
+test: ## Run full backend Go test suite
+	@printf '$(PROGRESS)Running full backend Go test suite...$(NC)\n'
+	@go test ./... -count=1
+	@printf '$(SUCCESS)✓ Backend Go tests passed$(NC)\n'
 
-format-check: ## Verify code formatting without changing files
-	@printf '$(PROGRESS)Checking code formatting...$(NC)\n'
-	@cd api && uv run ruff format --check .
-	@printf '$(SUCCESS)✓ Format check passed$(NC)\n'
+test-unit: ## Run backend Go unit test suite
+	@printf '$(PROGRESS)Running backend Go unit tests...$(NC)\n'
+	@go test ./... -count=1
+	@printf '$(SUCCESS)✓ Backend Go unit tests passed$(NC)\n'
 
-test: ## Run full API pytest suite
-	@printf '$(PROGRESS)Running full API pytest suite...$(NC)\n'
-	@cd api && uv run pytest -q
-	@printf '$(SUCCESS)✓ API test suite passed$(NC)\n'
+test-integration: ## Run backend Go integration test suite
+	@printf '$(PROGRESS)Running backend Go integration tests...$(NC)\n'
+	@go test ./... -count=1
+	@printf '$(SUCCESS)✓ Backend Go integration tests passed$(NC)\n'
 
-test-unit: ## Run API unit tests only
-	@printf '$(PROGRESS)Running API unit tests...$(NC)\n'
-	@cd api && uv run pytest -q -m "not integration"
-	@printf '$(SUCCESS)✓ API unit tests passed$(NC)\n'
+coverage: ## Run backend Go coverage and write coverage.out
+	@printf '$(PROGRESS)Running backend Go coverage...$(NC)\n'
+	@go test ./... -coverprofile=coverage.out -covermode=atomic
+	@go tool cover -func=coverage.out | tail -n 1
+	@printf '$(SUCCESS)✓ Backend Go coverage completed (coverage.out)$(NC)\n'
 
-test-integration: ## Run API integration tests only
-	@printf '$(PROGRESS)Running API integration tests...$(NC)\n'
-	@cd api && uv run pytest -q -m integration
-	@printf '$(SUCCESS)✓ API integration tests passed$(NC)\n'
+eval: ## Run EvalOps suite + baseline/previous delta gate and write reports
+	@printf '$(PROGRESS)Running EvalOps suite with regression delta gate...$(NC)\n'
+	@go run ./cmd/evalops \
+		-out data/evals/latest.json \
+		-history data/evals/history.jsonl \
+		-baseline evals/baselines/eval-suite-v1.json \
+		-trend-report data/evals/trend-report.md \
+		-enforce-delta-gate=true
+	@printf '$(SUCCESS)✓ EvalOps suite passed (data/evals/latest.json)$(NC)\n'
 
-coverage: ## Run API coverage gate with pytest-cov (minimum 60%)
-	@printf '$(PROGRESS)Running API coverage gate (>=60%%)...$(NC)\n'
-	@cd api && uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=60
-	@printf '$(SUCCESS)✓ API coverage gate passed$(NC)\n'
+eval-report: ## Generate EvalOps run + trend report without enforcing delta gate
+	@printf '$(PROGRESS)Generating EvalOps trend report (delta gate disabled)...$(NC)\n'
+	@go run ./cmd/evalops \
+		-out data/evals/latest.json \
+		-history data/evals/history.jsonl \
+		-baseline evals/baselines/eval-suite-v1.json \
+		-trend-report data/evals/trend-report.md \
+		-enforce-delta-gate=false
+	@printf '$(SUCCESS)✓ EvalOps trend report updated$(NC)\n'
 
-eval: ## Run eval harness and write evals/last_eval.json
-	@printf '$(PROGRESS)Running evaluation harness...$(NC)\n'
-	@cd api && uv run python -m evals.run_eval --out evals/last_eval.json
-	@printf '$(SUCCESS)✓ Eval completed (api/evals/last_eval.json)$(NC)\n'
-
-check: lint format-check test eval ## Run full API quality gate (lint + format-check + tests + eval)
+check: lint format-check test eval ## Run backend Go quality gate (vet + format-check + tests + eval gate)
 
 web-sync: ## Install web dependencies
 	@printf '$(PROGRESS)Installing web dependencies...$(NC)\n'
@@ -296,6 +344,8 @@ web-build: ## Build production web bundle
 	@printf '$(SUCCESS)✓ Web build completed$(NC)\n'
 
 web-check: web-lint web-test web-build ## Run full web quality gate (lint + tests + build)
+
+release-gate: check web-check acceptance-test-mock-docker release-smoke-docker ## Run deterministic release candidate gate
 
 diagram-render: ## Render PlantUML diagrams to SVG
 	@printf '$(PROGRESS)Rendering PlantUML diagrams to SVG...$(NC)\n'

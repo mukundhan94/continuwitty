@@ -4,36 +4,33 @@ This guide is the operational contract for contributors and coding agents.
 Use it as the default workflow when adding or refactoring features.
 
 ## 1. Repository Map
-- `api/app/`: FastAPI services, models, repositories, auth, provider adapters, MCP server.
-- `api/app/chat/`: chat domain package (API router, service orchestration, context assembly, errors).
-- `api/app/ingestion/`: document ingestion domain package (text/file intake, deterministic chunking, blended query path).
-- `api/app/mcp/`: MCP domain package (SSE transport, JSON-RPC dispatch, tool errors).
-- `api/app/providers/`: provider domain package (`base`, `errors`, concrete adapters, `registry`).
-- `api/app/embeddings/`: embedding provider abstraction (local deterministic + optional external provider fallback).
-- `api/tests/`: unit and integration tests.
-- `api/evals/`: scenario-based eval harness.
+- `cmd/api/`: Go API runtime wiring and MCP adapters.
+- `internal/`: Go domain modules (API handlers, repositories, auth, providers, MCP, admin, ingestion, export).
 - `db/init/`: SQL schema and migration-style DDL.
 - `web/`: React UI (chat/session/pinning workflows, streaming UX, frontend tests).
 - `web/src/styles/`: shared style system (theme tokens, global CSS vars, reusable styled shells).
 - `web/tailwind.config.ts` + `web/postcss.config.cjs`: Tailwind utility pipeline for the web app.
 - `acceptance-tests/`: Playwright-BDD acceptance framework (`features`, `steps`, `support`, `playwright.config.ts`).
-- `api/Dockerfile`, `web/Dockerfile`, `acceptance-tests/Dockerfile`: container runtimes.
+- `Dockerfile`, `web/Dockerfile`, `acceptance-tests/Dockerfile`: container runtimes.
 - `docker-compose.yml`: local stack orchestration for DB/API/web and acceptance profile.
 - `skills/`: reusable agent workflows for this project.
 
 ## 2. Non-Negotiable Rules
 - Keep all features local-first by default.
-- Use `uv` for dependency and command execution.
-- Update `docs/implementation-log.md` and `checkpoint.md` in every implementation phase.
+- Update `docs/implementation-log.md` and `migration/checkpoints/checkpoint.md` in every implementation phase.
 - Preserve backward compatibility for existing endpoints unless intentionally versioned.
 - Add tests for every non-trivial behavior change.
 - Keep all frontend colors/typography/shadows in `web/src/styles/theme.ts` and consume via shared primitives/utilities.
 - Keep engram auto-metadata enrichment fill-empty-only: derive `abstract/tags/keywords` only when empty and never overwrite non-empty caller values.
-- Keep API data contracts in the same package: prefer `api/app/models.py` for shared request/response models; only add domain-local models under `api/app/<domain>/models.py` when they are truly domain-internal.
 - Keep project write resolution centralized in `ProjectService.resolve_project_id_for_write`: explicit `project_id` wins, otherwise use actor default project, otherwise fail with 422.
 - Keep soft-delete semantics for sessions/engrams/collections (`deleted_at`, `deleted_by_user_id`, `delete_reason`) and restore by clearing those fields; never hard-delete from admin APIs/tools.
 - Keep collections project-bounded: engrams can only belong to collections in the same project, and cross-project engram moves must auto-detach invalid collection links.
+- Keep project visibility membership-safe: project-visible engrams/chats/documents must only resolve for admin, owner, or active project members (including ownerless legacy rows via active membership).
+- Keep project ownership canonical: `projects.owner_user_id` remains source-of-truth and must have a mirrored active owner row in `project_members`.
+- Keep project member management restricted to owner/admin; never allow assigning/demoting/removing `owner` via member CRUD APIs.
+- Keep project audit events DB-backed in `project_audit_events` for member add/update/remove, engram share/unshare, and engram pin/unpin actions.
 - Before every commit, follow `skills/codescene/SKILL.md` and run a CodeScene MCP pre-commit health check (`pre_commit_code_health_safeguard`) on the current change set; record the outcome in the implementation log.
+- Keep skill docs aligned with the Go runtime layout (`internal/`, `cmd/api/`, `web/src/`); do not leave deprecated `api/app`/`api/tests` path references in active skills.
 
 ## 3. Daily Workflow
 1. Pull latest and inspect `git status`.
@@ -44,33 +41,33 @@ Use it as the default workflow when adding or refactoring features.
 6. Implement one phase at a time.
 7. Run checks: `make lint`, `make test`, `make eval`, `make check`.
 8. If `web/` changed: run `make web-check`.
-9. If `acceptance-tests/`, `web/Dockerfile`, `api/Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-bddgen`, `make acceptance-typecheck`, and `make acceptance-test-docker`.
+9. If `acceptance-tests/`, `web/Dockerfile`, `Dockerfile`, `docker-compose.yml`, or auth/session workflow changed: run `make acceptance-bddgen`, `make acceptance-typecheck`, and `make acceptance-test-docker`.
 10. If Bedrock provider behavior changed, run live non-deterministic acceptance gate: `make acceptance-test-bedrock-live` (or docker equivalent).
 11. For docker runtime changes: validate `docker compose config`.
-12. Update docs (`docs/implementation-log.md`, `checkpoint.md`, `Plan.md` progress, `docs/architecture-playbook.md` when call flows or schema semantics change, skill docs if needed).
+12. Update docs (`docs/implementation-log.md`, `migration/checkpoints/checkpoint.md`, `Plan.md` progress, `docs/architecture-playbook.md` when call flows or schema semantics change, skill docs if needed).
 13. Commit with phase-scoped message.
 
 ## 4. Architecture Boundaries
-- Route handlers in `main.py` should orchestrate only.
-- Domain routers (`api/app/chat/api.py`) should remain thin and delegate to services.
+- Route handlers in `internal/api` should orchestrate only.
+- Domain routers should remain thin and delegate to services.
 - DB access must live in repository modules.
-- Context assembly logic belongs in domain context modules (`api/app/chat/context.py`), not route handlers.
-- Lifecycle/autosave/retention heuristics must stay in `api/app/chat/lifecycle_policy.py` as pure functions so they remain testable and reusable across REST/MCP paths.
-- Provider SDK calls must stay in `api/app/providers/`.
-- Document chunking and retrieval behavior belongs in `api/app/ingestion/`.
-- Embedding provider routing belongs in `api/app/embeddings/`; do not call provider endpoints directly from repositories.
+- Context assembly logic belongs in domain context modules (`internal/chat/context.go`), not route handlers.
+- Lifecycle/autosave/retention heuristics must stay in `internal/chat/lifecycle_policy.go` as pure functions so they remain testable and reusable across REST/MCP paths.
+- Provider SDK calls must stay in `internal/providers/`.
+- Document chunking and retrieval behavior belongs in `internal/ingestion/`.
+- Embedding provider routing belongs in `internal/embeddings/`; do not call provider endpoints directly from repositories.
 - MCP tool handlers should call service/repository layers, not raw SQL.
 - UI should call API/MCP contracts only, not reimplement business logic.
 - UI styling should use shared tokens in `web/src/styles/theme.ts`; avoid ad-hoc hardcoded palette values in components.
 
 ## 4a. Domain Module Layout Rules
-- For each new domain, create a dedicated module/package under `api/app/`:
-  - data access (`*_repository.py`)
-  - domain logic (`*_service.py` when logic grows)
-  - transport boundary (routes/MCP handlers in separate files where feasible)
-- Keep shared contracts in `models.py` only when broadly reused.
-- Prefer domain-local helper modules over adding unrelated helpers to `main.py`.
-- Add tests in matching domain-focused files (`test_<domain>*.py`).
+- For each new domain, create a dedicated package under `internal/`:
+  - data access (`internal/repository/*`)
+  - domain logic (`internal/<domain>/*.go`)
+  - transport boundary (`internal/api`, `internal/mcp`, or `cmd/api` adapters as needed)
+- Keep shared contracts in `internal/models` only when broadly reused.
+- Prefer domain-local helper modules over adding unrelated helpers to `cmd/api/main.go`.
+- Add tests in matching domain-focused files (`*_test.go`).
 
 ## 5. Schema and Migration Policy
 - Prefer additive, forward-only SQL changes.
@@ -81,7 +78,7 @@ Use it as the default workflow when adding or refactoring features.
 
 ## 6. API and Interface Policy
 - For breaking changes, add new fields/routes and keep old behavior until deprecated.
-- Validate all external payloads with Pydantic models.
+- Validate all external payloads with explicit request decoding and validation helpers.
 - Include stable identifiers in responses (`user_id`, `session_id`, `engram_id`).
 - For write flows that allow omitted `project_id` (`/api/v1/engrams`, admin collection create, MCP organization write tools), always resolve project via `ProjectService` and keep response-level project resolution metadata where defined (`resolved_project_id`, `used_default_project`).
 - Keep admin memory lists default-hidden for soft-deleted rows; expose deleted rows only with explicit `include_deleted=true`.
@@ -97,7 +94,7 @@ Use it as the default workflow when adding or refactoring features.
 - Normalize errors to app-level exceptions.
 - Keep provider-specific payload differences internal.
 - Never call providers directly from routes or templates.
-- Keep adapter selection centralized in `api/app/providers/registry.py`.
+- Keep adapter selection centralized in `internal/providers/registry.go`.
 
 ## 8. MCP Tool Authoring Standards
 - Tool names are verb/object and stable (`chat.create_session`).
@@ -105,7 +102,7 @@ Use it as the default workflow when adding or refactoring features.
 - Enforce auth/visibility checks exactly as API routes do.
 - Stream responses using JSON-RPC framed SSE events.
 - Return structured error payloads with machine-parseable codes.
-- Keep all tool routing in `api/app/mcp/service.py`; avoid embedding tool logic in route handlers.
+- Keep all tool routing in `internal/mcp`; avoid embedding tool logic in route handlers.
 - Keep external MCP compatibility (`initialize`, `tools/list`, `tools/call`) aligned with direct tool methods.
 - Keep MCP organization contracts stable:
   - project: `project.list`, `project.create`, `project.get_default`, `project.set_default`
@@ -113,9 +110,7 @@ Use it as the default workflow when adding or refactoring features.
   - collection lifecycle: `engram.collection_list`, `engram.collection_create`, `engram.collection_update`, `engram.collection_delete`, `engram.collection_add_items`, `engram.collection_remove_items`
   - session lifecycle: `chat.delete_session`, `chat.restore_session`
 - Keep dotted canonical tool names as source-of-truth; continue exposing underscore aliases in `tools/list` for strict MCP client compatibility and accept both forms in `tools/call`.
-- When MCP contracts change, update both typed clients in the same phase:
-  - `api/app/mcp/client.py`
-  - `web/src/api/mcpClient.ts`
+- When MCP contracts change, update `web/src/api/mcpClient.ts` in the same phase.
 
 ## 9. Testing Requirements
 - Unit tests for pure logic and adapters.
@@ -124,9 +119,9 @@ Use it as the default workflow when adding or refactoring features.
 - Frontend tests for UI helpers/components and session workflow logic.
 - Acceptance tests for end-to-end workflow regressions (`acceptance-tests/features/*.feature`).
 - Lifecycle policy changes require regression coverage across:
-  - `api/tests/test_chat_lifecycle_policy.py`
-  - `api/tests/test_chat_api_integration.py`
-  - `api/tests/test_mcp_api_integration.py`
+  - `internal/chat/lifecycle_policy_test.go`
+  - `internal/api/chat_api_lifecycle_test.go`
+  - `internal/mcp/compatibility_service_chat_timeline_test.go`
 - `@bedrock-live` acceptance tests are optional for deterministic local runs, but required when Bedrock adapter/runtime behavior changes.
 - Add regression tests when fixing bugs.
 - No phase is complete unless `make check` passes. If web files changed, `make web-check` is also required.
@@ -146,23 +141,23 @@ Before merging refactors:
 - If you need manual server control: use `make db-up`, then `make api` and `make web` in separate terminals.
 - Keep `make stack-up` for occasional full-container checks only.
 - For startup/debug issues: use `APP_ENV=development` and `LOG_CONFIG_IN_DEV=true` to print a redacted parsed config snapshot.
-- If retrieval quality drops: run `make eval`, inspect reranking and citation packing paths.
+- If retrieval quality drops: run targeted Go tests for retrieval and chat context paths.
 - If auth fails unexpectedly: inspect `data/audit_events.jsonl` and session settings.
 - If MCP stream fails: verify SSE endpoint wiring and JSON-RPC event framing.
 - If acceptance tests fail to render UI in Docker: verify Vite host allow list (`VITE_ALLOWED_HOSTS`) and proxy target (`VITE_API_PROXY_TARGET`).
 
 ## 12. Long-Run Maintenance Cadence
-- Weekly: run full quality gates and evals.
+- Weekly: run full quality gates and evals (`make check`, `make web-check`, `make eval-report`).
 - Monthly: review dependency updates and provider API changes.
-- Each feature cycle: refresh `docs/implementation-log.md`, `checkpoint.md`, `Plan.md`, and affected skill docs; update `docs/architecture-playbook.md` for call-flow or data-semantics changes.
+- Each feature cycle: refresh `docs/implementation-log.md`, `migration/checkpoints/checkpoint.md`, `Plan.md`, and affected skill docs; update `docs/architecture-playbook.md` for call-flow or data-semantics changes.
 - Keep skill instructions short, precise, and executable.
 
 ## 13. Accumulated Project Learnings
 
 ### Architecture Patterns That Worked
-- Domain module layout (`api/app/<domain>/` with `api.py`/`service.py`/`repository.py`/`models.py`) scales well for feature isolation.
+- Domain module layout (`internal/<domain>/` with focused package boundaries) scales well for feature isolation.
 - Centralized enrichment in repository create flow ensures all create paths share behavior (REST, MCP, chat save, autosave, CLI, consolidation).
-- Typed MCP client helpers (Python + TypeScript) alongside the server ensure contract parity and catch drift early.
+- Typed MCP client helpers alongside the server ensure contract parity and catch drift early.
 - Fill-empty-only metadata enrichment preserves caller intent while enabling zero-config agent persistence.
 - Token scope + allowlist + project policy model provides flexible least-privilege for external MCP agents.
 - Production fail-fast config validation prevents insecure session/token/OAuth defaults from booting in `APP_ENV=production`.
@@ -172,7 +167,7 @@ Before merging refactors:
 - Collection/project boundaries are enforced at mutation time; cross-project engram moves purge invalid collection memberships.
 
 ### Common Pitfalls to Avoid
-- Never put business logic in `main.py` route handlers — always delegate to services.
+- Never put business logic in API route handlers — always delegate to services.
 - Never use raw SQL in service or MCP layers — all DB access through repositories.
 - Never hardcode color/font values in React components — always use theme tokens from `web/src/styles/theme.ts`.
 - Never change MCP tool names — they are stable contracts for external agents (underscored aliases for compatibility only).
@@ -209,5 +204,5 @@ Before merging refactors:
 - MCP tool/transport changes go to `docs/mcp-guide.md`.
 - Environment variable additions go to `docs/env-reference.md`.
 - Implementation log entries go to `docs/implementation-log.md`.
-- Milestone completions go to `checkpoint.md`.
-- When a phase completes, update `checkpoint.md`, `todo.md`, and `Plan.md`.
+- Milestone completions go to `migration/checkpoints/checkpoint.md`.
+- When a phase completes, update `migration/checkpoints/checkpoint.md`, `todo.md`, and `Plan.md`.

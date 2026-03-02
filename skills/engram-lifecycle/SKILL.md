@@ -12,23 +12,22 @@ description: Use this skill when implementing or operating engram creation, quer
 
 ## Workflow
 1. Confirm schema fields needed (`owner_user_id`, `visibility_scope`, `source_session_id`, soft-delete metadata).
-2. Update models in `api/app/models.py`.
-3. Update repository logic in `api/app/repository.py` or dedicated repository modules.
-4. Route all write-time project fallback through `ProjectService.resolve_project_id_for_write`.
-5. Add/update route handlers in `api/app/main.py` or domain routers.
-6. Add tests in `api/tests/` for auth + visibility + behavior.
-7. Update README with API and workflow examples.
+2. Update contracts in `internal/models`.
+3. Update persistence in `internal/repository/engram*.go` and related repository modules.
+4. Route write-time project fallback through project service resolution helpers.
+5. Update REST handlers in `internal/api/session_engrams*.go` and MCP dispatch in `internal/mcp`.
+6. Update runtime adapters in `cmd/api` when dependency wiring changes.
+7. Add/extend tests for auth, visibility, and behavior.
 
 ## Rules
 - `private` visibility is default.
-- Use explicit checks for user ownership before returning engrams.
-- Keep engram soft-delete/recovery additive (`deleted_at` + restore path), never hard-delete from admin flows.
-- For create flows that can omit `project_id`, preserve response-level project resolution metadata (`resolved_project_id`, `used_default_project`) where defined.
-- Keep collection/project integrity: if an engram is moved across projects, detach collection links that no longer match the engram project.
-- Always return stable IDs in responses.
-- Ensure rehydration includes compact context + citations.
+- Enforce ownership/actor checks before returning engrams.
+- Keep soft-delete/recovery additive; never hard-delete in admin flows.
+- For create paths that omit `project_id`, preserve `resolved_project_id` + `used_default_project` metadata where contracted.
+- Preserve collection/project integrity on engram project moves.
+- Rehydration responses must include compact context + citations/source references.
 
 ## Validation
-- Run `make lint`.
-- Run `make test`.
-- Run `make eval`.
+- `go test ./internal/repository ./internal/api ./internal/mcp -count=1`
+- `go test ./... -count=1`
+- `make eval`

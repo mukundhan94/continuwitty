@@ -83,9 +83,11 @@ Some MCP clients preflight with `GET`/`HEAD`; these return `200` to avoid noisy 
 
 For MCP clients that support dynamic registration (e.g., VS Code Copilot):
 - `/.well-known/oauth-authorization-server` discovery
-- `POST /oauth/register` protected dynamic client registration (requires an authenticated admin session)
+- `POST /oauth/register` dynamic client registration (local default allows automatic registration)
 - `GET /oauth/authorize` + `POST /oauth/token` PKCE authorization code flow (`S256` only)
 - Token exchange issues short-lived MCP bearer tokens
+
+When `OAUTH_REQUIRE_PROTECTED_REGISTRATION=true`, registration requires an authenticated admin session.
 
 ---
 
@@ -189,6 +191,11 @@ curl -s -b "$COOKIE_JAR" \
 - `tools/list`
 - `tools/call`
 
+`initialize` includes a `policy` block with governance metadata:
+
+- `tool_policy_version`
+- `eval_suite_version`
+
 ---
 
 ## Tool Naming
@@ -230,7 +237,15 @@ curl -s -b "$COOKIE_JAR" \
 - `engram.create_from_conversation`
 - `engram.query`
 - `engram.rehydrate`
+- `engram.link_create`
+- `engram.link_list`
+- `engram.link_update`
+- `engram.link_archive`
+- `engram.link_suggest`
+- `engram.trace_path`
 - `engram.pin_to_session`
+- `engram.share`
+- `engram.unshare`
 
 ### Project Tools
 
@@ -238,8 +253,14 @@ curl -s -b "$COOKIE_JAR" \
 - `project.create`
 - `project.get_default`
 - `project.set_default`
+- `project.member_list`
+- `project.member_add`
+- `project.member_update`
+- `project.member_remove`
 - `project.export_bundle`
 - `project.import_bundle`
+
+Note: project audit-event listing is currently REST-only (`GET /api/v1/projects/{project_id}/audit-events`) and is not exposed as an MCP tool in this phase.
 
 ### User Tools
 
@@ -274,13 +295,18 @@ curl -s -b "$COOKIE_JAR" \
   "method": "tools/call",
   "params": {
     "name": "chat.send_message",
-    "arguments": {
-      "session_id": "00000000-0000-0000-0000-000000000000",
-      "content_text": "Summarize the pinned engrams",
-      "stream": true
+      "arguments": {
+        "session_id": "00000000-0000-0000-0000-000000000000",
+        "content_text": "Summarize the pinned engrams",
+        "link_recall_enabled": true,
+        "link_recall_depth": 1,
+        "link_recall_max_neighbors": 8,
+        "link_noise_suppression_enabled": true,
+        "link_noise_score_threshold": 0.30,
+        "stream": true
+      }
     }
   }
-}
 ```
 
 ---
@@ -388,6 +414,11 @@ curl -sN -b "$COOKIE_JAR" \
       "arguments": {
         "session_id": "00000000-0000-0000-0000-000000000000",
         "content_text": "Summarize pinned engrams and list action items.",
+        "link_recall_enabled": true,
+        "link_recall_depth": 1,
+        "link_recall_max_neighbors": 8,
+        "link_noise_suppression_enabled": true,
+        "link_noise_score_threshold": 0.30,
         "stream": true
       }
     }
@@ -420,6 +451,27 @@ curl -sN -b "$COOKIE_JAR" \
   }
 }
 ```
+
+`chat.send_message` responses include:
+
+- `cw_plan_applied` (optional normalized `cw>` directive plan)
+- `prompt_policy_version`
+- `used_engram_ids`
+- `used_engram_link_ids`
+- `engram_trace_paths`
+- `used_document_chunk_ids`
+- `source_references`
+- `retrieval_audit` (blocked candidate count + trace suppression/filtering/truncation + cross-project usage signals)
+
+`content_text` can begin with `cw>` to activate ContinuWitty query-protocol planning. The first-line directive is parsed and excluded from the stored/context query text.
+
+`chat.send_message` request arguments can also include optional bounded recall controls:
+
+- `link_recall_enabled`
+- `link_recall_depth`
+- `link_recall_max_neighbors`
+- `link_noise_suppression_enabled`
+- `link_noise_score_threshold`
 
 Document pin/list helpers:
 

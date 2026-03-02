@@ -23,6 +23,8 @@
 | `LOG_CONFIG_IN_DEV` | `true` | Print redacted parsed-config snapshot on startup in dev/local envs |
 | `APP_SEMANTIC_VERSION` | - | Application version string |
 | `APP_COMMIT_SHA` | - | Git commit SHA |
+| `API_REQUEST_LOG_ENABLED` | `true` | Enable structured per-request telemetry logs |
+| `API_METRICS_ENABLED` | `true` | Enable in-process observability endpoint (`/api/v1/metrics`) including request/provider/stream/lifecycle counters |
 | `APP_SESSION_SECRET` | - | Session signing secret |
 
 ## Security
@@ -32,12 +34,28 @@
 | `AUDIT_LOG_PATH` | `./data/audit_events.jsonl` | Local audit event log path |
 | `AUDIT_LOG_STDOUT_ENABLED` | `false` | Emit audit events to stdout (production emits to stdout automatically) |
 | `AUDIT_LOG_MAX_EVENT_BYTES` | `32768` | Maximum serialized bytes per audit event before truncation |
+| `AUDIT_SINK_URL` | - | Optional centralized audit sink endpoint (HTTP/HTTPS POST of sanitized JSON events) |
+| `AUDIT_SINK_AUTH_TOKEN` | - | Optional bearer token used for `Authorization` header when sending to `AUDIT_SINK_URL` |
+| `AUDIT_SINK_REQUIRED` | `false` | When `true`, requests fail audit logging if sink delivery fails; otherwise sink delivery is fail-open |
+| `AUDIT_SINK_TIMEOUT_SECONDS` | `2.0` | Timeout for audit sink delivery requests |
 | `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` | `5` | Max failed login attempts before lockout |
 | `LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `300` | Rate-limit sliding window |
 | `LOGIN_LOCKOUT_SECONDS` | `900` | Lockout duration after max attempts |
 | `MCP_TRANSPORT_RATE_LIMIT_MAX_REQUESTS` | `120` | Max MCP transport requests per window per actor key |
 | `MCP_TRANSPORT_RATE_LIMIT_WINDOW_SECONDS` | `60` | MCP transport rate-limit window |
 | `MCP_TRANSPORT_RATE_LIMIT_BLOCK_SECONDS` | `30` | MCP transport block duration once threshold is exceeded |
+
+## OIDC Login
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OIDC_ENABLED` | `false` | Enable external OIDC login flow (`/login/oidc`) |
+| `OIDC_ISSUER_URL` | - | OIDC issuer URL used for discovery |
+| `OIDC_CLIENT_ID` | - | OIDC client ID |
+| `OIDC_CLIENT_SECRET` | - | OIDC client secret |
+| `OIDC_REDIRECT_URL` | `http://localhost:8000/login/oidc/callback` | Redirect URI registered with the OIDC provider |
+| `OIDC_SCOPES` | `openid profile email` | Requested OIDC scopes |
+| `OIDC_USERNAME_CLAIM` | `email` | Preferred ID-token claim mapped to local username lookup |
 
 ## Debug / Observability
 
@@ -57,6 +75,8 @@
 |----------|---------|-------------|
 | `DEFAULT_CHAT_PROVIDER` | `openai` | Default LLM provider |
 | `DEFAULT_CHAT_MODEL` | `gpt-4o-mini` | Default LLM model ID |
+| `GRAPH_LINK_NOISE_SUPPRESSION_ENABLED` | `true` | Enable suppression filter for low-score linked-memory trace paths during graph recall |
+| `GRAPH_LINK_NOISE_SCORE_THRESHOLD` | `0.30` | Minimum trace-path score (`0..1`) required when noise suppression is enabled |
 | `OPENAI_API_KEY` | - | OpenAI API key |
 | `OPENAI_BASE_URL` | - | OpenAI base URL override |
 | `ANTHROPIC_API_KEY` | - | Anthropic API key |
@@ -67,6 +87,14 @@
 | `AWS_SECRET_ACCESS_KEY` | - | AWS secret key |
 | `AWS_SESSION_TOKEN` | - | AWS session token (optional) |
 
+## Governance Versions
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CHAT_PROMPT_POLICY_VERSION` | `chat-prompt-policy-v1` | Version tag surfaced in chat responses/stream events for prompt-governance tracking |
+| `MCP_TOOL_POLICY_VERSION` | `mcp-tool-policy-v1` | Version tag surfaced in MCP `initialize` policy metadata |
+| `EVAL_SUITE_VERSION` | `eval-suite-v1` | EvalOps suite version surfaced in `/api/v1/version` and MCP `initialize` policy metadata |
+
 ## Embedding
 
 | Variable | Default | Description |
@@ -75,6 +103,7 @@
 | `EMBEDDING_PROVIDER` | `local` | Embedding provider (`local` or `openai`) |
 | `EMBEDDING_MODEL` | - | External embedding model name |
 | `EMBEDDING_FALLBACK_TO_LOCAL` | `true` | Fall back to local deterministic embeddings |
+| `EMBEDDING_TIMEOUT_SECONDS` | `20.0` | Timeout for external embedding provider HTTP calls |
 
 ## Ingestion
 
@@ -114,7 +143,7 @@
 |----------|---------|-------------|
 | `OAUTH_ENABLED` | `true` | Enable OAuth authorization server |
 | `OAUTH_ISSUER_URL` | - | OAuth issuer URL |
-| `OAUTH_REQUIRE_PROTECTED_REGISTRATION` | `true` | Require authenticated admin session for dynamic client registration |
+| `OAUTH_REQUIRE_PROTECTED_REGISTRATION` | `false` | Require authenticated admin session for dynamic client registration (must be `true` in production) |
 | `OAUTH_ACCESS_TOKEN_TTL_SECONDS` | - | OAuth access token lifetime |
 | `OAUTH_AUTHORIZATION_CODE_TTL_SECONDS` | - | OAuth authorization code lifetime |
 | `OAUTH_CLIENT_SECRET_PEPPER` | - | Pepper for OAuth client secret hashing |

@@ -1,7 +1,7 @@
 import { apiJson, parseApiError } from './http'
 import type { ContinueSessionResponse, ChatSendResponse, SaveSessionAsEngramResponse } from './types'
 import { parseSseStream, type SseFrame } from '../utils/sse'
-import type { ChatStreamEvent, SaveEngramPayload } from './chatTypes'
+import type { ChatRecallOptions, ChatStreamEvent, SaveEngramPayload } from './chatTypes'
 
 function isChatStreamEventName(eventName: string): eventName is ChatStreamEvent['event'] {
   return eventName === 'meta' || eventName === 'chunk' || eventName === 'done' || eventName === 'error'
@@ -17,16 +17,24 @@ function toChatStreamEvent(frame: SseFrame): ChatStreamEvent | null {
   } as ChatStreamEvent
 }
 
-export async function sendChatMessage(sessionId: string, contentText: string): Promise<ChatSendResponse> {
+export async function sendChatMessage(
+  sessionId: string,
+  contentText: string,
+  recallOptions?: ChatRecallOptions,
+): Promise<ChatSendResponse> {
   return apiJson<ChatSendResponse>(`/api/v1/chat/sessions/${sessionId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content_text: contentText }),
+    body: JSON.stringify({
+      content_text: contentText,
+      ...recallOptions,
+    }),
   })
 }
 
 export async function* streamChatMessage(
   sessionId: string,
   contentText: string,
+  recallOptions?: ChatRecallOptions,
 ): AsyncGenerator<ChatStreamEvent> {
   const response = await fetch(`/api/v1/chat/sessions/${sessionId}/messages/stream`, {
     credentials: 'include',
@@ -34,7 +42,10 @@ export async function* streamChatMessage(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ content_text: contentText }),
+    body: JSON.stringify({
+      content_text: contentText,
+      ...recallOptions,
+    }),
   })
 
   if (!response.ok) {

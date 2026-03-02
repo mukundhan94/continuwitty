@@ -1,5 +1,9 @@
 services:
   db:
+    profiles:
+      - dev
+      - acceptance
+      - release-smoke
     image: pgvector/pgvector:pg16
     container_name: engram-db
     restart: unless-stopped
@@ -19,9 +23,13 @@ services:
       retries: 20
 
   api:
+    profiles:
+      - dev
+      - acceptance
+      - release-smoke
     build:
       context: .
-      dockerfile: api/Dockerfile
+      dockerfile: Dockerfile
     container_name: engram-api
     restart: unless-stopped
     environment:
@@ -51,6 +59,13 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      MCP_TOKEN_PEPPER: ${MCP_TOKEN_PEPPER:-engram-local-dev-mcp-token-pepper}
+      OAUTH_ENABLED: ${OAUTH_ENABLED:-true}
+      OAUTH_ISSUER_URL: ${OAUTH_ISSUER_URL:-}
+      OAUTH_REQUIRE_PROTECTED_REGISTRATION: ${OAUTH_REQUIRE_PROTECTED_REGISTRATION:-false}
+      OAUTH_ACCESS_TOKEN_TTL_SECONDS: ${OAUTH_ACCESS_TOKEN_TTL_SECONDS:-3600}
+      OAUTH_AUTHORIZATION_CODE_TTL_SECONDS: ${OAUTH_AUTHORIZATION_CODE_TTL_SECONDS:-300}
+      OAUTH_CLIENT_SECRET_PEPPER: ${OAUTH_CLIENT_SECRET_PEPPER:-engram-local-dev-oauth-client-pepper}
     depends_on:
       db:
         condition: service_healthy
@@ -59,16 +74,16 @@ services:
     volumes:
       - ./data:/srv/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz').read()\"",
-        ]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/healthz"]
       interval: 10s
       timeout: 5s
       retries: 20
 
   web:
+    profiles:
+      - dev
+      - acceptance
+      - release-smoke
     build:
       context: .
       dockerfile: web/Dockerfile
@@ -117,6 +132,25 @@ services:
     volumes:
       - ./acceptance-tests/artifacts:/work/acceptance-tests/artifacts
     command: ["npm", "run", "test"]
+
+  release-smoke:
+    image: curlimages/curl:8.12.1
+    profiles:
+      - release-smoke
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    command:
+      - "sh"
+      - "-c"
+      - |
+        set -eu
+        curl -fsS http://api:8000/healthz | grep -q '"status":"ok"'
+        curl -fsS http://api:8000/api/v1/version | grep -q '"semantic_version"'
+        curl -fsS http://api:8000/api/v1/metrics | grep -q '"totals"'
+        curl -fsS http://web:5173 >/dev/null
 
 volumes:
   pgdata:

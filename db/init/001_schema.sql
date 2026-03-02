@@ -22,6 +22,10 @@ ALTER TABLE engrams
   ADD COLUMN IF NOT EXISTS owner_user_id UUID,
   ADD COLUMN IF NOT EXISTS visibility_scope TEXT NOT NULL DEFAULT 'private',
   ADD COLUMN IF NOT EXISTS source_session_id UUID,
+  ADD COLUMN IF NOT EXISTS access_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS useful_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS contradiction_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS deleted_by_user_id UUID,
   ADD COLUMN IF NOT EXISTS delete_reason TEXT,
@@ -63,6 +67,9 @@ CREATE INDEX IF NOT EXISTS engrams_active_project_created_idx
 
 CREATE INDEX IF NOT EXISTS engrams_deleted_at_idx
   ON engrams (deleted_at);
+
+CREATE INDEX IF NOT EXISTS engrams_access_last_accessed_idx
+  ON engrams (access_count DESC, last_accessed_at DESC);
 
 CREATE INDEX IF NOT EXISTS engrams_embed_hnsw_idx
   ON engrams USING hnsw (embed vector_cosine_ops);
@@ -137,6 +144,102 @@ CREATE INDEX IF NOT EXISTS projects_owner_created_idx
 
 CREATE INDEX IF NOT EXISTS projects_archived_idx
   ON projects (is_archived);
+
+CREATE TABLE IF NOT EXISTS project_members (
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
+  added_by_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  revoked_at TIMESTAMPTZ,
+  revoked_by_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  PRIMARY KEY (project_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS project_members_active_project_idx
+  ON project_members (project_id, role, created_at DESC)
+  WHERE revoked_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS project_members_active_user_idx
+  ON project_members (user_id, project_id, created_at DESC)
+  WHERE revoked_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS project_members_revoked_project_idx
+  ON project_members (project_id, revoked_at DESC)
+  WHERE revoked_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS project_audit_events (
+  event_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  actor_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  target_engram_id UUID REFERENCES engrams(engram_id) ON DELETE SET NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS project_audit_events_project_created_idx
+  ON project_audit_events (project_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS project_audit_events_type_created_idx
+  ON project_audit_events (event_type, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS engram_links (
+  link_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  source_engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  target_engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  relation_type TEXT NOT NULL CHECK (relation_type IN ('supports', 'depends_on', 'contradicts', 'related_to', 'derived_from')),
+  weight DOUBLE PRECISION NOT NULL DEFAULT 0.5 CHECK (weight >= 0.0 AND weight <= 1.0),
+  temporal_weight DOUBLE PRECISION NOT NULL DEFAULT 0.5 CHECK (temporal_weight >= 0.0 AND temporal_weight <= 1.0),
+  confidence DOUBLE PRECISION NOT NULL DEFAULT 0.5 CHECK (confidence >= 0.0 AND confidence <= 1.0),
+  origin TEXT NOT NULL DEFAULT 'manual' CHECK (origin IN ('manual', 'suggested', 'inferred', 'system')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suggested', 'archived', 'rejected')),
+  evidence_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_by_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  last_reinforced_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (source_engram_id <> target_engram_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS engram_links_source_target_relation_active_uidx
+  ON engram_links (source_engram_id, target_engram_id, relation_type)
+  WHERE status IN ('active', 'suggested');
+
+CREATE INDEX IF NOT EXISTS engram_links_project_status_relation_created_idx
+  ON engram_links (project_id, status, relation_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_links_source_status_weight_idx
+  ON engram_links (source_engram_id, status, weight DESC, confidence DESC);
+
+CREATE INDEX IF NOT EXISTS engram_links_target_status_weight_idx
+  ON engram_links (target_engram_id, status, weight DESC, confidence DESC);
+
+CREATE INDEX IF NOT EXISTS engram_links_status_reinforced_idx
+  ON engram_links (status, last_reinforced_at DESC, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS engram_link_events (
+  event_id UUID PRIMARY KEY,
+  link_id UUID NOT NULL REFERENCES engram_links(link_id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  actor_user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS engram_link_events_link_created_idx
+  ON engram_link_events (link_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_link_events_project_created_idx
+  ON engram_link_events (project_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_link_events_type_created_idx
+  ON engram_link_events (event_type, created_at DESC);
 
 INSERT INTO projects (project_id, name, description, owner_user_id, is_archived)
 SELECT
@@ -392,6 +495,24 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE INDEX IF NOT EXISTS chat_messages_session_created_idx
   ON chat_messages (session_id, created_at ASC);
 
+CREATE TABLE IF NOT EXISTS engram_access_events (
+  event_id UUID PRIMARY KEY,
+  engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  session_id UUID REFERENCES chat_sessions(session_id) ON DELETE SET NULL,
+  access_source TEXT NOT NULL,
+  accessed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS engram_access_events_engram_accessed_idx
+  ON engram_access_events (engram_id, accessed_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_access_events_session_accessed_idx
+  ON engram_access_events (session_id, accessed_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_access_events_source_accessed_idx
+  ON engram_access_events (access_source, accessed_at DESC);
+
 CREATE TABLE IF NOT EXISTS session_pinned_engrams (
   session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
   engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
@@ -633,3 +754,31 @@ SET default_project_id = COALESCE(
   u.default_project_id
 )
 WHERE u.default_project_id IS NULL;
+
+INSERT INTO project_members (
+  project_id,
+  user_id,
+  role,
+  added_by_user_id,
+  created_at,
+  updated_at,
+  revoked_at,
+  revoked_by_user_id
+)
+SELECT
+  p.project_id,
+  p.owner_user_id,
+  'owner',
+  p.owner_user_id,
+  p.created_at,
+  p.updated_at,
+  NULL,
+  NULL
+FROM projects p
+WHERE p.owner_user_id IS NOT NULL
+ON CONFLICT (project_id, user_id) DO UPDATE
+SET
+  role = EXCLUDED.role,
+  revoked_at = NULL,
+  revoked_by_user_id = NULL,
+  updated_at = GREATEST(project_members.updated_at, EXCLUDED.updated_at);

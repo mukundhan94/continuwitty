@@ -10,6 +10,7 @@ import type {
   ChatMessage,
   ChatSession,
   ChatSourceReference,
+  EngramTracePath,
   ChatTimelineEvent,
 } from '../api/types'
 import {
@@ -42,6 +43,35 @@ const ComposerActions = styled.div`
   justify-content: flex-end;
   gap: 0.5rem;
   flex-wrap: wrap;
+`
+
+const RecallControls = styled.div`
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+`
+
+const RecallControl = styled.label`
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--color-ink-muted);
+`
+
+const RecallCheckbox = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--color-ink-muted);
+`
+
+const TracePathList = styled.ul`
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.25rem;
 `
 
 const ComposerForm = styled.form`
@@ -140,8 +170,16 @@ interface ChatPanelProps {
   sending: boolean
   error: string | null
   sourceReferences: ChatSourceReference[]
+  usedEngramLinkIds?: string[]
+  engramTracePaths?: EngramTracePath[]
   debugTrace: ChatDebugTrace | null
   timelineEvents: ChatTimelineEvent[]
+  linkRecallEnabled?: boolean
+  linkRecallDepth?: number
+  linkRecallMaxNeighbors?: number
+  onLinkRecallEnabledChange?: (value: boolean) => void
+  onLinkRecallDepthChange?: (value: number) => void
+  onLinkRecallMaxNeighborsChange?: (value: number) => void
   onComposerChange: (value: string) => void
   onSend: () => Promise<void>
   onRetry: () => Promise<void>
@@ -163,6 +201,8 @@ interface TranscriptSectionProps {
   streamingAssistantText: string
   hasSession: boolean
   sourceReferences: ChatSourceReference[]
+  usedEngramLinkIds: string[]
+  engramTracePaths: EngramTracePath[]
 }
 
 interface DebugTracePanelProps {
@@ -187,10 +227,27 @@ interface ComposerSectionProps {
   hasSession: boolean
   sending: boolean
   composerText: string
+  linkRecallEnabled: boolean
+  linkRecallDepth: number
+  linkRecallMaxNeighbors: number
   onComposerChange: (value: string) => void
+  onLinkRecallEnabledChange: (value: boolean) => void
+  onLinkRecallDepthChange: (value: number) => void
+  onLinkRecallMaxNeighborsChange: (value: number) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
   onComposerKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
   onRetry: () => Promise<void>
+}
+
+interface RecallControlsSectionProps {
+  hasSession: boolean
+  sending: boolean
+  linkRecallEnabled: boolean
+  linkRecallDepth: number
+  linkRecallMaxNeighbors: number
+  onLinkRecallEnabledChange: (value: boolean) => void
+  onLinkRecallDepthChange: (value: number) => void
+  onLinkRecallMaxNeighborsChange: (value: number) => void
 }
 
 function MessageBubble({ role, text }: { role: string; text: string }) {
@@ -219,6 +276,26 @@ function isEnterSubmitKey(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
 
 function canSubmitComposer(hasSession: boolean, sending: boolean, composerText: string): boolean {
   return hasSession && !sending && composerText.trim().length > 0
+}
+
+function clampInputNumber(value: number, minValue: number, maxValue: number): number {
+  if (!Number.isFinite(value)) {
+    return minValue
+  }
+  if (value < minValue) {
+    return minValue
+  }
+  if (value > maxValue) {
+    return maxValue
+  }
+  return Math.trunc(value)
+}
+
+function compactTraceNode(nodeId: string): string {
+  if (nodeId.length <= 12) {
+    return nodeId
+  }
+  return `${nodeId.slice(0, 6)}...${nodeId.slice(-4)}`
 }
 
 function tokenSourceLabel(debugTrace: ChatDebugTrace): string {
@@ -339,6 +416,8 @@ function TranscriptSection({
   streamingAssistantText,
   hasSession,
   sourceReferences,
+  usedEngramLinkIds,
+  engramTracePaths,
 }: TranscriptSectionProps) {
   return (
     <>
@@ -365,6 +444,25 @@ function TranscriptSection({
               </li>
             ))}
           </ul>
+        </SourceStrip>
+      ) : null}
+
+      {usedEngramLinkIds.length > 0 || engramTracePaths.length > 0 ? (
+        <SourceStrip data-testid="trace-path-strip">
+          <SourceTitle>Linked trace paths used:</SourceTitle>
+          <MutedText>
+            {usedEngramLinkIds.length} links across {engramTracePaths.length} paths.
+          </MutedText>
+          {engramTracePaths.length > 0 ? (
+            <TracePathList>
+              {engramTracePaths.slice(0, 5).map((trace) => (
+                <li key={`${trace.root_engram_id}-${trace.target_engram_id}-${trace.depth}`}>
+                  {trace.engram_ids.map(compactTraceNode).join(' -> ')} (depth {trace.depth}, score{' '}
+                  {trace.score.toFixed(2)})
+                </li>
+              ))}
+            </TracePathList>
+          ) : null}
         </SourceStrip>
       ) : null}
     </>
@@ -432,13 +530,30 @@ function ComposerSection({
   hasSession,
   sending,
   composerText,
+  linkRecallEnabled,
+  linkRecallDepth,
+  linkRecallMaxNeighbors,
   onComposerChange,
+  onLinkRecallEnabledChange,
+  onLinkRecallDepthChange,
+  onLinkRecallMaxNeighborsChange,
   onSubmit,
   onComposerKeyDown,
   onRetry,
 }: ComposerSectionProps) {
   return (
     <ComposerForm onSubmit={(event) => void onSubmit(event)}>
+      <RecallControlsSection
+        hasSession={hasSession}
+        sending={sending}
+        linkRecallEnabled={linkRecallEnabled}
+        linkRecallDepth={linkRecallDepth}
+        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
+        onLinkRecallEnabledChange={onLinkRecallEnabledChange}
+        onLinkRecallDepthChange={onLinkRecallDepthChange}
+        onLinkRecallMaxNeighborsChange={onLinkRecallMaxNeighborsChange}
+      />
+
       <textarea
         value={composerText}
         onChange={(event) => onComposerChange(event.target.value)}
@@ -460,6 +575,62 @@ function ComposerSection({
   )
 }
 
+function RecallControlsSection({
+  hasSession,
+  sending,
+  linkRecallEnabled,
+  linkRecallDepth,
+  linkRecallMaxNeighbors,
+  onLinkRecallEnabledChange,
+  onLinkRecallDepthChange,
+  onLinkRecallMaxNeighborsChange,
+}: RecallControlsSectionProps) {
+  const controlsDisabled = !hasSession || sending
+  const numericDisabled = controlsDisabled || !linkRecallEnabled
+
+  return (
+    <RecallControls>
+      <RecallCheckbox>
+        <input
+          checked={linkRecallEnabled}
+          disabled={controlsDisabled}
+          onChange={(event) => onLinkRecallEnabledChange(event.target.checked)}
+          type="checkbox"
+        />
+        Link Recall
+      </RecallCheckbox>
+      <RecallControl>
+        Recall Depth
+        <input
+          data-testid="link-recall-depth-input"
+          disabled={numericDisabled}
+          min={1}
+          max={3}
+          onChange={(event) =>
+            onLinkRecallDepthChange(clampInputNumber(Number(event.target.value), 1, 3))
+          }
+          type="number"
+          value={linkRecallDepth}
+        />
+      </RecallControl>
+      <RecallControl>
+        Max Neighbors
+        <input
+          data-testid="link-recall-neighbors-input"
+          disabled={numericDisabled}
+          min={1}
+          max={24}
+          onChange={(event) =>
+            onLinkRecallMaxNeighborsChange(clampInputNumber(Number(event.target.value), 1, 24))
+          }
+          type="number"
+          value={linkRecallMaxNeighbors}
+        />
+      </RecallControl>
+    </RecallControls>
+  )
+}
+
 export function ChatPanel({
   session,
   messages,
@@ -469,8 +640,16 @@ export function ChatPanel({
   sending,
   error,
   sourceReferences,
+  usedEngramLinkIds = [],
+  engramTracePaths = [],
   debugTrace,
   timelineEvents,
+  linkRecallEnabled = true,
+  linkRecallDepth = 1,
+  linkRecallMaxNeighbors = 8,
+  onLinkRecallEnabledChange = () => undefined,
+  onLinkRecallDepthChange = () => undefined,
+  onLinkRecallMaxNeighborsChange = () => undefined,
   onComposerChange,
   onSend,
   onRetry,
@@ -513,6 +692,8 @@ export function ChatPanel({
         streamingAssistantText={streamingAssistantText}
         hasSession={hasSession}
         sourceReferences={sourceReferences}
+        usedEngramLinkIds={usedEngramLinkIds}
+        engramTracePaths={engramTracePaths}
       />
 
       {debugTrace ? <DebugTracePanel debugTrace={debugTrace} /> : null}
@@ -523,7 +704,13 @@ export function ChatPanel({
         hasSession={hasSession}
         sending={sending}
         composerText={composerText}
+        linkRecallEnabled={linkRecallEnabled}
+        linkRecallDepth={linkRecallDepth}
+        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
         onComposerChange={onComposerChange}
+        onLinkRecallEnabledChange={onLinkRecallEnabledChange}
+        onLinkRecallDepthChange={onLinkRecallDepthChange}
+        onLinkRecallMaxNeighborsChange={onLinkRecallMaxNeighborsChange}
         onSubmit={handleSubmit}
         onComposerKeyDown={handleComposerKeyDown}
         onRetry={onRetry}

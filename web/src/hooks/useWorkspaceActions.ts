@@ -56,7 +56,7 @@ export function useWorkspaceActions(config: WorkspaceActionsConfig) {
     setSettingDefaultProject(true)
     setChatError(null)
     try {
-      const updated = await setDefaultProject(normalized)
+      const updated = await setDefaultProject({ project_id: normalized })
       setDefaultProjectId(updated.default_project_id)
       setNotice(`Default project set to ${updated.default_project_id}`)
     } catch (error) {

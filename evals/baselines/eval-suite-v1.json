@@ -1,0 +1,36 @@
+{
+  "suite_version": "eval-suite-v1",
+  "run_id": "baseline-eval-suite-v1",
+  "generated_at": "2026-03-01T00:00:00Z",
+  "passed": true,
+  "score": 1,
+  "passed_cases": 8,
+  "total_cases": 8,
+  "cases": [],
+  "dimensions": [
+    {
+      "dimension": "continuity",
+      "passed": 2,
+      "total": 2,
+      "score": 1
+    },
+    {
+      "dimension": "citation_trust",
+      "passed": 2,
+      "total": 2,
+      "score": 1
+    },
+    {
+      "dimension": "memory_drift",
+      "passed": 2,
+      "total": 2,
+      "score": 1
+    },
+    {
+      "dimension": "graph_trace",
+      "passed": 2,
+      "total": 2,
+      "score": 1
+    }
+  ]
+}

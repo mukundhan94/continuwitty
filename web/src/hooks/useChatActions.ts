@@ -1,15 +1,18 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 
 import {
+  type ChatRecallOptions,
   pinDocumentToSession,
   pinEngramToSession,
   streamChatMessage,
   type ChatStreamEvent,
+  type StreamDonePayload,
+  type StreamMetaPayload,
   unpinDocumentFromSession,
   unpinEngramFromSession,
 } from '../api/chat'
 import { ingestFileDocument, ingestTextDocument } from '../api/ingestion'
-import type { ChatDebugTrace, ChatSourceReference } from '../api/types'
+import type { ChatDebugTrace, ChatSourceReference, EngramTracePath } from '../api/types'
 
 interface PromptActionsConfig {
   composerText: string
@@ -21,9 +24,13 @@ interface PromptActionsConfig {
   setComposerText: (value: string) => void
   setStreamingAssistantText: Dispatch<SetStateAction<string>>
   setSourceReferences: Dispatch<SetStateAction<ChatSourceReference[]>>
+  setUsedEngramIds?: Dispatch<SetStateAction<string[]>>
+  setUsedEngramLinkIds?: Dispatch<SetStateAction<string[]>>
+  setEngramTracePaths?: Dispatch<SetStateAction<EngramTracePath[]>>
   setChatDebugTrace: Dispatch<SetStateAction<ChatDebugTrace | null>>
   setChatError: (value: string | null) => void
   setChatSending: (value: boolean) => void
+  recallOptions?: ChatRecallOptions
   describeError: (error: unknown) => string
 }
 
@@ -67,31 +74,48 @@ function beginPromptStreaming(config: PromptActionsConfig, content: string): voi
   config.setComposerText('')
   config.setStreamingAssistantText('')
   config.setSourceReferences([])
+  config.setUsedEngramIds?.([])
+  config.setUsedEngramLinkIds?.([])
+  config.setEngramTracePaths?.([])
   config.setChatDebugTrace(null)
   config.setChatError(null)
   config.setChatSending(true)
 }
 
+function applyPromptMetaEvent(config: PromptActionsConfig, payload: StreamMetaPayload): void {
+  config.setUsedEngramIds?.(payload.used_engram_ids)
+  config.setSourceReferences(payload.source_references)
+  config.setUsedEngramLinkIds?.(payload.used_engram_link_ids ?? [])
+  config.setEngramTracePaths?.(payload.engram_trace_paths ?? [])
+  if (payload.debug_trace) {
+    config.setChatDebugTrace(payload.debug_trace)
+  }
+}
+
+function applyPromptDoneEvent(config: PromptActionsConfig, payload: StreamDonePayload): void {
+  config.setStreamingAssistantText(payload.assistant_text)
+  config.setUsedEngramIds?.(payload.used_engram_ids)
+  config.setSourceReferences(payload.source_references)
+  config.setUsedEngramLinkIds?.(payload.used_engram_link_ids ?? [])
+  config.setEngramTracePaths?.(payload.engram_trace_paths ?? [])
+  config.setChatDebugTrace(payload.debug_trace ?? null)
+}
+
 function applyPromptStreamEvent(config: PromptActionsConfig, event: ChatStreamEvent): void {
-  switch (event.event) {
-    case 'meta':
-      config.setSourceReferences(event.data.source_references)
-      if (event.data.debug_trace) {
-        config.setChatDebugTrace(event.data.debug_trace)
-      }
-      return
-    case 'chunk':
-      config.setStreamingAssistantText((current) => current + event.data.text)
-      return
-    case 'done':
-      config.setStreamingAssistantText(event.data.assistant_text)
-      config.setSourceReferences(event.data.source_references)
-      config.setChatDebugTrace(event.data.debug_trace ?? null)
-      return
-    case 'error':
-      throw new Error(event.data.detail)
-    default:
-      return
+  if (event.event === 'meta') {
+    applyPromptMetaEvent(config, event.data)
+    return
+  }
+  if (event.event === 'chunk') {
+    config.setStreamingAssistantText((current) => current + event.data.text)
+    return
+  }
+  if (event.event === 'done') {
+    applyPromptDoneEvent(config, event.data)
+    return
+  }
+  if (event.event === 'error') {
+    throw new Error(event.data.detail)
   }
 }
 
@@ -109,6 +133,9 @@ function finalizePromptStreamError(
   config.setComposerText(content)
   config.setPendingUserText(null)
   config.setStreamingAssistantText('')
+  config.setUsedEngramIds?.([])
+  config.setUsedEngramLinkIds?.([])
+  config.setEngramTracePaths?.([])
   config.setChatDebugTrace(null)
 }
 
@@ -155,7 +182,7 @@ export function usePromptActions(config: PromptActionsConfig) {
       beginPromptStreaming(config, content)
 
       try {
-        for await (const event of streamChatMessage(config.selectedSessionId, content)) {
+        for await (const event of streamChatMessage(config.selectedSessionId, content, config.recallOptions)) {
           applyPromptStreamEvent(config, event)
         }
 

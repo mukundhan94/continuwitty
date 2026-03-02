@@ -7,8 +7,8 @@
 
 ## Authentication
 
-All API endpoints (except `/healthz`, `/login`, and `/.well-known/*`) require an authenticated session.
-Sign in via `POST /login` with form credentials to obtain a session cookie.
+All API endpoints (except `/healthz`, `/api/v1/metrics`, `/login`, `/login/oidc*`, and `/.well-known/*`) require an authenticated session.
+Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain a session cookie.
 
 ---
 
@@ -23,6 +23,22 @@ Sign in via `POST /login` with form credentials to obtain a session cookie.
 | `POST` | `/api/v1/users` | Create user (admin) |
 | `PATCH` | `/api/v1/users/{user_id}` | Update user (admin) |
 
+### Session Auth
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/session/csrf` | Issue/refresh CSRF token and session cookie |
+| `POST` | `/api/v1/session/login` | Session login (JSON username/password) |
+| `POST` | `/api/v1/session/logout` | Session logout (JSON + CSRF) |
+| `GET` | `/api/v1/session/oidc/start` | Start OIDC auth flow (redirect) |
+| `GET` | `/api/v1/session/oidc/callback` | Complete OIDC auth flow (redirect/login mapping) |
+
+### Observability
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/metrics` | Process-local observability snapshot (request, provider, stream, and lifecycle counters) |
+
 ### Engrams
 
 | Method | Path | Description |
@@ -32,6 +48,20 @@ Sign in via `POST /login` with form credentials to obtain a session cookie.
 | `POST` | `/api/v1/engrams/query` | Semantic query |
 | `GET` | `/api/v1/engrams/{engram_id}/sources` | Inspect provenance sources |
 | `GET` | `/api/v1/engrams/{engram_id}/rehydrate` | Get rehydration bundle |
+| `POST` | `/api/v1/engrams/{engram_id}/share` | Share engram to project-visible scope |
+| `POST` | `/api/v1/engrams/{engram_id}/unshare` | Revert engram visibility to private |
+
+### Engram Links (Graph)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/engrams/{engram_id}/links` | Create directed engram link |
+| `GET` | `/api/v1/engrams/{engram_id}/links` | List links from source engram |
+| `PATCH` | `/api/v1/engrams/links/{link_id}` | Update link weight/confidence/status/evidence |
+| `DELETE` | `/api/v1/engrams/links/{link_id}` | Archive link (soft delete) |
+| `POST` | `/api/v1/engrams/{engram_id}/links/suggest` | Get ranked link suggestions |
+| `POST` | `/api/v1/engrams/{engram_id}/links/hygiene` | Get graph hygiene recommendations (duplicate/conflict/stale low-value) |
+| `POST` | `/api/v1/engrams/{engram_id}/trace` | Traverse linked engrams (depth-limited) |
 
 ### Chat Sessions
 
@@ -89,6 +119,11 @@ Sign in via `POST /login` with form credentials to obtain a session cookie.
 | `POST` | `/api/v1/projects` | Create project |
 | `GET` | `/api/v1/projects/default` | Get default project |
 | `PATCH` | `/api/v1/projects/default` | Set default project |
+| `GET` | `/api/v1/projects/{project_id}/members` | List project members (owner/admin) |
+| `POST` | `/api/v1/projects/{project_id}/members` | Add/restore project member (owner/admin) |
+| `PATCH` | `/api/v1/projects/{project_id}/members/{user_id}` | Update project member role (owner/admin) |
+| `DELETE` | `/api/v1/projects/{project_id}/members/{user_id}` | Remove project member (owner/admin) |
+| `GET` | `/api/v1/projects/{project_id}/audit-events` | List project audit events (owner/admin) |
 | `GET` | `/api/v1/projects/{project_id}/export` | Export project bundle (JSON/ZIP, optional collection filter) |
 | `POST` | `/api/v1/projects/{project_id}/import` | Import project bundle with conflict policy (`skip`/`overwrite`/`rename`) |
 
@@ -150,11 +185,49 @@ Sign in via `POST /login` with form credentials to obtain a session cookie.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/healthz` | Health check |
-| `GET` | `/api/v1/version` | Version info |
+| `GET` | `/api/v1/version` | Version + governance metadata (`semantic_version`, `commit_id`, `chat_prompt_policy_version`, `mcp_tool_policy_version`, `eval_suite_version`) |
 
 ---
 
 ## Examples
+
+### Observability Snapshot
+
+`GET /api/v1/metrics` returns:
+
+- `totals`, `by_status_class`, `by_domain`, `by_route` for request-level telemetry.
+- `provider_failures` keyed by `operation provider error_code`.
+- `stream_health` keyed by `operation provider outcome` with count, chunks, and duration aggregates.
+- `lifecycle_traces` keyed by `operation stage` (or `operation stage error_code` for failure stages).
+
+### Version Snapshot
+
+`GET /api/v1/version` returns:
+
+- build metadata: `semantic_version`, `release`, `commit_id`
+- governance metadata: `chat_prompt_policy_version`, `mcp_tool_policy_version`, `eval_suite_version`
+
+### Chat Send Message Controls + Metadata
+
+`POST /api/v1/chat/sessions/{session_id}/messages` and `/messages/stream` support optional graph recall controls:
+
+- `link_recall_enabled` (bool)
+- `link_recall_depth` (int, bounded)
+- `link_recall_max_neighbors` (int, bounded)
+- `link_noise_suppression_enabled` (bool)
+- `link_noise_score_threshold` (number, bounded `0..1`)
+
+Message content can also start with `cw>` to activate ContinuWitty query-protocol planning; directive text is parsed from the first line and excluded from persisted/context query content.
+
+Chat send responses and stream `meta`/`done` events include:
+
+- `cw_plan_applied` (optional normalized `cw>` plan summary)
+- `used_engram_ids`
+- `used_engram_link_ids`
+- `engram_trace_paths`
+- `used_document_chunk_ids`
+- `source_references`
+- `retrieval_audit` (blocked candidate count + trace suppression/filtering/truncation + cross-project usage signals)
 
 ### Create Engram
 
@@ -242,7 +315,7 @@ Key fields:
 
 ### Auto Metadata Enrichment (Phase 29)
 
-- Scope: applies to all engram create paths through centralized repository logic (`api/app/repository.py`).
+- Scope: applies to all engram create paths through centralized repository logic (`internal/repository/engram_write.go`).
 - Behavior: fill-empty-only for `abstract`, `tags`, and `keywords`; non-empty caller values are never overwritten.
 - Strategy: deterministic local parsing in v1 (no provider call required).
 - Traceability: enrichment details are stored in `engram_json.auto_metadata` with schema version and origin.

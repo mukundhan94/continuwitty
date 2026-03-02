@@ -8,7 +8,7 @@
 
 ## Dockerized Stack (API + Web + DB)
 
-Use this when you want one-command local infrastructure with no host-level Python/Node runtimes.
+Use this when you want one-command local infrastructure with no host-level Go/Node toolchains.
 
 1. Copy env:
 ```bash
@@ -22,7 +22,7 @@ docker compose ps
 ```
 
 3. Open:
-- [http://localhost:8000/docs](http://localhost:8000/docs)
+- [http://localhost:8000/healthz](http://localhost:8000/healthz)
 - [http://localhost:5173](http://localhost:5173) (React chat workbench)
 
 4. Stop stack:
@@ -34,6 +34,21 @@ Fresh clean reset commands (drops DB volume and local runtime files):
 ```bash
 make db-reset
 make stack-reset
+```
+
+### Compose Profiles
+
+The compose file now exposes explicit profiles:
+
+- `dev`: local runtime stack (`db`, `api`, `web`)
+- `acceptance`: acceptance runner (`acceptance-tests`) with stack dependencies
+- `release-smoke`: release smoke probe (`release-smoke`) with stack dependencies
+
+Profile smoke commands:
+
+```bash
+make acceptance-test-mock-docker
+make release-smoke-docker
 ```
 
 ---
@@ -62,19 +77,20 @@ make format-check
 4. Run automated tests:
 ```bash
 make test
-```
-
-5. Run memory evaluation harness:
-```bash
 make eval
 ```
 
-6. Manual API smoke test:
+5. Manual API smoke test:
 ```bash
 make api
 ```
-Open `http://localhost:8000/login`, sign in, then use `/ui` to run create/list/query/rehydrate from the dashboard.
+Open `http://localhost:8000/login`, sign in (local credentials or OIDC when enabled), then use `/ui` to run create/list/query/rehydrate from the dashboard.
 For admin role validation, open `http://localhost:8000/ui/admin` and verify user list visibility.
+For observability baseline checks, open `http://localhost:8000/api/v1/metrics` after a few API requests and chat sends/streams, then verify:
+- request counters increment (`totals`, `by_route`),
+- provider failure categories appear when upstream failures are simulated (`provider_failures`),
+- stream outcomes/chunk counts update after streaming responses (`stream_health`),
+- lifecycle stage counters advance for send/stream paths (`lifecycle_traces`).
 
 Then test durable agent runs:
 
@@ -119,25 +135,14 @@ curl -X POST http://localhost:8000/api/v1/agent-runs \
   }'
 ```
 
-7. CLI smoke test:
+6. Container smoke test:
 ```bash
-make cli ARGS="search --query 'local-first memory' --project-id engram-vault --top-k 3"
+make stack-smoke
 ```
 
-8. Consolidation dry-run:
-```bash
-make consolidate ARGS="--project-id engram-vault --dry-run"
-```
-
-9. Inspect recent audit events:
+7. Inspect recent audit events:
 ```bash
 tail -n 10 data/audit_events.jsonl
-```
-
-If you want to use a hashed local UI password instead of plaintext, generate one with:
-```bash
-cd api
-uv run python -c "from app.auth import hash_password; print(hash_password('admin123'))"
 ```
 
 ---
@@ -177,60 +182,3 @@ Use this sequence to validate the latest multi-document continuity path end-to-e
 8. MCP parity check:
    - Use `tools/list` and confirm document-pin tools are exposed
    - Call `chat.list_pinned_documents` and verify both document IDs are returned
-
----
-
-## CLI Workflows
-
-Use CLI mode when you want a terminal-only path (no browser).
-
-### Upload Engram
-
-```bash
-cat > /tmp/engram.json <<'JSON'
-{
-  "project_id": "engram-vault",
-  "thread_id": "cli-run-001",
-  "title": "CLI upload sample",
-  "abstract": "Uploaded from local CLI.",
-  "detailed_summary_markdown": "Sample summary for CLI upload testing.",
-  "tags": ["cli"],
-  "keywords": ["upload", "local"]
-}
-JSON
-```
-
-```bash
-make cli ARGS="upload --file /tmp/engram.json"
-```
-
-### Search Engrams
-
-```bash
-make cli ARGS="search --query 'uploaded from local cli' --project-id engram-vault --top-k 5"
-```
-
-### Rehydrate Engram
-
-```bash
-make cli ARGS="rehydrate --engram-id <engram_uuid>"
-```
-
-### Consolidation Maintenance
-
-```bash
-make consolidate ARGS="--project-id engram-vault --dry-run"
-make consolidate ARGS="--project-id engram-vault"
-```
-
-### MCP Smoke Call
-
-Use the CLI to smoke-test MCP JSON-RPC calls against `/api/v1/mcp/stream`.
-
-```bash
-make cli ARGS="mcp-call --method tools/list --username admin --password admin123"
-```
-
-```bash
-make cli ARGS="mcp-call --method project.get_default --params-json '{}' --bearer-token engram_mcp_<token_id_hex>_<secret>"
-```

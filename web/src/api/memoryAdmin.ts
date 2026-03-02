@@ -6,6 +6,7 @@ import type {
   AdminEngramRestoreResponse,
   AdminSessionDeleteResponse,
   AdminSessionRestoreResponse,
+  EngramVisibilityRecord,
   EngramCollectionRecord,
 } from './types'
 
@@ -81,15 +82,80 @@ export interface UpdateCollectionItemsPayload {
   engram_ids: string[]
 }
 
+export interface DeleteAdminSessionInput {
+  session_id: string
+  payload: AdminDeleteSessionPayload
+}
+
+export interface RestoreAdminSessionInput {
+  session_id: string
+}
+
+export interface GetAdminEngramInput {
+  engram_id: string
+  include_deleted?: boolean
+}
+
+export interface UpdateAdminEngramInput {
+  engram_id: string
+  payload: UpdateAdminEngramPayload
+}
+
+export interface MoveAdminEngramInput {
+  engram_id: string
+  payload: MoveAdminEngramPayload
+}
+
+export interface DeleteAdminEngramInput {
+  engram_id: string
+  payload: AdminDeletePayload
+}
+
+export interface RestoreAdminEngramInput {
+  engram_id: string
+}
+
+export interface UpdateCollectionInput {
+  collection_id: string
+  payload: UpdateCollectionPayload
+}
+
+export interface DeleteCollectionInput {
+  collection_id: string
+  payload: AdminDeletePayload
+}
+
+export interface AddCollectionItemsInput {
+  collection_id: string
+  payload: UpdateCollectionItemsPayload
+}
+
+export interface RemoveCollectionItemInput {
+  collection_id: string
+  engram_id: string
+}
+
+export interface ShareEngramInput {
+  engram_id: string
+}
+
+export interface UnshareEngramInput {
+  engram_id: string
+}
+
 function buildQuery(params: Record<string, string | number | boolean | undefined>): string {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === '') {
+    if (!isPresentQueryValue(value)) {
       continue
     }
     query.set(key, String(value))
   }
   return query.toString()
+}
+
+function isPresentQueryValue(value: string | number | boolean | undefined): boolean {
+  return value !== undefined && value !== null && value !== ''
 }
 
 export async function listAdminSessions(
@@ -105,21 +171,18 @@ export async function listAdminSessions(
   return apiJson<AdminChatSessionRecord[]>(`/api/v1/admin/memory/sessions?${query}`)
 }
 
-export async function deleteAdminSession(
-  sessionId: string,
-  payload: AdminDeleteSessionPayload,
-): Promise<AdminSessionDeleteResponse> {
-  return apiJson<AdminSessionDeleteResponse>(`/api/v1/admin/memory/sessions/${sessionId}`, {
+export async function deleteAdminSession(input: DeleteAdminSessionInput): Promise<AdminSessionDeleteResponse> {
+  return apiJson<AdminSessionDeleteResponse>(`/api/v1/admin/memory/sessions/${input.session_id}`, {
     method: 'DELETE',
     body: JSON.stringify({
-      delete_linked_engrams: payload.delete_linked_engrams ?? false,
-      reason: payload.reason ?? null,
+      delete_linked_engrams: input.payload.delete_linked_engrams ?? false,
+      reason: input.payload.reason ?? null,
     }),
   })
 }
 
-export async function restoreAdminSession(sessionId: string): Promise<AdminSessionRestoreResponse> {
-  return apiJson<AdminSessionRestoreResponse>(`/api/v1/admin/memory/sessions/${sessionId}/restore`, {
+export async function restoreAdminSession(input: RestoreAdminSessionInput): Promise<AdminSessionRestoreResponse> {
+  return apiJson<AdminSessionRestoreResponse>(`/api/v1/admin/memory/sessions/${input.session_id}/restore`, {
     method: 'POST',
   })
 }
@@ -138,46 +201,34 @@ export async function listAdminEngrams(
   return apiJson<AdminEngramRecord[]>(`/api/v1/admin/memory/engrams?${query}`)
 }
 
-export async function getAdminEngram(
-  engramId: string,
-  includeDeleted = true,
-): Promise<AdminEngramRecord> {
-  const query = buildQuery({ include_deleted: includeDeleted })
-  return apiJson<AdminEngramRecord>(`/api/v1/admin/memory/engrams/${engramId}?${query}`)
+export async function getAdminEngram(input: GetAdminEngramInput): Promise<AdminEngramRecord> {
+  const query = buildQuery({ include_deleted: input.include_deleted ?? true })
+  return apiJson<AdminEngramRecord>(`/api/v1/admin/memory/engrams/${input.engram_id}?${query}`)
 }
 
-export async function updateAdminEngram(
-  engramId: string,
-  payload: UpdateAdminEngramPayload,
-): Promise<AdminEngramRecord> {
-  return apiJson<AdminEngramRecord>(`/api/v1/admin/memory/engrams/${engramId}`, {
+export async function updateAdminEngram(input: UpdateAdminEngramInput): Promise<AdminEngramRecord> {
+  return apiJson<AdminEngramRecord>(`/api/v1/admin/memory/engrams/${input.engram_id}`, {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(input.payload),
   })
 }
 
-export async function moveAdminEngram(
-  engramId: string,
-  payload: MoveAdminEngramPayload,
-): Promise<AdminEngramRecord> {
-  return apiJson<AdminEngramRecord>(`/api/v1/admin/memory/engrams/${engramId}/move`, {
+export async function moveAdminEngram(input: MoveAdminEngramInput): Promise<AdminEngramRecord> {
+  return apiJson<AdminEngramRecord>(`/api/v1/admin/memory/engrams/${input.engram_id}/move`, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(input.payload),
   })
 }
 
-export async function deleteAdminEngram(
-  engramId: string,
-  payload: AdminDeletePayload,
-): Promise<AdminEngramDeleteResponse> {
-  return apiJson<AdminEngramDeleteResponse>(`/api/v1/admin/memory/engrams/${engramId}`, {
+export async function deleteAdminEngram(input: DeleteAdminEngramInput): Promise<AdminEngramDeleteResponse> {
+  return apiJson<AdminEngramDeleteResponse>(`/api/v1/admin/memory/engrams/${input.engram_id}`, {
     method: 'DELETE',
-    body: JSON.stringify({ reason: payload.reason ?? null }),
+    body: JSON.stringify({ reason: input.payload.reason ?? null }),
   })
 }
 
-export async function restoreAdminEngram(engramId: string): Promise<AdminEngramRestoreResponse> {
-  return apiJson<AdminEngramRestoreResponse>(`/api/v1/admin/memory/engrams/${engramId}/restore`, {
+export async function restoreAdminEngram(input: RestoreAdminEngramInput): Promise<AdminEngramRestoreResponse> {
+  return apiJson<AdminEngramRestoreResponse>(`/api/v1/admin/memory/engrams/${input.engram_id}/restore`, {
     method: 'POST',
   })
 }
@@ -205,39 +256,42 @@ export async function createCollection(payload: CreateCollectionPayload): Promis
   })
 }
 
-export async function updateCollection(
-  collectionId: string,
-  payload: UpdateCollectionPayload,
-): Promise<EngramCollectionRecord> {
-  return apiJson<EngramCollectionRecord>(`/api/v1/admin/memory/collections/${collectionId}`, {
+export async function updateCollection(input: UpdateCollectionInput): Promise<EngramCollectionRecord> {
+  return apiJson<EngramCollectionRecord>(`/api/v1/admin/memory/collections/${input.collection_id}`, {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(input.payload),
   })
 }
 
-export async function deleteCollection(collectionId: string, payload: AdminDeletePayload): Promise<{ deleted: boolean }> {
-  return apiJson<{ deleted: boolean }>(`/api/v1/admin/memory/collections/${collectionId}`, {
+export async function deleteCollection(input: DeleteCollectionInput): Promise<{ deleted: boolean }> {
+  return apiJson<{ deleted: boolean }>(`/api/v1/admin/memory/collections/${input.collection_id}`, {
     method: 'DELETE',
-    body: JSON.stringify({ reason: payload.reason ?? null }),
+    body: JSON.stringify({ reason: input.payload.reason ?? null }),
   })
 }
 
-export async function addCollectionItems(
-  collectionId: string,
-  payload: UpdateCollectionItemsPayload,
-): Promise<{ added: number }> {
-  return apiJson<{ added: number }>(`/api/v1/admin/memory/collections/${collectionId}/items`, {
+export async function addCollectionItems(input: AddCollectionItemsInput): Promise<{ added: number }> {
+  return apiJson<{ added: number }>(`/api/v1/admin/memory/collections/${input.collection_id}/items`, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(input.payload),
   })
 }
 
-export async function removeCollectionItem(
-  collectionId: string,
-  engramId: string,
-): Promise<{ removed: boolean }> {
+export async function removeCollectionItem(input: RemoveCollectionItemInput): Promise<{ removed: boolean }> {
   return apiJson<{ removed: boolean }>(
-    `/api/v1/admin/memory/collections/${collectionId}/items/${engramId}`,
+    `/api/v1/admin/memory/collections/${input.collection_id}/items/${input.engram_id}`,
     { method: 'DELETE' },
   )
+}
+
+export async function shareEngram(input: ShareEngramInput): Promise<EngramVisibilityRecord> {
+  return apiJson<EngramVisibilityRecord>(`/api/v1/engrams/${input.engram_id}/share`, {
+    method: 'POST',
+  })
+}
+
+export async function unshareEngram(input: UnshareEngramInput): Promise<EngramVisibilityRecord> {
+  return apiJson<EngramVisibilityRecord>(`/api/v1/engrams/${input.engram_id}/unshare`, {
+    method: 'POST',
+  })
 }
