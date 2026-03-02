@@ -134,14 +134,7 @@ func (metrics *InMemoryRequestMetrics) Record(sample RequestMetricSample) {
 // Snapshot returns a copy safe for JSON serialization.
 func (metrics *InMemoryRequestMetrics) Snapshot() RequestMetricsSnapshot {
 	if metrics == nil {
-		return RequestMetricsSnapshot{
-			ByStatusClass: map[string]int64{},
-			ByDomain:      map[string]int64{},
-			ByRoute:       map[string]RouteHit{},
-			ProviderFails: map[string]int64{},
-			StreamHealth:  map[string]StreamHit{},
-			Lifecycle:     map[string]int64{},
-		}
+		return emptyRequestMetricsSnapshot()
 	}
 	metrics.mutex.RLock()
 	defer metrics.mutex.RUnlock()
@@ -153,37 +146,57 @@ func (metrics *InMemoryRequestMetrics) Snapshot() RequestMetricsSnapshot {
 		},
 		ByStatusClass: cloneInt64Map(metrics.byStatusClass),
 		ByDomain:      cloneInt64Map(metrics.byDomain),
-		ByRoute:       make(map[string]RouteHit, len(metrics.byRoute)),
+		ByRoute:       routeHitsSnapshot(metrics.byRoute),
 		ProviderFails: cloneInt64Map(metrics.providerFails),
-		StreamHealth:  make(map[string]StreamHit, len(metrics.streamHealth)),
+		StreamHealth:  streamHitsSnapshot(metrics.streamHealth),
 		Lifecycle:     cloneInt64Map(metrics.lifecycle),
 	}
-	for routeKey, accumulator := range metrics.byRoute {
-		average := 0.0
-		if accumulator.count > 0 {
-			average = accumulator.totalDurationMilli / float64(accumulator.count)
-		}
-		snapshot.ByRoute[routeKey] = RouteHit{
+	return snapshot
+}
+
+func emptyRequestMetricsSnapshot() RequestMetricsSnapshot {
+	return RequestMetricsSnapshot{
+		ByStatusClass: map[string]int64{},
+		ByDomain:      map[string]int64{},
+		ByRoute:       map[string]RouteHit{},
+		ProviderFails: map[string]int64{},
+		StreamHealth:  map[string]StreamHit{},
+		Lifecycle:     map[string]int64{},
+	}
+}
+
+func routeHitsSnapshot(source map[string]routeAccumulator) map[string]RouteHit {
+	snapshot := make(map[string]RouteHit, len(source))
+	for routeKey, accumulator := range source {
+		snapshot[routeKey] = RouteHit{
 			Count:               accumulator.count,
 			ErrorCount:          accumulator.errorCount,
 			TotalDurationMillis: accumulator.totalDurationMilli,
-			AverageDurationMS:   average,
+			AverageDurationMS:   averageDurationMillis(accumulator.totalDurationMilli, accumulator.count),
 		}
 	}
-	for key, accumulator := range metrics.streamHealth {
-		average := 0.0
-		if accumulator.count > 0 {
-			average = accumulator.totalDurationMilli / float64(accumulator.count)
-		}
-		snapshot.StreamHealth[key] = StreamHit{
+	return snapshot
+}
+
+func streamHitsSnapshot(source map[string]streamAccumulator) map[string]StreamHit {
+	snapshot := make(map[string]StreamHit, len(source))
+	for key, accumulator := range source {
+		snapshot[key] = StreamHit{
 			Count:               accumulator.count,
 			ErrorCount:          accumulator.errorCount,
 			TotalChunks:         accumulator.totalChunks,
 			TotalDurationMillis: accumulator.totalDurationMilli,
-			AverageDurationMS:   average,
+			AverageDurationMS:   averageDurationMillis(accumulator.totalDurationMilli, accumulator.count),
 		}
 	}
 	return snapshot
+}
+
+func averageDurationMillis(totalDuration float64, sampleCount int64) float64 {
+	if sampleCount <= 0 {
+		return 0.0
+	}
+	return totalDuration / float64(sampleCount)
 }
 
 // RecordProviderFailure captures a categorized provider failure sample from chat service flow.

@@ -19,6 +19,14 @@ const (
 	exportRouteDefaultPolicy = string(internalexport.ProjectImportConflictPolicySkip)
 )
 
+type projectExportInput struct {
+	actor             AdminActor
+	projectID         string
+	exportFormat      internalexport.ProjectExportFormat
+	collectionIDs     []uuid.UUID
+	includeEmbeddings bool
+}
+
 // MountExportRoutes registers project export/import endpoints.
 func MountExportRoutes(router chi.Router, service internalexport.Service) {
 	router.Get("/api/v1/projects/{project_id}/export", func(writer http.ResponseWriter, request *http.Request) {
@@ -38,45 +46,89 @@ func handleProjectExport(
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "export service is not configured"})
 		return
 	}
-	actor, ok := requireExportActor(writer, request)
+	input, ok := parseProjectExportInput(writer, request)
 	if !ok {
 		return
+	}
+	bundle, ok := buildProjectExportBundle(writer, request, service, input)
+	if !ok {
+		return
+	}
+	jsonPayload, ok := marshalProjectExportBundle(writer, bundle)
+	if !ok {
+		return
+	}
+	writeProjectExportPayload(writer, input.projectID, input.exportFormat, jsonPayload)
+}
+
+func parseProjectExportInput(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (projectExportInput, bool) {
+	actor, ok := requireExportActor(writer, request)
+	if !ok {
+		return projectExportInput{}, false
 	}
 	projectID := strings.TrimSpace(chi.URLParam(request, "project_id"))
 	if projectID == "" {
 		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "project_id is required"})
-		return
+		return projectExportInput{}, false
 	}
 	exportFormat, ok := parseExportFormat(writer, request.URL.Query().Get("format"))
 	if !ok {
-		return
+		return projectExportInput{}, false
 	}
 	collectionIDs, ok := parseCollectionIDs(writer, request.URL.Query()["collection_ids"])
 	if !ok {
-		return
+		return projectExportInput{}, false
 	}
-	includeEmbeddings := parseOptionalExportBoolQuery(request.URL.Query().Get("include_embeddings"), false)
+	return projectExportInput{
+		actor:             actor,
+		projectID:         projectID,
+		exportFormat:      exportFormat,
+		collectionIDs:     collectionIDs,
+		includeEmbeddings: parseOptionalExportBoolQuery(request.URL.Query().Get("include_embeddings"), false),
+	}, true
+}
 
+func buildProjectExportBundle(
+	writer http.ResponseWriter,
+	request *http.Request,
+	service internalexport.Service,
+	input projectExportInput,
+) (any, bool) {
 	bundle, err := service.BuildProjectExportBundle(
 		request.Context(),
 		internalexport.ExportProjectRequest{
-			ActorUserID:       actor.UserID,
-			ActorRole:         actor.Role,
-			ProjectID:         projectID,
-			CollectionIDs:     collectionIDs,
-			IncludeEmbeddings: includeEmbeddings,
+			ActorUserID:       input.actor.UserID,
+			ActorRole:         input.actor.Role,
+			ProjectID:         input.projectID,
+			CollectionIDs:     input.collectionIDs,
+			IncludeEmbeddings: input.includeEmbeddings,
 		},
 	)
 	if err != nil {
 		writeExportServiceError(writer, err)
-		return
+		return nil, false
 	}
+	return bundle, true
+}
 
+func marshalProjectExportBundle(writer http.ResponseWriter, bundle any) ([]byte, bool) {
 	jsonPayload, err := json.MarshalIndent(bundle, "", "  ")
 	if err != nil {
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
-		return
+		return nil, false
 	}
+	return jsonPayload, true
+}
+
+func writeProjectExportPayload(
+	writer http.ResponseWriter,
+	projectID string,
+	exportFormat internalexport.ProjectExportFormat,
+	jsonPayload []byte,
+) {
 	filename := buildExportFilename(projectID, exportFormat)
 	writer.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	if exportFormat == internalexport.ProjectExportFormatZIP {

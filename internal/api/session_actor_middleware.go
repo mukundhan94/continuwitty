@@ -83,10 +83,20 @@ func lookupActiveSessionUserRecord(
 	userID uuid.UUID,
 ) (*models.UserAuthRecord, bool) {
 	record, err := lookup(ctx, userID)
-	if err != nil || record == nil || !record.IsActive {
+	if sessionUserLookupFailed(err, record) {
 		return nil, false
 	}
 	return record, true
+}
+
+func sessionUserLookupFailed(err error, record *models.UserAuthRecord) bool {
+	if err != nil {
+		return true
+	}
+	if record == nil {
+		return true
+	}
+	return !record.IsActive
 }
 
 func normalizeActorRole(role models.UserRole) (string, bool) {
