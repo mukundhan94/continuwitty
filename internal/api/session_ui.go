@@ -475,18 +475,11 @@ func (dependencies sessionAuthDependencies) handleUIAdminRevokeMCPToken(writer h
 		writeSessionUserDependenciesError(writer)
 		return
 	}
-	if err := request.ParseForm(); err != nil {
-		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid form body"})
-		return
-	}
-	if !dependencies.validateLogoutCSRF(writer, request, request.FormValue("csrf_token")) {
-		return
-	}
-	tokenID, ok := parsePathUUID(writer, request, "token_id")
+	input, ok := dependencies.parseUIAdminRevokeMCPTokenInput(writer, request)
 	if !ok {
 		return
 	}
-	revoked, err := dependencies.revokeTokenForOwner(request.Context(), tokenID, record.UserID)
+	revoked, err := dependencies.revokeTokenForOwner(request.Context(), input.tokenID, record.UserID)
 	if err != nil {
 		writeJSON(writer, http.StatusInternalServerError, map[string]string{"detail": "internal error"})
 		return
@@ -495,7 +488,6 @@ func (dependencies sessionAuthDependencies) handleUIAdminRevokeMCPToken(writer h
 		writeJSON(writer, http.StatusNotFound, map[string]string{"detail": "Token not found"})
 		return
 	}
-	reason := optionalTrimmedString(request.FormValue("reason"))
 	dependencies.logAuditEventRequest(
 		request,
 		sessionAuditEvent{
@@ -503,12 +495,38 @@ func (dependencies sessionAuthDependencies) handleUIAdminRevokeMCPToken(writer h
 			success:   true,
 			username:  record.Username,
 			metadata: map[string]any{
-				"token_id": tokenID.String(),
-				"reason":   optionalTrimmedReason(reason),
+				"token_id": input.tokenID.String(),
+				"reason":   optionalTrimmedReason(input.reason),
 			},
 		},
 	)
 	http.Redirect(writer, request, "/ui/admin", http.StatusSeeOther)
+}
+
+type uiAdminRevokeMCPTokenInput struct {
+	tokenID uuid.UUID
+	reason  *string
+}
+
+func (dependencies sessionAuthDependencies) parseUIAdminRevokeMCPTokenInput(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (uiAdminRevokeMCPTokenInput, bool) {
+	if err := request.ParseForm(); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid form body"})
+		return uiAdminRevokeMCPTokenInput{}, false
+	}
+	if !dependencies.validateLogoutCSRF(writer, request, request.FormValue("csrf_token")) {
+		return uiAdminRevokeMCPTokenInput{}, false
+	}
+	tokenID, ok := parsePathUUID(writer, request, "token_id")
+	if !ok {
+		return uiAdminRevokeMCPTokenInput{}, false
+	}
+	return uiAdminRevokeMCPTokenInput{
+		tokenID: tokenID,
+		reason:  optionalTrimmedString(request.FormValue("reason")),
+	}, true
 }
 
 func decodeMCPTokenCreateFormRequest(

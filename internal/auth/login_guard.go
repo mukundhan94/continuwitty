@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 )
@@ -10,6 +11,8 @@ type loginWindowState struct {
 	failures     []time.Time
 	lockoutUntil time.Time
 }
+
+type loginAttemptKey string
 
 // LoginAttemptGuard tracks repeated login failures and temporary lockout windows.
 type LoginAttemptGuard struct {
@@ -21,7 +24,7 @@ type LoginAttemptGuard struct {
 	store       DistributedRateLimitStore
 
 	mutex sync.Mutex
-	state map[string]loginWindowState
+	state map[loginAttemptKey]loginWindowState
 }
 
 // LoginAttemptGuardOptions configures LoginAttemptGuard construction.
@@ -67,7 +70,7 @@ func NewLoginAttemptGuardWithOptions(options LoginAttemptGuardOptions) *LoginAtt
 		namespace:   normalizeNamespace(options.Namespace, DefaultLoginAttemptNamespace),
 		now:         options.Now,
 		store:       options.Store,
-		state:       map[string]loginWindowState{},
+		state:       map[loginAttemptKey]loginWindowState{},
 	}
 }
 
@@ -82,21 +85,21 @@ func (guard *LoginAttemptGuard) SetDistributedStore(namespace string, store Dist
 // Reset clears all tracked state for the guard.
 func (guard *LoginAttemptGuard) Reset() {
 	guard.mutex.Lock()
-	guard.state = map[string]loginWindowState{}
+	guard.state = map[loginAttemptKey]loginWindowState{}
 	guard.mutex.Unlock()
 	if guard.store != nil {
 		_ = guard.store.ClearNamespace(context.Background(), guard.namespace)
 	}
 }
 
-func (guard *LoginAttemptGuard) rateLimitStateKey(key string) RateLimitStateKey {
+func (guard *LoginAttemptGuard) rateLimitStateKey(key loginAttemptKey) RateLimitStateKey {
 	return RateLimitStateKey{
 		Namespace: guard.namespace,
-		RateKey:   key,
+		RateKey:   string(key),
 	}
 }
 
-func (guard *LoginAttemptGuard) checkDistributed(key string, now time.Time) (bool, int, error) {
+func (guard *LoginAttemptGuard) checkDistributed(key loginAttemptKey, now time.Time) (bool, int, error) {
 	allowed := true
 	retryAfter := 0
 	err := guard.store.MutateState(
@@ -118,7 +121,7 @@ func (guard *LoginAttemptGuard) checkDistributed(key string, now time.Time) (boo
 	return allowed, retryAfter, nil
 }
 
-func (guard *LoginAttemptGuard) checkLocal(key string, now time.Time) (bool, int) {
+func (guard *LoginAttemptGuard) checkLocal(key loginAttemptKey, now time.Time) (bool, int) {
 	guard.mutex.Lock()
 	defer guard.mutex.Unlock()
 	state := guard.state[key]
@@ -141,30 +144,32 @@ func (guard *LoginAttemptGuard) checkLocal(key string, now time.Time) (bool, int
 // Check returns whether the key is currently allowed, and any retry-after seconds if blocked.
 func (guard *LoginAttemptGuard) Check(key string) (bool, int) {
 	now := guard.now().UTC()
+	normalizedKey := normalizeLoginAttemptKey(key)
 	if guard.store != nil {
 		return distributedOrFallback(
 			func() (bool, int, error) {
-				return guard.checkDistributed(key, now)
+				return guard.checkDistributed(normalizedKey, now)
 			},
 			func() (bool, int) {
-				return guard.checkLocal(key, now)
+				return guard.checkLocal(normalizedKey, now)
 			},
 		)
 	}
-	return guard.checkLocal(key, now)
+	return guard.checkLocal(normalizedKey, now)
 }
 
 // RegisterSuccess clears failures for the key.
 func (guard *LoginAttemptGuard) RegisterSuccess(key string) {
+	normalizedKey := normalizeLoginAttemptKey(key)
 	guard.mutex.Lock()
-	delete(guard.state, key)
+	delete(guard.state, normalizedKey)
 	guard.mutex.Unlock()
 	if guard.store != nil {
-		_ = guard.store.DeleteState(context.Background(), guard.rateLimitStateKey(key))
+		_ = guard.store.DeleteState(context.Background(), guard.rateLimitStateKey(normalizedKey))
 	}
 }
 
-func (guard *LoginAttemptGuard) registerFailureDistributed(key string, now time.Time) error {
+func (guard *LoginAttemptGuard) registerFailureDistributed(key loginAttemptKey, now time.Time) error {
 	return guard.store.MutateState(
 		context.Background(),
 		guard.rateLimitStateKey(key),
@@ -181,7 +186,7 @@ func (guard *LoginAttemptGuard) registerFailureDistributed(key string, now time.
 	)
 }
 
-func (guard *LoginAttemptGuard) registerFailureLocal(key string, now time.Time) {
+func (guard *LoginAttemptGuard) registerFailureLocal(key loginAttemptKey, now time.Time) {
 	guard.mutex.Lock()
 	defer guard.mutex.Unlock()
 	state := guard.state[key]
@@ -196,12 +201,17 @@ func (guard *LoginAttemptGuard) registerFailureLocal(key string, now time.Time) 
 // RegisterFailure records a failed attempt and applies lockout when threshold is reached.
 func (guard *LoginAttemptGuard) RegisterFailure(key string) {
 	now := guard.now().UTC()
+	normalizedKey := normalizeLoginAttemptKey(key)
 	if guard.store != nil {
-		if err := guard.registerFailureDistributed(key, now); err == nil {
+		if err := guard.registerFailureDistributed(normalizedKey, now); err == nil {
 			return
 		}
 	}
-	guard.registerFailureLocal(key, now)
+	guard.registerFailureLocal(normalizedKey, now)
+}
+
+func normalizeLoginAttemptKey(key string) loginAttemptKey {
+	return loginAttemptKey(strings.TrimSpace(key))
 }
 
 func activeFailures(failures []time.Time, now time.Time, window time.Duration) []time.Time {

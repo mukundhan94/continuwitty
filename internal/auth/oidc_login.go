@@ -24,6 +24,14 @@ var (
 	errOIDCIdentityMissing  = errors.New("oidc identity did not include a usable username")
 )
 
+type oidcState string
+type oidcNonce string
+type oidcAuthCode string
+type oidcScopeConfig string
+type oidcUsernameClaim string
+type oidcClaimKey string
+type oidcClaimValue string
+
 // OIDCIdentity stores normalized identity claims extracted from an ID token.
 type OIDCIdentity struct {
 	Subject  string
@@ -76,12 +84,12 @@ func NewOIDCLoginProvider(ctx context.Context, settings config.Settings) (OIDCLo
 			ClientSecret: strings.TrimSpace(settings.OIDCClientSecret),
 			RedirectURL:  strings.TrimSpace(settings.OIDCRedirectURL),
 			Endpoint:     provider.Endpoint(),
-			Scopes:       parseOIDCScopes(settings.OIDCScopes),
+			Scopes:       parseOIDCScopes(oidcScopeConfig(settings.OIDCScopes)),
 		},
 		verifier: provider.Verifier(&oidc.Config{
 			ClientID: strings.TrimSpace(settings.OIDCClientID),
 		}),
-		usernameClaim: resolveOIDCUsernameClaim(settings.OIDCUsernameClaim),
+		usernameClaim: resolveOIDCUsernameClaim(oidcUsernameClaim(settings.OIDCUsernameClaim)),
 	}, nil
 }
 
@@ -105,8 +113,8 @@ func validateOIDCProviderSettings(settings config.Settings) error {
 	return fmt.Errorf("missing oidc settings: %s", strings.Join(missing, ", "))
 }
 
-func parseOIDCScopes(rawScopes string) []string {
-	scopes := strings.Fields(strings.TrimSpace(rawScopes))
+func parseOIDCScopes(rawScopes oidcScopeConfig) []string {
+	scopes := strings.Fields(strings.TrimSpace(string(rawScopes)))
 	if len(scopes) == 0 {
 		scopes = strings.Fields(defaultOIDCScopes)
 	}
@@ -129,8 +137,8 @@ func parseOIDCScopes(rawScopes string) []string {
 	return normalized
 }
 
-func resolveOIDCUsernameClaim(rawClaim string) string {
-	claim := strings.TrimSpace(rawClaim)
+func resolveOIDCUsernameClaim(rawClaim oidcUsernameClaim) string {
+	claim := strings.TrimSpace(string(rawClaim))
 	if claim == "" {
 		return defaultOIDCUsernameClaim
 	}
@@ -142,14 +150,18 @@ func (provider *oidcLoginProvider) Enabled() bool {
 }
 
 func (provider *oidcLoginProvider) AuthCodeURL(state string, nonce string) (string, error) {
+	return provider.buildAuthCodeURL(oidcState(state), oidcNonce(nonce))
+}
+
+func (provider *oidcLoginProvider) buildAuthCodeURL(state oidcState, nonce oidcNonce) (string, error) {
 	if provider == nil {
 		return "", errOIDCProviderDisabled
 	}
-	trimmedState := strings.TrimSpace(state)
+	trimmedState := strings.TrimSpace(string(state))
 	if trimmedState == "" {
 		return "", errors.New("oidc state is required")
 	}
-	return provider.oauthConfig.AuthCodeURL(trimmedState, oidc.Nonce(strings.TrimSpace(nonce))), nil
+	return provider.oauthConfig.AuthCodeURL(trimmedState, oidc.Nonce(strings.TrimSpace(string(nonce)))), nil
 }
 
 func (provider *oidcLoginProvider) AuthenticateCode(
@@ -160,10 +172,43 @@ func (provider *oidcLoginProvider) AuthenticateCode(
 	if provider == nil {
 		return nil, errOIDCProviderDisabled
 	}
-	token, err := provider.oauthConfig.Exchange(ctx, strings.TrimSpace(code))
+	token, err := provider.exchangeOIDCToken(ctx, oidcAuthCode(code))
+	if err != nil {
+		return nil, err
+	}
+	idToken, err := provider.verifyOIDCIDToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateOIDCNonce(idToken, oidcNonce(expectedNonce)); err != nil {
+		return nil, err
+	}
+	claims, err := decodeOIDCClaims(idToken)
+	if err != nil {
+		return nil, err
+	}
+	identity, err := provider.identityFromOIDCClaims(claims)
+	if err != nil {
+		return nil, err
+	}
+	return &identity, nil
+}
+
+func (provider *oidcLoginProvider) exchangeOIDCToken(
+	ctx context.Context,
+	code oidcAuthCode,
+) (*oauth2.Token, error) {
+	token, err := provider.oauthConfig.Exchange(ctx, strings.TrimSpace(string(code)))
 	if err != nil {
 		return nil, fmt.Errorf("exchange oidc code: %w", err)
 	}
+	return token, nil
+}
+
+func (provider *oidcLoginProvider) verifyOIDCIDToken(
+	ctx context.Context,
+	token *oauth2.Token,
+) (*oidc.IDToken, error) {
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok || strings.TrimSpace(rawIDToken) == "" {
 		return nil, errOIDCTokenMissingID
@@ -172,47 +217,59 @@ func (provider *oidcLoginProvider) AuthenticateCode(
 	if err != nil {
 		return nil, fmt.Errorf("verify oidc id_token: %w", err)
 	}
-	if strings.TrimSpace(idToken.Nonce) != strings.TrimSpace(expectedNonce) {
-		return nil, errOIDCNonceMismatch
+	return idToken, nil
+}
+
+func validateOIDCNonce(idToken *oidc.IDToken, expectedNonce oidcNonce) error {
+	if strings.TrimSpace(idToken.Nonce) == strings.TrimSpace(string(expectedNonce)) {
+		return nil
 	}
+	return errOIDCNonceMismatch
+}
+
+func decodeOIDCClaims(idToken *oidc.IDToken) (map[string]any, error) {
 	var claims map[string]any
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("decode oidc claims: %w", err)
 	}
+	return claims, nil
+}
+
+func (provider *oidcLoginProvider) identityFromOIDCClaims(claims map[string]any) (OIDCIdentity, error) {
 	identity := OIDCIdentity{
-		Subject:  claimString(claims, "sub"),
-		Email:    claimString(claims, "email"),
-		Username: claimString(claims, provider.usernameClaim),
+		Subject:  string(claimString(claims, oidcClaimKey("sub"))),
+		Email:    string(claimString(claims, oidcClaimKey("email"))),
+		Username: string(claimString(claims, oidcClaimKey(provider.usernameClaim))),
 	}
 	if strings.TrimSpace(identity.Username) == "" {
 		identity.Username = firstNonEmptyString(
-			claimString(claims, "email"),
-			claimString(claims, "preferred_username"),
-			claimString(claims, "upn"),
-			claimString(claims, "sub"),
+			claimString(claims, oidcClaimKey("email")),
+			claimString(claims, oidcClaimKey("preferred_username")),
+			claimString(claims, oidcClaimKey("upn")),
+			claimString(claims, oidcClaimKey("sub")),
 		)
 	}
 	if strings.TrimSpace(identity.Username) == "" {
-		return nil, errOIDCIdentityMissing
+		return OIDCIdentity{}, errOIDCIdentityMissing
 	}
-	return &identity, nil
+	return identity, nil
 }
 
-func claimString(claims map[string]any, key string) string {
-	value, exists := claims[key]
+func claimString(claims map[string]any, key oidcClaimKey) oidcClaimValue {
+	value, exists := claims[string(key)]
 	if !exists {
-		return ""
+		return oidcClaimValue("")
 	}
 	text, ok := value.(string)
 	if !ok {
-		return ""
+		return oidcClaimValue("")
 	}
-	return strings.TrimSpace(text)
+	return oidcClaimValue(strings.TrimSpace(text))
 }
 
-func firstNonEmptyString(candidates ...string) string {
+func firstNonEmptyString(candidates ...oidcClaimValue) string {
 	for _, candidate := range candidates {
-		trimmed := strings.TrimSpace(candidate)
+		trimmed := strings.TrimSpace(string(candidate))
 		if trimmed != "" {
 			return trimmed
 		}

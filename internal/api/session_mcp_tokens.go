@@ -149,22 +149,18 @@ func decodeMCPTokenCreateRequest(
 	if !decodeJSONAllowEmpty(writer, request, &payload) {
 		return models.MCPTokenCreateRequest{}, false
 	}
+	payload = normalizeMCPTokenCreateRequest(payload)
+	if !validateMCPTokenCreateRequest(writer, payload) {
+		return models.MCPTokenCreateRequest{}, false
+	}
+	return payload, true
+}
+
+func normalizeMCPTokenCreateRequest(payload models.MCPTokenCreateRequest) models.MCPTokenCreateRequest {
 	payload.Name = strings.TrimSpace(payload.Name)
-	if !isValidMCPTokenName(payload.Name) {
-		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid token name"})
-		return models.MCPTokenCreateRequest{}, false
-	}
 	payload.Scope = resolveMCPTokenScope(payload.Scope)
-	if _, err := models.ParseMCPTokenScope(payload.Scope); err != nil {
-		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid scope"})
-		return models.MCPTokenCreateRequest{}, false
-	}
 	if payload.ExpiresInDays == 0 {
 		payload.ExpiresInDays = defaultMCPTokenExpiryDays
-	}
-	if payload.ExpiresInDays < 1 || payload.ExpiresInDays > maxMCPTokenExpiryDays {
-		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid expires_in_days"})
-		return models.MCPTokenCreateRequest{}, false
 	}
 	if payload.AllowedTools == nil {
 		payload.AllowedTools = []string{}
@@ -172,7 +168,35 @@ func decodeMCPTokenCreateRequest(
 	if payload.AllowedProjectIDs == nil {
 		payload.AllowedProjectIDs = []string{}
 	}
-	return payload, true
+	return payload
+}
+
+func validateMCPTokenCreateRequest(
+	writer http.ResponseWriter,
+	payload models.MCPTokenCreateRequest,
+) bool {
+	if !isValidMCPTokenName(payload.Name) {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid token name"})
+		return false
+	}
+	if !isValidMCPTokenScope(payload.Scope) {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid scope"})
+		return false
+	}
+	if !isValidMCPTokenExpiry(payload.ExpiresInDays) {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid expires_in_days"})
+		return false
+	}
+	return true
+}
+
+func isValidMCPTokenScope(scope string) bool {
+	_, err := models.ParseMCPTokenScope(scope)
+	return err == nil
+}
+
+func isValidMCPTokenExpiry(expiresInDays int) bool {
+	return expiresInDays >= 1 && expiresInDays <= maxMCPTokenExpiryDays
 }
 
 func decodeMCPTokenRevokeRequest(

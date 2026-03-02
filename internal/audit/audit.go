@@ -101,14 +101,7 @@ func (logger *Logger) LogRequestEvent(event RequestEvent) error {
 	if logger == nil || !logger.hasOutputDestination() {
 		return nil
 	}
-	payload := logger.buildPayload(
-		event.Request,
-		event.EventType,
-		event.Success,
-		event.Username,
-		event.Detail,
-		event.Metadata,
-	)
+	payload := logger.buildPayload(event)
 	serialized, err := serializePayload(payload, logger.maxEventBytes)
 	if err != nil {
 		return err
@@ -129,30 +122,23 @@ func (logger *Logger) hasOutputDestination() bool {
 	return logger.path != "" || logger.stdoutEnabled || logger.sinkURL != ""
 }
 
-func (logger *Logger) buildPayload(
-	request *http.Request,
-	eventType string,
-	success bool,
-	username string,
-	detail string,
-	metadata map[string]any,
-) map[string]any {
+func (logger *Logger) buildPayload(event RequestEvent) map[string]any {
 	payload := map[string]any{
 		"timestamp":  logger.now().UTC().Format(time.RFC3339Nano),
-		"event_type": eventType,
-		"success":    success,
-		"ip":         clientIP(request),
-		"method":     requestMethod(request),
-		"path":       requestPath(request),
+		"event_type": event.EventType,
+		"success":    event.Success,
+		"ip":         clientIP(event.Request),
+		"method":     requestMethod(event.Request),
+		"path":       requestPath(event.Request),
 	}
-	if cleanUsername := sanitizeText(username, maxTextFieldLength); cleanUsername != "" {
+	if cleanUsername := sanitizeText(event.Username, maxTextFieldLength); cleanUsername != "" {
 		payload["username"] = cleanUsername
 	}
-	if cleanDetail := sanitizeText(detail, maxTextFieldLength); cleanDetail != "" {
+	if cleanDetail := sanitizeText(event.Detail, maxTextFieldLength); cleanDetail != "" {
 		payload["detail"] = cleanDetail
 	}
-	if len(metadata) > 0 {
-		payload["metadata"] = sanitizeMetadataMap(metadata, 0)
+	if len(event.Metadata) > 0 {
+		payload["metadata"] = sanitizeMetadataMap(event.Metadata, 0)
 	}
 	return payload
 }

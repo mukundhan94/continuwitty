@@ -22,6 +22,10 @@ var (
 	errInvalidSessionToken   = errors.New("invalid session token")
 )
 
+type sessionToken string
+type sessionPayload string
+type sessionSignature string
+
 // SessionUser stores authenticated user identity in session state.
 type SessionUser struct {
 	UserID   string `json:"user_id"`
@@ -121,9 +125,9 @@ func (manager *SessionManager) Encode(state SessionState) (string, error) {
 	if err != nil {
 		return "", errInvalidSessionToken
 	}
-	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	payload := sessionPayload(base64.RawURLEncoding.EncodeToString(payloadBytes))
 	signature := manager.sign(payload)
-	return payload + "." + base64.RawURLEncoding.EncodeToString(signature), nil
+	return string(payload) + "." + base64.RawURLEncoding.EncodeToString(signature), nil
 }
 
 // Decode validates and parses a signed session token.
@@ -132,7 +136,7 @@ func (manager *SessionManager) Decode(token string) (SessionState, error) {
 		return SessionState{}, errInvalidSessionManager
 	}
 
-	payload, encodedSignature, err := parseSessionToken(token)
+	payload, encodedSignature, err := parseSessionToken(sessionToken(token))
 	if err != nil {
 		return SessionState{}, err
 	}
@@ -161,14 +165,14 @@ func (manager *SessionManager) DecodeRequest(request *http.Request) (SessionStat
 	return manager.Decode(cookie.Value)
 }
 
-func (manager *SessionManager) sign(payload string) []byte {
+func (manager *SessionManager) sign(payload sessionPayload) []byte {
 	hash := hmac.New(sha256.New, manager.secret)
 	_, _ = hash.Write([]byte(payload))
 	return hash.Sum(nil)
 }
 
-func parseSessionToken(token string) (string, string, error) {
-	parts := strings.SplitN(strings.TrimSpace(token), ".", 2)
+func parseSessionToken(token sessionToken) (sessionPayload, sessionSignature, error) {
+	parts := strings.SplitN(strings.TrimSpace(string(token)), ".", 2)
 	if len(parts) != 2 {
 		return "", "", errInvalidSessionToken
 	}
@@ -178,12 +182,15 @@ func parseSessionToken(token string) (string, string, error) {
 	if parts[1] == "" {
 		return "", "", errInvalidSessionToken
 	}
-	return parts[0], parts[1], nil
+	return sessionPayload(parts[0]), sessionSignature(parts[1]), nil
 }
 
-func (manager *SessionManager) validateSessionTokenSignature(payload, encodedSignature string) error {
+func (manager *SessionManager) validateSessionTokenSignature(
+	payload sessionPayload,
+	encodedSignature sessionSignature,
+) error {
 	expectedSignature := manager.sign(payload)
-	receivedSignature, err := base64.RawURLEncoding.DecodeString(encodedSignature)
+	receivedSignature, err := base64.RawURLEncoding.DecodeString(string(encodedSignature))
 	if err != nil {
 		return errInvalidSessionToken
 	}
@@ -193,8 +200,8 @@ func (manager *SessionManager) validateSessionTokenSignature(payload, encodedSig
 	return nil
 }
 
-func decodeSessionStatePayload(payload string) (SessionState, error) {
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(payload)
+func decodeSessionStatePayload(payload sessionPayload) (SessionState, error) {
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(string(payload))
 	if err != nil {
 		return SessionState{}, errInvalidSessionToken
 	}
