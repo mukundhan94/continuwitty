@@ -33,7 +33,7 @@ func newSkipImportScenario(t *testing.T) skipImportScenario {
 	service.deps.findExistingEngramID = func(
 		_ context.Context,
 		_ repository.Queryer,
-		_, _, _ string,
+		_ findExistingEngramIDInput,
 	) (*uuid.UUID, error) {
 		return &existingEngramID, nil
 	}

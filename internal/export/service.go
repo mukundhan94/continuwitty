@@ -77,7 +77,7 @@ type serviceDeps struct {
 	findExistingEngramID func(
 		ctx context.Context,
 		db repository.Queryer,
-		projectID, title, markdown string,
+		input findExistingEngramIDInput,
 	) (*uuid.UUID, error)
 	softDeleteEngram func(
 		ctx context.Context,
@@ -92,7 +92,7 @@ type serviceDeps struct {
 	buildUniqueName func(
 		ctx context.Context,
 		db repository.Queryer,
-		table, column, projectID, baseName string,
+		input buildUniqueNameInput,
 	) (string, error)
 	listCollectionItemMap func(
 		ctx context.Context,

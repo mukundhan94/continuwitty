@@ -51,9 +51,11 @@ func (service *ProjectTransferService) importSingleEngram(
 	existingID, err := service.deps.findExistingEngramID(
 		ctx,
 		service.db,
-		request.TargetProjectID,
-		exported.Title,
-		exported.DetailedSummaryMarkdown,
+		findExistingEngramIDInput{
+			ProjectID: request.TargetProjectID,
+			Title:     exported.Title,
+			Markdown:  exported.DetailedSummaryMarkdown,
+		},
 	)
 	if err != nil {
 		return uuid.Nil, "", err
@@ -96,10 +98,12 @@ func (service *ProjectTransferService) resolveImportedEngramTitle(
 		title, err := service.deps.buildUniqueName(
 			ctx,
 			service.db,
-			"engrams",
-			"title",
-			request.TargetProjectID,
-			baseTitle,
+			buildUniqueNameInput{
+				Table:     "engrams",
+				Column:    "title",
+				ProjectID: request.TargetProjectID,
+				BaseName:  baseTitle,
+			},
 		)
 		if err != nil {
 			return "", "", err

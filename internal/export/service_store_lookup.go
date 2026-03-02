@@ -11,10 +11,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+type findExistingEngramIDInput struct {
+	ProjectID string
+	Title     string
+	Markdown  string
+}
+
 func findExistingEngramID(
 	ctx context.Context,
 	db repository.Queryer,
-	projectID, title, markdown string,
+	input findExistingEngramIDInput,
 ) (*uuid.UUID, error) {
 	row := db.QueryRow(
 		ctx,
@@ -27,9 +33,9 @@ func findExistingEngramID(
 		  AND deleted_at IS NULL
 		LIMIT 1
 		`,
-		projectID,
-		title,
-		markdown,
+		input.ProjectID,
+		input.Title,
+		input.Markdown,
 	)
 	return scanOptionalUUID(row)
 }
@@ -75,12 +81,19 @@ func findExistingCollectionID(
 	return scanOptionalUUID(row)
 }
 
+type buildUniqueNameInput struct {
+	Table     string
+	Column    string
+	ProjectID string
+	BaseName  string
+}
+
 func buildUniqueName(
 	ctx context.Context,
 	db repository.Queryer,
-	table, column, projectID, baseName string,
+	input buildUniqueNameInput,
 ) (string, error) {
-	candidate := baseName + " (imported)"
+	candidate := input.BaseName + " (imported)"
 	index := 2
 	sql := fmt.Sprintf(
 		`
@@ -91,30 +104,38 @@ func buildUniqueName(
 		  AND deleted_at IS NULL
 		LIMIT 1
 		`,
-		table,
-		column,
+		input.Table,
+		input.Column,
 	)
 	for {
-		exists, err := checkNameExists(ctx, db, sql, projectID, candidate)
+		exists, err := checkNameExists(ctx, db, checkNameExistsInput{
+			Query:     sql,
+			ProjectID: input.ProjectID,
+			Candidate: candidate,
+		})
 		if err != nil {
 			return "", err
 		}
 		if !exists {
 			return candidate, nil
 		}
-		candidate = fmt.Sprintf("%s (imported %d)", baseName, index)
+		candidate = fmt.Sprintf("%s (imported %d)", input.BaseName, index)
 		index++
 	}
+}
+
+type checkNameExistsInput struct {
+	Query     string
+	ProjectID string
+	Candidate string
 }
 
 func checkNameExists(
 	ctx context.Context,
 	db repository.Queryer,
-	sql string,
-	projectID string,
-	candidate string,
+	input checkNameExistsInput,
 ) (bool, error) {
-	row := db.QueryRow(ctx, sql, projectID, candidate)
+	row := db.QueryRow(ctx, input.Query, input.ProjectID, input.Candidate)
 	var exists int
 	err := row.Scan(&exists)
 	if errors.Is(err, pgx.ErrNoRows) {

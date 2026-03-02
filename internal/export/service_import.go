@@ -131,10 +131,12 @@ func (service *ProjectTransferService) resolveImportedCollectionName(
 	return service.deps.buildUniqueName(
 		ctx,
 		service.db,
-		"engram_collections",
-		"name",
-		request.TargetProjectID,
-		baseName,
+		buildUniqueNameInput{
+			Table:     "engram_collections",
+			Column:    "name",
+			ProjectID: request.TargetProjectID,
+			BaseName:  baseName,
+		},
 	)
 }
 

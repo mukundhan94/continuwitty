@@ -78,7 +78,7 @@ func configureRenameLookupDeps(t *testing.T, service *ProjectTransferService, co
 	service.deps.findExistingEngramID = func(
 		_ context.Context,
 		_ repository.Queryer,
-		_, _, _ string,
+		_ findExistingEngramIDInput,
 	) (*uuid.UUID, error) {
 		return &config.existingEngramID, nil
 	}
@@ -92,11 +92,11 @@ func configureRenameLookupDeps(t *testing.T, service *ProjectTransferService, co
 	service.deps.buildUniqueName = func(
 		_ context.Context,
 		_ repository.Queryer,
-		table, column, _, baseName string,
+		input buildUniqueNameInput,
 	) (string, error) {
-		requireEqual(t, true, table == "engrams" || table == "engram_collections")
-		requireEqual(t, true, column == "title" || column == "name")
-		return baseName + " (imported)", nil
+		requireEqual(t, true, input.Table == "engrams" || input.Table == "engram_collections")
+		requireEqual(t, true, input.Column == "title" || input.Column == "name")
+		return input.BaseName + " (imported)", nil
 	}
 }
 
