@@ -7,6 +7,24 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 70: dense-score query band filters)
+
+1. Added dense-score query filter contract extensions:
+   - new optional filters: `dense_score_min` and `dense_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded dense-score filters and rejects inverted dense-score windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate dense-score filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports dense-score band filtering alongside composite-rank score filtering.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for dense-score filters.
+   - repository query-runtime coverage for dense-score filtering behavior.
+   - MCP parity and validation coverage for dense-score filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include dense-score filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 69: rank-position diagnostics in query results)
 
 1. Extended engram query-result contracts with `rank_position`.

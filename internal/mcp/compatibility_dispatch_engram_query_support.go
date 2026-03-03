@@ -72,6 +72,8 @@ type engramQueryPayloadParts struct {
 	avgRelevanceFeedbackMax *float64
 	sourceSessionQualityMin *float64
 	sourceSessionQualityMax *float64
+	denseScoreMin           *float64
+	denseScoreMax           *float64
 	compositeRankScoreMin   *float64
 	compositeRankScoreMax   *float64
 	lastAccessedAfter       *time.Time
@@ -153,6 +155,8 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		avgRelevanceFeedbackMax: engagementParts.avgRelevanceFeedbackMax,
 		sourceSessionQualityMin: engagementParts.sourceSessionQualityMin,
 		sourceSessionQualityMax: engagementParts.sourceSessionQualityMax,
+		denseScoreMin:           engagementParts.denseScoreMin,
+		denseScoreMax:           engagementParts.denseScoreMax,
 		compositeRankScoreMin:   engagementParts.compositeRankScoreMin,
 		compositeRankScoreMax:   engagementParts.compositeRankScoreMax,
 		lastAccessedAfter:       temporalParts.lastAccessedAfter,
@@ -244,6 +248,8 @@ type engramQueryEngagementParts struct {
 	avgRelevanceFeedbackMax *float64
 	sourceSessionQualityMin *float64
 	sourceSessionQualityMax *float64
+	denseScoreMin           *float64
+	denseScoreMax           *float64
 	compositeRankScoreMin   *float64
 	compositeRankScoreMax   *float64
 }
@@ -276,6 +282,8 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 		avgRelevanceFeedbackMax: scoreParts.avgRelevanceFeedbackMax,
 		sourceSessionQualityMin: scoreParts.sourceSessionQualityMin,
 		sourceSessionQualityMax: scoreParts.sourceSessionQualityMax,
+		denseScoreMin:           scoreParts.denseScoreMin,
+		denseScoreMax:           scoreParts.denseScoreMax,
 		compositeRankScoreMin:   scoreParts.compositeRankScoreMin,
 		compositeRankScoreMax:   scoreParts.compositeRankScoreMax,
 	}
@@ -325,6 +333,9 @@ func invalidQueryEngagementWindowError(
 	}
 	if hasInvalidScoreWindow(parts.sourceSessionQualityMin, parts.sourceSessionQualityMax) {
 		return invalidParamError("source_session_quality_min")
+	}
+	if hasInvalidScoreWindow(parts.denseScoreMin, parts.denseScoreMax) {
+		return invalidParamError("dense_score_min")
 	}
 	if hasInvalidScoreWindow(parts.compositeRankScoreMin, parts.compositeRankScoreMax) {
 		return invalidParamError("composite_rank_score_min")
@@ -410,6 +421,8 @@ type engramQueryScoreEngagementParts struct {
 	avgRelevanceFeedbackMax *float64
 	sourceSessionQualityMin *float64
 	sourceSessionQualityMax *float64
+	denseScoreMin           *float64
+	denseScoreMax           *float64
 	compositeRankScoreMin   *float64
 	compositeRankScoreMax   *float64
 }
@@ -457,6 +470,14 @@ func parseEngramQueryScoreEngagementParts(
 	if dispatchErr != nil {
 		return engramQueryScoreEngagementParts{}, dispatchErr
 	}
+	denseScoreMin, dispatchErr := parseEngramQueryDenseScoreMin(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
+	denseScoreMax, dispatchErr := parseEngramQueryDenseScoreMax(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
 	compositeRankScoreMin, dispatchErr := parseEngramQueryCompositeRankScoreMin(params)
 	if dispatchErr != nil {
 		return engramQueryScoreEngagementParts{}, dispatchErr
@@ -476,6 +497,8 @@ func parseEngramQueryScoreEngagementParts(
 		avgRelevanceFeedbackMax: avgRelevanceFeedbackMax,
 		sourceSessionQualityMin: sourceSessionQualityMin,
 		sourceSessionQualityMax: sourceSessionQualityMax,
+		denseScoreMin:           denseScoreMin,
+		denseScoreMax:           denseScoreMax,
 		compositeRankScoreMin:   compositeRankScoreMin,
 		compositeRankScoreMax:   compositeRankScoreMax,
 	}, nil
@@ -564,6 +587,8 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		AvgRelevanceFeedbackMax: parts.avgRelevanceFeedbackMax,
 		SourceSessionQualityMin: parts.sourceSessionQualityMin,
 		SourceSessionQualityMax: parts.sourceSessionQualityMax,
+		DenseScoreMin:           parts.denseScoreMin,
+		DenseScoreMax:           parts.denseScoreMax,
 		CompositeRankScoreMin:   parts.compositeRankScoreMin,
 		CompositeRankScoreMax:   parts.compositeRankScoreMax,
 		LastAccessedAfter:       parts.lastAccessedAfter,
@@ -746,6 +771,14 @@ func parseEngramQuerySourceSessionQualityMin(params map[string]any) (*float64, *
 
 func parseEngramQuerySourceSessionQualityMax(params map[string]any) (*float64, *toolDispatchError) {
 	return parseEngramQueryBoundedScoreMin(params, "source_session_quality_max")
+}
+
+func parseEngramQueryDenseScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "dense_score_min")
+}
+
+func parseEngramQueryDenseScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "dense_score_max")
 }
 
 func parseEngramQueryCompositeRankScoreMin(params map[string]any) (*float64, *toolDispatchError) {

@@ -335,6 +335,31 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid source_session_quality_max",
 		},
 		{
+			name: "invalid dense score min",
+			body: map[string]any{
+				"query":           "durable memory",
+				"dense_score_min": 1.2,
+			},
+			expectedDetail: "invalid dense_score_min",
+		},
+		{
+			name: "invalid dense score max",
+			body: map[string]any{
+				"query":           "durable memory",
+				"dense_score_max": 1.2,
+			},
+			expectedDetail: "invalid dense_score_max",
+		},
+		{
+			name: "invalid dense score window",
+			body: map[string]any{
+				"query":           "durable memory",
+				"dense_score_min": 0.9,
+				"dense_score_max": 0.7,
+			},
+			expectedDetail: "invalid dense_score window",
+		},
+		{
 			name: "invalid composite rank score min",
 			body: map[string]any{
 				"query":                    "durable memory",
@@ -557,6 +582,8 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"avg_relevance_feedback_max":       0.9,
 					"source_session_quality_min":       0.7,
 					"source_session_quality_max":       0.9,
+					"dense_score_min":                  0.72,
+					"dense_score_max":                  0.96,
 					"composite_rank_score_min":         0.75,
 					"composite_rank_score_max":         0.95,
 					"last_accessed_after":              "2026-02-01T00:00:00Z",
@@ -730,6 +757,8 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 		0.9,
 		requireFloat64Pointer(t, request.SourceSessionQualityMax, "source_session_quality_max"),
 	)
+	requireEqual(t, 0.72, requireFloat64Pointer(t, request.DenseScoreMin, "dense_score_min"))
+	requireEqual(t, 0.96, requireFloat64Pointer(t, request.DenseScoreMax, "dense_score_max"))
 	requireEqual(
 		t,
 		0.75,

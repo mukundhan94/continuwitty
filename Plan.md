@@ -2148,6 +2148,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 70 - Dense-Score Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `dense_score_min` and `dense_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded dense-score filters (`0..1`) and rejects inverted dense-score windows.
+  - repository query pipeline now supports post-rerank dense-score filtering in combination with composite-score band filters.
+  - MCP `engram.query` parser/catalog now accept and validate dense-score filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain recall by dense semantic confidence independently of composite scoring.
+2. Keep dense-score filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit dense-score filters.
+
+### Deliverables
+
+1. Contract extension for `dense_score_min` and `dense_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank dense-score filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply dense-score floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted dense-score windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for dense-score band filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2237,3 +2269,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 68: `composite_rank_score_min` + `composite_rank_score_max` parity across REST/MCP/repository.
 34. Execute rank-position diagnostics increment:
    - [x] Phase 69: expose final `rank_position` in query result payloads across repository/REST/MCP.
+35. Execute dense-score filter increment:
+   - [x] Phase 70: `dense_score_min` + `dense_score_max` parity across REST/MCP/repository.

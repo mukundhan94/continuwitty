@@ -150,8 +150,10 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 			topK:  len(candidateRows),
 		},
 	)
-	filteredRows := filterByCompositeRankScore(
+	filteredRows := filterByRankScoreBands(
 		rerankedRows,
+		input.Request.DenseScoreMin,
+		input.Request.DenseScoreMax,
 		input.Request.CompositeRankScoreMin,
 		input.Request.CompositeRankScoreMax,
 	)
@@ -164,16 +166,25 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 	return results, nil
 }
 
-func filterByCompositeRankScore(
+func filterByRankScoreBands(
 	rows []map[string]any,
+	denseScoreMin *float64,
+	denseScoreMax *float64,
 	minScore *float64,
 	maxScore *float64,
 ) []map[string]any {
-	if minScore == nil && maxScore == nil {
+	if denseScoreMin == nil && denseScoreMax == nil && minScore == nil && maxScore == nil {
 		return rows
 	}
 	filtered := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
+		denseScore := denseScoreFromRow(row)
+		if denseScoreMin != nil && denseScore < *denseScoreMin {
+			continue
+		}
+		if denseScoreMax != nil && denseScore > *denseScoreMax {
+			continue
+		}
 		score := compositeRankScoreFromRow(row)
 		if minScore != nil && score < *minScore {
 			continue
