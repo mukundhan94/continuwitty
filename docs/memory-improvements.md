@@ -1,6 +1,6 @@
 # Engram Vault - LLM Memory Intelligence Improvements Plan
 
-**Status:** Blueprint (not yet implemented)  
+**Status:** Implemented baseline (Phases 35-40 completed on 2026-03-03)  
 **Date Created:** March 1, 2026  
 **Target Release:** Q2 2026  
 **Complexity:** High | **Impact on LLMs:** Critical
@@ -17,6 +17,23 @@ Current Engram Vault memory system is **static** — LLMs retrieve engrams by se
 - **Reduces noise** via automatic consolidation
 - **Guides LLMs** via autonomous curation suggestions
 - **Builds trust** via feedback-driven learning
+
+## Implementation Alignment (2026-03-03)
+
+This document started as a blueprint. The baseline implementation is now shipped across roadmap Phases 35-40:
+
+1. Improvement 1 (Relevance + Engagement Scoring): implemented via engagement/freshness-aware rerank signals and temporal query controls in Phases 35, 36, and 39.
+2. Improvement 2 (Memory Engagement Feedback Loop): implemented in Phase 36 with persisted feedback aggregates and REST/MCP feedback submission (`engram.feedback`).
+3. Improvement 3 (Automatic Time-Decay & Consolidation): implemented in Phase 37 with freshness decay refresh, consolidation refresh/list/action APIs, and MCP parity.
+4. Improvement 4 (Contradiction Detection & Warning): implemented in Phase 38 with contradiction warning synthesis, contradiction alert persistence, and admin review flows.
+5. Improvement 5 (Context Window Optimization): implemented in Phase 39 with `context_token_budget` and retrieval-audit diagnostics (`context_token_estimate`, `context_token_truncated`).
+6. Improvement 6 (Autonomous Memory Curation): implemented in Phase 40 with curation suggestion persistence, admin REST + MCP list/action workflows, deterministic generation hooks, acceptance coverage, and benchmarks.
+
+Canonical implementation status now lives in:
+
+- `Plan.md` (phase-level completion + scope)
+- `migration/checkpoints/checkpoint.md` (milestone tracker)
+- `docs/implementation-log.md` (chronological evidence)
 
 ---
 
@@ -1112,4 +1129,3 @@ Returns:
 3. Create detailed spike tickets for Weeks 1-2
 4. Finalize schema review (data engineer)
 5. Kickoff Phase 1
-
