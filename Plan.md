@@ -980,7 +980,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In Progress (2026-03-03).
+- Completed (2026-03-03).
 - Delivered in this checkpoint:
   - schema baseline for freshness scoring (`engrams.freshness_score`, `engrams.freshness_last_computed_at`).
   - repository freshness refresh routine with half-life decay and optional project scoping.
@@ -997,8 +997,8 @@ Build a local-first memory system where agents and humans can:
     - `engram.consolidation_list` / `engram_consolidation_list` (admin-only)
     - `engram.consolidation_action` / `engram_consolidation_action` (admin-only)
   - repository/model tests for consolidation refresh/list defaulting, filtering, and status parsing.
-- Remaining in this phase:
-  - acceptance + precision/recall benchmark coverage for grouping criteria.
+  - deterministic acceptance scenario for consolidation refresh/list/action quality checks (`@phase37`, mock path).
+  - benchmark coverage doc for grouping quality thresholds (`docs/phase37-consolidation-benchmark.md`).
 
 ### Goals
 
@@ -1045,4 +1045,4 @@ Build a local-first memory system where agents and humans can:
 5. Execute memory-intelligence foundation in order:
    - [x] Phase 35: memory engagement tracking baseline.
    - [ ] Phase 36: feedback loop + relevance/freshness scoring.
-   - [ ] Phase 37: time-decay + consolidation suggestions.
+   - [x] Phase 37: time-decay + consolidation suggestions.

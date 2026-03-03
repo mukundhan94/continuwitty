@@ -193,6 +193,29 @@
    - `make test-unit`
    - CodeScene scores on touched Go files: `10.0` (with `internal/mcp/catalog_metadata_data.go` reported as non-scorable/null by CodeScene).
 
+### 2026-03-03 (Phase 37 closeout: deterministic acceptance + precision/recall benchmark coverage)
+
+1. Added deterministic Phase 37 acceptance scenario:
+   - `acceptance-tests/features/phase37-consolidation-mock.feature`
+   - `acceptance-tests/src/steps/phase37-consolidation-mock.steps.ts`
+   - validates end-to-end admin consolidation flow in one isolated project:
+     - seed duplicate/non-duplicate engrams.
+     - refresh/list consolidation suggestions.
+     - compute grouping precision/recall and gate at `>=0.95`.
+     - action one suggestion (`merged`) and verify action fields via merged listing.
+2. Added benchmark documentation:
+   - `docs/phase37-consolidation-benchmark.md` captures fixture design, formulas, thresholds, and run commands.
+3. Acceptance docs alignment:
+   - `acceptance-tests/README.md` now documents the `@phase37` deterministic mock scenario and quality checks.
+4. Roadmap/checkpoint alignment:
+   - `Plan.md`: Phase 37 marked completed and delivered scope expanded with acceptance/benchmark coverage.
+   - `migration/checkpoints/checkpoint.md`: Phase 37 summary/progress tracker marked completed.
+5. Validation:
+   - `cd acceptance-tests && npm run bdd:gen`
+   - `cd acceptance-tests && npm run typecheck`
+   - `make lint`
+   - `make test-unit`
+
 ### 2026-03-01 (Security follow-up closeout: OIDC rollout validation + centralized audit sink regression)
 
 1. Added explicit OIDC-to-sink integration coverage in `internal/api/session_ui_oidc_test.go`:
