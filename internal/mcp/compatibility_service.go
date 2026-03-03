@@ -386,6 +386,22 @@ type EngramContradictionResolveService interface {
 	) (*models.EngramContradictionAlert, error)
 }
 
+// EngramCurationListService captures memory-curation suggestion list behavior used by MCP compatibility engram dispatch.
+type EngramCurationListService interface {
+	ListMemoryCurationSuggestions(
+		ctx context.Context,
+		request EngramCurationListRequest,
+	) ([]models.MemoryCurationSuggestion, error)
+}
+
+// EngramCurationActionService captures memory-curation suggestion action behavior used by MCP compatibility engram dispatch.
+type EngramCurationActionService interface {
+	ActionMemoryCurationSuggestion(
+		ctx context.Context,
+		request EngramCurationActionRequest,
+	) (*models.MemoryCurationSuggestion, error)
+}
+
 // EngramMoveService captures engram move-project behavior used by MCP compatibility engram dispatch.
 type EngramMoveService interface {
 	MoveEngram(
@@ -920,6 +936,27 @@ type EngramContradictionResolveRequest struct {
 	Status      models.ContradictionAlertStatus
 }
 
+// EngramCurationListRequest captures compatibility-level memory-curation suggestion list inputs.
+type EngramCurationListRequest struct {
+	ActorUserID    uuid.UUID
+	ActorRole      models.UserRole
+	ProjectID      *string
+	SessionID      *uuid.UUID
+	SuggestionType *models.MemoryCurationSuggestionType
+	Status         *models.MemoryCurationSuggestionStatus
+	Limit          int
+	Offset         int
+}
+
+// EngramCurationActionRequest captures compatibility-level memory-curation suggestion action inputs.
+type EngramCurationActionRequest struct {
+	ActorUserID  uuid.UUID
+	ActorRole    models.UserRole
+	SuggestionID uuid.UUID
+	ProjectID    *string
+	Status       models.MemoryCurationSuggestionStatus
+}
+
 // EngramMoveRequest captures compatibility-level engram move inputs.
 type EngramMoveRequest struct {
 	ActorUserID       uuid.UUID
@@ -1084,6 +1121,8 @@ type CompatibilityServiceDependencies struct {
 	EngramContradictionRefresh EngramContradictionRefreshService
 	EngramContradictionList    EngramContradictionListService
 	EngramContradictionResolve EngramContradictionResolveService
+	EngramCurationList         EngramCurationListService
+	EngramCurationAction       EngramCurationActionService
 	EngramMove                 EngramMoveService
 	EngramDelete               EngramDeleteService
 	EngramRestore              EngramRestoreService
@@ -1145,6 +1184,8 @@ type CompatibilityService struct {
 	engramContradictionRefresh EngramContradictionRefreshService
 	engramContradictionList    EngramContradictionListService
 	engramContradictionResolve EngramContradictionResolveService
+	engramCurationList         EngramCurationListService
+	engramCurationAction       EngramCurationActionService
 	engramMove                 EngramMoveService
 	engramDelete               EngramDeleteService
 	engramRestore              EngramRestoreService
@@ -1230,6 +1271,8 @@ func NewCompatibilityServiceWithDependencies(
 		engramContradictionRefresh: dependencies.EngramContradictionRefresh,
 		engramContradictionList:    dependencies.EngramContradictionList,
 		engramContradictionResolve: dependencies.EngramContradictionResolve,
+		engramCurationList:         dependencies.EngramCurationList,
+		engramCurationAction:       dependencies.EngramCurationAction,
 		engramMove:                 dependencies.EngramMove,
 		engramDelete:               dependencies.EngramDelete,
 		engramRestore:              dependencies.EngramRestore,

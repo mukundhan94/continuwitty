@@ -1063,6 +1063,47 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"engram.curation_list": {
+		description: "List autonomous memory curation suggestions by project/session/type/status (admin-only maintenance view).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"session_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"suggestion_type": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"auto_save",
+						"consolidate",
+						"contradiction",
+						"link",
+					},
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"suggested",
+						"accepted",
+						"rejected",
+						"applied",
+					},
+				},
+				"limit": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"offset": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+			},
+		},
+	},
 	"engram.get": {
 		description: "Get an engram in management format with editable source payload.",
 		inputSchema: map[string]any{
@@ -1442,6 +1483,33 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"enum": []any{
 						"resolved",
 						"dismissed",
+					},
+				},
+			},
+		},
+	},
+	"engram.curation_action": {
+		description: "Mark one memory curation suggestion as accepted, rejected, or applied (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"suggestion_id",
+				"status",
+			},
+			"properties": map[string]any{
+				"suggestion_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"accepted",
+						"rejected",
+						"applied",
 					},
 				},
 			},

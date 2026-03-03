@@ -360,6 +360,12 @@ func applyMCPEngramCompatibilityDependencies(
 	compatibilityDeps.EngramContradictionResolve = newMCPEngramContradictionResolveAdapter(
 		dependencies.memoryAdminService,
 	)
+	compatibilityDeps.EngramCurationList = newMCPEngramCurationListAdapter(
+		dependencies.memoryAdminService,
+	)
+	compatibilityDeps.EngramCurationAction = newMCPEngramCurationActionAdapter(
+		dependencies.memoryAdminService,
+	)
 	compatibilityDeps.EngramMove = newMCPEngramMoveAdapter(dependencies.memoryAdminService)
 	compatibilityDeps.EngramDelete = newMCPEngramDeleteAdapter(dependencies.memoryAdminService)
 	compatibilityDeps.EngramRestore = newMCPEngramRestoreAdapter(dependencies.memoryAdminService)

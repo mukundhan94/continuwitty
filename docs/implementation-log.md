@@ -7,6 +7,36 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: memory curation suggestion API + MCP list/action parity)
+
+1. Added admin memory service workflows for curation suggestion review/action:
+   - `internal/admin/service_curation.go`:
+     - `ListMemoryCurationSuggestions`
+     - `ActionMemoryCurationSuggestion`
+   - new admin-domain errors and request contracts in `internal/admin/service.go`.
+2. Added admin REST routes for curation suggestion management:
+   - `GET /api/v1/admin/memory/engrams/curation/suggestions`
+   - `POST /api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action`
+   - route parsing supports `project_id`, `session_id`, `suggestion_type`, `status`, paging.
+3. Added MCP curation tooling parity:
+   - `engram.curation_list`
+   - `engram.curation_action`
+   - compatibility dispatch parsers/handlers, catalog metadata entries, handler registration, and token project-policy coverage.
+4. Added MCP runtime adapters in `cmd/api` for memory-admin service bridging:
+   - `newMCPEngramCurationListAdapter`
+   - `newMCPEngramCurationActionAdapter`
+5. Added regression coverage:
+   - admin service tests: `internal/admin/service_curation_test.go`
+   - admin route tests: `internal/api/admin_memory_curation_routes_test.go`
+   - MCP compatibility tests:
+     - `internal/mcp/compatibility_service_engram_curation_list_test.go`
+     - `internal/mcp/compatibility_service_engram_curation_action_test.go`
+6. Validation:
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+
 ### 2026-03-03 (Phase 40 kickoff: memory curation suggestion schema/model/repository baseline)
 
 1. Added schema baseline in `db/init/001_schema.sql`:

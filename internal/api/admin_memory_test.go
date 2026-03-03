@@ -35,6 +35,8 @@ type fakeMemoryAdminService struct {
 	refreshContradictionFn func(ctx context.Context, request admin.EngramContradictionAlertRefreshRequest) (admin.EngramContradictionAlertRefreshResponse, error)
 	listContradictionFn    func(ctx context.Context, request admin.EngramContradictionAlertListRequest) ([]models.EngramContradictionAlert, error)
 	resolveContradictionFn func(ctx context.Context, alertID uuid.UUID, actorUserID uuid.UUID, request admin.EngramContradictionAlertResolveRequest) (*models.EngramContradictionAlert, error)
+	listCurationFn         func(ctx context.Context, request admin.MemoryCurationSuggestionListRequest) ([]models.MemoryCurationSuggestion, error)
+	actionCurationFn       func(ctx context.Context, suggestionID uuid.UUID, actorUserID uuid.UUID, request admin.MemoryCurationSuggestionActionRequest) (*models.MemoryCurationSuggestion, error)
 	listCollectionsFn      func(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error)
 	createCollectionFn     func(ctx context.Context, actorUserID uuid.UUID, actorRole string, payload admin.CollectionCreateRequest) (*models.EngramCollectionRecord, error)
 	updateCollectionFn     func(ctx context.Context, collectionID uuid.UUID, payload admin.CollectionUpdateRequest) (*models.EngramCollectionRecord, error)
@@ -111,20 +113,6 @@ func (f *fakeMemoryAdminService) ListEngramConsolidationSuggestions(
 	request admin.EngramConsolidationSuggestionListRequest,
 ) ([]models.EngramConsolidationSuggestion, error) {
 	return requireFakeAdminHandler("ListEngramConsolidationSuggestions", f.listConsolidationFn)(ctx, request)
-}
-
-func (f *fakeMemoryAdminService) ActionEngramConsolidationSuggestion(
-	ctx context.Context,
-	suggestionID uuid.UUID,
-	actorUserID uuid.UUID,
-	request admin.EngramConsolidationSuggestionActionRequest,
-) (*models.EngramConsolidationSuggestion, error) {
-	return requireFakeAdminHandler("ActionEngramConsolidationSuggestion", f.actionConsolidationFn)(
-		ctx,
-		suggestionID,
-		actorUserID,
-		request,
-	)
 }
 
 func (f *fakeMemoryAdminService) RefreshEngramContradictionAlerts(

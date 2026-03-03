@@ -14,12 +14,14 @@ var optionalProjectTools = map[string]struct{}{
 	"engram.list":                   {},
 	"engram.consolidation_list":     {},
 	"engram.contradiction_list":     {},
+	"engram.curation_list":          {},
 	"engram.collection_list":        {},
 	"engram.refresh_freshness":      {},
 	"engram.refresh_consolidation":  {},
 	"engram.consolidation_action":   {},
 	"engram.refresh_contradictions": {},
 	"engram.contradiction_resolve":  {},
+	"engram.curation_action":        {},
 }
 
 var projectFallbackTools = map[string]struct{}{

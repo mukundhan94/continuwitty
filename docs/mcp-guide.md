@@ -251,6 +251,8 @@ curl -s -b "$COOKIE_JAR" \
 - `engram.contradiction_list` (admin maintenance)
 - `engram.refresh_contradictions` (admin maintenance)
 - `engram.contradiction_resolve` (admin maintenance)
+- `engram.curation_list` (admin maintenance)
+- `engram.curation_action` (admin maintenance)
 - `engram.pin_to_session`
 - `engram.share`
 - `engram.unshare`

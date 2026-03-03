@@ -67,6 +67,16 @@ type MemoryAdminService interface {
 		actorUserID uuid.UUID,
 		request admin.EngramContradictionAlertResolveRequest,
 	) (*models.EngramContradictionAlert, error)
+	ListMemoryCurationSuggestions(
+		ctx context.Context,
+		request admin.MemoryCurationSuggestionListRequest,
+	) ([]models.MemoryCurationSuggestion, error)
+	ActionMemoryCurationSuggestion(
+		ctx context.Context,
+		suggestionID uuid.UUID,
+		actorUserID uuid.UUID,
+		request admin.MemoryCurationSuggestionActionRequest,
+	) (*models.MemoryCurationSuggestion, error)
 
 	ListCollections(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error)
 	CreateCollection(ctx context.Context, actorUserID uuid.UUID, actorRole string, payload admin.CollectionCreateRequest) (*models.EngramCollectionRecord, error)
@@ -165,6 +175,46 @@ func parseMemoryAdminConsolidationSuggestionListRequest(
 		Status:    status,
 		Limit:     limit,
 		Offset:    offset,
+	}, true
+}
+
+func parseMemoryAdminCurationSuggestionListRequest(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (admin.MemoryCurationSuggestionListRequest, bool) {
+	base, ok := parseMemoryAdminListRequest(writer, request, false)
+	if !ok {
+		return admin.MemoryCurationSuggestionListRequest{}, false
+	}
+	sessionID, ok := parseOptionalUUIDQuery(writer, request, "session_id")
+	if !ok {
+		return admin.MemoryCurationSuggestionListRequest{}, false
+	}
+	suggestionType, ok := parseOptionalStatusQuery(
+		writer,
+		request,
+		"suggestion_type",
+		models.ParseMemoryCurationSuggestionType,
+	)
+	if !ok {
+		return admin.MemoryCurationSuggestionListRequest{}, false
+	}
+	status, ok := parseOptionalStatusQuery(
+		writer,
+		request,
+		"status",
+		models.ParseMemoryCurationSuggestionStatus,
+	)
+	if !ok {
+		return admin.MemoryCurationSuggestionListRequest{}, false
+	}
+	return admin.MemoryCurationSuggestionListRequest{
+		ProjectID:      base.ProjectID,
+		SessionID:      sessionID,
+		SuggestionType: suggestionType,
+		Status:         status,
+		Limit:          base.Limit,
+		Offset:         base.Offset,
 	}, true
 }
 
@@ -325,7 +375,8 @@ func writeServiceError(writer http.ResponseWriter, err error) {
 		errors.Is(err, admin.ErrEngramNotFound),
 		errors.Is(err, admin.ErrCollectionNotFound),
 		errors.Is(err, admin.ErrConsolidationSuggestionNotFound),
-		errors.Is(err, admin.ErrContradictionAlertNotFound):
+		errors.Is(err, admin.ErrContradictionAlertNotFound),
+		errors.Is(err, admin.ErrMemoryCurationSuggestionNotFound):
 		statusCode = http.StatusNotFound
 		detail = err.Error()
 	case errors.Is(err, admin.ErrProjectIDRequired):
@@ -335,7 +386,8 @@ func writeServiceError(writer http.ResponseWriter, err error) {
 		statusCode = http.StatusBadRequest
 		detail = err.Error()
 	case errors.Is(err, admin.ErrConsolidationSuggestionActionInvalid),
-		errors.Is(err, admin.ErrContradictionAlertResolveStatusInvalid):
+		errors.Is(err, admin.ErrContradictionAlertResolveStatusInvalid),
+		errors.Is(err, admin.ErrMemoryCurationSuggestionActionInvalid):
 		statusCode = http.StatusBadRequest
 		detail = err.Error()
 	case errors.Is(err, admin.ErrEngramStale),

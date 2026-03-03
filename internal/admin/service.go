@@ -37,6 +37,10 @@ var (
 	ErrContradictionAlertNotFound = errors.New("contradiction alert not found")
 	// ErrContradictionAlertResolveStatusInvalid indicates invalid contradiction alert resolve status.
 	ErrContradictionAlertResolveStatusInvalid = errors.New("status must be resolved or dismissed")
+	// ErrMemoryCurationSuggestionNotFound indicates a requested memory curation suggestion does not exist.
+	ErrMemoryCurationSuggestionNotFound = errors.New("memory curation suggestion not found")
+	// ErrMemoryCurationSuggestionActionInvalid indicates invalid memory curation suggestion action status.
+	ErrMemoryCurationSuggestionActionInvalid = errors.New("status must be accepted, rejected, or applied")
 )
 
 // MemoryAdminListRequest captures shared admin list filters.
@@ -178,6 +182,22 @@ type EngramContradictionAlertResolveRequest struct {
 	Status    models.ContradictionAlertStatus `json:"status"`
 }
 
+// MemoryCurationSuggestionListRequest captures list filters for memory curation suggestions.
+type MemoryCurationSuggestionListRequest struct {
+	ProjectID      *string                                `json:"project_id,omitempty"`
+	SessionID      *uuid.UUID                             `json:"session_id,omitempty"`
+	SuggestionType *models.MemoryCurationSuggestionType   `json:"suggestion_type,omitempty"`
+	Status         *models.MemoryCurationSuggestionStatus `json:"status,omitempty"`
+	Limit          int                                    `json:"limit"`
+	Offset         int                                    `json:"offset"`
+}
+
+// MemoryCurationSuggestionActionRequest captures action payload for a memory curation suggestion.
+type MemoryCurationSuggestionActionRequest struct {
+	ProjectID *string                               `json:"project_id,omitempty"`
+	Status    models.MemoryCurationSuggestionStatus `json:"status"`
+}
+
 // CollectionCreateRequest captures collection create payload values.
 type CollectionCreateRequest struct {
 	ProjectID   string `json:"project_id"`
@@ -289,6 +309,16 @@ type serviceDeps struct {
 		db repository.Queryer,
 		input repository.ContradictionAlertResolveInput,
 	) (*models.EngramContradictionAlert, error)
+	listMemoryCurationSuggestions func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.MemoryCurationSuggestionListInput,
+	) ([]models.MemoryCurationSuggestion, error)
+	applyMemoryCurationSuggestionAction func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.MemoryCurationSuggestionActionInput,
+	) (*models.MemoryCurationSuggestion, error)
 
 	listCollections      func(ctx context.Context, db repository.Queryer, input repository.CollectionListInput) ([]models.EngramCollectionRecord, error)
 	getCollection        func(ctx context.Context, db repository.Queryer, collectionID uuid.UUID, includeDeleted bool) (*models.EngramCollectionRecord, error)
@@ -307,19 +337,21 @@ func defaultServiceDeps() serviceDeps {
 		restoreSession:          repository.RestoreSession,
 		softDeleteLinkedEngrams: repository.SoftDeleteLinkedEngrams,
 
-		listAdminEngrams:                   repository.ListAdminEngrams,
-		getAdminEngram:                     repository.GetAdminEngram,
-		updateAdminEngram:                  repository.UpdateAdminEngram,
-		moveAdminEngramProject:             repository.MoveAdminEngramProject,
-		softDeleteEngram:                   repository.SoftDeleteEngram,
-		restoreEngram:                      repository.RestoreEngram,
-		refreshEngramFreshness:             repository.RefreshEngramFreshnessScores,
-		refreshConsolidationSuggestions:    repository.RefreshExactDuplicateConsolidationSuggestions,
-		listConsolidationSuggestions:       repository.ListEngramConsolidationSuggestions,
-		applyConsolidationSuggestionAction: repository.ApplyEngramConsolidationSuggestionAction,
-		refreshContradictionAlerts:         repository.RefreshContradictionAlerts,
-		listContradictionAlerts:            repository.ListContradictionAlerts,
-		resolveContradictionAlert:          repository.ResolveContradictionAlert,
+		listAdminEngrams:                    repository.ListAdminEngrams,
+		getAdminEngram:                      repository.GetAdminEngram,
+		updateAdminEngram:                   repository.UpdateAdminEngram,
+		moveAdminEngramProject:              repository.MoveAdminEngramProject,
+		softDeleteEngram:                    repository.SoftDeleteEngram,
+		restoreEngram:                       repository.RestoreEngram,
+		refreshEngramFreshness:              repository.RefreshEngramFreshnessScores,
+		refreshConsolidationSuggestions:     repository.RefreshExactDuplicateConsolidationSuggestions,
+		listConsolidationSuggestions:        repository.ListEngramConsolidationSuggestions,
+		applyConsolidationSuggestionAction:  repository.ApplyEngramConsolidationSuggestionAction,
+		refreshContradictionAlerts:          repository.RefreshContradictionAlerts,
+		listContradictionAlerts:             repository.ListContradictionAlerts,
+		resolveContradictionAlert:           repository.ResolveContradictionAlert,
+		listMemoryCurationSuggestions:       repository.ListMemoryCurationSuggestions,
+		applyMemoryCurationSuggestionAction: repository.ApplyMemoryCurationSuggestionAction,
 
 		listCollections:      repository.ListCollections,
 		getCollection:        repository.GetCollection,

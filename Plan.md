@@ -1144,8 +1144,15 @@ Build a local-first memory system where agents and humans can:
     - `ListMemoryCurationSuggestions`
     - `ApplyMemoryCurationSuggestionAction`
   - repository regression coverage in `internal/repository/memory_curation_suggestions_test.go`.
+  - API + MCP list/action parity for memory curation suggestions:
+    - admin REST routes:
+      - `GET /api/v1/admin/memory/engrams/curation/suggestions`
+      - `POST /api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action`
+    - MCP tools:
+      - `engram.curation_list`
+      - `engram.curation_action`
+    - compatibility catalog + token project-policy support + route/dispatch regression tests.
 - Remaining in this phase:
-  - API + MCP routes/tools for listing and actioning memory curation suggestions.
   - suggestion generation workflow hooks and acceptance coverage.
   - benchmark coverage for suggestion precision/recall and action latency.
 
