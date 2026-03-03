@@ -92,6 +92,7 @@ func buildEngramQueryParityExpectations(
 	freshnessComputedBefore := mustParseRFC3339(t, "2026-02-15T00:00:00Z")
 	projectID := "proj-alpha"
 	accessCountMin := 3
+	contradictionCountMax := 2
 	freshnessScoreMin := 0.42
 	avgRelevanceFeedbackMin := 0.58
 	sourceSessionQualityMin := 0.73
@@ -106,6 +107,7 @@ func buildEngramQueryParityExpectations(
 		"created_after":              createdAfter.Format(time.RFC3339),
 		"created_before":             createdBefore.Format(time.RFC3339),
 		"access_count_min":           float64(accessCountMin),
+		"contradiction_count_max":    float64(contradictionCountMax),
 		"freshness_score_min":        freshnessScoreMin,
 		"avg_relevance_feedback_min": avgRelevanceFeedbackMin,
 		"source_session_quality_min": sourceSessionQualityMin,
@@ -127,6 +129,7 @@ func buildEngramQueryParityExpectations(
 			CreatedAfter:            &createdAfter,
 			CreatedBefore:           &createdBefore,
 			AccessCountMin:          &accessCountMin,
+			ContradictionCountMax:   &contradictionCountMax,
 			FreshnessScoreMin:       &freshnessScoreMin,
 			AvgRelevanceFeedbackMin: &avgRelevanceFeedbackMin,
 			SourceSessionQualityMin: &sourceSessionQualityMin,
@@ -194,6 +197,8 @@ func TestCompatibilityServiceEngramQueryValidationAndErrors(t *testing.T) {
 		{name: "invalid freshness_computed window", params: map[string]any{"query": "x", "freshness_computed_after": "2026-02-02T00:00:00Z", "freshness_computed_before": "2026-02-01T00:00:00Z"}},
 		{name: "invalid access_count_min type", params: map[string]any{"query": "x", "access_count_min": "bad"}},
 		{name: "invalid access_count_min negative", params: map[string]any{"query": "x", "access_count_min": -1.0}},
+		{name: "invalid contradiction_count_max type", params: map[string]any{"query": "x", "contradiction_count_max": "bad"}},
+		{name: "invalid contradiction_count_max negative", params: map[string]any{"query": "x", "contradiction_count_max": -1.0}},
 		{name: "invalid freshness_score_min low", params: map[string]any{"query": "x", "freshness_score_min": -0.1}},
 		{name: "invalid freshness_score_min high", params: map[string]any{"query": "x", "freshness_score_min": 1.1}},
 		{name: "invalid avg_relevance_feedback_min type", params: map[string]any{"query": "x", "avg_relevance_feedback_min": "bad"}},

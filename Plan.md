@@ -1370,6 +1370,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 46 - Contradiction-Aware Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `contradiction_count_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `contradiction_count_max`.
+  - repository query builder now supports `COALESCE(contradiction_count, 0) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `contradiction_count_max`.
+  - regression coverage expanded across repository/API/MCP for filter parsing, validation, and query-shape parity.
+
+### Goals
+
+1. Allow operators and agents to suppress high-conflict memories during recall.
+2. Keep contradiction-aware filtering deterministic and aligned across REST and MCP.
+3. Preserve backward-compatible query behavior for existing clients.
+
+### Deliverables
+
+1. Contract extension for `contradiction_count_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply contradiction-count ceilings across REST and MCP query paths.
+2. Invalid contradiction ceilings are rejected with explicit validation details.
+3. Query docs and tests stay synchronized with runtime parser and repository behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1411,3 +1443,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 44: fallback authority calibration + query-response authority signal exposure.
 10. Execute feedback-quality query filter increment:
    - [x] Phase 45: `avg_relevance_feedback_min` parity across REST/MCP/repository.
+11. Execute contradiction-aware query filter increment:
+   - [x] Phase 46: `contradiction_count_max` parity across REST/MCP/repository.

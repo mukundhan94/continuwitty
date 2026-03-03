@@ -189,6 +189,14 @@ func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidFilters(t *testing.T) {
 			},
 			expectedDetail: "invalid avg_relevance_feedback_min",
 		},
+		{
+			name: "invalid contradiction count max",
+			body: map[string]any{
+				"query":                   "durable memory",
+				"contradiction_count_max": -1,
+			},
+			expectedDetail: "invalid contradiction_count_max",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -331,6 +339,7 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"query":                      "durable memory",
 					"top_k":                      5,
 					"access_count_min":           2,
+					"contradiction_count_max":    3,
 					"freshness_score_min":        0.4,
 					"avg_relevance_feedback_min": 0.55,
 					"source_session_quality_min": 0.7,
@@ -438,6 +447,11 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 	requireEqual(t, "durable memory", request.Query)
 	requireEqual(t, 5, request.TopK)
 	requireEqual(t, 2, requireIntPointer(t, request.AccessCountMin, "access_count_min"))
+	requireEqual(
+		t,
+		3,
+		requireIntPointer(t, request.ContradictionCountMax, "contradiction_count_max"),
+	)
 	requireEqual(t, 0.4, requireFloat64Pointer(t, request.FreshnessScoreMin, "freshness_score_min"))
 	requireEqual(
 		t,

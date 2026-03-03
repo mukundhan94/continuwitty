@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 46: contradiction-aware query filter parity)
+
+1. Added contradiction-aware query contract extension:
+   - new optional filter: `contradiction_count_max` (non-negative integer) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `contradiction_count_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `contradiction_count_max`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(contradiction_count, 0) <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `contradiction_count_max`.
+   - repository where-clause/parameter assertions for contradiction predicate.
+   - MCP parity and validation coverage for contradiction-count filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 45: feedback-aware query filter parity)
 
 1. Added feedback-quality query contract extension:

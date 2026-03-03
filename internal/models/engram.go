@@ -64,6 +64,7 @@ type EngramQueryRequest struct {
 	CreatedAfter            *time.Time              `json:"created_after,omitempty"`
 	CreatedBefore           *time.Time              `json:"created_before,omitempty"`
 	AccessCountMin          *int                    `json:"access_count_min,omitempty"`
+	ContradictionCountMax   *int                    `json:"contradiction_count_max,omitempty"`
 	FreshnessScoreMin       *float64                `json:"freshness_score_min,omitempty"`
 	AvgRelevanceFeedbackMin *float64                `json:"avg_relevance_feedback_min,omitempty"`
 	SourceSessionQualityMin *float64                `json:"source_session_quality_min,omitempty"`

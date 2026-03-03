@@ -421,6 +421,22 @@
   - repository where-clause/params assertions for feedback-quality predicate.
   - MCP parity and validation tests for filter handling.
 
+### Phase 46 Progress Tracker
+
+- [x] Added contradiction-aware query filter contract:
+  - `contradiction_count_max` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `contradiction_count_max` now validates as non-negative.
+- [x] Added repository predicate support:
+  - `COALESCE(contradiction_count, 0) <= ...` filter path.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `contradiction_count_max`.
+  - tool schema now documents `contradiction_count_max`.
+- [x] Added regression coverage:
+  - REST invalid-filter and parsed-request assertions for `contradiction_count_max`.
+  - repository where-clause/params assertions for contradiction predicate.
+  - MCP parity and validation tests for contradiction-count filter behavior.
+
 ---
 
 ## Completed Milestones
@@ -573,3 +589,4 @@
 | 43 | Authority-Aware Query Filters | Completed |
 | 44 | Authority Signal Transparency + Fallback Calibration | Completed |
 | 45 | Feedback-Aware Query Filters | Completed |
+| 46 | Contradiction-Aware Query Filters | Completed |

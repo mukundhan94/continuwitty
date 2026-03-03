@@ -289,6 +289,7 @@ Optional temporal/engagement filters:
 - `last_accessed_after` / `last_accessed_before` (RFC3339 timestamp)
 - `freshness_computed_after` / `freshness_computed_before` (RFC3339 timestamp)
 - `access_count_min` (int, minimum `0`)
+- `contradiction_count_max` (int, minimum `0`)
 - `freshness_score_min` (number, bounded `0..1`)
 - `avg_relevance_feedback_min` (number, bounded `0..1`)
 - `source_session_quality_min` (number, bounded `0..1`)
