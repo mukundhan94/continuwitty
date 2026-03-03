@@ -111,6 +111,34 @@
    - `make test-unit`
    - CodeScene scores on touched Go files: `10.0`.
 
+### 2026-03-03 (Phase 37 extension: MCP consolidation refresh/list parity tools)
+
+1. Added MCP consolidation dispatch support:
+   - `engram.refresh_consolidation` (alias `engram_refresh_consolidation`) for deterministic exact-duplicate suggestion refresh (admin-only).
+   - `engram.consolidation_list` (alias `engram_consolidation_list`) for consolidation suggestion listing with optional `project_id`/`status` filters (admin-only).
+2. Added compatibility service contracts and runtime wiring:
+   - new request/response interfaces/types in `internal/mcp/compatibility_service.go`.
+   - dispatch handlers in `internal/mcp/compatibility_dispatch_engram_consolidation_support.go`.
+   - route registration in read/mutation handler registries.
+3. Added admin-to-MCP adapters:
+   - `cmd/api/mcp_engram_admin_consolidation_adapter.go`.
+   - dependency wiring in `cmd/api/main.go` via extracted compatibility dependency builders.
+4. Added token-policy + tool-catalog updates:
+   - read/write tool classification and ordering in `internal/mcp/catalog.go`.
+   - input schemas/metadata in `internal/mcp/catalog_metadata_data.go`.
+   - optional-project token normalization support in `internal/mcp/token_authorization_policy.go`.
+5. Added regression coverage:
+   - `internal/mcp/compatibility_service_engram_refresh_consolidation_test.go`.
+   - `internal/mcp/compatibility_service_engram_consolidation_list_test.go`.
+6. Documentation/state alignment:
+   - `docs/mcp-guide.md` tool catalog updated with consolidation MCP tools.
+   - `plan.md` and `migration/checkpoints/checkpoint.md` updated for Phase 37 MCP parity progress.
+7. Validation:
+   - `go test ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
 ### 2026-03-01 (Security follow-up closeout: OIDC rollout validation + centralized audit sink regression)
 
 1. Added explicit OIDC-to-sink integration coverage in `internal/api/session_ui_oidc_test.go`:

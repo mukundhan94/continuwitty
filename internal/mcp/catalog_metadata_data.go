@@ -964,6 +964,33 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"engram.consolidation_list": {
+		description: "List consolidation suggestions by project/status (admin-only maintenance view).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"suggested",
+						"merged",
+						"rejected",
+					},
+				},
+				"limit": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"offset": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+			},
+		},
+	},
 	"engram.get": {
 		description: "Get an engram in management format with editable source payload.",
 		inputSchema: map[string]any{
@@ -1266,6 +1293,21 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 				"half_life_days": map[string]any{
 					"type":    "number",
 					"minimum": 0.000001,
+				},
+			},
+		},
+	},
+	"engram.refresh_consolidation": {
+		description: "Refresh deterministic exact-duplicate consolidation suggestions (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"min_group_size": map[string]any{
+					"type":    "integer",
+					"minimum": 2,
 				},
 			},
 		},

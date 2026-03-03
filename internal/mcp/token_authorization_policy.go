@@ -8,12 +8,14 @@ import (
 )
 
 var optionalProjectTools = map[string]struct{}{
-	"engram.query":                {},
-	"chat.list_sessions":          {},
-	"chat.list_project_documents": {},
-	"engram.list":                 {},
-	"engram.collection_list":      {},
-	"engram.refresh_freshness":    {},
+	"engram.query":                 {},
+	"chat.list_sessions":           {},
+	"chat.list_project_documents":  {},
+	"engram.list":                  {},
+	"engram.consolidation_list":    {},
+	"engram.collection_list":       {},
+	"engram.refresh_freshness":     {},
+	"engram.refresh_consolidation": {},
 }
 
 var projectFallbackTools = map[string]struct{}{
