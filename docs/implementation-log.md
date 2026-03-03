@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 48: query engagement diagnostics in result payloads)
+
+1. Extended engram query result contracts with engagement diagnostics:
+   - added `access_count` to `EngramQueryResult`.
+   - added `freshness_score` to `EngramQueryResult`.
+2. Updated repository query mapping:
+   - mapped `access_count` and `freshness_score` from candidate-row projection into final query results.
+3. Added parity/regression coverage:
+   - repository query tests now assert engagement diagnostics in mapped results.
+   - REST query-route response test now asserts serialized `access_count` and `freshness_score`.
+   - MCP compatibility parity fixture now includes engagement diagnostics.
+4. Documentation alignment:
+   - API and MCP query docs now describe returned engagement diagnostics.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 47: query quality diagnostics in result payloads)
 
 1. Extended engram query result contracts with feedback diagnostics:

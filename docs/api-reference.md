@@ -296,7 +296,7 @@ Optional temporal/engagement filters:
 - `relation_type` (`supports|depends_on|contradicts|related_to|derived_from`)
 - `trace_depth` (`0` or `1`; defaults to `1` when `relation_type` is set)
 
-Query results include `source_session_quality_score` (`0..1`) plus `feedback_count` and `contradiction_count` for recall-quality diagnostics.
+Query results include `source_session_quality_score` (`0..1`), `access_count`, `freshness_score`, `feedback_count`, and `contradiction_count` for recall-quality diagnostics.
 
 ### Agent Run (With Snapshots)
 

@@ -149,6 +149,8 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	requireNoError(t, err)
 	requireEqual(t, 1, len(results))
 	requireEqual(t, "Lexical Match", results[0].Title)
+	requireEqual(t, 7, results[0].AccessCount)
+	requireEqual(t, 0.88, results[0].FreshnessScore)
 	requireEqual(t, 1, results[0].FeedbackCount)
 	requireEqual(t, 0, results[0].ContradictionCount)
 	requireEqual(t, 0.5, results[0].SourceSessionQualityScore)
@@ -183,8 +185,8 @@ func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 					0,
 					2,
 					0,
-					0,
-					1.0,
+					1,
+					0.4,
 					0.5,
 					0.2,
 				},
@@ -202,8 +204,8 @@ func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 					0,
 					1,
 					0,
-					0,
-					1.0,
+					7,
+					0.88,
 					0.5,
 					0.25,
 				},

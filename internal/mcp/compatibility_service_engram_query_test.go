@@ -56,6 +56,8 @@ func buildEngramQueryParityFixture(t *testing.T) engramQueryParityFixture {
 				CreatedAt:                 time.Unix(1700003950, 0).UTC(),
 				Distance:                  0.1,
 				SourceSessionQualityScore: 0.78,
+				AccessCount:               9,
+				FreshnessScore:            0.67,
 				FeedbackCount:             4,
 				ContradictionCount:        1,
 				Keywords:                  []string{"risk"},

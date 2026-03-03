@@ -274,6 +274,8 @@ func mapEngramQueryResult(row map[string]any) models.EngramQueryResult {
 		Tags:                      stringSliceFromAny(row["tags"]),
 		Keywords:                  stringSliceFromAny(row["keywords"]),
 		VisibilityScope:           visibilityFromAny(row["visibility_scope"]),
+		AccessCount:               intFromAny(row["access_count"]),
+		FreshnessScore:            float64FromAny(row["freshness_score"]),
 		FeedbackCount:             intFromAny(row["feedback_count"]),
 		ContradictionCount:        intFromAny(row["contradiction_count"]),
 		SourceSessionQualityScore: float64FromAny(row["source_session_quality_score"]),

@@ -1433,6 +1433,37 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 48 - Query Engagement Diagnostics in Results
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - `models.EngramQueryResult` now includes `access_count` and `freshness_score`.
+  - repository query result mapping now forwards engagement diagnostics already used by rerank internals.
+  - REST and MCP query paths now return engagement counters/scores alongside authority and feedback diagnostics.
+  - regression coverage extended for repository mapping and REST/MCP payload parity.
+
+### Goals
+
+1. Expose engagement/recency signals in query output for downstream agent reasoning.
+2. Improve transparency of rerank inputs returned to clients.
+3. Keep query payload shape deterministic across REST and MCP paths.
+
+### Deliverables
+
+1. Query-result contract extension for `access_count` and `freshness_score`.
+2. Repository mapping updates for engagement diagnostics.
+3. REST/MCP parity tests and docs synchronization.
+
+### Exit Criteria
+
+1. Query responses include `access_count` and `freshness_score` in both REST and MCP.
+2. Mapping behavior is regression-tested in repository/API/MCP suites.
+3. API/MCP docs reflect engagement diagnostics in query result rows.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1478,3 +1509,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 46: `contradiction_count_max` parity across REST/MCP/repository.
 12. Execute query diagnostics increment:
    - [x] Phase 47: expose `feedback_count` + `contradiction_count` in query results.
+13. Execute engagement diagnostics increment:
+   - [x] Phase 48: expose `access_count` + `freshness_score` in query results.

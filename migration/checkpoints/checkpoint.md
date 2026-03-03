@@ -451,6 +451,19 @@
 - [x] Added repository regression coverage:
   - query fixture/mapping assertions now verify feedback and contradiction counters on query results.
 
+### Phase 48 Progress Tracker
+
+- [x] Added query-result engagement diagnostics contract extension:
+  - `access_count` on `models.EngramQueryResult`.
+  - `freshness_score` on `models.EngramQueryResult`.
+- [x] Added repository projection/mapping parity:
+  - query result mapping now forwards access and freshness values from candidate rows.
+- [x] Added REST/MCP parity coverage:
+  - REST query route response test asserts `access_count` + `freshness_score` serialization.
+  - MCP compatibility query parity test includes engagement diagnostics fields.
+- [x] Added repository regression coverage:
+  - query fixture/mapping assertions now verify `access_count` and `freshness_score` on returned results.
+
 ---
 
 ## Completed Milestones
@@ -605,3 +618,4 @@
 | 45 | Feedback-Aware Query Filters | Completed |
 | 46 | Contradiction-Aware Query Filters | Completed |
 | 47 | Query Quality Diagnostics in Results | Completed |
+| 48 | Query Engagement Diagnostics in Results | Completed |

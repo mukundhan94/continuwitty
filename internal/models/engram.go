@@ -109,6 +109,8 @@ type EngramQueryResult struct {
 	Keywords                  []string   `json:"keywords,omitempty"`
 	OwnerUserID               *uuid.UUID `json:"owner_user_id,omitempty"`
 	VisibilityScope           string     `json:"visibility_scope"`
+	AccessCount               int        `json:"access_count"`
+	FreshnessScore            float64    `json:"freshness_score"`
 	FeedbackCount             int        `json:"feedback_count"`
 	ContradictionCount        int        `json:"contradiction_count"`
 	SourceSessionQualityScore float64    `json:"source_session_quality_score"`
