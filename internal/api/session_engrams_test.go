@@ -173,6 +173,14 @@ func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidFilters(t *testing.T) {
 			},
 			expectedDetail: "invalid trace_depth",
 		},
+		{
+			name: "invalid source session quality min",
+			body: map[string]any{
+				"query":                      "durable memory",
+				"source_session_quality_min": 1.2,
+			},
+			expectedDetail: "invalid source_session_quality_min",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -255,15 +263,16 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 				method: http.MethodPost,
 				path:   "/api/v1/engrams/query",
 				body: map[string]any{
-					"query":                     "durable memory",
-					"top_k":                     5,
-					"access_count_min":          2,
-					"freshness_score_min":       0.4,
-					"last_accessed_after":       "2026-02-01T00:00:00Z",
-					"last_accessed_before":      "2026-02-20T00:00:00Z",
-					"freshness_computed_after":  "2026-02-02T00:00:00Z",
-					"freshness_computed_before": "2026-02-21T00:00:00Z",
-					"relation_type":             "supports",
+					"query":                      "durable memory",
+					"top_k":                      5,
+					"access_count_min":           2,
+					"freshness_score_min":        0.4,
+					"source_session_quality_min": 0.7,
+					"last_accessed_after":        "2026-02-01T00:00:00Z",
+					"last_accessed_before":       "2026-02-20T00:00:00Z",
+					"freshness_computed_after":   "2026-02-02T00:00:00Z",
+					"freshness_computed_before":  "2026-02-21T00:00:00Z",
+					"relation_type":              "supports",
 				},
 			},
 		},
@@ -364,6 +373,11 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 	requireEqual(t, 5, request.TopK)
 	requireEqual(t, 2, requireIntPointer(t, request.AccessCountMin, "access_count_min"))
 	requireEqual(t, 0.4, requireFloat64Pointer(t, request.FreshnessScoreMin, "freshness_score_min"))
+	requireEqual(
+		t,
+		0.7,
+		requireFloat64Pointer(t, request.SourceSessionQualityMin, "source_session_quality_min"),
+	)
 	requireTimeWindowPresent(t, request.LastAccessedAfter, request.LastAccessedBefore, "last_accessed")
 	requireTimeWindowPresent(
 		t,

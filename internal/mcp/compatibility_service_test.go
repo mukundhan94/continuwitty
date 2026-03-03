@@ -132,6 +132,19 @@ func TestCompatibilityServiceToolsListIncludesFeedbackSignalFieldsForEngramFeedb
 	}
 }
 
+func TestCompatibilityServiceToolsListIncludesAuthorityFilterForEngramQuery(t *testing.T) {
+	frame := runCompatibilityRequest(
+		t,
+		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "tools-list", Method: "tools/list"}},
+	)
+	tool := findPublicToolByName(t, frame, "engram_query")
+	inputSchema := mapFromMap(t, tool, "inputSchema")
+	properties := mapFromMap(t, inputSchema, "properties")
+	if _, exists := properties["source_session_quality_min"]; !exists {
+		t.Fatalf("expected source_session_quality_min property in engram_query schema")
+	}
+}
+
 func TestBuildVisiblePublicToolCatalogClonesInputSchemas(t *testing.T) {
 	tools := buildVisiblePublicToolCatalog(nil)
 	first := findToolByPublicName(tools, "chat_save_as_engram")

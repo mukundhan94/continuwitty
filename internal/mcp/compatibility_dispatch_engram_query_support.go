@@ -54,6 +54,7 @@ type engramQueryPayloadParts struct {
 	createdBefore           *time.Time
 	accessCountMin          *int
 	freshnessScoreMin       *float64
+	sourceSessionQualityMin *float64
 	lastAccessedAfter       *time.Time
 	lastAccessedBefore      *time.Time
 	freshnessComputedAfter  *time.Time
@@ -104,6 +105,7 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		createdBefore:           temporalParts.createdBefore,
 		accessCountMin:          engagementParts.accessCountMin,
 		freshnessScoreMin:       engagementParts.freshnessScoreMin,
+		sourceSessionQualityMin: engagementParts.sourceSessionQualityMin,
 		lastAccessedAfter:       temporalParts.lastAccessedAfter,
 		lastAccessedBefore:      temporalParts.lastAccessedBefore,
 		freshnessComputedAfter:  temporalParts.freshnessComputedAfter,
@@ -175,8 +177,9 @@ func temporalWindowSpecs(parts engramQueryTemporalParts) []temporalWindowSpec {
 }
 
 type engramQueryEngagementParts struct {
-	accessCountMin    *int
-	freshnessScoreMin *float64
+	accessCountMin          *int
+	freshnessScoreMin       *float64
+	sourceSessionQualityMin *float64
 }
 
 func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngagementParts, *toolDispatchError) {
@@ -188,9 +191,14 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 	if dispatchErr != nil {
 		return engramQueryEngagementParts{}, dispatchErr
 	}
+	sourceSessionQualityMin, dispatchErr := parseEngramQuerySourceSessionQualityMin(params)
+	if dispatchErr != nil {
+		return engramQueryEngagementParts{}, dispatchErr
+	}
 	return engramQueryEngagementParts{
-		accessCountMin:    accessCountMin,
-		freshnessScoreMin: freshnessScoreMin,
+		accessCountMin:          accessCountMin,
+		freshnessScoreMin:       freshnessScoreMin,
+		sourceSessionQualityMin: sourceSessionQualityMin,
 	}, nil
 }
 
@@ -259,6 +267,7 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		CreatedBefore:           parts.createdBefore,
 		AccessCountMin:          parts.accessCountMin,
 		FreshnessScoreMin:       parts.freshnessScoreMin,
+		SourceSessionQualityMin: parts.sourceSessionQualityMin,
 		LastAccessedAfter:       parts.lastAccessedAfter,
 		LastAccessedBefore:      parts.lastAccessedBefore,
 		FreshnessComputedAfter:  parts.freshnessComputedAfter,
@@ -363,28 +372,31 @@ func parseEngramQueryAccessCountMin(params map[string]any) (*int, *toolDispatchE
 }
 
 func parseEngramQueryFreshnessScoreMin(params map[string]any) (*float64, *toolDispatchError) {
-	rawValue, found := optionalParamValue(params, "freshness_score_min")
+	return parseEngramQueryBoundedScoreMin(params, "freshness_score_min")
+}
+
+func parseEngramQuerySourceSessionQualityMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "source_session_quality_min")
+}
+
+func parseEngramQueryBoundedScoreMin(
+	params map[string]any,
+	key string,
+) (*float64, *toolDispatchError) {
+	rawValue, found := optionalParamValue(params, key)
 	if !found {
 		return nil, nil
 	}
-	parsed, dispatchErr := parseFreshnessScore(rawValue)
-	if dispatchErr != nil {
-		return nil, dispatchErr
+	parsed, ok := parseFloatValue(rawValue)
+	if !ok {
+		return nil, invalidParamError(key)
+	}
+	if parsed < 0 {
+		return nil, invalidParamError(key)
+	}
+	if parsed > 1 {
+		return nil, invalidParamError(key)
 	}
 	copy := parsed
 	return &copy, nil
-}
-
-func parseFreshnessScore(value any) (float64, *toolDispatchError) {
-	parsed, ok := parseFloatValue(value)
-	if !ok {
-		return 0, invalidParamError("freshness_score_min")
-	}
-	if parsed < 0 {
-		return 0, invalidParamError("freshness_score_min")
-	}
-	if parsed > 1 {
-		return 0, invalidParamError("freshness_score_min")
-	}
-	return parsed, nil
 }

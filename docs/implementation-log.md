@@ -7,6 +7,26 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 43: authority-threshold query filter parity)
+
+1. Added authority-aware query contract extension:
+   - new optional filter: `source_session_quality_min` (`0..1`) on engram query payloads.
+2. Added REST/MCP validation + parser parity:
+   - REST query decode now validates `source_session_quality_min` bounds.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `source_session_quality_min`.
+3. Added repository query predicate support:
+   - query builder now supports `COALESCE(source_session_quality_score, 0.5) >= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `source_session_quality_min`.
+   - repository where-clause and parameter assertions for the new predicate.
+   - MCP parity and validation coverage for the new filter.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker` -> `26 passed`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
 ### 2026-03-03 (Phase 42: source-session authority scoring baseline)
 
 1. Added schema baseline for authority scoring on engrams:

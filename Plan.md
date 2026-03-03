@@ -1273,6 +1273,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 43 - Authority-Aware Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `source_session_quality_min` filter to `models.EngramQueryRequest`.
+  - REST query validation now enforces `source_session_quality_min` bounds (`0..1`).
+  - repository query builder now supports `COALESCE(source_session_quality_score, 0.5) >= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `source_session_quality_min`.
+  - regression coverage expanded across repository/API/MCP for filter parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Let operators and agents explicitly filter recall by authority quality.
+2. Keep query behavior deterministic across REST and MCP.
+3. Preserve backward compatibility for existing query clients.
+
+### Deliverables
+
+1. Contract extension for `source_session_quality_min`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository query-predicate support with deterministic tests.
+
+### Exit Criteria
+
+1. Clients can request authority-threshold filtering in both REST and MCP query paths.
+2. Invalid authority thresholds are rejected with explicit validation errors.
+3. Query contract/docs/tests stay synchronized.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1308,3 +1340,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 41: richer explicit feedback payloads + aggregate relevance counters.
 7. Execute authority-scoring baseline increment:
    - [x] Phase 42: source-session authority scoring baseline in schema/retrieval/feedback loops.
+8. Execute authority-aware query contract increment:
+   - [x] Phase 43: authority-threshold query filter parity across REST/MCP/repository.

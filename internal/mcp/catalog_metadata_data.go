@@ -622,6 +622,11 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"minimum": 0,
 					"maximum": 1,
 				},
+				"source_session_quality_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
 			},
 		},
 	},

@@ -92,24 +92,26 @@ func buildEngramQueryParityExpectations(
 	projectID := "proj-alpha"
 	accessCountMin := 3
 	freshnessScoreMin := 0.42
+	sourceSessionQualityMin := 0.73
 	relationType := models.EngramLinkRelationSupports
 	traceDepth := 1
 	params := map[string]any{
-		"query":                     "roadmap",
-		"top_k":                     7.0,
-		"project_id":                projectID,
-		"tags":                      []any{"ops", "planning"},
-		"keywords":                  []any{"risk"},
-		"created_after":             createdAfter.Format(time.RFC3339),
-		"created_before":            createdBefore.Format(time.RFC3339),
-		"access_count_min":          float64(accessCountMin),
-		"freshness_score_min":       freshnessScoreMin,
-		"last_accessed_after":       lastAccessedAfter.Format(time.RFC3339),
-		"last_accessed_before":      lastAccessedBefore.Format(time.RFC3339),
-		"freshness_computed_after":  freshnessComputedAfter.Format(time.RFC3339),
-		"freshness_computed_before": freshnessComputedBefore.Format(time.RFC3339),
-		"relation_type":             string(relationType),
-		"trace_depth":               float64(traceDepth),
+		"query":                      "roadmap",
+		"top_k":                      7.0,
+		"project_id":                 projectID,
+		"tags":                       []any{"ops", "planning"},
+		"keywords":                   []any{"risk"},
+		"created_after":              createdAfter.Format(time.RFC3339),
+		"created_before":             createdBefore.Format(time.RFC3339),
+		"access_count_min":           float64(accessCountMin),
+		"freshness_score_min":        freshnessScoreMin,
+		"source_session_quality_min": sourceSessionQualityMin,
+		"last_accessed_after":        lastAccessedAfter.Format(time.RFC3339),
+		"last_accessed_before":       lastAccessedBefore.Format(time.RFC3339),
+		"freshness_computed_after":   freshnessComputedAfter.Format(time.RFC3339),
+		"freshness_computed_before":  freshnessComputedBefore.Format(time.RFC3339),
+		"relation_type":              string(relationType),
+		"trace_depth":                float64(traceDepth),
 	}
 	expected := EngramQueryDispatchRequest{
 		ActorUserID: actorUserID,
@@ -123,6 +125,7 @@ func buildEngramQueryParityExpectations(
 			CreatedBefore:           &createdBefore,
 			AccessCountMin:          &accessCountMin,
 			FreshnessScoreMin:       &freshnessScoreMin,
+			SourceSessionQualityMin: &sourceSessionQualityMin,
 			LastAccessedAfter:       &lastAccessedAfter,
 			LastAccessedBefore:      &lastAccessedBefore,
 			FreshnessComputedAfter:  &freshnessComputedAfter,
@@ -189,6 +192,9 @@ func TestCompatibilityServiceEngramQueryValidationAndErrors(t *testing.T) {
 		{name: "invalid access_count_min negative", params: map[string]any{"query": "x", "access_count_min": -1.0}},
 		{name: "invalid freshness_score_min low", params: map[string]any{"query": "x", "freshness_score_min": -0.1}},
 		{name: "invalid freshness_score_min high", params: map[string]any{"query": "x", "freshness_score_min": 1.1}},
+		{name: "invalid source_session_quality_min type", params: map[string]any{"query": "x", "source_session_quality_min": "bad"}},
+		{name: "invalid source_session_quality_min low", params: map[string]any{"query": "x", "source_session_quality_min": -0.1}},
+		{name: "invalid source_session_quality_min high", params: map[string]any{"query": "x", "source_session_quality_min": 1.1}},
 		{name: "invalid relation_type", params: map[string]any{"query": "x", "relation_type": "invalid"}},
 		{name: "invalid trace_depth type", params: map[string]any{"query": "x", "trace_depth": "bad"}},
 		{name: "invalid trace_depth range", params: map[string]any{"query": "x", "trace_depth": 2.0}},

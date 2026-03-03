@@ -387,6 +387,10 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 		{detail: "invalid top_k", invalid: payload.TopK < 1 || payload.TopK > 50},
 		{detail: "invalid access_count_min", invalid: invalidAccessCountMin(payload.AccessCountMin)},
 		{detail: "invalid freshness_score_min", invalid: invalidFreshnessScoreMin(payload.FreshnessScoreMin)},
+		{
+			detail:  "invalid source_session_quality_min",
+			invalid: invalidSourceSessionQualityMin(payload.SourceSessionQualityMin),
+		},
 		{detail: "invalid relation_type", invalid: invalidRelationType(payload.RelationType)},
 		{detail: "invalid trace_depth", invalid: invalidTraceDepth(payload.TraceDepth)},
 		{
@@ -401,6 +405,16 @@ func invalidAccessCountMin(value *int) bool {
 }
 
 func invalidFreshnessScoreMin(value *float64) bool {
+	if value == nil {
+		return false
+	}
+	if *value < 0 {
+		return true
+	}
+	return *value > 1
+}
+
+func invalidSourceSessionQualityMin(value *float64) bool {
 	if value == nil {
 		return false
 	}
