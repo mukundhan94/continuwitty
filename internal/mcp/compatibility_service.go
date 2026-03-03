@@ -362,6 +362,30 @@ type EngramConsolidationActionService interface {
 	) (*models.EngramConsolidationSuggestion, error)
 }
 
+// EngramContradictionRefreshService captures contradiction-alert refresh behavior used by MCP compatibility engram dispatch.
+type EngramContradictionRefreshService interface {
+	RefreshEngramContradictionAlerts(
+		ctx context.Context,
+		request EngramContradictionRefreshRequest,
+	) (*EngramContradictionRefreshResponse, error)
+}
+
+// EngramContradictionListService captures contradiction-alert list behavior used by MCP compatibility engram dispatch.
+type EngramContradictionListService interface {
+	ListEngramContradictionAlerts(
+		ctx context.Context,
+		request EngramContradictionListRequest,
+	) ([]models.EngramContradictionAlert, error)
+}
+
+// EngramContradictionResolveService captures contradiction-alert resolve behavior used by MCP compatibility engram dispatch.
+type EngramContradictionResolveService interface {
+	ResolveEngramContradictionAlert(
+		ctx context.Context,
+		request EngramContradictionResolveRequest,
+	) (*models.EngramContradictionAlert, error)
+}
+
 // EngramMoveService captures engram move-project behavior used by MCP compatibility engram dispatch.
 type EngramMoveService interface {
 	MoveEngram(
@@ -862,6 +886,39 @@ type EngramConsolidationActionRequest struct {
 	Status       models.ConsolidationSuggestionStatus
 }
 
+// EngramContradictionRefreshRequest captures compatibility-level contradiction refresh inputs.
+type EngramContradictionRefreshRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	ProjectID   *string
+}
+
+// EngramContradictionRefreshResponse captures compatibility-level contradiction refresh outputs.
+type EngramContradictionRefreshResponse struct {
+	ProjectID    *string   `json:"project_id,omitempty"`
+	DetectedAt   time.Time `json:"detected_at"`
+	UpdatedCount int       `json:"updated_count"`
+}
+
+// EngramContradictionListRequest captures compatibility-level contradiction list inputs.
+type EngramContradictionListRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	ProjectID   *string
+	Status      *models.ContradictionAlertStatus
+	Limit       int
+	Offset      int
+}
+
+// EngramContradictionResolveRequest captures compatibility-level contradiction resolve inputs.
+type EngramContradictionResolveRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	AlertID     uuid.UUID
+	ProjectID   *string
+	Status      models.ContradictionAlertStatus
+}
+
 // EngramMoveRequest captures compatibility-level engram move inputs.
 type EngramMoveRequest struct {
 	ActorUserID       uuid.UUID
@@ -1023,6 +1080,9 @@ type CompatibilityServiceDependencies struct {
 	EngramConsolidationRefresh EngramConsolidationRefreshService
 	EngramConsolidationList    EngramConsolidationListService
 	EngramConsolidationAction  EngramConsolidationActionService
+	EngramContradictionRefresh EngramContradictionRefreshService
+	EngramContradictionList    EngramContradictionListService
+	EngramContradictionResolve EngramContradictionResolveService
 	EngramMove                 EngramMoveService
 	EngramDelete               EngramDeleteService
 	EngramRestore              EngramRestoreService
@@ -1081,6 +1141,9 @@ type CompatibilityService struct {
 	engramConsolidationRefresh EngramConsolidationRefreshService
 	engramConsolidationList    EngramConsolidationListService
 	engramConsolidationAction  EngramConsolidationActionService
+	engramContradictionRefresh EngramContradictionRefreshService
+	engramContradictionList    EngramContradictionListService
+	engramContradictionResolve EngramContradictionResolveService
 	engramMove                 EngramMoveService
 	engramDelete               EngramDeleteService
 	engramRestore              EngramRestoreService
@@ -1163,6 +1226,9 @@ func NewCompatibilityServiceWithDependencies(
 		engramConsolidationRefresh: dependencies.EngramConsolidationRefresh,
 		engramConsolidationList:    dependencies.EngramConsolidationList,
 		engramConsolidationAction:  dependencies.EngramConsolidationAction,
+		engramContradictionRefresh: dependencies.EngramContradictionRefresh,
+		engramContradictionList:    dependencies.EngramContradictionList,
+		engramContradictionResolve: dependencies.EngramContradictionResolve,
 		engramMove:                 dependencies.EngramMove,
 		engramDelete:               dependencies.EngramDelete,
 		engramRestore:              dependencies.EngramRestore,

@@ -7,6 +7,40 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 38 continuation: contradiction alert admin API + MCP maintenance parity)
+
+1. Added contradiction alert maintenance workflows in admin service:
+   - new contracts and methods:
+     - `RefreshEngramContradictionAlerts`
+     - `ListEngramContradictionAlerts`
+     - `ResolveEngramContradictionAlert`
+   - repository dependency wiring for contradiction refresh/list/resolve paths.
+   - admin-domain validation/not-found errors for contradiction resolve workflows.
+2. Added admin REST routes for contradiction alerts:
+   - `POST /api/v1/admin/memory/engrams/contradictions/refresh`
+   - `GET /api/v1/admin/memory/engrams/contradictions/alerts`
+   - `POST /api/v1/admin/memory/engrams/contradictions/alerts/{alert_id}/resolve`
+   - route/query/payload validation for contradiction status (`open|resolved|dismissed`) with resolve-path guardrails (`resolved|dismissed` only).
+3. Added MCP contradiction maintenance tools:
+   - `engram.refresh_contradictions`
+   - `engram.contradiction_list`
+   - `engram.contradiction_resolve`
+   - end-to-end MCP compatibility wiring: tool parsing, dispatch handlers, dependency interfaces, runtime dependencies, token project-policy scoping, and catalog metadata.
+4. Added adapters and tests:
+   - admin service tests in `internal/admin/service_contradiction_test.go`.
+   - admin REST contradiction route tests in `internal/api/admin_memory_contradiction_routes_test.go`.
+   - MCP compatibility tests:
+     - `internal/mcp/compatibility_service_engram_refresh_contradictions_test.go`
+     - `internal/mcp/compatibility_service_engram_contradiction_list_test.go`
+     - `internal/mcp/compatibility_service_engram_contradiction_resolve_test.go`
+   - API + MCP docs updated (`docs/api-reference.md`, `docs/mcp-guide.md`).
+5. Validation:
+   - `go test ./internal/admin ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+   - CodeScene scores on touched Go files: `10.0` (catalog metadata data file reports `None` in score API).
+
 ### 2026-03-03 (Phase 38 continuation: contradiction alert persistence baseline)
 
 1. Added contradiction alert persistence schema in `db/init/001_schema.sql`:

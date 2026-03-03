@@ -1034,8 +1034,17 @@ Build a local-first memory system where agents and humans can:
     - `engram_contradiction_alerts` storage + indexes.
     - repository refresh/list/resolve primitives with project scoping and deterministic alert hashing.
     - repository/model unit tests for refresh/list/resolve behavior and status parsing.
+  - contradiction alert review tooling shipped across admin REST + MCP:
+    - admin REST endpoints for contradiction maintenance:
+      - `POST /api/v1/admin/memory/engrams/contradictions/refresh`
+      - `GET /api/v1/admin/memory/engrams/contradictions/alerts`
+      - `POST /api/v1/admin/memory/engrams/contradictions/alerts/{alert_id}/resolve`
+    - MCP tool parity for contradiction maintenance:
+      - `engram.refresh_contradictions`
+      - `engram.contradiction_list`
+      - `engram.contradiction_resolve`
+    - regression coverage for admin routes, service adapters, MCP parse/dispatch, and compatibility response parity.
 - Remaining in this phase:
-  - contradiction review tooling via API/MCP maintenance routes.
   - precision/recall benchmark coverage for contradiction warning quality.
 
 ### Goals

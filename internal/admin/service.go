@@ -33,6 +33,10 @@ var (
 	ErrConsolidationSuggestionNotFound = errors.New("consolidation suggestion not found")
 	// ErrConsolidationSuggestionActionInvalid indicates invalid consolidation action status.
 	ErrConsolidationSuggestionActionInvalid = errors.New("status must be merged or rejected")
+	// ErrContradictionAlertNotFound indicates a requested contradiction alert does not exist.
+	ErrContradictionAlertNotFound = errors.New("contradiction alert not found")
+	// ErrContradictionAlertResolveStatusInvalid indicates invalid contradiction alert resolve status.
+	ErrContradictionAlertResolveStatusInvalid = errors.New("status must be resolved or dismissed")
 )
 
 // MemoryAdminListRequest captures shared admin list filters.
@@ -148,6 +152,32 @@ type EngramConsolidationSuggestionActionRequest struct {
 	Status    models.ConsolidationSuggestionStatus `json:"status"`
 }
 
+// EngramContradictionAlertRefreshRequest captures refresh options for contradiction alerts.
+type EngramContradictionAlertRefreshRequest struct {
+	ProjectID *string `json:"project_id,omitempty"`
+}
+
+// EngramContradictionAlertRefreshResponse captures refresh results for contradiction alerts.
+type EngramContradictionAlertRefreshResponse struct {
+	ProjectID    *string   `json:"project_id,omitempty"`
+	DetectedAt   time.Time `json:"detected_at"`
+	UpdatedCount int       `json:"updated_count"`
+}
+
+// EngramContradictionAlertListRequest captures list filters for contradiction alerts.
+type EngramContradictionAlertListRequest struct {
+	ProjectID *string                          `json:"project_id,omitempty"`
+	Status    *models.ContradictionAlertStatus `json:"status,omitempty"`
+	Limit     int                              `json:"limit"`
+	Offset    int                              `json:"offset"`
+}
+
+// EngramContradictionAlertResolveRequest captures resolve payload for a contradiction alert.
+type EngramContradictionAlertResolveRequest struct {
+	ProjectID *string                         `json:"project_id,omitempty"`
+	Status    models.ContradictionAlertStatus `json:"status"`
+}
+
 // CollectionCreateRequest captures collection create payload values.
 type CollectionCreateRequest struct {
 	ProjectID   string `json:"project_id"`
@@ -244,6 +274,21 @@ type serviceDeps struct {
 		db repository.Queryer,
 		input repository.ConsolidationSuggestionActionInput,
 	) (*models.EngramConsolidationSuggestion, error)
+	refreshContradictionAlerts func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.ContradictionAlertRefreshInput,
+	) (repository.ContradictionAlertRefreshInput, error)
+	listContradictionAlerts func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.ContradictionAlertListInput,
+	) ([]models.EngramContradictionAlert, error)
+	resolveContradictionAlert func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.ContradictionAlertResolveInput,
+	) (*models.EngramContradictionAlert, error)
 
 	listCollections      func(ctx context.Context, db repository.Queryer, input repository.CollectionListInput) ([]models.EngramCollectionRecord, error)
 	getCollection        func(ctx context.Context, db repository.Queryer, collectionID uuid.UUID, includeDeleted bool) (*models.EngramCollectionRecord, error)
@@ -272,6 +317,9 @@ func defaultServiceDeps() serviceDeps {
 		refreshConsolidationSuggestions:    repository.RefreshExactDuplicateConsolidationSuggestions,
 		listConsolidationSuggestions:       repository.ListEngramConsolidationSuggestions,
 		applyConsolidationSuggestionAction: repository.ApplyEngramConsolidationSuggestionAction,
+		refreshContradictionAlerts:         repository.RefreshContradictionAlerts,
+		listContradictionAlerts:            repository.ListContradictionAlerts,
+		resolveContradictionAlert:          repository.ResolveContradictionAlert,
 
 		listCollections:      repository.ListCollections,
 		getCollection:        repository.GetCollection,

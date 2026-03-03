@@ -32,6 +32,9 @@ type fakeMemoryAdminService struct {
 	refreshConsolidationFn func(ctx context.Context, request admin.EngramConsolidationSuggestionRefreshRequest) (admin.EngramConsolidationSuggestionRefreshResponse, error)
 	listConsolidationFn    func(ctx context.Context, request admin.EngramConsolidationSuggestionListRequest) ([]models.EngramConsolidationSuggestion, error)
 	actionConsolidationFn  func(ctx context.Context, suggestionID uuid.UUID, actorUserID uuid.UUID, request admin.EngramConsolidationSuggestionActionRequest) (*models.EngramConsolidationSuggestion, error)
+	refreshContradictionFn func(ctx context.Context, request admin.EngramContradictionAlertRefreshRequest) (admin.EngramContradictionAlertRefreshResponse, error)
+	listContradictionFn    func(ctx context.Context, request admin.EngramContradictionAlertListRequest) ([]models.EngramContradictionAlert, error)
+	resolveContradictionFn func(ctx context.Context, alertID uuid.UUID, actorUserID uuid.UUID, request admin.EngramContradictionAlertResolveRequest) (*models.EngramContradictionAlert, error)
 	listCollectionsFn      func(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error)
 	createCollectionFn     func(ctx context.Context, actorUserID uuid.UUID, actorRole string, payload admin.CollectionCreateRequest) (*models.EngramCollectionRecord, error)
 	updateCollectionFn     func(ctx context.Context, collectionID uuid.UUID, payload admin.CollectionUpdateRequest) (*models.EngramCollectionRecord, error)
@@ -119,6 +122,34 @@ func (f *fakeMemoryAdminService) ActionEngramConsolidationSuggestion(
 	return requireFakeAdminHandler("ActionEngramConsolidationSuggestion", f.actionConsolidationFn)(
 		ctx,
 		suggestionID,
+		actorUserID,
+		request,
+	)
+}
+
+func (f *fakeMemoryAdminService) RefreshEngramContradictionAlerts(
+	ctx context.Context,
+	request admin.EngramContradictionAlertRefreshRequest,
+) (admin.EngramContradictionAlertRefreshResponse, error) {
+	return requireFakeAdminHandler("RefreshEngramContradictionAlerts", f.refreshContradictionFn)(ctx, request)
+}
+
+func (f *fakeMemoryAdminService) ListEngramContradictionAlerts(
+	ctx context.Context,
+	request admin.EngramContradictionAlertListRequest,
+) ([]models.EngramContradictionAlert, error) {
+	return requireFakeAdminHandler("ListEngramContradictionAlerts", f.listContradictionFn)(ctx, request)
+}
+
+func (f *fakeMemoryAdminService) ResolveEngramContradictionAlert(
+	ctx context.Context,
+	alertID uuid.UUID,
+	actorUserID uuid.UUID,
+	request admin.EngramContradictionAlertResolveRequest,
+) (*models.EngramContradictionAlert, error) {
+	return requireFakeAdminHandler("ResolveEngramContradictionAlert", f.resolveContradictionFn)(
+		ctx,
+		alertID,
 		actorUserID,
 		request,
 	)
@@ -463,6 +494,32 @@ func TestMountMemoryAdminRoutesActionConsolidationSuggestionRejectsInvalidStatus
 		[]byte(`{"status":"invalid"}`),
 	)
 	requireEqual(t, http.StatusBadRequest, response.Code)
+}
+
+func TestMountMemoryAdminRoutesRefreshEngramContradictionUsesPayload(t *testing.T) {
+	captured := admin.EngramContradictionAlertRefreshRequest{}
+	detectedAt := time.Date(2026, 3, 3, 13, 15, 0, 0, time.UTC)
+	service := &fakeMemoryAdminService{
+		refreshContradictionFn: func(
+			_ context.Context,
+			request admin.EngramContradictionAlertRefreshRequest,
+		) (admin.EngramContradictionAlertRefreshResponse, error) {
+			captured = request
+			return admin.EngramContradictionAlertRefreshResponse{
+				ProjectID:    request.ProjectID,
+				DetectedAt:   detectedAt,
+				UpdatedCount: 6,
+			}, nil
+		},
+	}
+
+	executeMemoryAdminRefreshRequest(
+		t,
+		service,
+		"/api/v1/admin/memory/engrams/contradictions/refresh",
+		[]byte(`{"project_id":"engram-vault"}`),
+	)
+	requireEqual(t, "engram-vault", derefString(captured.ProjectID))
 }
 
 func TestMountMemoryAdminRoutesUpdateEngramMapsStaleTo409(t *testing.T) {

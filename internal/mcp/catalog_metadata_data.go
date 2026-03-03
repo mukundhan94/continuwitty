@@ -991,6 +991,33 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"engram.contradiction_list": {
+		description: "List contradiction alerts by project/status (admin-only maintenance view).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"open",
+						"resolved",
+						"dismissed",
+					},
+				},
+				"limit": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"offset": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+			},
+		},
+	},
 	"engram.get": {
 		description: "Get an engram in management format with editable source payload.",
 		inputSchema: map[string]any{
@@ -1333,6 +1360,43 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"enum": []any{
 						"merged",
 						"rejected",
+					},
+				},
+			},
+		},
+	},
+	"engram.refresh_contradictions": {
+		description: "Refresh contradiction alerts from active contradiction links (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+			},
+		},
+	},
+	"engram.contradiction_resolve": {
+		description: "Mark one contradiction alert as resolved or dismissed (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"alert_id",
+				"status",
+			},
+			"properties": map[string]any{
+				"alert_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"resolved",
+						"dismissed",
 					},
 				},
 			},

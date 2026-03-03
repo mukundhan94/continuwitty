@@ -15,6 +15,8 @@ func registerEngramMutationToolHandlers(handlers map[string]implementedToolHandl
 	handlers["engram.refresh_freshness"] = bindEngramDispatch((*CompatibilityService).dispatchEngramRefreshFreshnessTool)
 	handlers["engram.refresh_consolidation"] = bindEngramDispatch((*CompatibilityService).dispatchEngramRefreshConsolidationTool)
 	handlers["engram.consolidation_action"] = bindEngramDispatch((*CompatibilityService).dispatchEngramConsolidationActionTool)
+	handlers["engram.refresh_contradictions"] = bindEngramDispatch((*CompatibilityService).dispatchEngramRefreshContradictionsTool)
+	handlers["engram.contradiction_resolve"] = bindEngramDispatch((*CompatibilityService).dispatchEngramContradictionResolveTool)
 	handlers["engram.delete"] = bindEngramDispatch((*CompatibilityService).dispatchEngramDeleteTool)
 	handlers["engram.restore"] = bindEngramDispatch((*CompatibilityService).dispatchEngramRestoreTool)
 }

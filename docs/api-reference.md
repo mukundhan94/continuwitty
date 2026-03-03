@@ -139,6 +139,9 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 | `POST` | `/api/v1/admin/memory/engrams/consolidation/refresh` | Refresh deterministic consolidation suggestions (admin) |
 | `GET` | `/api/v1/admin/memory/engrams/consolidation/suggestions` | List consolidation suggestions (admin) |
 | `POST` | `/api/v1/admin/memory/engrams/consolidation/suggestions/{suggestion_id}/action` | Mark consolidation suggestion as merged/rejected (admin) |
+| `POST` | `/api/v1/admin/memory/engrams/contradictions/refresh` | Refresh contradiction alerts from active contradiction links (admin) |
+| `GET` | `/api/v1/admin/memory/engrams/contradictions/alerts` | List contradiction alerts (admin) |
+| `POST` | `/api/v1/admin/memory/engrams/contradictions/alerts/{alert_id}/resolve` | Mark contradiction alert as resolved/dismissed (admin) |
 | `GET` | `/api/v1/admin/memory/engrams/{engram_id}` | Get engram (admin) |
 | `PATCH` | `/api/v1/admin/memory/engrams/{engram_id}` | Update engram |
 | `POST` | `/api/v1/admin/memory/engrams/{engram_id}/move` | Move engram to project |
