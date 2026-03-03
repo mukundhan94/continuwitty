@@ -7,6 +7,20 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 hardening: acceptance coverage for scoped link-curation refresh)
+
+1. Extended Phase 40 acceptance feature in `acceptance-tests/features/phase40-curation-mock.feature`:
+   - added scenario: "Link hygiene refresh rejects mismatched project scope".
+2. Added step support in `acceptance-tests/src/steps/phase40-curation-mock.steps.ts`:
+   - refresh helper now supports scoped payloads.
+   - happy-path link refresh now sends scoped `project_id`.
+   - mismatch scenario asserts HTTP `400` and detail:
+     - `project_id does not match target engram project`.
+3. Validation:
+   - `make acceptance-bddgen`
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock-docker` -> `26 passed`
+
 ### 2026-03-03 (Phase 40 hardening: scoped project guard for link-curation refresh)
 
 1. Added scoped project enforcement for link-curation refresh in `internal/admin/service_link_curation.go`:

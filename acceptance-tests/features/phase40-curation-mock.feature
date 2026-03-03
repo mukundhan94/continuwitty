@@ -28,3 +28,9 @@ Feature: Phase 40 autonomous curation suggestions
     Then curation suggestion type coverage should include link
     When I apply one link curation suggestion for the seeded project
     Then applied curation suggestions should include the link actioned record
+
+  Scenario: Link hygiene refresh rejects mismatched project scope
+    Given I am signed in
+    When I seed deterministic memory curation prerequisites
+    And I refresh link hygiene curation suggestions with mismatched project scope
+    Then link hygiene refresh should fail with project scope mismatch

@@ -324,6 +324,7 @@
       - consolidation suggestion status transitions to `merged`.
       - contradiction alert status transitions to `resolved`.
     - link-hygiene refresh generates actionable `link` suggestions and `status=applied` action succeeds.
+    - link-hygiene refresh rejects mismatched scoped `project_id` with explicit bad-request behavior.
 - [x] Added scoped project hardening for link-curation refresh.
   - REST + MCP refresh paths now accept optional `project_id`.
   - refresh rejects mismatched scope (`project_id` != source engram project) with explicit bad-request mapping.

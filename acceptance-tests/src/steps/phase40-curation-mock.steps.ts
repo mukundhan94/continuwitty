@@ -18,6 +18,10 @@ type RefreshResponse = {
   updated_count: number
 }
 
+type ErrorResponse = {
+  detail?: string
+}
+
 type ConsolidationSuggestion = {
   suggestion_id: string
   status: string
@@ -39,6 +43,7 @@ let selectedLinkCurationSuggestionID: string | null = null
 let targetConsolidationSuggestionID: string | null = null
 let targetContradictionAlertID: string | null = null
 let seededLinkSourceEngramID: string | null = null
+let lastLinkRefreshErrorDetail: string | null = null
 
 type ExpectJSONInput = {
   response: APIResponse
@@ -100,6 +105,20 @@ async function expectJSON<T>(input: ExpectJSONInput): Promise<T> {
     throw new Error(`${input.context} failed (${input.response.status()}): ${payload}`)
   }
   return JSON.parse(payload) as T
+}
+
+async function errorDetail(response: APIResponse): Promise<string> {
+  const payload = await response.text()
+  let parsed: ErrorResponse | null = null
+  try {
+    parsed = JSON.parse(payload) as ErrorResponse
+  } catch {
+    parsed = null
+  }
+  if (parsed?.detail && parsed.detail.trim() !== '') {
+    return parsed.detail
+  }
+  return payload
 }
 
 async function createProject(input: CreateProjectInput): Promise<void> {
@@ -295,6 +314,16 @@ async function assertResolvedContradictionAlert(
   expect(resolvedRecord?.resolved_by).toBeTruthy()
 }
 
+async function postLinkCurationRefresh(
+  request: APIRequestContext,
+  sourceEngramID: string,
+  payload: Record<string, unknown>,
+): Promise<APIResponse> {
+  return request.post(`/api/v1/admin/memory/engrams/${sourceEngramID}/links/curation/refresh`, {
+    data: payload,
+  })
+}
+
 When('I seed deterministic memory curation prerequisites', async ({ page }) => {
   seededProjectID = `phase40-curation-${Date.now()}`
   listedSuggestions = []
@@ -305,6 +334,7 @@ When('I seed deterministic memory curation prerequisites', async ({ page }) => {
   targetConsolidationSuggestionID = null
   targetContradictionAlertID = null
   seededLinkSourceEngramID = null
+  lastLinkRefreshErrorDetail = null
 
   await createProject({ projectID: seededProjectID, request: page.request })
 
@@ -494,10 +524,11 @@ When(
       seededLinkSourceEngramID,
       'Missing seeded link source engram id',
     )
-    const refresh = await page.request.post(
-      `/api/v1/admin/memory/engrams/${sourceEngramID}/links/curation/refresh`,
-      { data: { include_archived: false, limit: 50 } },
-    )
+    const refresh = await postLinkCurationRefresh(page.request, sourceEngramID, {
+      project_id: requireSeededProjectID(),
+      include_archived: false,
+      limit: 50,
+    })
     const refreshPayload = await expectJSON<RefreshResponse>({
       response: refresh,
       context: 'phase40 link curation refresh',
@@ -520,6 +551,25 @@ When(
   },
 )
 
+When(
+  'I refresh link hygiene curation suggestions with mismatched project scope',
+  async ({ page }) => {
+    const sourceEngramID = requireStringID(
+      seededLinkSourceEngramID,
+      'Missing seeded link source engram id',
+    )
+    const projectID = requireSeededProjectID()
+    const refresh = await postLinkCurationRefresh(page.request, sourceEngramID, {
+      project_id: `${projectID}-mismatch`,
+      include_archived: false,
+      limit: 50,
+    })
+    expect(refresh.ok()).toBeFalsy()
+    expect(refresh.status()).toBe(400)
+    lastLinkRefreshErrorDetail = await errorDetail(refresh)
+  },
+)
+
 Then('curation suggestion type coverage should include link', async () => {
   const observedTypes = new Set<string>(listedSuggestions.map((item) => item.suggestion_type))
   expect(observedTypes.has('link')).toBeTruthy()
@@ -537,4 +587,8 @@ Then('applied curation suggestions should include the link actioned record', asy
     status: 'applied',
     listContext: 'phase40 link curation list applied',
   })
+})
+
+Then('link hygiene refresh should fail with project scope mismatch', async () => {
+  expect(lastLinkRefreshErrorDetail).toBe('project_id does not match target engram project')
 })
