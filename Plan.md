@@ -1030,8 +1030,11 @@ Build a local-first memory system where agents and humans can:
   - chat send responses and stream `meta`/`done` payloads now include `contradiction_warnings`.
   - MCP `chat.send_message` parity now forwards `contradiction_warnings`.
   - regression tests added for contradiction-warning generation and payload propagation.
+  - contradiction alert persistence baseline added with deterministic schema + repository workflows:
+    - `engram_contradiction_alerts` storage + indexes.
+    - repository refresh/list/resolve primitives with project scoping and deterministic alert hashing.
+    - repository/model unit tests for refresh/list/resolve behavior and status parsing.
 - Remaining in this phase:
-  - contradiction alert persistence and resolution workflows.
   - contradiction review tooling via API/MCP maintenance routes.
   - precision/recall benchmark coverage for contradiction warning quality.
 

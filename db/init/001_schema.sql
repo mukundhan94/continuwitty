@@ -566,6 +566,34 @@ CREATE INDEX IF NOT EXISTS engram_consolidation_suggestions_project_status_idx
 CREATE INDEX IF NOT EXISTS engram_consolidation_suggestions_source_gin_idx
   ON engram_consolidation_suggestions USING GIN (source_engram_ids);
 
+CREATE TABLE IF NOT EXISTS engram_contradiction_alerts (
+  alert_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  source_engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  target_engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  contradiction_link_ids UUID[] NOT NULL DEFAULT '{}',
+  reason TEXT NOT NULL,
+  alert_hash TEXT NOT NULL,
+  confidence_score DOUBLE PRECISION NOT NULL CHECK (confidence_score >= 0 AND confidence_score <= 1),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'dismissed')),
+  detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  resolved_by UUID REFERENCES users(user_id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS engram_contradiction_alerts_hash_uidx
+  ON engram_contradiction_alerts (alert_hash);
+
+CREATE INDEX IF NOT EXISTS engram_contradiction_alerts_project_status_detected_idx
+  ON engram_contradiction_alerts (project_id, status, detected_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_contradiction_alerts_source_target_idx
+  ON engram_contradiction_alerts (source_engram_id, target_engram_id, status);
+
+CREATE INDEX IF NOT EXISTS engram_contradiction_alerts_link_ids_gin_idx
+  ON engram_contradiction_alerts USING GIN (contradiction_link_ids);
+
 CREATE TABLE IF NOT EXISTS session_pinned_engrams (
   session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
   engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,

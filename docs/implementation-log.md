@@ -7,6 +7,29 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 38 continuation: contradiction alert persistence baseline)
+
+1. Added contradiction alert persistence schema in `db/init/001_schema.sql`:
+   - new `engram_contradiction_alerts` table keyed by `alert_id` + deterministic `alert_hash`.
+   - status lifecycle (`open`/`resolved`/`dismissed`), contradiction link references, confidence, and resolve metadata.
+   - supporting indexes for hash uniqueness, project/status recency reads, source-target lifecycle lookups, and link-id GIN lookup.
+2. Added contradiction alert domain model in `internal/models/engram_contradiction.go`:
+   - `ContradictionAlertStatus` enum with parser validation.
+   - `EngramContradictionAlert` record used by repository + future API/MCP surfaces.
+3. Added repository workflows in `internal/repository/engram_contradiction_alerts.go`:
+   - `RefreshContradictionAlerts` groups active `contradicts` links and upserts deterministic alerts.
+   - `ListContradictionAlerts` supports optional project/status filters and pagination.
+   - `ResolveContradictionAlert` supports `resolved`/`dismissed` transitions for open alerts.
+4. Added tests:
+   - `internal/repository/engram_contradiction_alerts_test.go` for refresh/list/resolve behavior, filter forwarding, status validation, and missing-row handling.
+   - `internal/models/engram_contradiction_test.go` for status parser coverage.
+5. Validation:
+   - `go test ./internal/models ./internal/repository -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+   - CodeScene scores: touched Go files `10.0`.
+
 ### 2026-03-03 (Phase 38 kickoff: contradiction warning baseline for chat + MCP)
 
 1. Added contradiction trace metadata in linked-recall path assembly:
