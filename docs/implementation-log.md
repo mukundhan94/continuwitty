@@ -7,6 +7,215 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 37 kickoff slice: freshness maintenance baseline)
+
+1. Added freshness schema baseline in `db/init/001_schema.sql`:
+   - `engrams.freshness_score` (`DOUBLE PRECISION`, default `1.0`).
+   - `engrams.freshness_last_computed_at` (`TIMESTAMPTZ`).
+   - `engrams_freshness_idx` for freshness/recency maintenance queries.
+2. Added repository maintenance routine in `internal/repository/engram_freshness.go`:
+   - `RefreshEngramFreshnessScores` recomputes freshness using exponential half-life decay (`exp(-ln(2) * age_days / half_life_days)`).
+   - supports optional project scoping and deterministic defaults (`half_life_days=70`, `reference_time=utc now`).
+3. Added admin service and API wiring for explicit maintenance execution:
+   - `internal/admin/service.go`: `RefreshEngramFreshness`.
+   - `internal/api/admin_memory_engrams.go`: `POST /api/v1/admin/memory/engrams/freshness/refresh`.
+4. Added/updated tests:
+   - `internal/repository/engram_freshness_test.go`.
+   - `internal/admin/service_test.go`.
+   - `internal/api/admin_memory_test.go`.
+5. Documentation/state alignment:
+   - `plan.md`: Phase 35 marked completed; Phase 36/37 set to in-progress with delivered/remaining details.
+   - `migration/checkpoints/checkpoint.md`: added Phase 36 and Phase 37 progress trackers.
+6. Validation:
+   - `go test ./internal/repository ./internal/admin ./internal/api -count=1`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
+### 2026-03-03 (Phase 37 extension: MCP freshness maintenance tool)
+
+1. Added MCP freshness maintenance dispatch path:
+   - new tool `engram.refresh_freshness` (tools-call alias `engram_refresh_freshness`) in:
+     - `internal/mcp/compatibility_dispatch_engram_freshness_support.go`
+     - `internal/mcp/compatibility_dispatch_engram_mutation_handlers.go`
+     - `internal/mcp/catalog.go`
+     - `internal/mcp/catalog_metadata_data.go`
+   - admin-only actor guard enforced in dispatch.
+2. Added compatibility service + runtime wiring:
+   - new compatibility interface/request/response contracts in `internal/mcp/compatibility_service.go`.
+   - dependency wiring in `cmd/api/main.go`.
+   - new adapter `cmd/api/mcp_engram_admin_freshness_adapter.go` forwarding to admin freshness service.
+3. Added token project-policy support:
+   - `internal/mcp/token_authorization_policy.go` now treats `engram.refresh_freshness` as an optional-project tool for project allowlist normalization/autofill behavior.
+4. Added regression coverage:
+   - `internal/mcp/compatibility_service_engram_refresh_freshness_test.go` verifies direct/tools parity, admin guard, parameter validation, and internal error mapping.
+5. Documentation updates:
+   - `docs/mcp-guide.md` tool catalog now includes `engram.feedback` and `engram.refresh_freshness`.
+   - roadmap/checkpoint entries updated for Phase 37 MCP slice progress.
+6. Validation:
+   - `go test ./internal/mcp ./cmd/api -count=1`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
+### 2026-03-03 (Phase 37 extension: consolidation suggestion schema + repository baseline)
+
+1. Added consolidation suggestion persistence baseline in `db/init/001_schema.sql`:
+   - new table `engram_consolidation_suggestions`.
+   - new indexes:
+     - `engram_consolidation_suggestions_hash_uidx`
+     - `engram_consolidation_suggestions_project_status_idx`
+     - `engram_consolidation_suggestions_source_gin_idx`
+2. Added consolidation suggestion domain model in `internal/models/engram_consolidation.go`:
+   - suggestion type and status enums.
+   - status parser (`ParseConsolidationSuggestionStatus`).
+   - persisted entity contract (`EngramConsolidationSuggestion`).
+3. Added repository baseline in `internal/repository/engram_consolidation_suggestions.go`:
+   - `RefreshExactDuplicateConsolidationSuggestions` for deterministic exact-duplicate grouping (`LOWER(TRIM(title))`) with configurable minimum group size.
+   - conflict-safe upsert keyed by deterministic `consolidation_hash`.
+   - confidence scoring tied to duplicate cluster size.
+   - `ListEngramConsolidationSuggestions` with project/status filtering and pagination.
+4. Added repository coverage in `internal/repository/engram_consolidation_suggestions_test.go`:
+   - default normalization and query argument assertions.
+   - invalid min-group guardrail coverage.
+   - list filtering and status parsing assertions.
+5. Documentation/state alignment:
+   - `plan.md`: Phase 37 delivered-scope updated to include consolidation schema/repository baseline.
+   - `migration/checkpoints/checkpoint.md`: Phase 37 tracker and summary updated for consolidation baseline progress.
+6. Validation:
+   - `go test ./internal/models ./internal/repository -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
+### 2026-03-03 (Phase 37 extension: admin consolidation refresh/list service + REST routes)
+
+1. Added admin-service contracts and methods for consolidation suggestions:
+   - `RefreshEngramConsolidationSuggestions`
+   - `ListEngramConsolidationSuggestions`
+   - request/response contracts in `internal/admin/service.go` + implementation in `internal/admin/service_consolidation.go`.
+2. Added memory-admin API routes:
+   - `POST /api/v1/admin/memory/engrams/consolidation/refresh`
+   - `GET /api/v1/admin/memory/engrams/consolidation/suggestions`
+3. Added API parsing and error handling support:
+   - status query parsing (`suggested|merged|rejected`) for consolidation listing.
+   - explicit invalid min-group guardrail mapping to `400`.
+4. Added regression coverage:
+   - `internal/admin/service_test.go` consolidation refresh/list forwarding and validation tests.
+   - `internal/api/admin_memory_test.go` consolidation refresh/list route tests + invalid-status coverage.
+5. Refactored admin memory route wiring into focused route files and shared helper file to preserve maintainability and restore full CodeScene quality gates.
+6. Documentation/state alignment:
+   - `docs/api-reference.md` now documents the two consolidation admin endpoints.
+   - `plan.md` and `migration/checkpoints/checkpoint.md` updated for Phase 37 admin-API progress.
+7. Validation:
+   - `go test ./internal/admin ./internal/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
+### 2026-03-03 (Phase 37 extension: MCP consolidation refresh/list parity tools)
+
+1. Added MCP consolidation dispatch support:
+   - `engram.refresh_consolidation` (alias `engram_refresh_consolidation`) for deterministic exact-duplicate suggestion refresh (admin-only).
+   - `engram.consolidation_list` (alias `engram_consolidation_list`) for consolidation suggestion listing with optional `project_id`/`status` filters (admin-only).
+2. Added compatibility service contracts and runtime wiring:
+   - new request/response interfaces/types in `internal/mcp/compatibility_service.go`.
+   - dispatch handlers in `internal/mcp/compatibility_dispatch_engram_consolidation_support.go`.
+   - route registration in read/mutation handler registries.
+3. Added admin-to-MCP adapters:
+   - `cmd/api/mcp_engram_admin_consolidation_adapter.go`.
+   - dependency wiring in `cmd/api/main.go` via extracted compatibility dependency builders.
+4. Added token-policy + tool-catalog updates:
+   - read/write tool classification and ordering in `internal/mcp/catalog.go`.
+   - input schemas/metadata in `internal/mcp/catalog_metadata_data.go`.
+   - optional-project token normalization support in `internal/mcp/token_authorization_policy.go`.
+5. Added regression coverage:
+   - `internal/mcp/compatibility_service_engram_refresh_consolidation_test.go`.
+   - `internal/mcp/compatibility_service_engram_consolidation_list_test.go`.
+6. Documentation/state alignment:
+   - `docs/mcp-guide.md` tool catalog updated with consolidation MCP tools.
+   - `plan.md` and `migration/checkpoints/checkpoint.md` updated for Phase 37 MCP parity progress.
+7. Validation:
+   - `go test ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
+### 2026-03-03 (Phase 37 extension: consolidation action workflow baseline in repository/admin REST)
+
+1. Added repository action path in `internal/repository/engram_consolidation_suggestions.go`:
+   - `ApplyEngramConsolidationSuggestionAction` updates suggestion status to `merged`/`rejected`.
+   - records `actioned_at`, `action_taken_by`, and `updated_at` atomically.
+   - validates actionable status (`merged`/`rejected`) and returns `nil` on missing suggestion IDs.
+2. Added admin service action workflow:
+   - `ActionEngramConsolidationSuggestion` in `internal/admin/service_consolidation.go`.
+   - added service-level not-found and invalid-action errors with explicit status validation.
+3. Added admin memory REST route:
+   - `POST /api/v1/admin/memory/engrams/consolidation/suggestions/{suggestion_id}/action`.
+   - actor attribution forwarded from authenticated admin actor to service/repository.
+4. Added regression coverage:
+   - repository tests for action success, invalid status, and missing suggestion behavior.
+   - admin service tests for repository forwarding, invalid status rejection, and not-found mapping.
+   - API tests for actor/payload forwarding and invalid-status rejection.
+5. Documentation/state alignment:
+   - `docs/api-reference.md` now documents consolidation action endpoint.
+   - `plan.md` and `migration/checkpoints/checkpoint.md` updated for Phase 37 action-baseline progress.
+6. Validation:
+   - `go test ./internal/repository ./internal/admin ./internal/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
+### 2026-03-03 (Phase 37 extension: MCP consolidation action parity + project-scoped action guard)
+
+1. Added MCP consolidation action parity tooling:
+   - new admin-only tool `engram.consolidation_action` (alias `engram_consolidation_action`) to mark one suggestion as `merged` or `rejected`.
+   - dispatch routing/wiring added across:
+     - `internal/mcp/compatibility_dispatch_engram_mutation_handlers.go`
+     - `internal/mcp/compatibility_dispatch_engram_consolidation_action_support.go`
+     - `internal/mcp/compatibility_service.go`
+     - `cmd/api/mcp_engram_admin_consolidation_adapter.go`
+     - `cmd/api/main.go`
+2. Added MCP tool catalog and token-policy alignment:
+   - tool classification/order updates in `internal/mcp/catalog.go`.
+   - input schema metadata in `internal/mcp/catalog_metadata_data.go`.
+   - optional project-token normalization support in `internal/mcp/token_authorization_policy.go`.
+3. Hardened consolidation action scoping across repository/admin/API:
+   - `ApplyEngramConsolidationSuggestionAction` now supports optional project guard (`project_id`) for status updates.
+   - admin action request object and REST payload now accept `project_id` and forward it to repository writes.
+4. Added/updated regression coverage:
+   - `internal/mcp/compatibility_service_engram_consolidation_action_test.go` for direct/tools parity, admin guard, validation, and internal/not-found mappings.
+   - updated repository/admin/API tests for optional `project_id` forwarding and action-path behavior.
+5. Documentation/state alignment:
+   - `docs/mcp-guide.md` tool catalog updated with consolidation action tooling.
+   - `Plan.md` and `migration/checkpoints/checkpoint.md` updated for narrowed remaining Phase 37 scope.
+6. Validation:
+   - `go test ./internal/repository ./internal/admin ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0` (with `internal/mcp/catalog_metadata_data.go` reported as non-scorable/null by CodeScene).
+
+### 2026-03-03 (Phase 37 closeout: deterministic acceptance + precision/recall benchmark coverage)
+
+1. Added deterministic Phase 37 acceptance scenario:
+   - `acceptance-tests/features/phase37-consolidation-mock.feature`
+   - `acceptance-tests/src/steps/phase37-consolidation-mock.steps.ts`
+   - validates end-to-end admin consolidation flow in one isolated project:
+     - seed duplicate/non-duplicate engrams.
+     - refresh/list consolidation suggestions.
+     - compute grouping precision/recall and gate at `>=0.95`.
+     - action one suggestion (`merged`) and verify action fields via merged listing.
+2. Added benchmark documentation:
+   - `docs/phase37-consolidation-benchmark.md` captures fixture design, formulas, thresholds, and run commands.
+3. Acceptance docs alignment:
+   - `acceptance-tests/README.md` now documents the `@phase37` deterministic mock scenario and quality checks.
+4. Roadmap/checkpoint alignment:
+   - `Plan.md`: Phase 37 marked completed and delivered scope expanded with acceptance/benchmark coverage.
+   - `migration/checkpoints/checkpoint.md`: Phase 37 summary/progress tracker marked completed.
+5. Validation:
+   - `cd acceptance-tests && npm run bdd:gen`
+   - `cd acceptance-tests && npm run typecheck`
+   - `make lint`
+   - `make test-unit`
+
 ### 2026-03-01 (Security follow-up closeout: OIDC rollout validation + centralized audit sink regression)
 
 1. Added explicit OIDC-to-sink integration coverage in `internal/api/session_ui_oidc_test.go`:

@@ -322,6 +322,46 @@ type EngramUpdateService interface {
 	) (*models.AdminEngramRecord, error)
 }
 
+// EngramFeedbackService captures explicit feedback submission for engram ranking signals.
+type EngramFeedbackService interface {
+	SubmitEngramFeedback(
+		ctx context.Context,
+		request EngramFeedbackRequest,
+	) (*models.EngramFeedbackRecord, error)
+}
+
+// EngramFreshnessRefreshService captures freshness maintenance behavior used by MCP compatibility engram dispatch.
+type EngramFreshnessRefreshService interface {
+	RefreshEngramFreshness(
+		ctx context.Context,
+		request EngramFreshnessRefreshRequest,
+	) (*EngramFreshnessRefreshResponse, error)
+}
+
+// EngramConsolidationRefreshService captures consolidation refresh behavior used by MCP compatibility engram dispatch.
+type EngramConsolidationRefreshService interface {
+	RefreshEngramConsolidationSuggestions(
+		ctx context.Context,
+		request EngramConsolidationRefreshRequest,
+	) (*EngramConsolidationRefreshResponse, error)
+}
+
+// EngramConsolidationListService captures consolidation list behavior used by MCP compatibility engram dispatch.
+type EngramConsolidationListService interface {
+	ListEngramConsolidationSuggestions(
+		ctx context.Context,
+		request EngramConsolidationListRequest,
+	) ([]models.EngramConsolidationSuggestion, error)
+}
+
+// EngramConsolidationActionService captures consolidation action behavior used by MCP compatibility engram dispatch.
+type EngramConsolidationActionService interface {
+	ActionEngramConsolidationSuggestion(
+		ctx context.Context,
+		request EngramConsolidationActionRequest,
+	) (*models.EngramConsolidationSuggestion, error)
+}
+
 // EngramMoveService captures engram move-project behavior used by MCP compatibility engram dispatch.
 type EngramMoveService interface {
 	MoveEngram(
@@ -762,6 +802,65 @@ type EngramUpdateRequest struct {
 	Sources                 *[]models.AdminEngramSourceInput
 }
 
+// EngramFeedbackRequest captures compatibility-level engram feedback inputs.
+type EngramFeedbackRequest struct {
+	ActorUserID  uuid.UUID
+	EngramID     uuid.UUID
+	FeedbackType models.EngramFeedbackType
+	Note         *string
+}
+
+// EngramFreshnessRefreshRequest captures compatibility-level engram freshness refresh inputs.
+type EngramFreshnessRefreshRequest struct {
+	ActorUserID  uuid.UUID
+	ActorRole    models.UserRole
+	ProjectID    *string
+	HalfLifeDays *float64
+}
+
+// EngramFreshnessRefreshResponse captures compatibility-level freshness refresh outputs.
+type EngramFreshnessRefreshResponse struct {
+	ProjectID     *string   `json:"project_id,omitempty"`
+	HalfLifeDays  float64   `json:"half_life_days"`
+	ReferenceTime time.Time `json:"reference_time"`
+	UpdatedCount  int       `json:"updated_count"`
+}
+
+// EngramConsolidationRefreshRequest captures compatibility-level consolidation refresh inputs.
+type EngramConsolidationRefreshRequest struct {
+	ActorUserID  uuid.UUID
+	ActorRole    models.UserRole
+	ProjectID    *string
+	MinGroupSize *int
+}
+
+// EngramConsolidationRefreshResponse captures compatibility-level consolidation refresh outputs.
+type EngramConsolidationRefreshResponse struct {
+	ProjectID    *string   `json:"project_id,omitempty"`
+	MinGroupSize int       `json:"min_group_size"`
+	SuggestedAt  time.Time `json:"suggested_at"`
+	UpdatedCount int       `json:"updated_count"`
+}
+
+// EngramConsolidationListRequest captures compatibility-level consolidation list inputs.
+type EngramConsolidationListRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	ProjectID   *string
+	Status      *models.ConsolidationSuggestionStatus
+	Limit       int
+	Offset      int
+}
+
+// EngramConsolidationActionRequest captures compatibility-level consolidation-action inputs.
+type EngramConsolidationActionRequest struct {
+	ActorUserID  uuid.UUID
+	ActorRole    models.UserRole
+	SuggestionID uuid.UUID
+	ProjectID    *string
+	Status       models.ConsolidationSuggestionStatus
+}
+
 // EngramMoveRequest captures compatibility-level engram move inputs.
 type EngramMoveRequest struct {
 	ActorUserID       uuid.UUID
@@ -884,107 +983,117 @@ type EngramCollectionRemoveItemResponse struct {
 
 // CompatibilityServiceDependencies captures optional service dependencies for compatibility dispatch.
 type CompatibilityServiceDependencies struct {
-	MCPToolPolicyVersion     string
-	EvalSuiteVersion         string
-	ProjectService           ProjectListService
-	ProjectExport            ProjectExportService
-	ProjectImport            ProjectImportService
-	SessionService           SessionListService
-	SessionGet               SessionGetService
-	SessionCreate            SessionCreateService
-	SessionContinue          SessionContinueService
-	SessionSaveAsEngram      SessionSaveAsEngramService
-	SessionDelete            SessionDeleteService
-	SessionRestore           SessionRestoreService
-	LifecyclePolicyUpdate    LifecyclePolicyUpdateService
-	MessageService           MessageListService
-	MessageSend              MessageSendService
-	MessageStream            MessageStreamService
-	TimelineService          TimelineListService
-	PinnedEngramService      PinnedEngramListService
-	PinnedDocumentService    PinnedDocumentListService
-	ProjectDocumentService   ProjectDocumentListService
-	EngramList               EngramListService
-	EngramGet                EngramGetService
-	EngramQuery              EngramQueryService
-	EngramRehydrate          EngramRehydrateService
-	EngramLinkGet            EngramLinkGetService
-	EngramLinkCreate         EngramLinkCreateService
-	EngramLinkList           EngramLinkListService
-	EngramLinkUpdate         EngramLinkUpdateService
-	EngramLinkArchive        EngramLinkArchiveService
-	EngramLinkSuggest        EngramLinkSuggestService
-	EngramTracePath          EngramTracePathService
-	EngramCreate             EngramCreateService
-	EngramCreateConversation EngramCreateFromConversationService
-	EngramUpdate             EngramUpdateService
-	EngramMove               EngramMoveService
-	EngramDelete             EngramDeleteService
-	EngramRestore            EngramRestoreService
-	EngramCollectionList     EngramCollectionListService
-	EngramCollectionGet      EngramCollectionGetService
-	EngramCollectionCreate   EngramCollectionCreateService
-	EngramCollectionUpdate   EngramCollectionUpdateService
-	EngramCollectionDelete   EngramCollectionDeleteService
-	EngramCollectionAddItems EngramCollectionAddItemsService
-	EngramCollectionRemove   EngramCollectionRemoveItemService
-	PinEngramService         PinEngramService
-	UnpinEngramService       UnpinEngramService
-	PinDocumentService       PinDocumentService
-	UnpinDocumentService     UnpinDocumentService
+	MCPToolPolicyVersion       string
+	EvalSuiteVersion           string
+	ProjectService             ProjectListService
+	ProjectExport              ProjectExportService
+	ProjectImport              ProjectImportService
+	SessionService             SessionListService
+	SessionGet                 SessionGetService
+	SessionCreate              SessionCreateService
+	SessionContinue            SessionContinueService
+	SessionSaveAsEngram        SessionSaveAsEngramService
+	SessionDelete              SessionDeleteService
+	SessionRestore             SessionRestoreService
+	LifecyclePolicyUpdate      LifecyclePolicyUpdateService
+	MessageService             MessageListService
+	MessageSend                MessageSendService
+	MessageStream              MessageStreamService
+	TimelineService            TimelineListService
+	PinnedEngramService        PinnedEngramListService
+	PinnedDocumentService      PinnedDocumentListService
+	ProjectDocumentService     ProjectDocumentListService
+	EngramList                 EngramListService
+	EngramGet                  EngramGetService
+	EngramQuery                EngramQueryService
+	EngramRehydrate            EngramRehydrateService
+	EngramLinkGet              EngramLinkGetService
+	EngramLinkCreate           EngramLinkCreateService
+	EngramLinkList             EngramLinkListService
+	EngramLinkUpdate           EngramLinkUpdateService
+	EngramLinkArchive          EngramLinkArchiveService
+	EngramLinkSuggest          EngramLinkSuggestService
+	EngramTracePath            EngramTracePathService
+	EngramCreate               EngramCreateService
+	EngramCreateConversation   EngramCreateFromConversationService
+	EngramUpdate               EngramUpdateService
+	EngramFeedback             EngramFeedbackService
+	EngramFreshnessRefresh     EngramFreshnessRefreshService
+	EngramConsolidationRefresh EngramConsolidationRefreshService
+	EngramConsolidationList    EngramConsolidationListService
+	EngramConsolidationAction  EngramConsolidationActionService
+	EngramMove                 EngramMoveService
+	EngramDelete               EngramDeleteService
+	EngramRestore              EngramRestoreService
+	EngramCollectionList       EngramCollectionListService
+	EngramCollectionGet        EngramCollectionGetService
+	EngramCollectionCreate     EngramCollectionCreateService
+	EngramCollectionUpdate     EngramCollectionUpdateService
+	EngramCollectionDelete     EngramCollectionDeleteService
+	EngramCollectionAddItems   EngramCollectionAddItemsService
+	EngramCollectionRemove     EngramCollectionRemoveItemService
+	PinEngramService           PinEngramService
+	UnpinEngramService         UnpinEngramService
+	PinDocumentService         PinDocumentService
+	UnpinDocumentService       UnpinDocumentService
 }
 
 // CompatibilityService provides baseline MCP interop behavior while the full tool catalog migrates.
 type CompatibilityService struct {
-	serverVersion            string
-	mcpToolPolicyVersion     string
-	evalSuiteVersion         string
-	projectService           ProjectListService
-	projectExport            ProjectExportService
-	projectImport            ProjectImportService
-	sessionService           SessionListService
-	sessionGet               SessionGetService
-	sessionCreate            SessionCreateService
-	sessionContinue          SessionContinueService
-	sessionSaveAsEngram      SessionSaveAsEngramService
-	sessionDelete            SessionDeleteService
-	sessionRestore           SessionRestoreService
-	lifecyclePolicyUpdate    LifecyclePolicyUpdateService
-	messageService           MessageListService
-	messageSend              MessageSendService
-	messageStream            MessageStreamService
-	timelineService          TimelineListService
-	pinnedEngramService      PinnedEngramListService
-	pinnedDocumentService    PinnedDocumentListService
-	projectDocumentService   ProjectDocumentListService
-	engramList               EngramListService
-	engramGet                EngramGetService
-	engramQuery              EngramQueryService
-	engramRehydrate          EngramRehydrateService
-	engramLinkGet            EngramLinkGetService
-	engramLinkCreate         EngramLinkCreateService
-	engramLinkList           EngramLinkListService
-	engramLinkUpdate         EngramLinkUpdateService
-	engramLinkArchive        EngramLinkArchiveService
-	engramLinkSuggest        EngramLinkSuggestService
-	engramTracePath          EngramTracePathService
-	engramCreate             EngramCreateService
-	engramCreateConversation EngramCreateFromConversationService
-	engramUpdate             EngramUpdateService
-	engramMove               EngramMoveService
-	engramDelete             EngramDeleteService
-	engramRestore            EngramRestoreService
-	engramCollectionList     EngramCollectionListService
-	engramCollectionGet      EngramCollectionGetService
-	engramCollectionCreate   EngramCollectionCreateService
-	engramCollectionUpdate   EngramCollectionUpdateService
-	engramCollectionDelete   EngramCollectionDeleteService
-	engramCollectionAddItems EngramCollectionAddItemsService
-	engramCollectionRemove   EngramCollectionRemoveItemService
-	pinEngramService         PinEngramService
-	unpinEngramService       UnpinEngramService
-	pinDocumentService       PinDocumentService
-	unpinDocumentService     UnpinDocumentService
+	serverVersion              string
+	mcpToolPolicyVersion       string
+	evalSuiteVersion           string
+	projectService             ProjectListService
+	projectExport              ProjectExportService
+	projectImport              ProjectImportService
+	sessionService             SessionListService
+	sessionGet                 SessionGetService
+	sessionCreate              SessionCreateService
+	sessionContinue            SessionContinueService
+	sessionSaveAsEngram        SessionSaveAsEngramService
+	sessionDelete              SessionDeleteService
+	sessionRestore             SessionRestoreService
+	lifecyclePolicyUpdate      LifecyclePolicyUpdateService
+	messageService             MessageListService
+	messageSend                MessageSendService
+	messageStream              MessageStreamService
+	timelineService            TimelineListService
+	pinnedEngramService        PinnedEngramListService
+	pinnedDocumentService      PinnedDocumentListService
+	projectDocumentService     ProjectDocumentListService
+	engramList                 EngramListService
+	engramGet                  EngramGetService
+	engramQuery                EngramQueryService
+	engramRehydrate            EngramRehydrateService
+	engramLinkGet              EngramLinkGetService
+	engramLinkCreate           EngramLinkCreateService
+	engramLinkList             EngramLinkListService
+	engramLinkUpdate           EngramLinkUpdateService
+	engramLinkArchive          EngramLinkArchiveService
+	engramLinkSuggest          EngramLinkSuggestService
+	engramTracePath            EngramTracePathService
+	engramCreate               EngramCreateService
+	engramCreateConversation   EngramCreateFromConversationService
+	engramUpdate               EngramUpdateService
+	engramFeedback             EngramFeedbackService
+	engramFreshnessRefresh     EngramFreshnessRefreshService
+	engramConsolidationRefresh EngramConsolidationRefreshService
+	engramConsolidationList    EngramConsolidationListService
+	engramConsolidationAction  EngramConsolidationActionService
+	engramMove                 EngramMoveService
+	engramDelete               EngramDeleteService
+	engramRestore              EngramRestoreService
+	engramCollectionList       EngramCollectionListService
+	engramCollectionGet        EngramCollectionGetService
+	engramCollectionCreate     EngramCollectionCreateService
+	engramCollectionUpdate     EngramCollectionUpdateService
+	engramCollectionDelete     EngramCollectionDeleteService
+	engramCollectionAddItems   EngramCollectionAddItemsService
+	engramCollectionRemove     EngramCollectionRemoveItemService
+	pinEngramService           PinEngramService
+	unpinEngramService         UnpinEngramService
+	pinDocumentService         PinDocumentService
+	unpinDocumentService       UnpinDocumentService
 }
 
 // NewCompatibilityService builds a compatibility MCP service with stable initialize/tool-list behavior.
@@ -1013,55 +1122,60 @@ func NewCompatibilityServiceWithDependencies(
 		evalSuiteVersion = governance.DefaultEvalSuiteVersion
 	}
 	return &CompatibilityService{
-		serverVersion:            trimmed,
-		mcpToolPolicyVersion:     policyVersion,
-		evalSuiteVersion:         evalSuiteVersion,
-		projectService:           dependencies.ProjectService,
-		projectExport:            dependencies.ProjectExport,
-		projectImport:            dependencies.ProjectImport,
-		sessionService:           dependencies.SessionService,
-		sessionGet:               dependencies.SessionGet,
-		sessionCreate:            dependencies.SessionCreate,
-		sessionContinue:          dependencies.SessionContinue,
-		sessionSaveAsEngram:      dependencies.SessionSaveAsEngram,
-		sessionDelete:            dependencies.SessionDelete,
-		sessionRestore:           dependencies.SessionRestore,
-		lifecyclePolicyUpdate:    dependencies.LifecyclePolicyUpdate,
-		messageService:           dependencies.MessageService,
-		messageSend:              dependencies.MessageSend,
-		messageStream:            dependencies.MessageStream,
-		timelineService:          dependencies.TimelineService,
-		pinnedEngramService:      dependencies.PinnedEngramService,
-		pinnedDocumentService:    dependencies.PinnedDocumentService,
-		projectDocumentService:   dependencies.ProjectDocumentService,
-		engramList:               dependencies.EngramList,
-		engramGet:                dependencies.EngramGet,
-		engramQuery:              dependencies.EngramQuery,
-		engramRehydrate:          dependencies.EngramRehydrate,
-		engramLinkGet:            dependencies.EngramLinkGet,
-		engramLinkCreate:         dependencies.EngramLinkCreate,
-		engramLinkList:           dependencies.EngramLinkList,
-		engramLinkUpdate:         dependencies.EngramLinkUpdate,
-		engramLinkArchive:        dependencies.EngramLinkArchive,
-		engramLinkSuggest:        dependencies.EngramLinkSuggest,
-		engramTracePath:          dependencies.EngramTracePath,
-		engramCreate:             dependencies.EngramCreate,
-		engramCreateConversation: dependencies.EngramCreateConversation,
-		engramUpdate:             dependencies.EngramUpdate,
-		engramMove:               dependencies.EngramMove,
-		engramDelete:             dependencies.EngramDelete,
-		engramRestore:            dependencies.EngramRestore,
-		engramCollectionList:     dependencies.EngramCollectionList,
-		engramCollectionGet:      dependencies.EngramCollectionGet,
-		engramCollectionCreate:   dependencies.EngramCollectionCreate,
-		engramCollectionUpdate:   dependencies.EngramCollectionUpdate,
-		engramCollectionDelete:   dependencies.EngramCollectionDelete,
-		engramCollectionAddItems: dependencies.EngramCollectionAddItems,
-		engramCollectionRemove:   dependencies.EngramCollectionRemove,
-		pinEngramService:         dependencies.PinEngramService,
-		unpinEngramService:       dependencies.UnpinEngramService,
-		pinDocumentService:       dependencies.PinDocumentService,
-		unpinDocumentService:     dependencies.UnpinDocumentService,
+		serverVersion:              trimmed,
+		mcpToolPolicyVersion:       policyVersion,
+		evalSuiteVersion:           evalSuiteVersion,
+		projectService:             dependencies.ProjectService,
+		projectExport:              dependencies.ProjectExport,
+		projectImport:              dependencies.ProjectImport,
+		sessionService:             dependencies.SessionService,
+		sessionGet:                 dependencies.SessionGet,
+		sessionCreate:              dependencies.SessionCreate,
+		sessionContinue:            dependencies.SessionContinue,
+		sessionSaveAsEngram:        dependencies.SessionSaveAsEngram,
+		sessionDelete:              dependencies.SessionDelete,
+		sessionRestore:             dependencies.SessionRestore,
+		lifecyclePolicyUpdate:      dependencies.LifecyclePolicyUpdate,
+		messageService:             dependencies.MessageService,
+		messageSend:                dependencies.MessageSend,
+		messageStream:              dependencies.MessageStream,
+		timelineService:            dependencies.TimelineService,
+		pinnedEngramService:        dependencies.PinnedEngramService,
+		pinnedDocumentService:      dependencies.PinnedDocumentService,
+		projectDocumentService:     dependencies.ProjectDocumentService,
+		engramList:                 dependencies.EngramList,
+		engramGet:                  dependencies.EngramGet,
+		engramQuery:                dependencies.EngramQuery,
+		engramRehydrate:            dependencies.EngramRehydrate,
+		engramLinkGet:              dependencies.EngramLinkGet,
+		engramLinkCreate:           dependencies.EngramLinkCreate,
+		engramLinkList:             dependencies.EngramLinkList,
+		engramLinkUpdate:           dependencies.EngramLinkUpdate,
+		engramLinkArchive:          dependencies.EngramLinkArchive,
+		engramLinkSuggest:          dependencies.EngramLinkSuggest,
+		engramTracePath:            dependencies.EngramTracePath,
+		engramCreate:               dependencies.EngramCreate,
+		engramCreateConversation:   dependencies.EngramCreateConversation,
+		engramUpdate:               dependencies.EngramUpdate,
+		engramFeedback:             dependencies.EngramFeedback,
+		engramFreshnessRefresh:     dependencies.EngramFreshnessRefresh,
+		engramConsolidationRefresh: dependencies.EngramConsolidationRefresh,
+		engramConsolidationList:    dependencies.EngramConsolidationList,
+		engramConsolidationAction:  dependencies.EngramConsolidationAction,
+		engramMove:                 dependencies.EngramMove,
+		engramDelete:               dependencies.EngramDelete,
+		engramRestore:              dependencies.EngramRestore,
+		engramCollectionList:       dependencies.EngramCollectionList,
+		engramCollectionGet:        dependencies.EngramCollectionGet,
+		engramCollectionCreate:     dependencies.EngramCollectionCreate,
+		engramCollectionUpdate:     dependencies.EngramCollectionUpdate,
+		engramCollectionDelete:     dependencies.EngramCollectionDelete,
+		engramCollectionAddItems:   dependencies.EngramCollectionAddItems,
+		engramCollectionRemove:     dependencies.EngramCollectionRemove,
+		pinEngramService:           dependencies.PinEngramService,
+		unpinEngramService:         dependencies.UnpinEngramService,
+		pinDocumentService:         dependencies.PinDocumentService,
+		unpinDocumentService:       dependencies.UnpinDocumentService,
 	}
 }
 

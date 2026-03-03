@@ -54,6 +54,10 @@ type sessionEngramRoutesHandlerOptions struct {
 		limit int,
 		actorUserID uuid.UUID,
 	) ([]models.EngramSourceRecord, error)
+	submitEngramFeedback func(
+		ctx context.Context,
+		input SessionEngramFeedbackInput,
+	) (*models.EngramFeedbackRecord, error)
 	shareEngram func(
 		ctx context.Context,
 		actorUserID uuid.UUID,
@@ -639,6 +643,7 @@ func buildSessionEngramRoutesTestHandler(
 			QueryEngrams:             options.queryEngrams,
 			GetRehydrationBundle:     options.getRehydrationBundle,
 			GetEngramSources:         options.getEngramSources,
+			SubmitEngramFeedback:     options.submitEngramFeedback,
 			ShareEngram:              options.shareEngram,
 			UnshareEngram:            options.unshareEngram,
 			CreateEngramLink:         options.createEngramLink,

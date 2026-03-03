@@ -62,6 +62,7 @@ type lexicalOverlapInput struct {
 type rankScoreInput struct {
 	distance       float64
 	lexicalOverlap float64
+	feedbackScore  float64
 }
 
 type citationPackInput struct {
@@ -250,7 +251,22 @@ func overlapCount(source map[string]struct{}, target map[string]struct{}) int {
 
 func combinedRankScore(input rankScoreInput) float64 {
 	denseScore := 1.0 / (1.0 + math.Max(input.distance, 0))
-	return (denseScore * 0.8) + (input.lexicalOverlap * 0.2)
+	return (denseScore * 0.7) + (input.lexicalOverlap * 0.2) + (input.feedbackScore * 0.1)
+}
+
+func normalizeFeedbackScore(usefulCount int, contradictionCount int) float64 {
+	useful := max(usefulCount, 0)
+	contradiction := max(contradictionCount, 0)
+	total := useful + contradiction
+	if total == 0 {
+		return 0.5
+	}
+	raw := float64(useful-contradiction) / float64(total+2)
+	return clamp01((raw + 1.0) / 2.0)
+}
+
+func clamp01(value float64) float64 {
+	return min(max(value, 0), 1)
 }
 
 func packCitations(input citationPackInput) []models.RehydrationCitation {
@@ -346,6 +362,10 @@ func rerankByCombinedScore(input rerankRowsInput) []map[string]any {
 					rankScoreInput{
 						distance:       float64FromAny(row["distance"]),
 						lexicalOverlap: lexicalScore,
+						feedbackScore: normalizeFeedbackScore(
+							intFromAny(row["useful_count"]),
+							intFromAny(row["contradiction_count"]),
+						),
 					},
 				),
 				createdAt: timeFromAny(row["created_at"]),
@@ -583,6 +603,21 @@ func float64FromAny(value any) float64 {
 		return float64(typed)
 	case int64:
 		return float64(typed)
+	default:
+		return 0
+	}
+}
+
+func intFromAny(value any) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int32:
+		return int(typed)
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
 	default:
 		return 0
 	}

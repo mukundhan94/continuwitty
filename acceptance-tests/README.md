@@ -122,4 +122,10 @@ The `@mock` lifecycle scenario validates autosave behavior deterministically by 
 - autosave `off` keeps timeline empty after repeated sends,
 - create-session payload carries expected autosave policy fields.
 
+The `@phase37` mock scenario validates consolidation maintenance quality deterministically via admin APIs:
+
+- seeds duplicate and non-duplicate engrams inside an isolated project,
+- refreshes/list consolidation suggestions and computes grouping precision/recall,
+- asserts threshold compliance and verifies merge-action workflow (`suggested` -> `merged`).
+
 When dockerized scenarios fail, screenshots are written to `acceptance-tests/artifacts/`.

@@ -283,6 +283,209 @@ func TestUpdateEngramUsesRepositoryRequestObject(t *testing.T) {
 	requireEqual(t, 256, captured.EmbeddingDim)
 }
 
+func TestRefreshEngramFreshnessUsesRepositoryRequestObject(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	projectID := "engram-vault"
+	captured := repository.EngramFreshnessRefreshInput{}
+	referenceTime := time.Date(2026, 3, 3, 12, 30, 0, 0, time.UTC)
+	service.deps.refreshEngramFreshness = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.EngramFreshnessRefreshInput,
+	) (repository.EngramFreshnessRefreshInput, error) {
+		captured = input
+		return repository.EngramFreshnessRefreshInput{
+			ProjectID:     input.ProjectID,
+			HalfLifeDays:  45,
+			ReferenceTime: referenceTime,
+			UpdatedCount:  9,
+		}, nil
+	}
+	halfLifeDays := 45.0
+
+	response, err := service.RefreshEngramFreshness(
+		context.Background(),
+		EngramFreshnessRefreshRequest{
+			ProjectID:    &projectID,
+			HalfLifeDays: &halfLifeDays,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, "engram-vault", derefString(captured.ProjectID))
+	requireEqual(t, 45.0, captured.HalfLifeDays)
+	requireEqual(t, "engram-vault", derefString(response.ProjectID))
+	requireEqual(t, 45.0, response.HalfLifeDays)
+	requireEqual(t, referenceTime, response.ReferenceTime)
+	requireEqual(t, 9, response.UpdatedCount)
+}
+
+func TestRefreshEngramConsolidationSuggestionsUsesRepositoryRequestObject(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	suggestedAt := time.Date(2026, 3, 3, 13, 45, 0, 0, time.UTC)
+	called := false
+	service.deps.refreshConsolidationSuggestions = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.ConsolidationSuggestionRefreshInput,
+	) (repository.ConsolidationSuggestionRefreshInput, error) {
+		if input.ProjectID != nil {
+			t.Fatalf("expected nil project id")
+		}
+		if input.MinGroupSize != 4 {
+			t.Fatalf("expected min group size to be forwarded")
+		}
+		called = true
+		return repository.ConsolidationSuggestionRefreshInput{
+			MinGroupSize: 4,
+			SuggestedAt:  suggestedAt,
+			UpdatedCount: 6,
+		}, nil
+	}
+	minGroupSize := 4
+
+	response, err := service.RefreshEngramConsolidationSuggestions(
+		context.Background(),
+		EngramConsolidationSuggestionRefreshRequest{
+			MinGroupSize: &minGroupSize,
+		},
+	)
+	requireNoError(t, err)
+	if !called {
+		t.Fatalf("expected repository refresh to be called")
+	}
+	requireEqual(t, "", derefString(response.ProjectID))
+	requireEqual(t, 4, response.MinGroupSize)
+	requireEqual(t, suggestedAt, response.SuggestedAt)
+	requireEqual(t, 6, response.UpdatedCount)
+}
+
+func TestRefreshEngramConsolidationSuggestionsRejectsInvalidMinGroupSize(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	minGroupSize := 1
+	_, err := service.RefreshEngramConsolidationSuggestions(
+		context.Background(),
+		EngramConsolidationSuggestionRefreshRequest{MinGroupSize: &minGroupSize},
+	)
+	if !errors.Is(err, ErrConsolidationMinGroupSizeInvalid) {
+		t.Fatalf("expected ErrConsolidationMinGroupSizeInvalid, got %v", err)
+	}
+}
+
+func TestListEngramConsolidationSuggestionsUsesRepositoryRequestObject(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	projectID := "engram-vault"
+	status := models.ConsolidationSuggestionStatusSuggested
+	captured := repository.ConsolidationSuggestionListInput{}
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000d001")
+	service.deps.listConsolidationSuggestions = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.ConsolidationSuggestionListInput,
+	) ([]models.EngramConsolidationSuggestion, error) {
+		captured = input
+		return []models.EngramConsolidationSuggestion{
+			{
+				SuggestionID: suggestionID,
+				ProjectID:    "engram-vault",
+				Status:       models.ConsolidationSuggestionStatusSuggested,
+			},
+		}, nil
+	}
+
+	listed, err := service.ListEngramConsolidationSuggestions(
+		context.Background(),
+		EngramConsolidationSuggestionListRequest{
+			ProjectID: &projectID,
+			Status:    &status,
+			Limit:     10,
+			Offset:    3,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, "engram-vault", derefString(captured.ProjectID))
+	requireEqual(t, status, *captured.Status)
+	requireEqual(t, 10, captured.Limit)
+	requireEqual(t, 3, captured.Offset)
+	requireEqual(t, 1, len(listed))
+	requireEqual(t, suggestionID, listed[0].SuggestionID)
+}
+
+func TestActionEngramConsolidationSuggestionUsesRepositoryRequestObject(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000d011")
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000d012")
+	projectID := "engram-vault"
+	captured := repository.ConsolidationSuggestionActionInput{}
+	service.deps.applyConsolidationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.ConsolidationSuggestionActionInput,
+	) (*models.EngramConsolidationSuggestion, error) {
+		captured = input
+		return &models.EngramConsolidationSuggestion{
+			SuggestionID: suggestionID,
+			Status:       models.ConsolidationSuggestionStatusMerged,
+		}, nil
+	}
+
+	updated, err := service.ActionEngramConsolidationSuggestion(
+		context.Background(),
+		suggestionID,
+		actorUserID,
+		EngramConsolidationSuggestionActionRequest{
+			ProjectID: &projectID,
+			Status:    models.ConsolidationSuggestionStatusMerged,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, suggestionID, captured.SuggestionID)
+	requireEqual(t, "engram-vault", derefString(captured.ProjectID))
+	requireEqual(t, actorUserID, captured.ActorUserID)
+	requireEqual(t, models.ConsolidationSuggestionStatusMerged, captured.Status)
+	if updated == nil {
+		t.Fatalf("expected updated consolidation suggestion")
+	}
+	requireEqual(t, suggestionID, updated.SuggestionID)
+}
+
+func TestActionEngramConsolidationSuggestionRejectsInvalidStatus(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	_, err := service.ActionEngramConsolidationSuggestion(
+		context.Background(),
+		uuid.MustParse("00000000-0000-0000-0000-00000000d021"),
+		uuid.MustParse("00000000-0000-0000-0000-00000000d022"),
+		EngramConsolidationSuggestionActionRequest{
+			Status: models.ConsolidationSuggestionStatusSuggested,
+		},
+	)
+	if !errors.Is(err, ErrConsolidationSuggestionActionInvalid) {
+		t.Fatalf("expected ErrConsolidationSuggestionActionInvalid, got %v", err)
+	}
+}
+
+func TestActionEngramConsolidationSuggestionReturnsNotFound(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	service.deps.applyConsolidationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.ConsolidationSuggestionActionInput,
+	) (*models.EngramConsolidationSuggestion, error) {
+		return nil, nil
+	}
+
+	_, err := service.ActionEngramConsolidationSuggestion(
+		context.Background(),
+		uuid.MustParse("00000000-0000-0000-0000-00000000d031"),
+		uuid.MustParse("00000000-0000-0000-0000-00000000d032"),
+		EngramConsolidationSuggestionActionRequest{
+			Status: models.ConsolidationSuggestionStatusRejected,
+		},
+	)
+	if !errors.Is(err, ErrConsolidationSuggestionNotFound) {
+		t.Fatalf("expected ErrConsolidationSuggestionNotFound, got %v", err)
+	}
+}
+
 func derefString(value *string) string {
 	if value == nil {
 		return ""

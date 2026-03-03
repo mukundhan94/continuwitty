@@ -1,6 +1,8 @@
 package models
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -97,6 +99,45 @@ type EngramQueryResult struct {
 	OwnerUserID     *uuid.UUID `json:"owner_user_id,omitempty"`
 	VisibilityScope string     `json:"visibility_scope"`
 	Distance        float64    `json:"distance"`
+}
+
+// EngramFeedbackType identifies explicit feedback semantics for one engram.
+type EngramFeedbackType string
+
+const (
+	EngramFeedbackTypeUseful        EngramFeedbackType = "useful"
+	EngramFeedbackTypeContradiction EngramFeedbackType = "contradiction"
+)
+
+// ParseEngramFeedbackType normalizes an engram feedback type and validates it.
+func ParseEngramFeedbackType(value string) (EngramFeedbackType, error) {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	switch EngramFeedbackType(trimmed) {
+	case EngramFeedbackTypeUseful:
+		return EngramFeedbackTypeUseful, nil
+	case EngramFeedbackTypeContradiction:
+		return EngramFeedbackTypeContradiction, nil
+	default:
+		return "", fmt.Errorf("unsupported engram feedback type %q", value)
+	}
+}
+
+// EngramFeedbackRecord captures one persisted explicit feedback event and updated counters.
+type EngramFeedbackRecord struct {
+	FeedbackID         uuid.UUID          `json:"feedback_id"`
+	EngramID           uuid.UUID          `json:"engram_id"`
+	ActorUserID        uuid.UUID          `json:"actor_user_id"`
+	FeedbackType       EngramFeedbackType `json:"feedback_type"`
+	Note               string             `json:"note"`
+	CreatedAt          time.Time          `json:"created_at"`
+	UsefulCount        int                `json:"useful_count"`
+	ContradictionCount int                `json:"contradiction_count"`
+}
+
+// EngramFeedbackCreateRequest models explicit feedback submission payload.
+type EngramFeedbackCreateRequest struct {
+	FeedbackType string  `json:"feedback_type"`
+	Note         *string `json:"note,omitempty"`
 }
 
 // EngramCreateResponse is returned when a new engram is persisted.

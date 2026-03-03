@@ -27,6 +27,12 @@ var (
 	ErrProjectResolverNotConfigured = errors.New("project resolver is not configured")
 	// ErrProjectIDRequired indicates that a write operation is missing project context.
 	ErrProjectIDRequired = errors.New("project_id is required")
+	// ErrConsolidationMinGroupSizeInvalid indicates invalid consolidation minimum group-size input.
+	ErrConsolidationMinGroupSizeInvalid = errors.New("min_group_size must be at least 2")
+	// ErrConsolidationSuggestionNotFound indicates a requested consolidation suggestion does not exist.
+	ErrConsolidationSuggestionNotFound = errors.New("consolidation suggestion not found")
+	// ErrConsolidationSuggestionActionInvalid indicates invalid consolidation action status.
+	ErrConsolidationSuggestionActionInvalid = errors.New("status must be merged or rejected")
 )
 
 // MemoryAdminListRequest captures shared admin list filters.
@@ -98,6 +104,48 @@ type EngramDeleteResponse struct {
 type EngramRestoreResponse struct {
 	EngramID uuid.UUID `json:"engram_id"`
 	Restored bool      `json:"restored"`
+}
+
+// EngramFreshnessRefreshRequest captures freshness maintenance refresh options.
+type EngramFreshnessRefreshRequest struct {
+	ProjectID    *string  `json:"project_id,omitempty"`
+	HalfLifeDays *float64 `json:"half_life_days,omitempty"`
+}
+
+// EngramFreshnessRefreshResponse captures freshness maintenance refresh results.
+type EngramFreshnessRefreshResponse struct {
+	ProjectID     *string   `json:"project_id,omitempty"`
+	HalfLifeDays  float64   `json:"half_life_days"`
+	ReferenceTime time.Time `json:"reference_time"`
+	UpdatedCount  int       `json:"updated_count"`
+}
+
+// EngramConsolidationSuggestionRefreshRequest captures refresh options for consolidation suggestions.
+type EngramConsolidationSuggestionRefreshRequest struct {
+	ProjectID    *string `json:"project_id,omitempty"`
+	MinGroupSize *int    `json:"min_group_size,omitempty"`
+}
+
+// EngramConsolidationSuggestionRefreshResponse captures refresh results for consolidation suggestions.
+type EngramConsolidationSuggestionRefreshResponse struct {
+	ProjectID    *string   `json:"project_id,omitempty"`
+	MinGroupSize int       `json:"min_group_size"`
+	SuggestedAt  time.Time `json:"suggested_at"`
+	UpdatedCount int       `json:"updated_count"`
+}
+
+// EngramConsolidationSuggestionListRequest captures list filters for consolidation suggestions.
+type EngramConsolidationSuggestionListRequest struct {
+	ProjectID *string                               `json:"project_id,omitempty"`
+	Status    *models.ConsolidationSuggestionStatus `json:"status,omitempty"`
+	Limit     int                                   `json:"limit"`
+	Offset    int                                   `json:"offset"`
+}
+
+// EngramConsolidationSuggestionActionRequest captures action payload for a suggestion.
+type EngramConsolidationSuggestionActionRequest struct {
+	ProjectID *string                              `json:"project_id,omitempty"`
+	Status    models.ConsolidationSuggestionStatus `json:"status"`
 }
 
 // CollectionCreateRequest captures collection create payload values.
@@ -176,6 +224,26 @@ type serviceDeps struct {
 	moveAdminEngramProject func(ctx context.Context, db repository.Queryer, input repository.AdminEngramMoveProjectInput) (*models.AdminEngramRecord, error)
 	softDeleteEngram       func(ctx context.Context, db repository.Queryer, input repository.AdminEngramSoftDeleteInput) (bool, error)
 	restoreEngram          func(ctx context.Context, db repository.Queryer, engramID uuid.UUID) (bool, error)
+	refreshEngramFreshness func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.EngramFreshnessRefreshInput,
+	) (repository.EngramFreshnessRefreshInput, error)
+	refreshConsolidationSuggestions func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.ConsolidationSuggestionRefreshInput,
+	) (repository.ConsolidationSuggestionRefreshInput, error)
+	listConsolidationSuggestions func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.ConsolidationSuggestionListInput,
+	) ([]models.EngramConsolidationSuggestion, error)
+	applyConsolidationSuggestionAction func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.ConsolidationSuggestionActionInput,
+	) (*models.EngramConsolidationSuggestion, error)
 
 	listCollections      func(ctx context.Context, db repository.Queryer, input repository.CollectionListInput) ([]models.EngramCollectionRecord, error)
 	getCollection        func(ctx context.Context, db repository.Queryer, collectionID uuid.UUID, includeDeleted bool) (*models.EngramCollectionRecord, error)
@@ -194,12 +262,16 @@ func defaultServiceDeps() serviceDeps {
 		restoreSession:          repository.RestoreSession,
 		softDeleteLinkedEngrams: repository.SoftDeleteLinkedEngrams,
 
-		listAdminEngrams:       repository.ListAdminEngrams,
-		getAdminEngram:         repository.GetAdminEngram,
-		updateAdminEngram:      repository.UpdateAdminEngram,
-		moveAdminEngramProject: repository.MoveAdminEngramProject,
-		softDeleteEngram:       repository.SoftDeleteEngram,
-		restoreEngram:          repository.RestoreEngram,
+		listAdminEngrams:                   repository.ListAdminEngrams,
+		getAdminEngram:                     repository.GetAdminEngram,
+		updateAdminEngram:                  repository.UpdateAdminEngram,
+		moveAdminEngramProject:             repository.MoveAdminEngramProject,
+		softDeleteEngram:                   repository.SoftDeleteEngram,
+		restoreEngram:                      repository.RestoreEngram,
+		refreshEngramFreshness:             repository.RefreshEngramFreshnessScores,
+		refreshConsolidationSuggestions:    repository.RefreshExactDuplicateConsolidationSuggestions,
+		listConsolidationSuggestions:       repository.ListEngramConsolidationSuggestions,
+		applyConsolidationSuggestionAction: repository.ApplyEngramConsolidationSuggestionAction,
 
 		listCollections:      repository.ListCollections,
 		getCollection:        repository.GetCollection,
@@ -419,6 +491,29 @@ func (s *Service) RestoreEngram(ctx context.Context, engramID uuid.UUID) (Engram
 		return EngramRestoreResponse{}, err
 	}
 	return EngramRestoreResponse{EngramID: engramID, Restored: true}, nil
+}
+
+// RefreshEngramFreshness recomputes freshness scores for active engrams.
+func (s *Service) RefreshEngramFreshness(
+	ctx context.Context,
+	request EngramFreshnessRefreshRequest,
+) (EngramFreshnessRefreshResponse, error) {
+	refreshInput := repository.EngramFreshnessRefreshInput{
+		ProjectID: request.ProjectID,
+	}
+	if request.HalfLifeDays != nil {
+		refreshInput.HalfLifeDays = *request.HalfLifeDays
+	}
+	refreshed, err := s.deps.refreshEngramFreshness(ctx, s.db, refreshInput)
+	if err != nil {
+		return EngramFreshnessRefreshResponse{}, err
+	}
+	return EngramFreshnessRefreshResponse{
+		ProjectID:     refreshed.ProjectID,
+		HalfLifeDays:  refreshed.HalfLifeDays,
+		ReferenceTime: refreshed.ReferenceTime,
+		UpdatedCount:  refreshed.UpdatedCount,
+	}, nil
 }
 
 // ListCollections returns collections filtered by request fields.

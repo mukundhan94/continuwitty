@@ -256,78 +256,128 @@ func newMCPCompatibilityService(
 	dependencies mcpCompatibilityRuntimeDependencies,
 	chatObservability chat.ObservabilityRecorder,
 ) *mcp.CompatibilityService {
-	messageAdapter := newMCPMessageAdapter(settings, dependencies.pool, chatObservability)
-	var messageSend mcp.MessageSendService
-	var messageStream mcp.MessageStreamService
-	if messageAdapter != nil {
-		messageSend = messageAdapter
-		messageStream = messageAdapter
-	}
+	messageSend, messageStream := resolveMCPMessageServices(
+		settings,
+		dependencies.pool,
+		chatObservability,
+	)
+	compatibilityDeps := buildMCPCompatibilityDependencies(
+		settings,
+		dependencies,
+		messageSend,
+		messageStream,
+	)
 
 	return mcp.NewCompatibilityServiceWithDependencies(
 		settings.AppSemanticVersion,
-		mcp.CompatibilityServiceDependencies{
-			MCPToolPolicyVersion:   settings.MCPToolPolicyVersion,
-			EvalSuiteVersion:       settings.EvalSuiteVersion,
-			ProjectService:         dependencies.projectService,
-			ProjectExport:          newMCPProjectExportAdapter(dependencies.exportService),
-			ProjectImport:          newMCPProjectImportAdapter(dependencies.exportService),
-			SessionService:         newMCPSessionListAdapter(dependencies.pool),
-			SessionGet:             newMCPSessionGetAdapter(dependencies.pool),
-			SessionCreate:          newMCPSessionCreateAdapter(dependencies.pool),
-			SessionContinue:        newMCPSessionContinueAdapter(dependencies.pool),
-			SessionSaveAsEngram:    newMCPSaveSessionAsEngramAdapter(dependencies.pool),
-			SessionDelete:          newMCPSessionDeleteAdapter(dependencies.memoryAdminService),
-			SessionRestore:         newMCPSessionRestoreAdapter(dependencies.memoryAdminService),
-			LifecyclePolicyUpdate:  newMCPLifecyclePolicyUpdateAdapter(dependencies.pool),
-			MessageService:         newMCPMessageListAdapter(dependencies.pool),
-			MessageSend:            messageSend,
-			MessageStream:          messageStream,
-			TimelineService:        newMCPTimelineListAdapter(dependencies.pool),
-			PinnedEngramService:    newMCPPinnedEngramListAdapter(dependencies.pool),
-			PinnedDocumentService:  newMCPPinnedDocumentListAdapter(dependencies.pool),
-			ProjectDocumentService: newMCPProjectDocumentListAdapter(dependencies.pool),
-			EngramCreate: newMCPEngramCreateAdapter(
-				dependencies.pool,
-				dependencies.projectService,
-				settings.EmbeddingDim,
-			),
-			EngramCreateConversation: newMCPEngramCreateFromConversationAdapter(
-				dependencies.pool,
-				dependencies.projectService,
-				settings.EmbeddingDim,
-			),
-			EngramList:           newMCPEngramListAdapter(dependencies.memoryAdminService),
-			EngramGet:            newMCPEngramGetAdapter(dependencies.memoryAdminService),
-			EngramQuery:          newMCPEngramQueryAdapter(dependencies.pool, settings.EmbeddingDim),
-			EngramRehydrate:      newMCPEngramRehydrateAdapter(dependencies.pool),
-			EngramLinkGet:        newMCPEngramLinkGetAdapter(dependencies.pool),
-			EngramLinkCreate:     newMCPEngramLinkCreateAdapter(dependencies.pool),
-			EngramLinkList:       newMCPEngramLinkListAdapter(dependencies.pool),
-			EngramLinkUpdate:     newMCPEngramLinkUpdateAdapter(dependencies.pool),
-			EngramLinkArchive:    newMCPEngramLinkArchiveAdapter(dependencies.pool),
-			EngramLinkSuggest:    newMCPEngramLinkSuggestAdapter(dependencies.pool, settings.EmbeddingDim),
-			EngramTracePath:      newMCPEngramTracePathAdapter(dependencies.pool),
-			EngramUpdate:         newMCPEngramUpdateAdapter(dependencies.memoryAdminService),
-			EngramMove:           newMCPEngramMoveAdapter(dependencies.memoryAdminService),
-			EngramDelete:         newMCPEngramDeleteAdapter(dependencies.memoryAdminService),
-			EngramRestore:        newMCPEngramRestoreAdapter(dependencies.memoryAdminService),
-			EngramCollectionList: newMCPEngramCollectionListAdapter(dependencies.memoryAdminService),
-			EngramCollectionGet:  newMCPEngramCollectionGetAdapter(dependencies.memoryAdminService),
-			EngramCollectionCreate: newMCPEngramCollectionCreateAdapter(
-				dependencies.memoryAdminService,
-				dependencies.projectService,
-			),
-			EngramCollectionUpdate:   newMCPEngramCollectionUpdateAdapter(dependencies.memoryAdminService),
-			EngramCollectionDelete:   newMCPEngramCollectionDeleteAdapter(dependencies.memoryAdminService),
-			EngramCollectionAddItems: newMCPEngramCollectionAddItemsAdapter(dependencies.memoryAdminService),
-			EngramCollectionRemove:   newMCPEngramCollectionRemoveItemAdapter(dependencies.memoryAdminService),
-			PinEngramService:         newMCPPinEngramAdapter(dependencies.pool),
-			UnpinEngramService:       newMCPUnpinEngramAdapter(dependencies.pool),
-			PinDocumentService:       newMCPPinDocumentAdapter(dependencies.pool),
-			UnpinDocumentService:     newMCPUnpinDocumentAdapter(dependencies.pool),
-		},
+		compatibilityDeps,
 	)
+}
+
+func buildMCPCompatibilityDependencies(
+	settings config.Settings,
+	dependencies mcpCompatibilityRuntimeDependencies,
+	messageSend mcp.MessageSendService,
+	messageStream mcp.MessageStreamService,
+) mcp.CompatibilityServiceDependencies {
+	compatibilityDeps := mcp.CompatibilityServiceDependencies{
+		MCPToolPolicyVersion:   settings.MCPToolPolicyVersion,
+		EvalSuiteVersion:       settings.EvalSuiteVersion,
+		ProjectService:         dependencies.projectService,
+		ProjectExport:          newMCPProjectExportAdapter(dependencies.exportService),
+		ProjectImport:          newMCPProjectImportAdapter(dependencies.exportService),
+		SessionService:         newMCPSessionListAdapter(dependencies.pool),
+		SessionGet:             newMCPSessionGetAdapter(dependencies.pool),
+		SessionCreate:          newMCPSessionCreateAdapter(dependencies.pool),
+		SessionContinue:        newMCPSessionContinueAdapter(dependencies.pool),
+		SessionSaveAsEngram:    newMCPSaveSessionAsEngramAdapter(dependencies.pool),
+		SessionDelete:          newMCPSessionDeleteAdapter(dependencies.memoryAdminService),
+		SessionRestore:         newMCPSessionRestoreAdapter(dependencies.memoryAdminService),
+		LifecyclePolicyUpdate:  newMCPLifecyclePolicyUpdateAdapter(dependencies.pool),
+		MessageService:         newMCPMessageListAdapter(dependencies.pool),
+		MessageSend:            messageSend,
+		MessageStream:          messageStream,
+		TimelineService:        newMCPTimelineListAdapter(dependencies.pool),
+		PinnedEngramService:    newMCPPinnedEngramListAdapter(dependencies.pool),
+		PinnedDocumentService:  newMCPPinnedDocumentListAdapter(dependencies.pool),
+		ProjectDocumentService: newMCPProjectDocumentListAdapter(dependencies.pool),
+		PinEngramService:       newMCPPinEngramAdapter(dependencies.pool),
+		UnpinEngramService:     newMCPUnpinEngramAdapter(dependencies.pool),
+		PinDocumentService:     newMCPPinDocumentAdapter(dependencies.pool),
+		UnpinDocumentService:   newMCPUnpinDocumentAdapter(dependencies.pool),
+	}
+	applyMCPEngramCompatibilityDependencies(&compatibilityDeps, settings, dependencies)
+	return compatibilityDeps
+}
+
+func applyMCPEngramCompatibilityDependencies(
+	compatibilityDeps *mcp.CompatibilityServiceDependencies,
+	settings config.Settings,
+	dependencies mcpCompatibilityRuntimeDependencies,
+) {
+	if compatibilityDeps == nil {
+		return
+	}
+	compatibilityDeps.EngramCreate = newMCPEngramCreateAdapter(
+		dependencies.pool,
+		dependencies.projectService,
+		settings.EmbeddingDim,
+	)
+	compatibilityDeps.EngramCreateConversation = newMCPEngramCreateFromConversationAdapter(
+		dependencies.pool,
+		dependencies.projectService,
+		settings.EmbeddingDim,
+	)
+	compatibilityDeps.EngramList = newMCPEngramListAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramGet = newMCPEngramGetAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramQuery = newMCPEngramQueryAdapter(dependencies.pool, settings.EmbeddingDim)
+	compatibilityDeps.EngramRehydrate = newMCPEngramRehydrateAdapter(dependencies.pool)
+	compatibilityDeps.EngramLinkGet = newMCPEngramLinkGetAdapter(dependencies.pool)
+	compatibilityDeps.EngramLinkCreate = newMCPEngramLinkCreateAdapter(dependencies.pool)
+	compatibilityDeps.EngramLinkList = newMCPEngramLinkListAdapter(dependencies.pool)
+	compatibilityDeps.EngramLinkUpdate = newMCPEngramLinkUpdateAdapter(dependencies.pool)
+	compatibilityDeps.EngramLinkArchive = newMCPEngramLinkArchiveAdapter(dependencies.pool)
+	compatibilityDeps.EngramLinkSuggest = newMCPEngramLinkSuggestAdapter(dependencies.pool, settings.EmbeddingDim)
+	compatibilityDeps.EngramTracePath = newMCPEngramTracePathAdapter(dependencies.pool)
+	compatibilityDeps.EngramUpdate = newMCPEngramUpdateAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramFeedback = newMCPEngramFeedbackAdapter(dependencies.pool)
+	compatibilityDeps.EngramFreshnessRefresh = newMCPEngramFreshnessRefreshAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramConsolidationRefresh = newMCPEngramConsolidationRefreshAdapter(
+		dependencies.memoryAdminService,
+	)
+	compatibilityDeps.EngramConsolidationList = newMCPEngramConsolidationListAdapter(
+		dependencies.memoryAdminService,
+	)
+	compatibilityDeps.EngramConsolidationAction = newMCPEngramConsolidationActionAdapter(
+		dependencies.memoryAdminService,
+	)
+	compatibilityDeps.EngramMove = newMCPEngramMoveAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramDelete = newMCPEngramDeleteAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramRestore = newMCPEngramRestoreAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramCollectionList = newMCPEngramCollectionListAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramCollectionGet = newMCPEngramCollectionGetAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramCollectionCreate = newMCPEngramCollectionCreateAdapter(
+		dependencies.memoryAdminService,
+		dependencies.projectService,
+	)
+	compatibilityDeps.EngramCollectionUpdate = newMCPEngramCollectionUpdateAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramCollectionDelete = newMCPEngramCollectionDeleteAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramCollectionAddItems = newMCPEngramCollectionAddItemsAdapter(dependencies.memoryAdminService)
+	compatibilityDeps.EngramCollectionRemove = newMCPEngramCollectionRemoveItemAdapter(
+		dependencies.memoryAdminService,
+	)
+}
+
+func resolveMCPMessageServices(
+	settings config.Settings,
+	pool *pgxpool.Pool,
+	chatObservability chat.ObservabilityRecorder,
+) (mcp.MessageSendService, mcp.MessageStreamService) {
+	messageAdapter := newMCPMessageAdapter(settings, pool, chatObservability)
+	if messageAdapter == nil {
+		return nil, nil
+	}
+	return messageAdapter, messageAdapter
 }
 
 func resolveChatObservabilityRecorder(
@@ -407,6 +457,7 @@ func buildSessionAuthDependencies(runtimeDependencies sessionAuthRuntimeDependen
 		QueryEngrams:             queryEngramsDependency(runtimeDependencies.pool, runtimeDependencies.settings.EmbeddingDim),
 		GetRehydrationBundle:     getRehydrationBundleDependency(runtimeDependencies.pool),
 		GetEngramSources:         getEngramSourcesDependency(runtimeDependencies.pool),
+		SubmitEngramFeedback:     submitEngramFeedbackDependency(runtimeDependencies.pool),
 		ShareEngram:              shareEngramDependency(runtimeDependencies.projectService),
 		UnshareEngram:            unshareEngramDependency(runtimeDependencies.projectService),
 		CreateEngramLink:         linkAdapter.create,
@@ -579,6 +630,29 @@ func getEngramSourcesDependency(
 				EngramID:    engramID,
 				Limit:       limit,
 				ActorUserID: &actorUserID,
+			},
+		)
+	}
+}
+
+func submitEngramFeedbackDependency(
+	pool *pgxpool.Pool,
+) func(
+	ctx context.Context,
+	input internalapi.SessionEngramFeedbackInput,
+) (*models.EngramFeedbackRecord, error) {
+	return func(
+		ctx context.Context,
+		input internalapi.SessionEngramFeedbackInput,
+	) (*models.EngramFeedbackRecord, error) {
+		return repository.RecordEngramFeedback(
+			ctx,
+			pool,
+			repository.EngramFeedbackCreateInput{
+				EngramID:     input.EngramID,
+				ActorUserID:  input.ActorUserID,
+				FeedbackType: input.FeedbackType,
+				Note:         input.Note,
 			},
 		)
 	}

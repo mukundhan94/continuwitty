@@ -135,6 +135,10 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 | `DELETE` | `/api/v1/admin/memory/sessions/{session_id}` | Delete session (soft) |
 | `POST` | `/api/v1/admin/memory/sessions/{session_id}/restore` | Restore session |
 | `GET` | `/api/v1/admin/memory/engrams` | List engrams (admin) |
+| `POST` | `/api/v1/admin/memory/engrams/freshness/refresh` | Recompute engram freshness scores (admin) |
+| `POST` | `/api/v1/admin/memory/engrams/consolidation/refresh` | Refresh deterministic consolidation suggestions (admin) |
+| `GET` | `/api/v1/admin/memory/engrams/consolidation/suggestions` | List consolidation suggestions (admin) |
+| `POST` | `/api/v1/admin/memory/engrams/consolidation/suggestions/{suggestion_id}/action` | Mark consolidation suggestion as merged/rejected (admin) |
 | `GET` | `/api/v1/admin/memory/engrams/{engram_id}` | Get engram (admin) |
 | `PATCH` | `/api/v1/admin/memory/engrams/{engram_id}` | Update engram |
 | `POST` | `/api/v1/admin/memory/engrams/{engram_id}/move` | Move engram to project |

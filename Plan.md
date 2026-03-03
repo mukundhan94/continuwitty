@@ -914,8 +914,8 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In Progress (2026-03-01).
-- Scope is intentionally limited to telemetry + counters that can be safely integrated into existing chat send/stream paths.
+- Completed (2026-03-02).
+- Delivered scope: telemetry + counters integrated into existing chat send/stream success paths with non-blocking failure behavior.
 
 ### Goals
 
@@ -949,7 +949,14 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- Planned.
+- In Progress (2026-03-03).
+- Delivered in this cycle:
+  - explicit `engram_feedback` storage and aggregate updates (`useful_count`, `contradiction_count`).
+  - REST endpoint `POST /api/v1/engrams/{engram_id}/feedback`.
+  - MCP tool `engram.feedback` / `engram_feedback`.
+  - feedback signal integration in retrieval reranking.
+- Remaining in this phase:
+  - complete engagement/freshness weighting calibration and benchmark notes under current latency targets.
 
 ### Goals
 
@@ -973,7 +980,25 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- Planned.
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - schema baseline for freshness scoring (`engrams.freshness_score`, `engrams.freshness_last_computed_at`).
+  - repository freshness refresh routine with half-life decay and optional project scoping.
+  - admin memory API route to trigger freshness refresh (`POST /api/v1/admin/memory/engrams/freshness/refresh`).
+  - MCP maintenance tool to trigger freshness refresh (`engram.refresh_freshness` / `engram_refresh_freshness`, admin-only).
+  - consolidation suggestion schema baseline (`engram_consolidation_suggestions` + indexes).
+  - repository consolidation suggestion routines for deterministic exact-duplicate refresh/list operations.
+  - admin service + REST routes for consolidation maintenance/listing:
+    - `POST /api/v1/admin/memory/engrams/consolidation/refresh`
+    - `GET /api/v1/admin/memory/engrams/consolidation/suggestions`
+    - `POST /api/v1/admin/memory/engrams/consolidation/suggestions/{suggestion_id}/action`
+  - MCP consolidation parity tooling:
+    - `engram.refresh_consolidation` / `engram_refresh_consolidation` (admin-only)
+    - `engram.consolidation_list` / `engram_consolidation_list` (admin-only)
+    - `engram.consolidation_action` / `engram_consolidation_action` (admin-only)
+  - repository/model tests for consolidation refresh/list defaulting, filtering, and status parsing.
+  - deterministic acceptance scenario for consolidation refresh/list/action quality checks (`@phase37`, mock path).
+  - benchmark coverage doc for grouping quality thresholds (`docs/phase37-consolidation-benchmark.md`).
 
 ### Goals
 
@@ -1018,6 +1043,6 @@ Build a local-first memory system where agents and humans can:
    - [x] add `cw>` query protocol baseline (parser + runtime metadata)
    - [x] enable access-aware federated linked recall across projects
 5. Execute memory-intelligence foundation in order:
-   - [ ] Phase 35: memory engagement tracking baseline.
+   - [x] Phase 35: memory engagement tracking baseline.
    - [ ] Phase 36: feedback loop + relevance/freshness scoring.
-   - [ ] Phase 37: time-decay + consolidation suggestions.
+   - [x] Phase 37: time-decay + consolidation suggestions.

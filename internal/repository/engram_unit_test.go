@@ -102,6 +102,51 @@ func TestRerankByCombinedScorePrefersLexicalOverlap(t *testing.T) {
 	}
 }
 
+func TestRerankByCombinedScoreIncorporatesFeedbackSignal(t *testing.T) {
+	rows := []map[string]any{
+		{
+			"engram_id":           uuid.MustParse("00000000-0000-0000-0000-000000000311"),
+			"project_id":          "engram-vault",
+			"title":               "Useful Memory",
+			"abstract":            "shared checkpoint details",
+			"created_at":          time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
+			"tags":                []string{},
+			"keywords":            []string{"checkpoint"},
+			"retrieval_text":      "checkpoint details",
+			"useful_count":        10,
+			"contradiction_count": 0,
+			"distance":            0.3,
+		},
+		{
+			"engram_id":           uuid.MustParse("00000000-0000-0000-0000-000000000312"),
+			"project_id":          "engram-vault",
+			"title":               "Contradicted Memory",
+			"abstract":            "shared checkpoint details",
+			"created_at":          time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
+			"tags":                []string{},
+			"keywords":            []string{"checkpoint"},
+			"retrieval_text":      "checkpoint details",
+			"useful_count":        0,
+			"contradiction_count": 8,
+			"distance":            0.3,
+		},
+	}
+
+	reranked := rerankByCombinedScore(
+		rerankRowsInput{
+			rows:  rows,
+			query: "checkpoint details",
+			topK:  1,
+		},
+	)
+	if len(reranked) != 1 {
+		t.Fatalf("expected one reranked result, got %d", len(reranked))
+	}
+	if title, _ := reranked[0]["title"].(string); title != "Useful Memory" {
+		t.Fatalf("expected positive feedback memory to rank first, got %q", title)
+	}
+}
+
 func TestFormatCitationsTruncatesAndStripsNewlines(t *testing.T) {
 	title := "Primary source"
 	citationText := formatCitations(

@@ -107,6 +107,8 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 			owner_user_id,
 			visibility_scope,
 			retrieval_text,
+			COALESCE(useful_count, 0) AS useful_count,
+			COALESCE(contradiction_count, 0) AS contradiction_count,
 			embed <=> $1::vector AS distance
 		FROM engrams
 		%s
@@ -200,6 +202,8 @@ func scanEngramCandidateRow(row interface {
 		ownerUserID     *uuid.UUID
 		visibilityScope *string
 		retrievalText   string
+		usefulCount     int
+		contradiction   int
 		distance        float64
 	)
 
@@ -214,6 +218,8 @@ func scanEngramCandidateRow(row interface {
 		&ownerUserID,
 		&visibilityScope,
 		&retrievalText,
+		&usefulCount,
+		&contradiction,
 		&distance,
 	)
 	if err != nil {
@@ -226,17 +232,19 @@ func scanEngramCandidateRow(row interface {
 		keywords = []string{}
 	}
 	return map[string]any{
-		"engram_id":        engramID,
-		"project_id":       projectID,
-		"title":            title,
-		"abstract":         abstract,
-		"created_at":       createdAt,
-		"tags":             tags,
-		"keywords":         keywords,
-		"owner_user_id":    ownerUserID,
-		"visibility_scope": visibilityOrDefault(visibilityScope),
-		"retrieval_text":   retrievalText,
-		"distance":         distance,
+		"engram_id":           engramID,
+		"project_id":          projectID,
+		"title":               title,
+		"abstract":            abstract,
+		"created_at":          createdAt,
+		"tags":                tags,
+		"keywords":            keywords,
+		"owner_user_id":       ownerUserID,
+		"visibility_scope":    visibilityOrDefault(visibilityScope),
+		"retrieval_text":      retrievalText,
+		"useful_count":        usefulCount,
+		"contradiction_count": contradiction,
+		"distance":            distance,
 	}, nil
 }
 

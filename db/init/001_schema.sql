@@ -24,6 +24,8 @@ ALTER TABLE engrams
   ADD COLUMN IF NOT EXISTS source_session_id UUID,
   ADD COLUMN IF NOT EXISTS access_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS freshness_score DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+  ADD COLUMN IF NOT EXISTS freshness_last_computed_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS useful_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS contradiction_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
@@ -70,6 +72,9 @@ CREATE INDEX IF NOT EXISTS engrams_deleted_at_idx
 
 CREATE INDEX IF NOT EXISTS engrams_access_last_accessed_idx
   ON engrams (access_count DESC, last_accessed_at DESC);
+
+CREATE INDEX IF NOT EXISTS engrams_freshness_idx
+  ON engrams (freshness_score DESC, freshness_last_computed_at DESC);
 
 CREATE INDEX IF NOT EXISTS engrams_embed_hnsw_idx
   ON engrams USING hnsw (embed vector_cosine_ops);
@@ -512,6 +517,54 @@ CREATE INDEX IF NOT EXISTS engram_access_events_session_accessed_idx
 
 CREATE INDEX IF NOT EXISTS engram_access_events_source_accessed_idx
   ON engram_access_events (access_source, accessed_at DESC);
+
+CREATE TABLE IF NOT EXISTS engram_feedback (
+  feedback_id UUID PRIMARY KEY,
+  engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  actor_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  feedback_type TEXT NOT NULL CHECK (feedback_type IN ('useful', 'contradiction')),
+  note TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS engram_feedback_engram_created_idx
+  ON engram_feedback (engram_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_feedback_actor_created_idx
+  ON engram_feedback (actor_user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_feedback_type_created_idx
+  ON engram_feedback (feedback_type, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS engram_consolidation_suggestions (
+  suggestion_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  source_engram_ids UUID[] NOT NULL,
+  consolidation_type TEXT NOT NULL CHECK (
+    consolidation_type IN ('exact_duplicate', 'theme_duplicate', 'superseded', 'complementary')
+  ),
+  reason TEXT NOT NULL,
+  consolidation_hash TEXT NOT NULL,
+  confidence_score DOUBLE PRECISION NOT NULL DEFAULT 0.0 CHECK (
+    confidence_score >= 0.0 AND confidence_score <= 1.0
+  ),
+  status TEXT NOT NULL DEFAULT 'suggested' CHECK (
+    status IN ('suggested', 'merged', 'rejected')
+  ),
+  suggested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  actioned_at TIMESTAMPTZ,
+  action_taken_by UUID REFERENCES users(user_id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS engram_consolidation_suggestions_hash_uidx
+  ON engram_consolidation_suggestions (consolidation_hash);
+
+CREATE INDEX IF NOT EXISTS engram_consolidation_suggestions_project_status_idx
+  ON engram_consolidation_suggestions (project_id, status, suggested_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_consolidation_suggestions_source_gin_idx
+  ON engram_consolidation_suggestions USING GIN (source_engram_ids);
 
 CREATE TABLE IF NOT EXISTS session_pinned_engrams (
   session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,

@@ -964,6 +964,33 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"engram.consolidation_list": {
+		description: "List consolidation suggestions by project/status (admin-only maintenance view).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"suggested",
+						"merged",
+						"rejected",
+					},
+				},
+				"limit": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"offset": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+			},
+		},
+	},
 	"engram.get": {
 		description: "Get an engram in management format with editable source payload.",
 		inputSchema: map[string]any{
@@ -1225,6 +1252,88 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 				"link_id": map[string]any{
 					"type":   "string",
 					"format": "uuid",
+				},
+			},
+		},
+	},
+	"engram.feedback": {
+		description: "Submit explicit feedback for one engram (useful or contradiction).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"engram_id",
+				"feedback_type",
+			},
+			"properties": map[string]any{
+				"engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"feedback_type": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"useful",
+						"contradiction",
+					},
+				},
+				"note": map[string]any{
+					"type": "string",
+				},
+			},
+		},
+	},
+	"engram.refresh_freshness": {
+		description: "Recompute engram freshness scores using half-life decay (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"half_life_days": map[string]any{
+					"type":    "number",
+					"minimum": 0.000001,
+				},
+			},
+		},
+	},
+	"engram.refresh_consolidation": {
+		description: "Refresh deterministic exact-duplicate consolidation suggestions (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"min_group_size": map[string]any{
+					"type":    "integer",
+					"minimum": 2,
+				},
+			},
+		},
+	},
+	"engram.consolidation_action": {
+		description: "Mark one consolidation suggestion as merged or rejected (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"suggestion_id",
+				"status",
+			},
+			"properties": map[string]any{
+				"suggestion_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"merged",
+						"rejected",
+					},
 				},
 			},
 		},
