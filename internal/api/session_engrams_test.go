@@ -221,6 +221,14 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid contradiction_count_max",
 		},
 		{
+			name: "invalid contradiction count min",
+			body: map[string]any{
+				"query":                   "durable memory",
+				"contradiction_count_min": -1,
+			},
+			expectedDetail: "invalid contradiction_count_min",
+		},
+		{
 			name: "invalid contradiction feedback ratio max",
 			body: map[string]any{
 				"query":                            "durable memory",
@@ -460,6 +468,7 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"access_count_max":                 20,
 					"feedback_count_min":               4,
 					"feedback_count_max":               10,
+					"contradiction_count_min":          1,
 					"contradiction_count_max":          3,
 					"contradiction_feedback_ratio_min": 0.1,
 					"contradiction_feedback_ratio_max": 0.3,
@@ -580,6 +589,11 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 	requireEqual(t, 20, requireIntPointer(t, request.AccessCountMax, "access_count_max"))
 	requireEqual(t, 4, requireIntPointer(t, request.FeedbackCountMin, "feedback_count_min"))
 	requireEqual(t, 10, requireIntPointer(t, request.FeedbackCountMax, "feedback_count_max"))
+	requireEqual(
+		t,
+		1,
+		requireIntPointer(t, request.ContradictionCountMin, "contradiction_count_min"),
+	)
 	requireEqual(
 		t,
 		3,

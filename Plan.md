@@ -1917,6 +1917,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 63 - Contradiction-Count Floor Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `contradiction_count_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `contradiction_count_min`.
+  - repository query builder now supports `COALESCE(contradiction_count, 0) >= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `contradiction_count_min`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to retrieve high-contradiction memories explicitly for triage workflows.
+2. Keep contradiction-count floor filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `contradiction_count_min`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply minimum contradiction-count thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for contradiction-count floor filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1992,3 +2024,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 61: `useful_feedback_ratio_max` parity across REST/MCP/repository.
 27. Execute contradiction-ratio floor query filter increment:
    - [x] Phase 62: `contradiction_feedback_ratio_min` parity across REST/MCP/repository.
+28. Execute contradiction-count floor query filter increment:
+   - [x] Phase 63: `contradiction_count_min` parity across REST/MCP/repository.

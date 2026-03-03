@@ -58,6 +58,7 @@ type engramQueryPayloadParts struct {
 	accessCountMax          *int
 	feedbackCountMin        *int
 	feedbackCountMax        *int
+	contradictionCountMin   *int
 	contradictionCountMax   *int
 	contradictionRatioMin   *float64
 	contradictionRatioMax   *float64
@@ -123,6 +124,7 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		accessCountMax:          engagementParts.accessCountMax,
 		feedbackCountMin:        engagementParts.feedbackCountMin,
 		feedbackCountMax:        engagementParts.feedbackCountMax,
+		contradictionCountMin:   engagementParts.contradictionCountMin,
 		contradictionCountMax:   engagementParts.contradictionCountMax,
 		contradictionRatioMin:   engagementParts.contradictionRatioMin,
 		contradictionRatioMax:   engagementParts.contradictionRatioMax,
@@ -211,6 +213,7 @@ type engramQueryEngagementParts struct {
 	accessCountMax          *int
 	feedbackCountMin        *int
 	feedbackCountMax        *int
+	contradictionCountMin   *int
 	contradictionCountMax   *int
 	contradictionRatioMin   *float64
 	contradictionRatioMax   *float64
@@ -240,6 +243,7 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 		accessCountMax:          integerParts.accessCountMax,
 		feedbackCountMin:        integerParts.feedbackCountMin,
 		feedbackCountMax:        integerParts.feedbackCountMax,
+		contradictionCountMin:   integerParts.contradictionCountMin,
 		contradictionCountMax:   integerParts.contradictionCountMax,
 		contradictionRatioMin:   scoreParts.contradictionRatioMin,
 		contradictionRatioMax:   scoreParts.contradictionRatioMax,
@@ -261,6 +265,7 @@ type engramQueryIntegerEngagementParts struct {
 	accessCountMax        *int
 	feedbackCountMin      *int
 	feedbackCountMax      *int
+	contradictionCountMin *int
 	contradictionCountMax *int
 }
 
@@ -291,6 +296,13 @@ func parseEngramQueryIntegerEngagementParts(
 	if dispatchErr != nil {
 		return engramQueryIntegerEngagementParts{}, dispatchErr
 	}
+	contradictionCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(
+		params,
+		"contradiction_count_min",
+	)
+	if dispatchErr != nil {
+		return engramQueryIntegerEngagementParts{}, dispatchErr
+	}
 	contradictionCountMax, dispatchErr := parseEngramQueryNonNegativeIntPointer(
 		params,
 		"contradiction_count_max",
@@ -305,6 +317,7 @@ func parseEngramQueryIntegerEngagementParts(
 		accessCountMax:        accessCountMax,
 		feedbackCountMin:      feedbackCountMin,
 		feedbackCountMax:      feedbackCountMax,
+		contradictionCountMin: contradictionCountMin,
 		contradictionCountMax: contradictionCountMax,
 	}, nil
 }
@@ -448,6 +461,7 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		AccessCountMax:          parts.accessCountMax,
 		FeedbackCountMin:        parts.feedbackCountMin,
 		FeedbackCountMax:        parts.feedbackCountMax,
+		ContradictionCountMin:   parts.contradictionCountMin,
 		ContradictionCountMax:   parts.contradictionCountMax,
 		ContradictionRatioMin:   parts.contradictionRatioMin,
 		ContradictionRatioMax:   parts.contradictionRatioMax,

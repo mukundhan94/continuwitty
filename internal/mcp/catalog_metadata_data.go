@@ -641,6 +641,10 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":    "integer",
 					"minimum": 0,
 				},
+				"contradiction_count_min": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
 				"contradiction_feedback_ratio_max": map[string]any{
 					"type":    "number",
 					"minimum": 0,

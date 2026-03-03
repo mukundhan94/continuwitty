@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 63: contradiction-count floor query filter parity)
+
+1. Added contradiction-count floor query contract extension:
+   - new optional filter: `contradiction_count_min` (non-negative integer) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `contradiction_count_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `contradiction_count_min`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(contradiction_count, 0) >= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `contradiction_count_min`.
+   - repository where-clause/parameter assertions for contradiction-count floor predicate.
+   - MCP parity and validation coverage for contradiction-count floor filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 62: contradiction-ratio floor query filter parity)
 
 1. Added contradiction-ratio floor query contract extension:

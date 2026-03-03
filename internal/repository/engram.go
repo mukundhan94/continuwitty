@@ -223,6 +223,7 @@ func buildEngramQueryWhere(
 	addOptionalPointerClause(builder, request.AccessCountMax, "COALESCE(access_count, 0) <= %s")
 	addOptionalPointerClause(builder, request.FeedbackCountMin, "COALESCE(feedback_count, 0) >= %s")
 	addOptionalPointerClause(builder, request.FeedbackCountMax, "COALESCE(feedback_count, 0) <= %s")
+	addOptionalPointerClause(builder, request.ContradictionCountMin, "COALESCE(contradiction_count, 0) >= %s")
 	addOptionalPointerClause(builder, request.ContradictionCountMax, "COALESCE(contradiction_count, 0) <= %s")
 	addOptionalPointerClause(
 		builder,
