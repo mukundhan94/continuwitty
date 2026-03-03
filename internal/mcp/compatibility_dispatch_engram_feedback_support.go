@@ -45,16 +45,68 @@ func parseEngramFeedbackRequest(
 	if err != nil {
 		return EngramFeedbackRequest{}, invalidParamError("feedback_type")
 	}
+	sessionID, ok := optionalUUIDParam(params, "session_id")
+	if !ok {
+		return EngramFeedbackRequest{}, invalidParamError("session_id")
+	}
 	note, ok := optionalStringPointerParam(params, "note")
 	if !ok {
 		return EngramFeedbackRequest{}, invalidParamError("note")
 	}
+	relevanceScore, ok := optionalFeedbackRelevanceScoreParam(params, "relevance_score")
+	if !ok {
+		return EngramFeedbackRequest{}, invalidParamError("relevance_score")
+	}
+	integrationDepth, ok := optionalFeedbackIntegrationDepthParam(params, "integration_depth")
+	if !ok {
+		return EngramFeedbackRequest{}, invalidParamError("integration_depth")
+	}
 	return EngramFeedbackRequest{
-		ActorUserID:  actor.UserID,
-		EngramID:     engramID,
-		FeedbackType: feedbackType,
-		Note:         normalizeOptionalTrimmedParamString(note),
+		ActorUserID:      actor.UserID,
+		EngramID:         engramID,
+		SessionID:        sessionID,
+		FeedbackType:     feedbackType,
+		IntegrationDepth: integrationDepth,
+		Note:             normalizeOptionalTrimmedParamString(note),
+		RelevanceScore:   relevanceScore,
 	}, nil
+}
+
+func optionalFeedbackRelevanceScoreParam(
+	params map[string]any,
+	key string,
+) (*int, bool) {
+	rawValue, found := optionalParamValue(params, key)
+	if !found {
+		return nil, true
+	}
+	parsed, ok := parseIntValue(rawValue)
+	if !ok {
+		return nil, false
+	}
+	if parsed < 1 || parsed > 5 {
+		return nil, false
+	}
+	return &parsed, true
+}
+
+func optionalFeedbackIntegrationDepthParam(
+	params map[string]any,
+	key string,
+) (*models.EngramFeedbackIntegrationDepth, bool) {
+	rawValue, found := optionalStringPointerParam(params, key)
+	if !found {
+		return nil, true
+	}
+	if rawValue == nil {
+		return nil, true
+	}
+	parsed, err := models.ParseEngramFeedbackIntegrationDepth(*rawValue)
+	if err != nil {
+		return nil, false
+	}
+	normalized := parsed
+	return &normalized, true
 }
 
 func normalizeOptionalTrimmedParamString(value *string) *string {

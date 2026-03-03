@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"engram/internal/graph"
 	"engram/internal/models"
 	"engram/internal/repository"
 
@@ -27,12 +28,26 @@ var (
 	ErrProjectResolverNotConfigured = errors.New("project resolver is not configured")
 	// ErrProjectIDRequired indicates that a write operation is missing project context.
 	ErrProjectIDRequired = errors.New("project_id is required")
+	// ErrProjectScopeMismatch indicates a scoped project_id does not match the target resource project.
+	ErrProjectScopeMismatch = errors.New("project_id does not match target engram project")
 	// ErrConsolidationMinGroupSizeInvalid indicates invalid consolidation minimum group-size input.
 	ErrConsolidationMinGroupSizeInvalid = errors.New("min_group_size must be at least 2")
 	// ErrConsolidationSuggestionNotFound indicates a requested consolidation suggestion does not exist.
 	ErrConsolidationSuggestionNotFound = errors.New("consolidation suggestion not found")
 	// ErrConsolidationSuggestionActionInvalid indicates invalid consolidation action status.
 	ErrConsolidationSuggestionActionInvalid = errors.New("status must be merged or rejected")
+	// ErrContradictionAlertNotFound indicates a requested contradiction alert does not exist.
+	ErrContradictionAlertNotFound = errors.New("contradiction alert not found")
+	// ErrContradictionAlertResolveStatusInvalid indicates invalid contradiction alert resolve status.
+	ErrContradictionAlertResolveStatusInvalid = errors.New("status must be resolved or dismissed")
+	// ErrMemoryCurationSuggestionNotFound indicates a requested memory curation suggestion does not exist.
+	ErrMemoryCurationSuggestionNotFound = errors.New("memory curation suggestion not found")
+	// ErrMemoryCurationSuggestionActionInvalid indicates invalid memory curation suggestion action status.
+	ErrMemoryCurationSuggestionActionInvalid = errors.New("status must be accepted, rejected, or applied")
+	// ErrMemoryCurationSuggestionPayloadInvalid indicates apply action cannot parse required payload fields.
+	ErrMemoryCurationSuggestionPayloadInvalid = errors.New("memory curation payload is invalid for apply action")
+	// ErrMemoryCurationSuggestionApplyUnsupported indicates apply action cannot execute payload-specific workflow.
+	ErrMemoryCurationSuggestionApplyUnsupported = errors.New("memory curation apply action is unsupported for suggestion payload")
 )
 
 // MemoryAdminListRequest captures shared admin list filters.
@@ -148,6 +163,66 @@ type EngramConsolidationSuggestionActionRequest struct {
 	Status    models.ConsolidationSuggestionStatus `json:"status"`
 }
 
+// EngramContradictionAlertRefreshRequest captures refresh options for contradiction alerts.
+type EngramContradictionAlertRefreshRequest struct {
+	ProjectID *string `json:"project_id,omitempty"`
+}
+
+// EngramContradictionAlertRefreshResponse captures refresh results for contradiction alerts.
+type EngramContradictionAlertRefreshResponse struct {
+	ProjectID    *string   `json:"project_id,omitempty"`
+	DetectedAt   time.Time `json:"detected_at"`
+	UpdatedCount int       `json:"updated_count"`
+}
+
+// EngramLinkCurationSuggestionRefreshRequest captures refresh options for link curation suggestions.
+type EngramLinkCurationSuggestionRefreshRequest struct {
+	ProjectID         *string   `json:"project_id,omitempty"`
+	SourceEngramID    uuid.UUID `json:"source_engram_id"`
+	IncludeArchived   bool      `json:"include_archived,omitempty"`
+	Limit             int       `json:"limit,omitempty"`
+	StaleAfterDays    int       `json:"stale_after_days,omitempty"`
+	LowValueThreshold float64   `json:"low_value_threshold,omitempty"`
+}
+
+// EngramLinkCurationSuggestionRefreshResponse captures refresh results for link curation suggestions.
+type EngramLinkCurationSuggestionRefreshResponse struct {
+	ProjectID      *string   `json:"project_id,omitempty"`
+	SourceEngramID uuid.UUID `json:"source_engram_id"`
+	SuggestedAt    time.Time `json:"suggested_at"`
+	UpdatedCount   int       `json:"updated_count"`
+}
+
+// EngramContradictionAlertListRequest captures list filters for contradiction alerts.
+type EngramContradictionAlertListRequest struct {
+	ProjectID *string                          `json:"project_id,omitempty"`
+	Status    *models.ContradictionAlertStatus `json:"status,omitempty"`
+	Limit     int                              `json:"limit"`
+	Offset    int                              `json:"offset"`
+}
+
+// EngramContradictionAlertResolveRequest captures resolve payload for a contradiction alert.
+type EngramContradictionAlertResolveRequest struct {
+	ProjectID *string                         `json:"project_id,omitempty"`
+	Status    models.ContradictionAlertStatus `json:"status"`
+}
+
+// MemoryCurationSuggestionListRequest captures list filters for memory curation suggestions.
+type MemoryCurationSuggestionListRequest struct {
+	ProjectID      *string                                `json:"project_id,omitempty"`
+	SessionID      *uuid.UUID                             `json:"session_id,omitempty"`
+	SuggestionType *models.MemoryCurationSuggestionType   `json:"suggestion_type,omitempty"`
+	Status         *models.MemoryCurationSuggestionStatus `json:"status,omitempty"`
+	Limit          int                                    `json:"limit"`
+	Offset         int                                    `json:"offset"`
+}
+
+// MemoryCurationSuggestionActionRequest captures action payload for a memory curation suggestion.
+type MemoryCurationSuggestionActionRequest struct {
+	ProjectID *string                               `json:"project_id,omitempty"`
+	Status    models.MemoryCurationSuggestionStatus `json:"status"`
+}
+
 // CollectionCreateRequest captures collection create payload values.
 type CollectionCreateRequest struct {
 	ProjectID   string `json:"project_id"`
@@ -244,6 +319,57 @@ type serviceDeps struct {
 		db repository.Queryer,
 		input repository.ConsolidationSuggestionActionInput,
 	) (*models.EngramConsolidationSuggestion, error)
+	refreshContradictionAlerts func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.ContradictionAlertRefreshInput,
+	) (repository.ContradictionAlertRefreshInput, error)
+	listContradictionAlerts func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.ContradictionAlertListInput,
+	) ([]models.EngramContradictionAlert, error)
+	resolveContradictionAlert func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.ContradictionAlertResolveInput,
+	) (*models.EngramContradictionAlert, error)
+	recommendLinkHygiene func(
+		ctx context.Context,
+		db repository.Queryer,
+		input graph.LinkHygieneInput,
+	) ([]models.EngramLinkHygieneRecommendation, error)
+	createMemoryCurationSuggestion func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.MemoryCurationSuggestionCreateInput,
+	) (*models.MemoryCurationSuggestion, error)
+	resetMemoryCurationSuggestions func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.MemoryCurationSuggestionResetInput,
+	) (int, error)
+	getMemoryCurationSuggestion func(
+		ctx context.Context,
+		db repository.Queryer,
+		suggestionID uuid.UUID,
+		projectID *string,
+	) (*models.MemoryCurationSuggestion, error)
+	listMemoryCurationSuggestions func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.MemoryCurationSuggestionListInput,
+	) ([]models.MemoryCurationSuggestion, error)
+	applyMemoryCurationSuggestionAction func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.MemoryCurationSuggestionActionInput,
+	) (*models.MemoryCurationSuggestion, error)
+	archiveEngramLink func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.EngramLinkArchiveInput,
+	) (*models.EngramLinkRecord, error)
 
 	listCollections      func(ctx context.Context, db repository.Queryer, input repository.CollectionListInput) ([]models.EngramCollectionRecord, error)
 	getCollection        func(ctx context.Context, db repository.Queryer, collectionID uuid.UUID, includeDeleted bool) (*models.EngramCollectionRecord, error)
@@ -272,6 +398,26 @@ func defaultServiceDeps() serviceDeps {
 		refreshConsolidationSuggestions:    repository.RefreshExactDuplicateConsolidationSuggestions,
 		listConsolidationSuggestions:       repository.ListEngramConsolidationSuggestions,
 		applyConsolidationSuggestionAction: repository.ApplyEngramConsolidationSuggestionAction,
+		refreshContradictionAlerts:         repository.RefreshContradictionAlerts,
+		listContradictionAlerts:            repository.ListContradictionAlerts,
+		resolveContradictionAlert:          repository.ResolveContradictionAlert,
+		recommendLinkHygiene: func(
+			ctx context.Context,
+			db repository.Queryer,
+			input graph.LinkHygieneInput,
+		) ([]models.EngramLinkHygieneRecommendation, error) {
+			service := graph.NewLinkHygieneService(db)
+			if service == nil {
+				return []models.EngramLinkHygieneRecommendation{}, nil
+			}
+			return service.Recommend(ctx, input)
+		},
+		createMemoryCurationSuggestion:      repository.CreateMemoryCurationSuggestion,
+		resetMemoryCurationSuggestions:      repository.ResetSuggestedMemoryCurationSuggestions,
+		getMemoryCurationSuggestion:         repository.GetMemoryCurationSuggestion,
+		listMemoryCurationSuggestions:       repository.ListMemoryCurationSuggestions,
+		applyMemoryCurationSuggestionAction: repository.ApplyMemoryCurationSuggestionAction,
+		archiveEngramLink:                   repository.ArchiveEngramLink,
 
 		listCollections:      repository.ListCollections,
 		getCollection:        repository.GetCollection,

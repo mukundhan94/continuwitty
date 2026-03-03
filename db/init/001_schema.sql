@@ -22,11 +22,14 @@ ALTER TABLE engrams
   ADD COLUMN IF NOT EXISTS owner_user_id UUID,
   ADD COLUMN IF NOT EXISTS visibility_scope TEXT NOT NULL DEFAULT 'private',
   ADD COLUMN IF NOT EXISTS source_session_id UUID,
+  ADD COLUMN IF NOT EXISTS source_session_quality_score DOUBLE PRECISION NOT NULL DEFAULT 0.5,
   ADD COLUMN IF NOT EXISTS access_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS freshness_score DOUBLE PRECISION NOT NULL DEFAULT 1.0,
   ADD COLUMN IF NOT EXISTS freshness_last_computed_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS useful_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS feedback_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS avg_relevance_feedback DOUBLE PRECISION,
   ADD COLUMN IF NOT EXISTS contradiction_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS deleted_by_user_id UUID,
@@ -42,6 +45,21 @@ BEGIN
     ALTER TABLE engrams
       ADD CONSTRAINT engrams_visibility_scope_check
       CHECK (visibility_scope IN ('private', 'project'));
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'engrams_source_session_quality_score_check'
+  ) THEN
+    ALTER TABLE engrams
+      ADD CONSTRAINT engrams_source_session_quality_score_check
+      CHECK (
+        source_session_quality_score >= 0.0
+        AND source_session_quality_score <= 1.0
+      );
   END IF;
 END $$;
 
@@ -75,6 +93,9 @@ CREATE INDEX IF NOT EXISTS engrams_access_last_accessed_idx
 
 CREATE INDEX IF NOT EXISTS engrams_freshness_idx
   ON engrams (freshness_score DESC, freshness_last_computed_at DESC);
+
+CREATE INDEX IF NOT EXISTS engrams_source_session_quality_idx
+  ON engrams (source_session_quality_score DESC, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS engrams_embed_hnsw_idx
   ON engrams USING hnsw (embed vector_cosine_ops);
@@ -521,20 +542,74 @@ CREATE INDEX IF NOT EXISTS engram_access_events_source_accessed_idx
 CREATE TABLE IF NOT EXISTS engram_feedback (
   feedback_id UUID PRIMARY KEY,
   engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  session_id UUID REFERENCES chat_sessions(session_id) ON DELETE SET NULL,
   actor_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   feedback_type TEXT NOT NULL CHECK (feedback_type IN ('useful', 'contradiction')),
+  integration_depth TEXT CHECK (
+    integration_depth IS NULL OR integration_depth IN ('mentioned', 'elaborated', 'contradicted', 'ignored')
+  ),
+  relevance_score INTEGER CHECK (relevance_score >= 1 AND relevance_score <= 5),
   note TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE engram_feedback
+  ADD COLUMN IF NOT EXISTS session_id UUID,
+  ADD COLUMN IF NOT EXISTS integration_depth TEXT,
+  ADD COLUMN IF NOT EXISTS relevance_score INTEGER;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'engram_feedback_session_id_fkey'
+  ) THEN
+    ALTER TABLE engram_feedback
+      ADD CONSTRAINT engram_feedback_session_id_fkey
+      FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'engram_feedback_integration_depth_check'
+  ) THEN
+    ALTER TABLE engram_feedback
+      ADD CONSTRAINT engram_feedback_integration_depth_check
+      CHECK (
+        integration_depth IS NULL OR integration_depth IN ('mentioned', 'elaborated', 'contradicted', 'ignored')
+      );
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'engram_feedback_relevance_score_check'
+  ) THEN
+    ALTER TABLE engram_feedback
+      ADD CONSTRAINT engram_feedback_relevance_score_check
+      CHECK (relevance_score IS NULL OR (relevance_score >= 1 AND relevance_score <= 5));
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS engram_feedback_engram_created_idx
   ON engram_feedback (engram_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_feedback_session_created_idx
+  ON engram_feedback (session_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS engram_feedback_actor_created_idx
   ON engram_feedback (actor_user_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS engram_feedback_type_created_idx
   ON engram_feedback (feedback_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_feedback_integration_depth_created_idx
+  ON engram_feedback (integration_depth, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS engram_consolidation_suggestions (
   suggestion_id UUID PRIMARY KEY,
@@ -565,6 +640,62 @@ CREATE INDEX IF NOT EXISTS engram_consolidation_suggestions_project_status_idx
 
 CREATE INDEX IF NOT EXISTS engram_consolidation_suggestions_source_gin_idx
   ON engram_consolidation_suggestions USING GIN (source_engram_ids);
+
+CREATE TABLE IF NOT EXISTS engram_contradiction_alerts (
+  alert_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  source_engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  target_engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  contradiction_link_ids UUID[] NOT NULL DEFAULT '{}',
+  reason TEXT NOT NULL,
+  alert_hash TEXT NOT NULL,
+  confidence_score DOUBLE PRECISION NOT NULL CHECK (confidence_score >= 0 AND confidence_score <= 1),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'dismissed')),
+  detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  resolved_by UUID REFERENCES users(user_id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS engram_contradiction_alerts_hash_uidx
+  ON engram_contradiction_alerts (alert_hash);
+
+CREATE INDEX IF NOT EXISTS engram_contradiction_alerts_project_status_detected_idx
+  ON engram_contradiction_alerts (project_id, status, detected_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_contradiction_alerts_source_target_idx
+  ON engram_contradiction_alerts (source_engram_id, target_engram_id, status);
+
+CREATE INDEX IF NOT EXISTS engram_contradiction_alerts_link_ids_gin_idx
+  ON engram_contradiction_alerts USING GIN (contradiction_link_ids);
+
+CREATE TABLE IF NOT EXISTS memory_curation_suggestions (
+  suggestion_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  session_id UUID REFERENCES chat_sessions(session_id) ON DELETE SET NULL,
+  suggestion_type TEXT NOT NULL CHECK (
+    suggestion_type IN ('auto_save', 'consolidate', 'contradiction', 'link')
+  ),
+  reason TEXT NOT NULL,
+  recommendation TEXT NOT NULL DEFAULT '',
+  payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  confidence_score DOUBLE PRECISION NOT NULL DEFAULT 0.0 CHECK (
+    confidence_score >= 0.0 AND confidence_score <= 1.0
+  ),
+  status TEXT NOT NULL DEFAULT 'suggested' CHECK (
+    status IN ('suggested', 'accepted', 'rejected', 'applied')
+  ),
+  suggested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actioned_at TIMESTAMPTZ,
+  action_taken_by UUID REFERENCES users(user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS memory_curation_suggestions_project_status_idx
+  ON memory_curation_suggestions (project_id, status, suggested_at DESC);
+
+CREATE INDEX IF NOT EXISTS memory_curation_suggestions_session_type_idx
+  ON memory_curation_suggestions (session_id, suggestion_type, suggested_at DESC);
 
 CREATE TABLE IF NOT EXISTS session_pinned_engrams (
   session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,

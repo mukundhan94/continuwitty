@@ -362,6 +362,54 @@ type EngramConsolidationActionService interface {
 	) (*models.EngramConsolidationSuggestion, error)
 }
 
+// EngramContradictionRefreshService captures contradiction-alert refresh behavior used by MCP compatibility engram dispatch.
+type EngramContradictionRefreshService interface {
+	RefreshEngramContradictionAlerts(
+		ctx context.Context,
+		request EngramContradictionRefreshRequest,
+	) (*EngramContradictionRefreshResponse, error)
+}
+
+// EngramContradictionListService captures contradiction-alert list behavior used by MCP compatibility engram dispatch.
+type EngramContradictionListService interface {
+	ListEngramContradictionAlerts(
+		ctx context.Context,
+		request EngramContradictionListRequest,
+	) ([]models.EngramContradictionAlert, error)
+}
+
+// EngramContradictionResolveService captures contradiction-alert resolve behavior used by MCP compatibility engram dispatch.
+type EngramContradictionResolveService interface {
+	ResolveEngramContradictionAlert(
+		ctx context.Context,
+		request EngramContradictionResolveRequest,
+	) (*models.EngramContradictionAlert, error)
+}
+
+// EngramCurationListService captures memory-curation suggestion list behavior used by MCP compatibility engram dispatch.
+type EngramCurationListService interface {
+	ListMemoryCurationSuggestions(
+		ctx context.Context,
+		request EngramCurationListRequest,
+	) ([]models.MemoryCurationSuggestion, error)
+}
+
+// EngramCurationRefreshService captures memory-curation refresh behavior used by MCP compatibility engram dispatch.
+type EngramCurationRefreshService interface {
+	RefreshEngramLinkCurationSuggestions(
+		ctx context.Context,
+		request EngramCurationRefreshRequest,
+	) (*EngramCurationRefreshResponse, error)
+}
+
+// EngramCurationActionService captures memory-curation suggestion action behavior used by MCP compatibility engram dispatch.
+type EngramCurationActionService interface {
+	ActionMemoryCurationSuggestion(
+		ctx context.Context,
+		request EngramCurationActionRequest,
+	) (*models.MemoryCurationSuggestion, error)
+}
+
 // EngramMoveService captures engram move-project behavior used by MCP compatibility engram dispatch.
 type EngramMoveService interface {
 	MoveEngram(
@@ -590,6 +638,7 @@ type SessionMessageSendRequest struct {
 	ActorUserID                 uuid.UUID
 	SessionID                   uuid.UUID
 	ContentText                 string
+	ContextTokenBudget          *int
 	LinkRecallEnabled           *bool
 	LinkRecallDepth             *int
 	LinkRecallMaxNeighbors      *int
@@ -599,19 +648,20 @@ type SessionMessageSendRequest struct {
 
 // MessageSendResponse captures send-message outputs.
 type MessageSendResponse struct {
-	SessionID            uuid.UUID      `json:"session_id"`
-	MessageID            uuid.UUID      `json:"message_id"`
-	ReplyMessageID       uuid.UUID      `json:"reply_message_id"`
-	AssistantText        string         `json:"assistant_text"`
-	PromptPolicyVersion  string         `json:"prompt_policy_version,omitempty"`
-	CWPlanApplied        any            `json:"cw_plan_applied,omitempty"`
-	UsedEngramIDs        []uuid.UUID    `json:"used_engram_ids"`
-	UsedEngramLinkIDs    []uuid.UUID    `json:"used_engram_link_ids"`
-	EngramTracePaths     any            `json:"engram_trace_paths"`
-	UsedDocumentChunkIDs []uuid.UUID    `json:"used_document_chunk_ids"`
-	SourceReferences     any            `json:"source_references"`
-	RetrievalAudit       any            `json:"retrieval_audit,omitempty"`
-	DebugTrace           map[string]any `json:"debug_trace,omitempty"`
+	SessionID             uuid.UUID      `json:"session_id"`
+	MessageID             uuid.UUID      `json:"message_id"`
+	ReplyMessageID        uuid.UUID      `json:"reply_message_id"`
+	AssistantText         string         `json:"assistant_text"`
+	PromptPolicyVersion   string         `json:"prompt_policy_version,omitempty"`
+	CWPlanApplied         any            `json:"cw_plan_applied,omitempty"`
+	UsedEngramIDs         []uuid.UUID    `json:"used_engram_ids"`
+	UsedEngramLinkIDs     []uuid.UUID    `json:"used_engram_link_ids"`
+	EngramTracePaths      any            `json:"engram_trace_paths"`
+	ContradictionWarnings any            `json:"contradiction_warnings,omitempty"`
+	UsedDocumentChunkIDs  []uuid.UUID    `json:"used_document_chunk_ids"`
+	SourceReferences      any            `json:"source_references"`
+	RetrievalAudit        any            `json:"retrieval_audit,omitempty"`
+	DebugTrace            map[string]any `json:"debug_trace,omitempty"`
 }
 
 // MessageStreamEvent captures compatibility-level stream event payload emitted by chat.send_message.
@@ -804,10 +854,13 @@ type EngramUpdateRequest struct {
 
 // EngramFeedbackRequest captures compatibility-level engram feedback inputs.
 type EngramFeedbackRequest struct {
-	ActorUserID  uuid.UUID
-	EngramID     uuid.UUID
-	FeedbackType models.EngramFeedbackType
-	Note         *string
+	ActorUserID      uuid.UUID
+	EngramID         uuid.UUID
+	SessionID        *uuid.UUID
+	FeedbackType     models.EngramFeedbackType
+	IntegrationDepth *models.EngramFeedbackIntegrationDepth
+	Note             *string
+	RelevanceScore   *int
 }
 
 // EngramFreshnessRefreshRequest captures compatibility-level engram freshness refresh inputs.
@@ -859,6 +912,80 @@ type EngramConsolidationActionRequest struct {
 	SuggestionID uuid.UUID
 	ProjectID    *string
 	Status       models.ConsolidationSuggestionStatus
+}
+
+// EngramContradictionRefreshRequest captures compatibility-level contradiction refresh inputs.
+type EngramContradictionRefreshRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	ProjectID   *string
+}
+
+// EngramContradictionRefreshResponse captures compatibility-level contradiction refresh outputs.
+type EngramContradictionRefreshResponse struct {
+	ProjectID    *string   `json:"project_id,omitempty"`
+	DetectedAt   time.Time `json:"detected_at"`
+	UpdatedCount int       `json:"updated_count"`
+}
+
+// EngramContradictionListRequest captures compatibility-level contradiction list inputs.
+type EngramContradictionListRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	ProjectID   *string
+	Status      *models.ContradictionAlertStatus
+	Limit       int
+	Offset      int
+}
+
+// EngramContradictionResolveRequest captures compatibility-level contradiction resolve inputs.
+type EngramContradictionResolveRequest struct {
+	ActorUserID uuid.UUID
+	ActorRole   models.UserRole
+	AlertID     uuid.UUID
+	ProjectID   *string
+	Status      models.ContradictionAlertStatus
+}
+
+// EngramCurationListRequest captures compatibility-level memory-curation suggestion list inputs.
+type EngramCurationListRequest struct {
+	ActorUserID    uuid.UUID
+	ActorRole      models.UserRole
+	ProjectID      *string
+	SessionID      *uuid.UUID
+	SuggestionType *models.MemoryCurationSuggestionType
+	Status         *models.MemoryCurationSuggestionStatus
+	Limit          int
+	Offset         int
+}
+
+// EngramCurationRefreshRequest captures compatibility-level memory-curation refresh inputs.
+type EngramCurationRefreshRequest struct {
+	ActorUserID       uuid.UUID
+	ActorRole         models.UserRole
+	ProjectID         *string
+	SourceEngramID    uuid.UUID
+	IncludeArchived   bool
+	Limit             int
+	StaleAfterDays    int
+	LowValueThreshold float64
+}
+
+// EngramCurationRefreshResponse captures compatibility-level memory-curation refresh outputs.
+type EngramCurationRefreshResponse struct {
+	ProjectID      *string   `json:"project_id,omitempty"`
+	SourceEngramID uuid.UUID `json:"source_engram_id"`
+	SuggestedAt    time.Time `json:"suggested_at"`
+	UpdatedCount   int       `json:"updated_count"`
+}
+
+// EngramCurationActionRequest captures compatibility-level memory-curation suggestion action inputs.
+type EngramCurationActionRequest struct {
+	ActorUserID  uuid.UUID
+	ActorRole    models.UserRole
+	SuggestionID uuid.UUID
+	ProjectID    *string
+	Status       models.MemoryCurationSuggestionStatus
 }
 
 // EngramMoveRequest captures compatibility-level engram move inputs.
@@ -1022,6 +1149,12 @@ type CompatibilityServiceDependencies struct {
 	EngramConsolidationRefresh EngramConsolidationRefreshService
 	EngramConsolidationList    EngramConsolidationListService
 	EngramConsolidationAction  EngramConsolidationActionService
+	EngramContradictionRefresh EngramContradictionRefreshService
+	EngramContradictionList    EngramContradictionListService
+	EngramContradictionResolve EngramContradictionResolveService
+	EngramCurationList         EngramCurationListService
+	EngramCurationRefresh      EngramCurationRefreshService
+	EngramCurationAction       EngramCurationActionService
 	EngramMove                 EngramMoveService
 	EngramDelete               EngramDeleteService
 	EngramRestore              EngramRestoreService
@@ -1080,6 +1213,12 @@ type CompatibilityService struct {
 	engramConsolidationRefresh EngramConsolidationRefreshService
 	engramConsolidationList    EngramConsolidationListService
 	engramConsolidationAction  EngramConsolidationActionService
+	engramContradictionRefresh EngramContradictionRefreshService
+	engramContradictionList    EngramContradictionListService
+	engramContradictionResolve EngramContradictionResolveService
+	engramCurationList         EngramCurationListService
+	engramCurationRefresh      EngramCurationRefreshService
+	engramCurationAction       EngramCurationActionService
 	engramMove                 EngramMoveService
 	engramDelete               EngramDeleteService
 	engramRestore              EngramRestoreService
@@ -1162,6 +1301,12 @@ func NewCompatibilityServiceWithDependencies(
 		engramConsolidationRefresh: dependencies.EngramConsolidationRefresh,
 		engramConsolidationList:    dependencies.EngramConsolidationList,
 		engramConsolidationAction:  dependencies.EngramConsolidationAction,
+		engramContradictionRefresh: dependencies.EngramContradictionRefresh,
+		engramContradictionList:    dependencies.EngramContradictionList,
+		engramContradictionResolve: dependencies.EngramContradictionResolve,
+		engramCurationList:         dependencies.EngramCurationList,
+		engramCurationRefresh:      dependencies.EngramCurationRefresh,
+		engramCurationAction:       dependencies.EngramCurationAction,
 		engramMove:                 dependencies.EngramMove,
 		engramDelete:               dependencies.EngramDelete,
 		engramRestore:              dependencies.EngramRestore,

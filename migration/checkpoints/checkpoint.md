@@ -28,8 +28,15 @@
 - **Phase 33 completed:** portable export/import stash workflow with REST + MCP + web transfer flows, owner/admin authorization, and source-fidelity round-trip coverage.
 - **Phase 34 completed:** security audit remediation for production-safe config defaults, distributed login/MCP throttling, protected OAuth registration, and security regression coverage.
 - **Phase 35 completed:** memory engagement tracking baseline (engram access counters/events, chat success-path access recording hooks, and non-blocking telemetry failure handling).
-- **Phase 36 in progress:** explicit feedback loop baseline shipped (storage, API/MCP feedback submission, and rerank feedback signal integration); engagement/freshness weighting calibration remains.
+- **Phase 36 completed:** explicit feedback loop shipped (storage, API/MCP feedback submission, rerank feedback signal integration) with calibrated engagement/freshness weighting and latency benchmark notes.
 - **Phase 37 completed:** freshness maintenance plus consolidation schema/repository/admin-API/MCP parity shipped (refresh/list/action API + MCP tools + tests), with deterministic acceptance + precision/recall benchmark coverage for grouping criteria.
+- **Phase 38 completed:** contradiction warning baseline, contradiction-alert persistence/review workflows, and warning-quality benchmark coverage are shipped (trace metadata + chat/send/stream/MCP warning parity, contradiction-alert storage + refresh/list/resolve repository workflows, admin/API/MCP maintenance routes, and deterministic precision/recall acceptance coverage enabled in default `@mock` runs).
+- **Phase 39 completed:** temporal query + cost-aware context assembly shipped with engagement filters (`access_count_min`, `freshness_score_min`), recall/timeline windows (`last_accessed_after/before`, `freshness_computed_after/before`), trace-aware constraints (`relation_type`, `trace_depth`), and bounded `context_token_budget` controls across REST/MCP chat send paths with retrieval-audit budget diagnostics (`context_token_budget`, `context_token_estimate`, `context_token_truncated`).
+- **Phase 40 completed:** autonomous memory suggestions now include schema/model/repository foundations, admin REST + MCP curation maintenance parity (`engram.curation_refresh_links`, `engram.curation_list`, `engram.curation_action`), deterministic generation hooks from consolidation/contradiction refresh workflows plus scheduled and on-demand link-hygiene link-suggestion persistence, `status=applied` downstream orchestration for consolidation/contradiction/link payloads, mock acceptance coverage for curation generation/action flows, and benchmark baselines for curation action/sync latency.
+- **Phase 41 completed:** explicit feedback enrichment now supports optional `relevance_score`, optional `session_id`, and optional `integration_depth` attribution across REST/MCP feedback submission with persisted `feedback_count` and `avg_relevance_feedback` aggregate tracking.
+- **Phase 42 completed:** session-authority scoring baseline shipped with bounded `source_session_quality_score` schema/indexing, authority-aware rerank integration, and deterministic feedback-driven authority calibration on relevance-scored feedback events.
+- **Phase 43 completed:** authority-aware query filtering now supports `source_session_quality_min` across REST/MCP/repository contracts with validation and catalog metadata parity.
+- **Phases 44-53 completed:** authority fallback transparency shipped (`source_session_quality_score` in query responses) and query quality controls now include `avg_relevance_feedback_min`, `contradiction_count_max`, `contradiction_feedback_ratio_max`, `feedback_count_min`, `useful_count_min`, and `useful_feedback_ratio_min` filters plus result diagnostics for `feedback_count`, `contradiction_count`, `access_count`, `freshness_score`, `useful_count`, `avg_relevance_feedback`, and `useful_feedback_ratio`.
 - **Technical debt follow-ups completed (2026-03-01):** OIDC rollout validation now includes centralized audit-sink regression coverage for callback failure events, and cross-provider engram reuse validation now has explicit chat fallback coverage asserting identical engram-context reuse and provenance metadata across provider/model switches.
 - **Go migration initiated (2026-02-22):** phased Python/FastAPI → Go migration started with dedicated progress tracker in `checkpoint-go-migration.md` (CP1 complete: module scaffold + config parity tests; CP2 complete: DB bootstrap/transaction parity tests; CP3 complete: API scaffold + health/version route parity tests; CP4 complete: auth hashing/CSRF parity tests; CP5 complete: user models/repository parity tests; CP6 complete: embeddings local/fallback parity tests; CP7 complete: engram repository helper/query parity tests; CP8 complete: DB read-path parity for `list_engrams`/`query_engrams`; CP9 complete: rehydration/source read-path parity; CP10 complete: engram write-path repository flows; CP11 complete: chat session repository baseline; CP12 complete: project repository baseline; CP13 complete: chat message/session pinning repository continuation; CP14 complete: document repository baseline; CP15 complete: MCP token repository baseline; CP16 complete: OAuth repository baseline; CP17 complete: collection repository baseline; CP18 complete: memory-admin session repository baseline; CP19 complete: memory-admin engram repository baseline; CP20 complete: memory-admin engram update/source-replacement repository parity; CP21 complete: memory-admin service baseline; CP22 complete: memory-admin API route baseline; CP23 complete: dependency-aware memory-admin API integration baseline; CP24 complete: runtime dependency wiring with migration-time actor/project resolver bridges; CP25 complete: context-first admin actor hardening baseline; CP26 complete: session-cookie actor middleware baseline with DB-backed canonicalization; CP27 complete: session login/logout/csrf route baseline with `/api/v1/me`; CP28 complete: session hardening baseline for TTL/issued-at validation and secure cookie attributes; CP29 complete: UI/login parity baseline (`/`, `/login`, `/logout`, `/ui`) on hardened sessions; CP30 complete: login guard + auth audit parity baseline in Go runtime/UI flow; CP31 complete: distributed limiter parity baseline with `rate_limit_state` store wiring and local fallback hardening; CP32 complete: UI/admin auth integration hardening with `/ui/admin` role-gating parity and auth/session code-health uplift; CP33 complete: role-aware `/api/v1/users` API parity + auth/session route health uplift; CP34 complete: session-auth engram route parity (`/api/v1/engrams*`) with strict >9.5 code-health gate; CP35 complete: non-checkpoint code-health uplift for `internal/auth/session.go` from 9.38 to 9.68; CP36 complete: non-checkpoint code-health uplift for `internal/repository/user.go` from 9.38 to 10.0; CP37 complete: non-checkpoint code-health uplift for `internal/embeddings/service.go` from 9.09 to 9.68; CP38 complete: non-checkpoint code-health uplift for `internal/repository/oauth.go` from 9.38 to 10.0; CP39 complete: non-checkpoint code-health uplift for `internal/repository/chat_test.go` from 9.09 to 10.0; CP40 complete: non-checkpoint code-health uplift for `internal/repository/chat.go` from 9.02 to 9.68; CP41 complete: non-checkpoint code-health uplift for `internal/repository/oauth_test.go` from 9.38 to 10.0; CP42 complete: non-checkpoint code-health uplift for `internal/repository/collection_test.go` from 9.09 to 10.0; CP43 complete: non-checkpoint code-health uplift for `internal/repository/document_test.go` from 8.72 to 9.68; CP44 complete: non-checkpoint code-health uplift for `internal/repository/document.go` from 8.81 to 9.68; CP45 complete: non-checkpoint code-health uplift for `internal/repository/chat_pinning.go` from 8.81 to 9.68; CP46 complete: non-checkpoint code-health uplift for `internal/repository/engram_write_test.go` from 9.26 to 10.0; CP47 complete: non-checkpoint code-health uplift for `internal/repository/admin_engram_update_test.go` from 9.25 to 10.0; CP48 complete: non-checkpoint code-health uplift for `internal/repository/admin_engram_test.go` from 9.38 to 10.0; CP49 complete: non-checkpoint code-health uplift for `internal/admin/service_test.go` from 9.38 to 10.0; CP50 complete: non-checkpoint code-health uplift for `internal/admin/service.go` from 8.54 to 9.68; CP51 complete: non-checkpoint code-health uplift for `internal/repository/chat_pinning_test.go` from 9.38 to 9.51).
 - **Go migration current checkpoint (2026-03-01):** CP189 completed in `checkpoint-go-migration.md` with Phase 22 release automation closure (CI backend/web/acceptance/release-smoke gates, optional workflow-dispatched live-provider release gate, compose profile matrix, and versioned release checklist/rollback docs) validated with compose config checks plus `go test ./...`.
@@ -184,7 +191,9 @@
   - REST: `POST /api/v1/engrams/{engram_id}/feedback`.
   - MCP: `engram.feedback` / `engram_feedback`.
 - [x] Added feedback-aware retrieval rerank signal.
-- [ ] Add engagement/freshness weighting calibration and phase latency benchmark notes.
+- [x] Added engagement/freshness weighting calibration and phase latency benchmark notes:
+  - composite rerank now includes engagement (`access_count`) and freshness (`freshness_score`) factors with deterministic weights.
+  - latency benchmark notes captured in `docs/phase36-relevance-calibration.md`.
 
 ### Phase 37 Progress Tracker
 
@@ -214,6 +223,327 @@
 - [x] Added acceptance/benchmark coverage for grouping criteria:
   - deterministic `@phase37` acceptance scenario for refresh/list/action quality checks.
   - documented precision/recall benchmark fixture and thresholds in `docs/phase37-consolidation-benchmark.md`.
+
+### Phase 38 Progress Tracker
+
+- [x] Added contradiction-trace metadata in link recall assembly:
+  - `engram_trace_paths[].has_contradiction`
+  - `engram_trace_paths[].contradicting_link_ids`
+- [x] Added contradiction warning synthesis in chat context assembly:
+  - `contradiction_warnings` with severity guidance (`high`/`medium`/`low`).
+- [x] Added send/stream/MCP payload parity for contradiction warnings:
+  - chat send response.
+  - stream `meta` + `done` payloads.
+  - MCP `chat.send_message` response parity adapter.
+- [x] Added regression coverage for contradiction warning generation and propagation.
+- [x] Added contradiction alert persistence repository baseline:
+  - schema + indexes in `engram_contradiction_alerts`.
+  - deterministic refresh/list/resolve repository primitives with project scoping.
+  - repository/model test coverage for refresh/list/resolve + status parsing.
+- [x] Added contradiction review tooling via API/MCP:
+  - admin routes for refresh/list/resolve contradiction alerts.
+  - MCP tool parity:
+    - `engram.refresh_contradictions`
+    - `engram.contradiction_list`
+    - `engram.contradiction_resolve`
+  - regression coverage across admin routes, adapters, MCP parser/dispatch paths.
+- [x] Added contradiction warning synthesis latency benchmark baseline:
+  - chat benchmark coverage for `buildContradictionWarnings` at 50/200 path workloads.
+  - benchmark results + runbook documented in `docs/phase38-contradiction-benchmark.md`.
+- [x] Added warning-quality benchmark coverage:
+  - deterministic acceptance precision/recall scenario for contradiction refresh/list/resolve flow in `acceptance-tests/features/phase38-contradiction-mock.feature`.
+  - contradiction-link create path fixed by aliasing source/target CTE relations in `internal/repository/engram_links.go`, enabling scenario inclusion in default `@mock` suite.
+
+### Phase 39 Progress Tracker
+
+- [x] Added temporal query filters beyond created-at bounds:
+  - `access_count_min`
+  - `freshness_score_min`
+  - repository + MCP parser/catalog/test coverage updated for new filters.
+- [x] Added recall/timeline temporal windows:
+  - `last_accessed_after` / `last_accessed_before`
+  - `freshness_computed_after` / `freshness_computed_before`
+  - REST decode validation + MCP parser/catalog parity + repository predicates.
+- [x] Added trace-aware query constraints:
+  - `relation_type`
+  - `trace_depth` (depth-1 trace constraint baseline)
+  - REST/MCP parser/catalog parity + repository `engram_links` filter support.
+- [x] Added bounded cost-aware context controls in chat send paths:
+  - optional `context_token_budget` in REST/MCP send-message payloads.
+  - bounded context-section assembly with deterministic estimated-token truncation.
+- [x] Added retrieval-audit budget diagnostics:
+  - `context_token_budget`
+  - `context_token_estimate`
+  - `context_token_truncated`
+- [x] Added regression coverage for context-budget normalization/truncation and REST/MCP forwarding.
+- [x] Add trace-aware temporal filters and expanded contract coverage.
+- [x] Expand benchmark coverage for complex temporal/engagement/trace filter combinations.
+  - repository benchmark suite now includes:
+    - `BenchmarkBuildEngramQueryWhereComplexTemporalEngagementTrace`
+    - `BenchmarkBuildEngramQueryWhereComplexFilterMatrix`
+  - benchmark artifact: `docs/phase39-query-benchmark.md`.
+
+### Phase 40 Progress Tracker
+
+- [x] Added `memory_curation_suggestions` schema baseline:
+  - new table + status/type checks.
+  - project/status and session/type indexes.
+- [x] Added curation suggestion model contracts:
+  - suggestion type/status enums + parse helpers.
+  - persisted record payload shape.
+- [x] Added repository persistence baseline:
+  - `CreateMemoryCurationSuggestion`
+  - `ListMemoryCurationSuggestions`
+  - `ApplyMemoryCurationSuggestionAction`
+- [x] Added repository regression coverage for create/list/action and invalid status paths.
+- [x] Added API + MCP routes/tools for memory curation suggestion workflows.
+  - REST admin routes:
+    - `POST /api/v1/admin/memory/engrams/{engram_id}/links/curation/refresh`
+    - `GET /api/v1/admin/memory/engrams/curation/suggestions`
+    - `POST /api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action`
+  - MCP tools:
+    - `engram.curation_refresh_links`
+    - `engram.curation_list`
+    - `engram.curation_action`
+  - Added route/service/dispatch/catalog/token-policy regression coverage.
+  - `engram.curation_refresh_links` catalog metadata now exposes optional scoped `project_id` in `tools/list` schema.
+- [x] Added deterministic suggestion-generation workflow hooks.
+  - consolidation refresh now rebuilds `consolidate` curation suggestions.
+  - contradiction refresh now rebuilds `contradiction` curation suggestions.
+  - admin link-curation refresh now persists deduped `link` curation suggestions from on-demand hygiene recommendations.
+  - scheduled link-hygiene execution now persists `link` curation suggestions for non-auto-archived recommendations.
+  - scheduled link-hygiene suggestion persistence dedupes pending rows by payload identity (`link_id`, `target_engram_id`, `suggested_action`).
+  - stale `suggested` rows are reset per type/project before regeneration.
+- [x] Added curation apply-action orchestration for actionable suggestion types.
+  - `status=applied` now dispatches downstream operations before curation status update.
+  - `consolidate` payloads trigger consolidation `merged` transitions.
+  - `contradiction` payloads trigger contradiction-alert `resolved` transitions.
+  - `link` payloads trigger link archival for archive-oriented hygiene actions and `review_relation_conflict`.
+  - payload parse failures now return explicit bad-request errors in REST/MCP action flows.
+- [x] Added acceptance coverage for curation generation/action quality.
+  - deterministic `@phase40 @mock` scenarios validate:
+    - curation generation via consolidation + contradiction refresh flows.
+    - curation type coverage (`consolidate`, `contradiction`).
+    - curation action transitions (`suggested` -> `accepted`, `suggested` -> `applied`) and audit fields.
+    - applied-status downstream effects:
+      - consolidation suggestion status transitions to `merged`.
+      - contradiction alert status transitions to `resolved`.
+    - link-hygiene refresh generates actionable `link` suggestions and `status=applied` action succeeds.
+    - link-hygiene refresh rejects mismatched scoped `project_id` with explicit bad-request behavior.
+- [x] Added scoped project hardening for link-curation refresh.
+  - REST + MCP refresh paths now accept optional `project_id`.
+  - refresh rejects mismatched scope (`project_id` != source engram project) with explicit bad-request mapping.
+- [x] Added benchmark coverage for curation suggestion action latency, applied-side-effect orchestration, and sync scaling.
+  - benchmark suite:
+    - `BenchmarkActionMemoryCurationSuggestion`
+    - `BenchmarkActionMemoryCurationSuggestionAppliedConsolidate`
+    - `BenchmarkActionMemoryCurationSuggestionAppliedContradiction`
+    - `BenchmarkSyncConsolidationCurationSuggestions50Candidates`
+    - `BenchmarkSyncConsolidationCurationSuggestions200Candidates`
+  - benchmark artifact: `docs/phase40-curation-benchmark.md`
+
+### Phase 41 Progress Tracker
+
+- [x] Added schema/model support for richer feedback signals:
+  - `engrams.feedback_count`.
+  - `engrams.avg_relevance_feedback`.
+  - `engram_feedback.relevance_score` (optional, 1-5).
+  - `engram_feedback.session_id` (optional, FK to `chat_sessions`).
+  - `engram_feedback.integration_depth` (optional enum: `mentioned|elaborated|contradicted|ignored`).
+- [x] Extended feedback repository write path:
+  - feedback events now persist optional `relevance_score`, optional `session_id`, and optional `integration_depth`.
+  - engram aggregates now update `feedback_count` and `avg_relevance_feedback` deterministically.
+- [x] Added REST + MCP feedback payload parity:
+  - REST and MCP feedback requests now accept optional `relevance_score` with `1-5` validation, optional `session_id` UUID, and optional `integration_depth`.
+  - MCP `engram.feedback` catalog schema now documents `relevance_score`, `session_id`, and `integration_depth`.
+- [x] Added regression coverage:
+  - repository tests for relevance score/session/integration-depth persistence + validation and aggregate returns.
+  - API route tests for relevance-score/session/integration-depth forwarding and validation.
+  - MCP compatibility tests for relevance-score/session/integration-depth forwarding and validation.
+
+### Phase 42 Progress Tracker
+
+- [x] Added schema support for source-session authority scoring:
+  - `engrams.source_session_quality_score` (`0.0-1.0`, default `0.5`).
+  - idempotent check constraint + `engrams_source_session_quality_idx`.
+- [x] Added retrieval authority signal integration:
+  - engram query candidate selection now reads `source_session_quality_score`.
+  - composite rerank now includes authority weighting.
+- [x] Added deterministic feedback-driven authority calibration:
+  - feedback write path updates `source_session_quality_score` when `relevance_score` is provided.
+- [x] Added regression coverage:
+  - rerank unit test for authority signal ordering.
+  - query-shape assertion for `source_session_quality_score` selection.
+  - feedback SQL regression assertion for authority-score update path.
+
+### Phase 43 Progress Tracker
+
+- [x] Added authority-threshold query contract:
+  - `source_session_quality_min` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `source_session_quality_min` now validates as bounded `0..1`.
+- [x] Added repository query predicate support:
+  - `COALESCE(source_session_quality_score, 0.5) >= ...` filter path.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `source_session_quality_min`.
+  - tool schema now documents `source_session_quality_min`.
+- [x] Added regression coverage:
+  - REST invalid-filter test and parsed-request assertion for authority filter.
+  - repository where-clause/params assertions for authority predicate.
+  - MCP parity + validation tests for authority filter handling.
+
+### Phase 44 Progress Tracker
+
+- [x] Added fallback authority calibration for feedback writes:
+  - `source_session_quality_score` updates now use normalized `relevance_score` when present.
+  - fallback authority mapping now applies from `integration_depth` when `relevance_score` is omitted.
+  - feedback-type fallback now applies when both relevance and integration depth are absent.
+- [x] Added authority-score visibility in query response contracts:
+  - `models.EngramQueryResult` now includes `source_session_quality_score`.
+  - repository query result mapping now forwards `source_session_quality_score` to API/MCP callers.
+- [x] Added regression coverage:
+  - repository authority-signal normalization tests for fallback precedence and bounded mappings.
+  - API query route response test asserting serialized `source_session_quality_score`.
+  - MCP compatibility parity test including `source_session_quality_score` in returned payloads.
+
+### Phase 45 Progress Tracker
+
+- [x] Added feedback-quality query filter contract:
+  - `avg_relevance_feedback_min` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `avg_relevance_feedback_min` now validates as bounded `0..1`.
+- [x] Added repository predicate support:
+  - `COALESCE(avg_relevance_feedback, 0.5) >= ...` filter path.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `avg_relevance_feedback_min`.
+  - tool schema now documents `avg_relevance_feedback_min`.
+- [x] Added regression coverage:
+  - REST invalid-filter and parsed-request assertions for `avg_relevance_feedback_min`.
+  - repository where-clause/params assertions for feedback-quality predicate.
+  - MCP parity and validation tests for filter handling.
+
+### Phase 46 Progress Tracker
+
+- [x] Added contradiction-aware query filter contract:
+  - `contradiction_count_max` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `contradiction_count_max` now validates as non-negative.
+- [x] Added repository predicate support:
+  - `COALESCE(contradiction_count, 0) <= ...` filter path.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `contradiction_count_max`.
+  - tool schema now documents `contradiction_count_max`.
+- [x] Added regression coverage:
+  - REST invalid-filter and parsed-request assertions for `contradiction_count_max`.
+  - repository where-clause/params assertions for contradiction predicate.
+  - MCP parity and validation tests for contradiction-count filter behavior.
+
+### Phase 47 Progress Tracker
+
+- [x] Added query-result diagnostics contract extension:
+  - `feedback_count` on `models.EngramQueryResult`.
+  - `contradiction_count` on `models.EngramQueryResult`.
+- [x] Added repository query projection parity:
+  - query SQL now projects `COALESCE(feedback_count, 0)`.
+  - result mapping now forwards both feedback and contradiction counters.
+- [x] Added REST/MCP parity coverage:
+  - REST query route response test asserts `feedback_count` + `contradiction_count` serialization.
+  - MCP compatibility query parity test includes quality counters in returned payloads.
+- [x] Added repository regression coverage:
+  - query fixture/mapping assertions now verify feedback and contradiction counters on query results.
+
+### Phase 48 Progress Tracker
+
+- [x] Added query-result engagement diagnostics contract extension:
+  - `access_count` on `models.EngramQueryResult`.
+  - `freshness_score` on `models.EngramQueryResult`.
+- [x] Added repository projection/mapping parity:
+  - query result mapping now forwards access and freshness values from candidate rows.
+- [x] Added REST/MCP parity coverage:
+  - REST query route response test asserts `access_count` + `freshness_score` serialization.
+  - MCP compatibility query parity test includes engagement diagnostics fields.
+- [x] Added repository regression coverage:
+  - query fixture/mapping assertions now verify `access_count` and `freshness_score` on returned results.
+
+### Phase 49 Progress Tracker
+
+- [x] Added feedback-volume query filter contract:
+  - `feedback_count_min` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `feedback_count_min` now validates as non-negative.
+- [x] Added repository predicate support:
+  - `COALESCE(feedback_count, 0) >= ...` filter path.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `feedback_count_min`.
+  - tool schema now documents `feedback_count_min`.
+- [x] Added regression coverage:
+  - REST invalid-filter and parsed-request assertions for `feedback_count_min`.
+  - repository where-clause/params assertions for feedback-count predicate.
+  - MCP parity and validation tests for feedback-volume filter behavior.
+
+### Phase 50 Progress Tracker
+
+- [x] Added useful-signal query filter contract:
+  - `useful_count_min` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `useful_count_min` now validates as non-negative.
+- [x] Added repository predicate support:
+  - `COALESCE(useful_count, 0) >= ...` filter path.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `useful_count_min`.
+  - tool schema now documents `useful_count_min`.
+- [x] Added regression coverage:
+  - REST invalid-filter and parsed-request assertions for `useful_count_min`.
+  - repository where-clause/params assertions for useful-count predicate.
+  - MCP parity and validation tests for useful-signal filter behavior.
+
+### Phase 51 Progress Tracker
+
+- [x] Added useful-ratio query filter contract:
+  - `useful_feedback_ratio_min` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `useful_feedback_ratio_min` now validates as bounded `0..1`.
+- [x] Added repository ratio-predicate support:
+  - query filter now applies `useful_count / feedback_count` threshold when feedback exists.
+  - deterministic fallback `0.5` is used when feedback_count is zero.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `useful_feedback_ratio_min`.
+  - tool schema now documents `useful_feedback_ratio_min`.
+- [x] Added regression coverage:
+  - REST invalid-filter and parsed-request assertions for `useful_feedback_ratio_min`.
+  - repository where-clause/params assertions for ratio predicate.
+  - MCP parity and validation tests for useful-ratio filter behavior.
+
+### Phase 52 Progress Tracker
+
+- [x] Extended query-result diagnostics contract:
+  - `useful_count`, `avg_relevance_feedback`, and `useful_feedback_ratio` on `models.EngramQueryResult`.
+- [x] Added repository projection/mapping support:
+  - query projection now selects `COALESCE(avg_relevance_feedback, 0.5)`.
+  - result mapper now emits deterministic `useful_feedback_ratio` with neutral `0.5` fallback when feedback is absent.
+- [x] Added REST/MCP parity coverage:
+  - REST query response assertions now validate useful diagnostics fields.
+  - MCP compatibility parity fixture now includes useful diagnostics in query results.
+- [x] Added repository regression coverage:
+  - query fixture assertions now verify useful diagnostics mapping and SQL projection clauses.
+  - helper coverage ensures ratio fallback semantics when `feedback_count` is zero.
+
+### Phase 53 Progress Tracker
+
+- [x] Added contradiction-ratio query filter contract:
+  - `contradiction_feedback_ratio_max` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `contradiction_feedback_ratio_max` now validates as bounded `0..1`.
+- [x] Added repository ratio-predicate support:
+  - query filter now applies `contradiction_count / feedback_count` threshold when feedback exists.
+  - deterministic fallback `0.0` is used when feedback_count is zero.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `contradiction_feedback_ratio_max`.
+  - tool schema now documents `contradiction_feedback_ratio_max`.
+- [x] Added regression coverage:
+  - REST invalid-filter and parsed-request assertions for `contradiction_feedback_ratio_max`.
+  - repository where-clause/params assertions for contradiction-ratio predicate.
+  - MCP parity and validation tests for contradiction-ratio filter behavior.
 
 ---
 
@@ -356,4 +686,20 @@
 | 32 | ContinuWitty Query Protocol | Completed |
 | 33 | Portable Export/Import Stash | Completed |
 | 34 | Security Audit Remediation Program | Completed |
-| 35 | Memory Engagement Tracking Baseline | In Progress |
+| 35 | Memory Engagement Tracking Baseline | Completed |
+| 36 | Feedback Loop + Relevance Scoring | Completed |
+| 37 | Time-Decay + Consolidation Suggestions | Completed |
+| 38 | Contradiction Detection + Warning Flows | Completed |
+| 39 | Temporal Query Extensions + Cost-Aware Context Assembly | Completed |
+| 40 | Autonomous Memory Suggestions + Action Workflows | Completed |
+| 41 | Feedback Signal Enrichment | Completed |
+| 42 | Session Authority Scoring Baseline | Completed |
+| 43 | Authority-Aware Query Filters | Completed |
+| 44 | Authority Signal Transparency + Fallback Calibration | Completed |
+| 45 | Feedback-Aware Query Filters | Completed |
+| 46 | Contradiction-Aware Query Filters | Completed |
+| 47 | Query Quality Diagnostics in Results | Completed |
+| 48 | Query Engagement Diagnostics in Results | Completed |
+| 49 | Feedback-Volume Query Filters | Completed |
+| 50 | Useful-Signal Query Filters | Completed |
+| 51 | Useful-Ratio Query Filters | Completed |

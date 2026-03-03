@@ -323,6 +323,27 @@ func TestRefreshEngramConsolidationSuggestionsUsesRepositoryRequestObject(t *tes
 	service := NewService(nil, 256, nil)
 	suggestedAt := time.Date(2026, 3, 3, 13, 45, 0, 0, time.UTC)
 	called := false
+	service.deps.resetMemoryCurationSuggestions = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.MemoryCurationSuggestionResetInput,
+	) (int, error) {
+		return 0, nil
+	}
+	service.deps.listConsolidationSuggestions = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.ConsolidationSuggestionListInput,
+	) ([]models.EngramConsolidationSuggestion, error) {
+		return nil, nil
+	}
+	service.deps.createMemoryCurationSuggestion = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.MemoryCurationSuggestionCreateInput,
+	) (*models.MemoryCurationSuggestion, error) {
+		return &models.MemoryCurationSuggestion{}, nil
+	}
 	service.deps.refreshConsolidationSuggestions = func(
 		_ context.Context,
 		_ repository.Queryer,
@@ -361,6 +382,13 @@ func TestRefreshEngramConsolidationSuggestionsUsesRepositoryRequestObject(t *tes
 
 func TestRefreshEngramConsolidationSuggestionsRejectsInvalidMinGroupSize(t *testing.T) {
 	service := NewService(nil, 256, nil)
+	service.deps.resetMemoryCurationSuggestions = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.MemoryCurationSuggestionResetInput,
+	) (int, error) {
+		return 0, nil
+	}
 	minGroupSize := 1
 	_, err := service.RefreshEngramConsolidationSuggestions(
 		context.Background(),

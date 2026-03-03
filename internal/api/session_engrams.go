@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"engram/internal/models"
 
@@ -33,10 +34,13 @@ type SessionProjectResolution struct {
 
 // SessionEngramFeedbackInput captures feedback route payload + actor context.
 type SessionEngramFeedbackInput struct {
-	EngramID     uuid.UUID
-	ActorUserID  uuid.UUID
-	FeedbackType models.EngramFeedbackType
-	Note         *string
+	EngramID         uuid.UUID
+	SessionID        *uuid.UUID
+	ActorUserID      uuid.UUID
+	FeedbackType     models.EngramFeedbackType
+	IntegrationDepth *models.EngramFeedbackIntegrationDepth
+	Note             *string
+	RelevanceScore   *int
 }
 
 func (dependencies sessionAuthDependencies) handleCreateEngram(writer http.ResponseWriter, request *http.Request) {
@@ -211,10 +215,13 @@ func (dependencies sessionAuthDependencies) handleSubmitEngramFeedback(
 	record, err := dependencies.submitEngramFeedback(
 		request.Context(),
 		SessionEngramFeedbackInput{
-			EngramID:     engramID,
-			ActorUserID:  actor.UserID,
-			FeedbackType: payload.FeedbackType,
-			Note:         payload.Note,
+			EngramID:         engramID,
+			SessionID:        payload.SessionID,
+			ActorUserID:      actor.UserID,
+			FeedbackType:     payload.FeedbackType,
+			IntegrationDepth: payload.IntegrationDepth,
+			Note:             payload.Note,
+			RelevanceScore:   payload.RelevanceScore,
 		},
 	)
 	if err != nil {
@@ -303,26 +310,222 @@ func decodeQueryEngramsRequest(
 	if !decodeJSONAllowEmpty(writer, request, &payload) {
 		return models.EngramQueryRequest{}, false
 	}
-	payload.Query = strings.TrimSpace(payload.Query)
-	if payload.Query == "" {
-		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "query is required"})
+	normalizeQueryEngramsPayload(&payload)
+	if detail := validateQueryEngramsPayload(payload); detail != "" {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": detail})
 		return models.EngramQueryRequest{}, false
-	}
-	if payload.TopK == 0 {
-		payload.TopK = defaultEngramQueryTopK
-	}
-	if payload.TopK < 1 || payload.TopK > 50 {
-		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid top_k"})
-		return models.EngramQueryRequest{}, false
-	}
-	payload.ProjectID = normalizeOptionalProjectID(payload.ProjectID)
-	if payload.Tags == nil {
-		payload.Tags = []string{}
-	}
-	if payload.Keywords == nil {
-		payload.Keywords = []string{}
 	}
 	return payload, true
+}
+
+func normalizeQueryEngramsPayload(payload *models.EngramQueryRequest) {
+	payload.Query = strings.TrimSpace(payload.Query)
+	normalizeQueryTopK(payload)
+	normalizeQueryRelationType(payload)
+	normalizeQueryTraceDepth(payload)
+	normalizeQueryScope(payload)
+}
+
+func normalizeQueryTopK(payload *models.EngramQueryRequest) {
+	if payload.TopK != 0 {
+		return
+	}
+	payload.TopK = defaultEngramQueryTopK
+}
+
+func normalizeQueryRelationType(payload *models.EngramQueryRequest) {
+	if payload.RelationType == nil {
+		return
+	}
+	relation := strings.TrimSpace(string(*payload.RelationType))
+	if relation == "" {
+		payload.RelationType = nil
+		return
+	}
+	typed := models.EngramLinkRelationType(relation)
+	payload.RelationType = &typed
+}
+
+func normalizeQueryTraceDepth(payload *models.EngramQueryRequest) {
+	if payload.RelationType == nil || payload.TraceDepth != nil {
+		return
+	}
+	defaultDepth := 1
+	payload.TraceDepth = &defaultDepth
+}
+
+func normalizeQueryScope(payload *models.EngramQueryRequest) {
+	payload.ProjectID = normalizeOptionalProjectID(payload.ProjectID)
+	payload.Tags = normalizeStringSlice(payload.Tags)
+	payload.Keywords = normalizeStringSlice(payload.Keywords)
+}
+
+func normalizeStringSlice(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
+}
+
+func validateQueryEngramsPayload(payload models.EngramQueryRequest) string {
+	for _, rule := range queryEngramValidationRules(payload) {
+		if rule.invalid {
+			return rule.detail
+		}
+	}
+	return invalidQueryTemporalWindowDetail(payload)
+}
+
+type queryEngramValidationRule struct {
+	detail  string
+	invalid bool
+}
+
+func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngramValidationRule {
+	return []queryEngramValidationRule{
+		{detail: "query is required", invalid: payload.Query == ""},
+		{detail: "invalid top_k", invalid: payload.TopK < 1 || payload.TopK > 50},
+		{detail: "invalid useful_count_min", invalid: invalidUsefulCountMin(payload.UsefulCountMin)},
+		{detail: "invalid access_count_min", invalid: invalidAccessCountMin(payload.AccessCountMin)},
+		{detail: "invalid feedback_count_min", invalid: invalidFeedbackCountMin(payload.FeedbackCountMin)},
+		{
+			detail:  "invalid contradiction_count_max",
+			invalid: invalidContradictionCountMax(payload.ContradictionCountMax),
+		},
+		{
+			detail:  "invalid contradiction_feedback_ratio_max",
+			invalid: invalidContradictionRatioMax(payload.ContradictionRatioMax),
+		},
+		{detail: "invalid freshness_score_min", invalid: invalidFreshnessScoreMin(payload.FreshnessScoreMin)},
+		{
+			detail:  "invalid useful_feedback_ratio_min",
+			invalid: invalidUsefulFeedbackRatioMin(payload.UsefulFeedbackRatioMin),
+		},
+		{
+			detail:  "invalid avg_relevance_feedback_min",
+			invalid: invalidAvgRelevanceFeedbackMin(payload.AvgRelevanceFeedbackMin),
+		},
+		{
+			detail:  "invalid source_session_quality_min",
+			invalid: invalidSourceSessionQualityMin(payload.SourceSessionQualityMin),
+		},
+		{detail: "invalid relation_type", invalid: invalidRelationType(payload.RelationType)},
+		{detail: "invalid trace_depth", invalid: invalidTraceDepth(payload.TraceDepth)},
+		{
+			detail:  "invalid trace_depth",
+			invalid: relationTypeTraceDepthConflict(payload.RelationType, payload.TraceDepth),
+		},
+	}
+}
+
+func invalidUsefulCountMin(value *int) bool {
+	return value != nil && *value < 0
+}
+
+func invalidAccessCountMin(value *int) bool {
+	return value != nil && *value < 0
+}
+
+func invalidFeedbackCountMin(value *int) bool {
+	return value != nil && *value < 0
+}
+
+func invalidContradictionCountMax(value *int) bool {
+	return value != nil && *value < 0
+}
+
+func invalidContradictionRatioMax(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidFreshnessScoreMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidUsefulFeedbackRatioMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidAvgRelevanceFeedbackMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidSourceSessionQualityMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidBoundedUnitInterval(value *float64) bool {
+	if value == nil {
+		return false
+	}
+	if *value < 0 {
+		return true
+	}
+	return *value > 1
+}
+
+func hasInvalidTemporalWindow(after *time.Time, before *time.Time) bool {
+	if after == nil || before == nil {
+		return false
+	}
+	return after.After(*before)
+}
+
+func invalidRelationType(value *models.EngramLinkRelationType) bool {
+	if value == nil {
+		return false
+	}
+	_, err := models.ParseEngramLinkRelationType(strings.TrimSpace(string(*value)))
+	return err != nil
+}
+
+func invalidTraceDepth(value *int) bool {
+	if value == nil {
+		return false
+	}
+	if *value < 0 {
+		return true
+	}
+	return *value > 1
+}
+
+func relationTypeTraceDepthConflict(
+	relationType *models.EngramLinkRelationType,
+	traceDepth *int,
+) bool {
+	return relationType != nil && traceDepth != nil && *traceDepth == 0
+}
+
+type queryTemporalWindowSpec struct {
+	after         *time.Time
+	before        *time.Time
+	invalidDetail string
+}
+
+func invalidQueryTemporalWindowDetail(payload models.EngramQueryRequest) string {
+	specs := []queryTemporalWindowSpec{
+		{
+			after:         payload.CreatedAfter,
+			before:        payload.CreatedBefore,
+			invalidDetail: "invalid created_at window",
+		},
+		{
+			after:         payload.LastAccessedAfter,
+			before:        payload.LastAccessedBefore,
+			invalidDetail: "invalid last_accessed window",
+		},
+		{
+			after:         payload.FreshnessComputedAfter,
+			before:        payload.FreshnessComputedBefore,
+			invalidDetail: "invalid freshness_computed window",
+		},
+	}
+	for _, spec := range specs {
+		if hasInvalidTemporalWindow(spec.after, spec.before) {
+			return spec.invalidDetail
+		}
+	}
+	return ""
 }
 
 func decodeEngramFeedbackRequest(
@@ -342,10 +545,84 @@ func decodeEngramFeedbackRequest(
 		)
 		return SessionEngramFeedbackInput{}, false
 	}
+	relevanceScore, ok := normalizeOptionalFeedbackRelevanceScore(payload.RelevanceScore)
+	if !ok {
+		writeJSON(
+			writer,
+			http.StatusBadRequest,
+			map[string]string{"detail": "relevance_score must be an integer between 1 and 5"},
+		)
+		return SessionEngramFeedbackInput{}, false
+	}
+	integrationDepth, ok := parseOptionalFeedbackIntegrationDepth(payload.IntegrationDepth)
+	if !ok {
+		writeJSON(
+			writer,
+			http.StatusBadRequest,
+			map[string]string{
+				"detail": "integration_depth must be one of: mentioned, elaborated, contradicted, ignored",
+			},
+		)
+		return SessionEngramFeedbackInput{}, false
+	}
+	sessionID, ok := parseOptionalFeedbackSessionID(payload.SessionID)
+	if !ok {
+		writeJSON(
+			writer,
+			http.StatusBadRequest,
+			map[string]string{"detail": "session_id must be a valid uuid when provided"},
+		)
+		return SessionEngramFeedbackInput{}, false
+	}
 	return SessionEngramFeedbackInput{
-		FeedbackType: parsedType,
-		Note:         normalizeOptionalTrimmedString(payload.Note),
+		FeedbackType:     parsedType,
+		IntegrationDepth: integrationDepth,
+		Note:             normalizeOptionalTrimmedString(payload.Note),
+		RelevanceScore:   relevanceScore,
+		SessionID:        sessionID,
 	}, true
+}
+
+func normalizeOptionalFeedbackRelevanceScore(
+	relevanceScore *int,
+) (*int, bool) {
+	if relevanceScore == nil {
+		return nil, true
+	}
+	if *relevanceScore < 1 || *relevanceScore > 5 {
+		return nil, false
+	}
+	normalized := *relevanceScore
+	return &normalized, true
+}
+
+func parseOptionalFeedbackIntegrationDepth(
+	integrationDepth *string,
+) (*models.EngramFeedbackIntegrationDepth, bool) {
+	if integrationDepth == nil {
+		return nil, true
+	}
+	parsed, err := models.ParseEngramFeedbackIntegrationDepth(*integrationDepth)
+	if err != nil {
+		return nil, false
+	}
+	normalized := parsed
+	return &normalized, true
+}
+
+func parseOptionalFeedbackSessionID(sessionID *string) (*uuid.UUID, bool) {
+	if sessionID == nil {
+		return nil, true
+	}
+	trimmed := strings.TrimSpace(*sessionID)
+	if trimmed == "" {
+		return nil, false
+	}
+	parsed, err := uuid.Parse(trimmed)
+	if err != nil {
+		return nil, false
+	}
+	return &parsed, true
 }
 
 func normalizeCreateEngramPayload(payload *models.MemoryEngramCreate) {

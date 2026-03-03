@@ -25,6 +25,7 @@ func TestBuildStreamMetaPayloadIncludesContextReferences(t *testing.T) {
 	requireEqualAnyRuntime(t, prepared.Context.UsedEngramIDs, payload["used_engram_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedEngramLinkIDs, payload["used_engram_link_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.EngramTracePaths, payload["engram_trace_paths"])
+	requireEqualAnyRuntime(t, prepared.Context.ContradictionWarnings, payload["contradiction_warnings"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedDocumentChunkIDs, payload["used_document_chunk_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.SourceReferences, payload["source_references"])
 	requireEqualAnyRuntime(t, prepared.Context.RetrievalAudit, payload["retrieval_audit"])
@@ -53,6 +54,7 @@ func TestBuildStreamDonePayloadIncludesReplyAndContextFields(t *testing.T) {
 	requireEqualAnyRuntime(t, prepared.Context.UsedEngramIDs, payload["used_engram_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedEngramLinkIDs, payload["used_engram_link_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.EngramTracePaths, payload["engram_trace_paths"])
+	requireEqualAnyRuntime(t, prepared.Context.ContradictionWarnings, payload["contradiction_warnings"])
 	requireEqualAnyRuntime(t, prepared.Context.UsedDocumentChunkIDs, payload["used_document_chunk_ids"])
 	requireEqualAnyRuntime(t, prepared.Context.SourceReferences, payload["source_references"])
 	requireEqualAnyRuntime(t, prepared.Context.RetrievalAudit, payload["retrieval_audit"])
@@ -105,6 +107,7 @@ func TestPrepareGenerationForwardsLinkRecallOverrides(t *testing.T) {
 	maxNeighbors := 9
 	noiseSuppressionEnabled := false
 	noiseThreshold := 0.72
+	contextTokenBudget := 640
 
 	_, err := runtime.PrepareGeneration(
 		context.Background(),
@@ -112,6 +115,7 @@ func TestPrepareGenerationForwardsLinkRecallOverrides(t *testing.T) {
 		base.Session.SessionID,
 		ChatMessageCreateRequest{
 			ContentText:                 "How should we proceed?",
+			ContextTokenBudget:          &contextTokenBudget,
 			LinkRecallEnabled:           &enabled,
 			LinkRecallDepth:             &depth,
 			LinkRecallMaxNeighbors:      &maxNeighbors,
@@ -125,6 +129,7 @@ func TestPrepareGenerationForwardsLinkRecallOverrides(t *testing.T) {
 	if len(requests) != 1 {
 		t.Fatalf("expected one context assembly request, got %d", len(requests))
 	}
+	requireOptionalIntRuntime(t, requests[0].ContextTokenBudget, 640, "context_token_budget")
 	requireOptionalBoolRuntime(t, requests[0].LinkRecallEnabled, false, "link_recall_enabled")
 	requireOptionalIntRuntime(t, requests[0].LinkRecallDepth, 2, "link_recall_depth")
 	requireOptionalIntRuntime(t, requests[0].LinkRecallMaxNeighbors, 9, "link_recall_max_neighbors")

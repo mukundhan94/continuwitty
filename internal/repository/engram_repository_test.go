@@ -149,6 +149,14 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	requireNoError(t, err)
 	requireEqual(t, 1, len(results))
 	requireEqual(t, "Lexical Match", results[0].Title)
+	requireEqual(t, 7, results[0].AccessCount)
+	requireEqual(t, 0.88, results[0].FreshnessScore)
+	requireEqual(t, 1, results[0].FeedbackCount)
+	requireEqual(t, 0, results[0].UsefulCount)
+	requireEqual(t, 0.82, results[0].AvgRelevanceFeedback)
+	requireEqual(t, 0.0, results[0].UsefulFeedbackRatio)
+	requireEqual(t, 0, results[0].ContradictionCount)
+	requireEqual(t, 0.5, results[0].SourceSessionQualityScore)
 	assertQueryEngramsRuntimeQuery(
 		t,
 		queryRuntimeAssertionInput{
@@ -178,7 +186,12 @@ func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 					"private",
 					"unrelated text",
 					0,
+					2,
+					0.55,
 					0,
+					1,
+					0.4,
+					0.5,
 					0.2,
 				},
 				{
@@ -193,7 +206,12 @@ func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 					"private",
 					"durable checkpoint lifecycle",
 					0,
+					1,
+					0.82,
 					0,
+					7,
+					0.88,
+					0.5,
 					0.25,
 				},
 			},
@@ -210,9 +228,7 @@ type queryRuntimeAssertionInput struct {
 
 func assertQueryEngramsRuntimeQuery(t *testing.T, input queryRuntimeAssertionInput) {
 	t.Helper()
-	if !strings.Contains(input.query, "embed <=> $1::vector AS distance") {
-		t.Fatalf("expected vector distance clause in query, got %q", input.query)
-	}
+	assertQueryHasRerankSignalClauses(t, input.query)
 	if !strings.Contains(input.query, "WHERE deleted_at IS NULL AND project_id = $2") {
 		t.Fatalf("expected project clause with pgx placeholders, got %q", input.query)
 	}
@@ -232,5 +248,24 @@ func assertQueryEngramsRuntimeQuery(t *testing.T, input queryRuntimeAssertionInp
 	expectedArgs := []any{"[0.1,0.2,0.3]", input.projectID, input.actorUserID, 4}
 	if !reflect.DeepEqual(input.args, expectedArgs) {
 		t.Fatalf("expected args %#v, got %#v", expectedArgs, input.args)
+	}
+}
+
+func assertQueryHasRerankSignalClauses(t *testing.T, query string) {
+	t.Helper()
+	if !strings.Contains(query, "embed <=> $1::vector AS distance") {
+		t.Fatalf("expected vector distance clause in query, got %q", query)
+	}
+	if !strings.Contains(query, "COALESCE(access_count, 0) AS access_count") {
+		t.Fatalf("expected access_count clause in query, got %q", query)
+	}
+	if !strings.Contains(query, "COALESCE(freshness_score, 1.0) AS freshness_score") {
+		t.Fatalf("expected freshness_score clause in query, got %q", query)
+	}
+	if !strings.Contains(query, "COALESCE(avg_relevance_feedback, 0.5) AS avg_relevance_feedback") {
+		t.Fatalf("expected avg_relevance_feedback clause in query, got %q", query)
+	}
+	if !strings.Contains(query, "COALESCE(source_session_quality_score, 0.5) AS source_session_quality_score") {
+		t.Fatalf("expected source_session_quality_score clause in query, got %q", query)
 	}
 }

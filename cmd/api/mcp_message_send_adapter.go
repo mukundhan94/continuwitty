@@ -40,6 +40,7 @@ func (adapter *mcpMessageSendAdapter) SendMessage(
 		request.SessionID,
 		chat.ChatMessageCreateRequest{
 			ContentText:                 request.ContentText,
+			ContextTokenBudget:          request.ContextTokenBudget,
 			LinkRecallEnabled:           request.LinkRecallEnabled,
 			LinkRecallDepth:             request.LinkRecallDepth,
 			LinkRecallMaxNeighbors:      request.LinkRecallMaxNeighbors,
@@ -51,19 +52,20 @@ func (adapter *mcpMessageSendAdapter) SendMessage(
 		return nil, err
 	}
 	return &mcp.MessageSendResponse{
-		SessionID:            result.SessionID,
-		MessageID:            result.MessageID,
-		ReplyMessageID:       result.ReplyMessageID,
-		AssistantText:        result.AssistantText,
-		PromptPolicyVersion:  result.PromptPolicyVersion,
-		CWPlanApplied:        result.CWPlanApplied,
-		UsedEngramIDs:        append([]uuid.UUID(nil), result.UsedEngramIDs...),
-		UsedEngramLinkIDs:    append([]uuid.UUID(nil), result.UsedEngramLinkIDs...),
-		EngramTracePaths:     result.EngramTracePaths,
-		UsedDocumentChunkIDs: append([]uuid.UUID(nil), result.UsedDocumentChunkIDs...),
-		SourceReferences:     result.SourceReferences,
-		RetrievalAudit:       result.RetrievalAudit,
-		DebugTrace:           mapStringAnyCopy(result.DebugTrace),
+		SessionID:             result.SessionID,
+		MessageID:             result.MessageID,
+		ReplyMessageID:        result.ReplyMessageID,
+		AssistantText:         result.AssistantText,
+		PromptPolicyVersion:   result.PromptPolicyVersion,
+		CWPlanApplied:         result.CWPlanApplied,
+		UsedEngramIDs:         append([]uuid.UUID(nil), result.UsedEngramIDs...),
+		UsedEngramLinkIDs:     append([]uuid.UUID(nil), result.UsedEngramLinkIDs...),
+		EngramTracePaths:      result.EngramTracePaths,
+		ContradictionWarnings: result.ContradictionWarnings,
+		UsedDocumentChunkIDs:  append([]uuid.UUID(nil), result.UsedDocumentChunkIDs...),
+		SourceReferences:      result.SourceReferences,
+		RetrievalAudit:        result.RetrievalAudit,
+		DebugTrace:            mapStringAnyCopy(result.DebugTrace),
 	}, nil
 }
 
@@ -80,6 +82,7 @@ func (adapter *mcpMessageSendAdapter) StreamMessageEvents(
 		request.SessionID,
 		chat.ChatMessageCreateRequest{
 			ContentText:                 request.ContentText,
+			ContextTokenBudget:          request.ContextTokenBudget,
 			LinkRecallEnabled:           request.LinkRecallEnabled,
 			LinkRecallDepth:             request.LinkRecallDepth,
 			LinkRecallMaxNeighbors:      request.LinkRecallMaxNeighbors,

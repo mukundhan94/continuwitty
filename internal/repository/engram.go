@@ -2,9 +2,6 @@ package repository
 
 import (
 	"fmt"
-	"math"
-	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -13,8 +10,6 @@ import (
 
 	"github.com/google/uuid"
 )
-
-var tokenPattern = regexp.MustCompile(`[a-z0-9]{2,}`)
 
 var genericChatAbstracts = map[string]struct{}{
 	"":                                   {},
@@ -54,26 +49,9 @@ type compactSummaryInput struct {
 	maxChars                int
 }
 
-type lexicalOverlapInput struct {
-	query          string
-	candidateParts []string
-}
-
-type rankScoreInput struct {
-	distance       float64
-	lexicalOverlap float64
-	feedbackScore  float64
-}
-
 type citationPackInput struct {
 	citations []models.RehydrationCitation
 	limit     int
-}
-
-type rerankRowsInput struct {
-	rows  []map[string]any
-	query string
-	topK  int
 }
 
 func vectorLiteral(values []float64) string {
@@ -119,15 +97,6 @@ func buildRetrievalText(payload models.MemoryEngramCreate) string {
 		" ",
 	)
 	return strings.TrimSpace(combined)
-}
-
-func tokenize(text string) map[string]struct{} {
-	matches := tokenPattern.FindAllString(strings.ToLower(text), -1)
-	tokens := make(map[string]struct{}, len(matches))
-	for _, match := range matches {
-		tokens[match] = struct{}{}
-	}
-	return tokens
 }
 
 func normalizeSpaces(input textLimitInput) string {
@@ -215,60 +184,6 @@ func resolveCompactSummary(input compactSummaryInput) string {
 	return "No summary available."
 }
 
-func lexicalOverlapScore(input lexicalOverlapInput) float64 {
-	queryTokens := tokenize(input.query)
-	if len(queryTokens) == 0 {
-		return 0
-	}
-
-	documentTokens := collectTokens(input.candidateParts)
-	if len(documentTokens) == 0 {
-		return 0
-	}
-
-	return float64(overlapCount(queryTokens, documentTokens)) / float64(len(queryTokens))
-}
-
-func collectTokens(parts []string) map[string]struct{} {
-	tokens := make(map[string]struct{})
-	for _, part := range parts {
-		for token := range tokenize(part) {
-			tokens[token] = struct{}{}
-		}
-	}
-	return tokens
-}
-
-func overlapCount(source map[string]struct{}, target map[string]struct{}) int {
-	overlap := 0
-	for token := range source {
-		if _, exists := target[token]; exists {
-			overlap += 1
-		}
-	}
-	return overlap
-}
-
-func combinedRankScore(input rankScoreInput) float64 {
-	denseScore := 1.0 / (1.0 + math.Max(input.distance, 0))
-	return (denseScore * 0.7) + (input.lexicalOverlap * 0.2) + (input.feedbackScore * 0.1)
-}
-
-func normalizeFeedbackScore(usefulCount int, contradictionCount int) float64 {
-	useful := max(usefulCount, 0)
-	contradiction := max(contradictionCount, 0)
-	total := useful + contradiction
-	if total == 0 {
-		return 0.5
-	}
-	raw := float64(useful-contradiction) / float64(total+2)
-	return clamp01((raw + 1.0) / 2.0)
-}
-
-func clamp01(value float64) float64 {
-	return min(max(value, 0), 1)
-}
-
 func packCitations(input citationPackInput) []models.RehydrationCitation {
 	if input.limit <= 0 {
 		return []models.RehydrationCitation{}
@@ -295,100 +210,170 @@ func buildEngramQueryWhere(
 	actorUserID *uuid.UUID,
 	queryLiteral string,
 ) (string, []any) {
-	whereClauses := []string{"deleted_at IS NULL"}
-	params := []any{queryLiteral}
-
-	nextPlaceholder := func() string {
-		return pgxPlaceholder(len(params) + 1)
-	}
-
-	if request.ProjectID != nil && *request.ProjectID != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("project_id = %s", nextPlaceholder()))
-		params = append(params, *request.ProjectID)
-	}
-	if actorUserID != nil {
-		actorPlaceholder := nextPlaceholder()
-		whereClauses = append(
-			whereClauses,
-			buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "owner_user_id", visibilityColumn: "visibility_scope", projectColumn: "project_id", actorPlaceholder: actorPlaceholder, includeOwnerless: true}),
-		)
-		params = append(params, *actorUserID)
-	}
-	if len(request.Tags) > 0 {
-		whereClauses = append(whereClauses, fmt.Sprintf("tags && %s", nextPlaceholder()))
-		params = append(params, request.Tags)
-	}
-	if len(request.Keywords) > 0 {
-		whereClauses = append(whereClauses, fmt.Sprintf("keywords && %s", nextPlaceholder()))
-		params = append(params, request.Keywords)
-	}
-	if request.CreatedAfter != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("created_at >= %s", nextPlaceholder()))
-		params = append(params, *request.CreatedAfter)
-	}
-	if request.CreatedBefore != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("created_at <= %s", nextPlaceholder()))
-		params = append(params, *request.CreatedBefore)
-	}
-
-	return "WHERE " + strings.Join(whereClauses, " AND "), params
+	builder := newEngramQueryWhereBuilder(queryLiteral)
+	builder.addProjectFilter(request.ProjectID)
+	builder.addActorVisibilityFilter(actorUserID)
+	builder.addStringSliceOverlapFilter("tags", request.Tags)
+	builder.addStringSliceOverlapFilter("keywords", request.Keywords)
+	addOptionalPointerClause(builder, request.CreatedAfter, "created_at >= %s")
+	addOptionalPointerClause(builder, request.CreatedBefore, "created_at <= %s")
+	addOptionalPointerClause(builder, request.UsefulCountMin, "COALESCE(useful_count, 0) >= %s")
+	addOptionalPointerClause(builder, request.AccessCountMin, "COALESCE(access_count, 0) >= %s")
+	addOptionalPointerClause(builder, request.FeedbackCountMin, "COALESCE(feedback_count, 0) >= %s")
+	addOptionalPointerClause(builder, request.ContradictionCountMax, "COALESCE(contradiction_count, 0) <= %s")
+	addOptionalPointerClause(
+		builder,
+		request.ContradictionRatioMax,
+		`(
+			CASE
+				WHEN COALESCE(feedback_count, 0) = 0 THEN 0.0
+				ELSE COALESCE(contradiction_count, 0)::DOUBLE PRECISION /
+					GREATEST(COALESCE(feedback_count, 0), 1)::DOUBLE PRECISION
+			END
+		) <= %s`,
+	)
+	addOptionalPointerClause(builder, request.FreshnessScoreMin, "COALESCE(freshness_score, 1.0) >= %s")
+	addOptionalPointerClause(
+		builder,
+		request.UsefulFeedbackRatioMin,
+		`(
+			CASE
+				WHEN COALESCE(feedback_count, 0) = 0 THEN 0.5
+				ELSE COALESCE(useful_count, 0)::DOUBLE PRECISION /
+					GREATEST(COALESCE(feedback_count, 0), 1)::DOUBLE PRECISION
+			END
+		) >= %s`,
+	)
+	addOptionalPointerClause(builder, request.AvgRelevanceFeedbackMin, "COALESCE(avg_relevance_feedback, 0.5) >= %s")
+	addOptionalPointerClause(builder, request.SourceSessionQualityMin, "COALESCE(source_session_quality_score, 0.5) >= %s")
+	addOptionalPointerClause(builder, request.LastAccessedAfter, "COALESCE(last_accessed_at, created_at) >= %s")
+	addOptionalPointerClause(builder, request.LastAccessedBefore, "COALESCE(last_accessed_at, created_at) <= %s")
+	addOptionalPointerClause(builder, request.FreshnessComputedAfter, "COALESCE(freshness_last_computed_at, created_at) >= %s")
+	addOptionalPointerClause(builder, request.FreshnessComputedBefore, "COALESCE(freshness_last_computed_at, created_at) <= %s")
+	builder.addTraceFilter(request.RelationType, request.TraceDepth)
+	return builder.whereClause(), builder.params
 }
 
-func rerankByCombinedScore(input rerankRowsInput) []map[string]any {
-	type rankedRow struct {
-		score     float64
-		createdAt time.Time
-		row       map[string]any
-	}
+type engramQueryWhereBuilder struct {
+	whereClauses []string
+	params       []any
+}
 
-	ranked := make([]rankedRow, 0, len(input.rows))
-	for _, row := range input.rows {
-		lexicalScore := lexicalOverlapScore(
-			lexicalOverlapInput{
-				query: input.query,
-				candidateParts: []string{
-					stringFromAny(row["title"]),
-					stringFromAny(row["abstract"]),
-					stringFromAny(row["retrieval_text"]),
-					strings.Join(stringSliceFromAny(row["tags"]), " "),
-					strings.Join(stringSliceFromAny(row["keywords"]), " "),
-				},
+func newEngramQueryWhereBuilder(queryLiteral string) *engramQueryWhereBuilder {
+	return &engramQueryWhereBuilder{
+		whereClauses: []string{"deleted_at IS NULL"},
+		params:       []any{queryLiteral},
+	}
+}
+
+func (builder *engramQueryWhereBuilder) nextPlaceholder() string {
+	return pgxPlaceholder(len(builder.params) + 1)
+}
+
+func (builder *engramQueryWhereBuilder) addClauseWithParam(clauseFormat string, param any) {
+	builder.whereClauses = append(builder.whereClauses, fmt.Sprintf(clauseFormat, builder.nextPlaceholder()))
+	builder.params = append(builder.params, param)
+}
+
+func (builder *engramQueryWhereBuilder) addProjectFilter(projectID *string) {
+	if projectID == nil || *projectID == "" {
+		return
+	}
+	builder.addClauseWithParam("project_id = %s", *projectID)
+}
+
+func (builder *engramQueryWhereBuilder) addActorVisibilityFilter(actorUserID *uuid.UUID) {
+	if actorUserID == nil {
+		return
+	}
+	actorPlaceholder := builder.nextPlaceholder()
+	builder.whereClauses = append(
+		builder.whereClauses,
+		buildMembershipReadClause(
+			membershipReadClauseInput{
+				ownerColumn:      "owner_user_id",
+				visibilityColumn: "visibility_scope",
+				projectColumn:    "project_id",
+				actorPlaceholder: actorPlaceholder,
+				includeOwnerless: true,
 			},
-		)
-		ranked = append(
-			ranked,
-			rankedRow{
-				score: combinedRankScore(
-					rankScoreInput{
-						distance:       float64FromAny(row["distance"]),
-						lexicalOverlap: lexicalScore,
-						feedbackScore: normalizeFeedbackScore(
-							intFromAny(row["useful_count"]),
-							intFromAny(row["contradiction_count"]),
-						),
-					},
-				),
-				createdAt: timeFromAny(row["created_at"]),
-				row:       row,
-			},
-		)
-	}
+		),
+	)
+	builder.params = append(builder.params, *actorUserID)
+}
 
-	sort.Slice(ranked, func(left, right int) bool {
-		if ranked[left].score == ranked[right].score {
-			return ranked[left].createdAt.After(ranked[right].createdAt)
-		}
-		return ranked[left].score > ranked[right].score
-	})
+func (builder *engramQueryWhereBuilder) addStringSliceOverlapFilter(column string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+	builder.addClauseWithParam(fmt.Sprintf("%s && %%s", column), values)
+}
 
-	if input.topK <= 0 || input.topK > len(ranked) {
-		input.topK = len(ranked)
+func (builder *engramQueryWhereBuilder) addTraceFilter(
+	relationType *models.EngramLinkRelationType,
+	traceDepth *int,
+) {
+	resolvedDepth := resolveTraceDepth(traceDepth, relationType)
+	if resolvedDepth <= 0 {
+		return
 	}
-	trimmed := make([]map[string]any, 0, input.topK)
-	for _, row := range ranked[:input.topK] {
-		trimmed = append(trimmed, row.row)
+	if resolvedDepth > 1 {
+		return
 	}
-	return trimmed
+	builder.addDepthOneTraceFilter(relationType)
+}
+
+func resolveTraceDepth(
+	traceDepth *int,
+	relationType *models.EngramLinkRelationType,
+) int {
+	if traceDepth != nil {
+		return *traceDepth
+	}
+	if relationType != nil {
+		return 1
+	}
+	return 0
+}
+
+func (builder *engramQueryWhereBuilder) addDepthOneTraceFilter(
+	relationType *models.EngramLinkRelationType,
+) {
+	relationFilter := ""
+	if relationType != nil {
+		relationFilter = fmt.Sprintf(
+			"\n\t\tAND link.relation_type = %s",
+			builder.nextPlaceholder(),
+		)
+		builder.params = append(builder.params, string(*relationType))
+	}
+	builder.whereClauses = append(
+		builder.whereClauses,
+		fmt.Sprintf(
+			`EXISTS (
+		SELECT 1
+		FROM engram_links link
+		WHERE link.status = 'active'
+			AND (link.source_engram_id = engram_id OR link.target_engram_id = engram_id)%s
+	)`,
+			relationFilter,
+		),
+	)
+}
+
+func (builder *engramQueryWhereBuilder) whereClause() string {
+	return "WHERE " + strings.Join(builder.whereClauses, " AND ")
+}
+
+func addOptionalPointerClause[T any](
+	builder *engramQueryWhereBuilder,
+	value *T,
+	clauseFormat string,
+) {
+	if value == nil {
+		return
+	}
+	builder.addClauseWithParam(clauseFormat, *value)
 }
 
 func formatCitations(citations []models.RehydrationCitation) string {
@@ -594,32 +579,35 @@ func stringSliceFromAny(value any) []string {
 }
 
 func float64FromAny(value any) float64 {
-	switch typed := value.(type) {
-	case float64:
-		return typed
-	case float32:
-		return float64(typed)
-	case int:
-		return float64(typed)
-	case int64:
-		return float64(typed)
-	default:
+	number, ok := numberFromAny(value)
+	if !ok {
 		return 0
 	}
+	return number
 }
 
 func intFromAny(value any) int {
+	number, ok := numberFromAny(value)
+	if !ok {
+		return 0
+	}
+	return int(number)
+}
+
+func numberFromAny(value any) (float64, bool) {
 	switch typed := value.(type) {
 	case int:
-		return typed
+		return float64(typed), true
 	case int32:
-		return int(typed)
+		return float64(typed), true
 	case int64:
-		return int(typed)
+		return float64(typed), true
+	case float32:
+		return float64(typed), true
 	case float64:
-		return int(typed)
+		return typed, true
 	default:
-		return 0
+		return 0, false
 	}
 }
 

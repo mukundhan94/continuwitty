@@ -40,19 +40,20 @@ var errChatServiceDependenciesIncomplete = errors.New("chat service dependencies
 
 // ChatSendResponse captures send-message outputs.
 type ChatSendResponse struct {
-	SessionID            uuid.UUID             `json:"session_id"`
-	MessageID            uuid.UUID             `json:"message_id"`
-	ReplyMessageID       uuid.UUID             `json:"reply_message_id"`
-	AssistantText        string                `json:"assistant_text"`
-	PromptPolicyVersion  string                `json:"prompt_policy_version,omitempty"`
-	CWPlanApplied        *CWQueryPlan          `json:"cw_plan_applied,omitempty"`
-	UsedEngramIDs        []uuid.UUID           `json:"used_engram_ids"`
-	UsedEngramLinkIDs    []uuid.UUID           `json:"used_engram_link_ids"`
-	EngramTracePaths     []EngramTracePath     `json:"engram_trace_paths"`
-	UsedDocumentChunkIDs []uuid.UUID           `json:"used_document_chunk_ids"`
-	SourceReferences     []ChatSourceReference `json:"source_references"`
-	RetrievalAudit       *ChatRetrievalAudit   `json:"retrieval_audit,omitempty"`
-	DebugTrace           map[string]any        `json:"debug_trace,omitempty"`
+	SessionID             uuid.UUID                  `json:"session_id"`
+	MessageID             uuid.UUID                  `json:"message_id"`
+	ReplyMessageID        uuid.UUID                  `json:"reply_message_id"`
+	AssistantText         string                     `json:"assistant_text"`
+	PromptPolicyVersion   string                     `json:"prompt_policy_version,omitempty"`
+	CWPlanApplied         *CWQueryPlan               `json:"cw_plan_applied,omitempty"`
+	UsedEngramIDs         []uuid.UUID                `json:"used_engram_ids"`
+	UsedEngramLinkIDs     []uuid.UUID                `json:"used_engram_link_ids"`
+	EngramTracePaths      []EngramTracePath          `json:"engram_trace_paths"`
+	ContradictionWarnings []ChatContradictionWarning `json:"contradiction_warnings,omitempty"`
+	UsedDocumentChunkIDs  []uuid.UUID                `json:"used_document_chunk_ids"`
+	SourceReferences      []ChatSourceReference      `json:"source_references"`
+	RetrievalAudit        *ChatRetrievalAudit        `json:"retrieval_audit,omitempty"`
+	DebugTrace            map[string]any             `json:"debug_trace,omitempty"`
 }
 
 // ChatServiceDependencies captures dependencies used by the chat service.
@@ -285,19 +286,20 @@ func buildChatSendResponse(
 	assistantText string,
 ) ChatSendResponse {
 	return ChatSendResponse{
-		SessionID:            prepared.Session.SessionID,
-		MessageID:            prepared.UserMessage.MessageID,
-		ReplyMessageID:       assistantMessage.MessageID,
-		AssistantText:        assistantText,
-		PromptPolicyVersion:  prepared.PromptPolicyVersion,
-		CWPlanApplied:        prepared.CWPlanApplied,
-		UsedEngramIDs:        prepared.Context.UsedEngramIDs,
-		UsedEngramLinkIDs:    prepared.Context.UsedEngramLinkIDs,
-		EngramTracePaths:     prepared.Context.EngramTracePaths,
-		UsedDocumentChunkIDs: prepared.Context.UsedDocumentChunkIDs,
-		SourceReferences:     prepared.Context.SourceReferences,
-		RetrievalAudit:       prepared.Context.RetrievalAudit,
-		DebugTrace:           nil,
+		SessionID:             prepared.Session.SessionID,
+		MessageID:             prepared.UserMessage.MessageID,
+		ReplyMessageID:        assistantMessage.MessageID,
+		AssistantText:         assistantText,
+		PromptPolicyVersion:   prepared.PromptPolicyVersion,
+		CWPlanApplied:         prepared.CWPlanApplied,
+		UsedEngramIDs:         prepared.Context.UsedEngramIDs,
+		UsedEngramLinkIDs:     prepared.Context.UsedEngramLinkIDs,
+		EngramTracePaths:      prepared.Context.EngramTracePaths,
+		ContradictionWarnings: prepared.Context.ContradictionWarnings,
+		UsedDocumentChunkIDs:  prepared.Context.UsedDocumentChunkIDs,
+		SourceReferences:      prepared.Context.SourceReferences,
+		RetrievalAudit:        prepared.Context.RetrievalAudit,
+		DebugTrace:            nil,
 	}
 }
 

@@ -53,6 +53,35 @@ type MemoryAdminService interface {
 		actorUserID uuid.UUID,
 		request admin.EngramConsolidationSuggestionActionRequest,
 	) (*models.EngramConsolidationSuggestion, error)
+	RefreshEngramContradictionAlerts(
+		ctx context.Context,
+		request admin.EngramContradictionAlertRefreshRequest,
+	) (admin.EngramContradictionAlertRefreshResponse, error)
+	ListEngramContradictionAlerts(
+		ctx context.Context,
+		request admin.EngramContradictionAlertListRequest,
+	) ([]models.EngramContradictionAlert, error)
+	ResolveEngramContradictionAlert(
+		ctx context.Context,
+		alertID uuid.UUID,
+		actorUserID uuid.UUID,
+		request admin.EngramContradictionAlertResolveRequest,
+	) (*models.EngramContradictionAlert, error)
+	RefreshEngramLinkCurationSuggestions(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		request admin.EngramLinkCurationSuggestionRefreshRequest,
+	) (admin.EngramLinkCurationSuggestionRefreshResponse, error)
+	ListMemoryCurationSuggestions(
+		ctx context.Context,
+		request admin.MemoryCurationSuggestionListRequest,
+	) ([]models.MemoryCurationSuggestion, error)
+	ActionMemoryCurationSuggestion(
+		ctx context.Context,
+		suggestionID uuid.UUID,
+		actorUserID uuid.UUID,
+		request admin.MemoryCurationSuggestionActionRequest,
+	) (*models.MemoryCurationSuggestion, error)
 
 	ListCollections(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error)
 	CreateCollection(ctx context.Context, actorUserID uuid.UUID, actorRole string, payload admin.CollectionCreateRequest) (*models.EngramCollectionRecord, error)
@@ -136,37 +165,87 @@ func parseMemoryAdminConsolidationSuggestionListRequest(
 	writer http.ResponseWriter,
 	request *http.Request,
 ) (admin.EngramConsolidationSuggestionListRequest, bool) {
-	base, ok := parseMemoryAdminListRequest(writer, request, false)
-	if !ok {
-		return admin.EngramConsolidationSuggestionListRequest{}, false
-	}
-	status, ok := parseOptionalConsolidationSuggestionStatusQuery(writer, request, "status")
+	projectID, status, limit, offset, ok := parseMemoryAdminProjectStatusListRequest(
+		writer,
+		request,
+		func(w http.ResponseWriter, r *http.Request, key string) (*models.ConsolidationSuggestionStatus, bool) {
+			return parseOptionalStatusQuery(w, r, key, models.ParseConsolidationSuggestionStatus)
+		},
+	)
 	if !ok {
 		return admin.EngramConsolidationSuggestionListRequest{}, false
 	}
 	return admin.EngramConsolidationSuggestionListRequest{
-		ProjectID: base.ProjectID,
+		ProjectID: projectID,
 		Status:    status,
-		Limit:     base.Limit,
-		Offset:    base.Offset,
+		Limit:     limit,
+		Offset:    offset,
 	}, true
 }
 
-func parseOptionalConsolidationSuggestionStatusQuery(
+func parseMemoryAdminCurationSuggestionListRequest(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (admin.MemoryCurationSuggestionListRequest, bool) {
+	base, ok := parseMemoryAdminListRequest(writer, request, false)
+	if !ok {
+		return admin.MemoryCurationSuggestionListRequest{}, false
+	}
+	sessionID, ok := parseOptionalUUIDQuery(writer, request, "session_id")
+	if !ok {
+		return admin.MemoryCurationSuggestionListRequest{}, false
+	}
+	suggestionType, ok := parseOptionalStatusQuery(
+		writer,
+		request,
+		"suggestion_type",
+		models.ParseMemoryCurationSuggestionType,
+	)
+	if !ok {
+		return admin.MemoryCurationSuggestionListRequest{}, false
+	}
+	status, ok := parseOptionalStatusQuery(
+		writer,
+		request,
+		"status",
+		models.ParseMemoryCurationSuggestionStatus,
+	)
+	if !ok {
+		return admin.MemoryCurationSuggestionListRequest{}, false
+	}
+	return admin.MemoryCurationSuggestionListRequest{
+		ProjectID:      base.ProjectID,
+		SessionID:      sessionID,
+		SuggestionType: suggestionType,
+		Status:         status,
+		Limit:          base.Limit,
+		Offset:         base.Offset,
+	}, true
+}
+
+func parseMemoryAdminProjectStatusListRequest[Status any](
+	writer http.ResponseWriter,
+	request *http.Request,
+	parseStatus func(http.ResponseWriter, *http.Request, string) (*Status, bool),
+) (*string, *Status, int, int, bool) {
+	base, ok := parseMemoryAdminListRequest(writer, request, false)
+	if !ok {
+		return nil, nil, 0, 0, false
+	}
+	status, ok := parseStatus(writer, request, "status")
+	if !ok {
+		return nil, nil, 0, 0, false
+	}
+	return base.ProjectID, status, base.Limit, base.Offset, true
+}
+
+func parseOptionalStatusQuery[Status any](
 	writer http.ResponseWriter,
 	request *http.Request,
 	key string,
-) (*models.ConsolidationSuggestionStatus, bool) {
-	value := strings.TrimSpace(request.URL.Query().Get(key))
-	if value == "" {
-		return nil, true
-	}
-	parsed, err := models.ParseConsolidationSuggestionStatus(value)
-	if err != nil {
-		writeInvalidParameter(writer, key)
-		return nil, false
-	}
-	return &parsed, true
+	parseStatusValue func(string) (Status, error),
+) (*Status, bool) {
+	return parseOptionalQueryValue(writer, request, key, parseStatusValue)
 }
 
 func requireActor(writer http.ResponseWriter, request *http.Request, requireAdminActor RequireAdminActor) (AdminActor, bool) {
@@ -199,16 +278,14 @@ func parseOptionalUUIDQuery(writer http.ResponseWriter, request *http.Request, k
 }
 
 func parseOptionalBoolQuery(writer http.ResponseWriter, request *http.Request, key string, defaultValue bool) (bool, bool) {
-	value := strings.TrimSpace(request.URL.Query().Get(key))
-	if value == "" {
-		return defaultValue, true
-	}
-	parsed, err := strconv.ParseBool(value)
-	if err != nil {
-		writeInvalidParameter(writer, key)
+	parsed, ok := parseOptionalQueryValue(writer, request, key, strconv.ParseBool)
+	if !ok {
 		return false, false
 	}
-	return parsed, true
+	if parsed == nil {
+		return defaultValue, true
+	}
+	return *parsed, true
 }
 
 type intQuerySpec struct {
@@ -236,6 +313,24 @@ func parseOptionalIntQuery(writer http.ResponseWriter, request *http.Request, ke
 		return 0, false
 	}
 	return parsed, true
+}
+
+func parseOptionalQueryValue[T any](
+	writer http.ResponseWriter,
+	request *http.Request,
+	key string,
+	parse func(string) (T, error),
+) (*T, bool) {
+	value := strings.TrimSpace(request.URL.Query().Get(key))
+	if value == "" {
+		return nil, true
+	}
+	parsed, err := parse(value)
+	if err != nil {
+		writeInvalidParameter(writer, key)
+		return nil, false
+	}
+	return &parsed, true
 }
 
 func parseRequiredUUID(writer http.ResponseWriter, rawValue string, key string) (uuid.UUID, bool) {
@@ -284,16 +379,23 @@ func writeServiceError(writer http.ResponseWriter, err error) {
 	case errors.Is(err, admin.ErrSessionNotFound),
 		errors.Is(err, admin.ErrEngramNotFound),
 		errors.Is(err, admin.ErrCollectionNotFound),
-		errors.Is(err, admin.ErrConsolidationSuggestionNotFound):
+		errors.Is(err, admin.ErrConsolidationSuggestionNotFound),
+		errors.Is(err, admin.ErrContradictionAlertNotFound),
+		errors.Is(err, admin.ErrMemoryCurationSuggestionNotFound):
 		statusCode = http.StatusNotFound
 		detail = err.Error()
-	case errors.Is(err, admin.ErrProjectIDRequired):
+	case errors.Is(err, admin.ErrProjectIDRequired),
+		errors.Is(err, admin.ErrProjectScopeMismatch):
 		statusCode = http.StatusBadRequest
 		detail = err.Error()
 	case errors.Is(err, admin.ErrConsolidationMinGroupSizeInvalid):
 		statusCode = http.StatusBadRequest
 		detail = err.Error()
-	case errors.Is(err, admin.ErrConsolidationSuggestionActionInvalid):
+	case errors.Is(err, admin.ErrConsolidationSuggestionActionInvalid),
+		errors.Is(err, admin.ErrContradictionAlertResolveStatusInvalid),
+		errors.Is(err, admin.ErrMemoryCurationSuggestionActionInvalid),
+		errors.Is(err, admin.ErrMemoryCurationSuggestionPayloadInvalid),
+		errors.Is(err, admin.ErrMemoryCurationSuggestionApplyUnsupported):
 		statusCode = http.StatusBadRequest
 		detail = err.Error()
 	case errors.Is(err, admin.ErrEngramStale),

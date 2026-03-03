@@ -100,6 +100,69 @@ func TestCompatibilityServiceToolsListIncludesCatalogMetadataForConversationSave
 	}
 }
 
+func TestCompatibilityServiceToolsListIncludesProjectScopeForCurationRefresh(t *testing.T) {
+	frame := runCompatibilityRequest(
+		t,
+		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "tools-list", Method: "tools/list"}},
+	)
+	tool := findPublicToolByName(t, frame, "engram_curation_refresh_links")
+	inputSchema := mapFromMap(t, tool, "inputSchema")
+	properties := mapFromMap(t, inputSchema, "properties")
+	if _, exists := properties["project_id"]; !exists {
+		t.Fatalf("expected project_id property in engram_curation_refresh_links schema")
+	}
+}
+
+func TestCompatibilityServiceToolsListIncludesFeedbackSignalFieldsForEngramFeedback(t *testing.T) {
+	frame := runCompatibilityRequest(
+		t,
+		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "tools-list", Method: "tools/list"}},
+	)
+	tool := findPublicToolByName(t, frame, "engram_feedback")
+	inputSchema := mapFromMap(t, tool, "inputSchema")
+	properties := mapFromMap(t, inputSchema, "properties")
+	if _, exists := properties["relevance_score"]; !exists {
+		t.Fatalf("expected relevance_score property in engram_feedback schema")
+	}
+	if _, exists := properties["session_id"]; !exists {
+		t.Fatalf("expected session_id property in engram_feedback schema")
+	}
+	if _, exists := properties["integration_depth"]; !exists {
+		t.Fatalf("expected integration_depth property in engram_feedback schema")
+	}
+}
+
+func TestCompatibilityServiceToolsListIncludesAuthorityFilterForEngramQuery(t *testing.T) {
+	frame := runCompatibilityRequest(
+		t,
+		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "tools-list", Method: "tools/list"}},
+	)
+	tool := findPublicToolByName(t, frame, "engram_query")
+	inputSchema := mapFromMap(t, tool, "inputSchema")
+	properties := mapFromMap(t, inputSchema, "properties")
+	if _, exists := properties["source_session_quality_min"]; !exists {
+		t.Fatalf("expected source_session_quality_min property in engram_query schema")
+	}
+	if _, exists := properties["avg_relevance_feedback_min"]; !exists {
+		t.Fatalf("expected avg_relevance_feedback_min property in engram_query schema")
+	}
+	if _, exists := properties["contradiction_count_max"]; !exists {
+		t.Fatalf("expected contradiction_count_max property in engram_query schema")
+	}
+	if _, exists := properties["contradiction_feedback_ratio_max"]; !exists {
+		t.Fatalf("expected contradiction_feedback_ratio_max property in engram_query schema")
+	}
+	if _, exists := properties["feedback_count_min"]; !exists {
+		t.Fatalf("expected feedback_count_min property in engram_query schema")
+	}
+	if _, exists := properties["useful_count_min"]; !exists {
+		t.Fatalf("expected useful_count_min property in engram_query schema")
+	}
+	if _, exists := properties["useful_feedback_ratio_min"]; !exists {
+		t.Fatalf("expected useful_feedback_ratio_min property in engram_query schema")
+	}
+}
+
 func TestBuildVisiblePublicToolCatalogClonesInputSchemas(t *testing.T) {
 	tools := buildVisiblePublicToolCatalog(nil)
 	first := findToolByPublicName(tools, "chat_save_as_engram")

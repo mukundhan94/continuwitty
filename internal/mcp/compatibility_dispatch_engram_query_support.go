@@ -31,42 +31,371 @@ func buildEngramQueryDispatchRequest(
 	actor Actor,
 	params map[string]any,
 ) (EngramQueryDispatchRequest, *toolDispatchError) {
-	query, ok := requiredStringParam(params, "query")
-	if !ok {
-		return EngramQueryDispatchRequest{}, invalidParamError("query")
-	}
-	topK, dispatchErr := parseEngramQueryTopKParam(params)
+	query, dispatchErr := parseRequiredQueryParam(params)
 	if dispatchErr != nil {
 		return EngramQueryDispatchRequest{}, dispatchErr
 	}
-	tags, ok := optionalStringArrayParam(params, "tags")
-	if !ok {
-		return EngramQueryDispatchRequest{}, invalidParamError("tags")
-	}
-	keywords, ok := optionalStringArrayParam(params, "keywords")
-	if !ok {
-		return EngramQueryDispatchRequest{}, invalidParamError("keywords")
-	}
-	createdAfter, ok := optionalRFC3339TimeParam(params, "created_after")
-	if !ok {
-		return EngramQueryDispatchRequest{}, invalidParamError("created_after")
-	}
-	createdBefore, ok := optionalRFC3339TimeParam(params, "created_before")
-	if !ok {
-		return EngramQueryDispatchRequest{}, invalidParamError("created_before")
+	payload, dispatchErr := parseEngramQueryPayload(params)
+	if dispatchErr != nil {
+		return EngramQueryDispatchRequest{}, dispatchErr
 	}
 	return EngramQueryDispatchRequest{
 		ActorUserID: actor.UserID,
-		Payload: models.EngramQueryRequest{
-			Query:         query,
-			TopK:          topK,
-			ProjectID:     optionalProjectIDParam(params, "project_id"),
-			Tags:          tags,
-			Keywords:      keywords,
-			CreatedAfter:  createdAfter,
-			CreatedBefore: createdBefore,
-		},
+		Payload:     payload.withQuery(query),
 	}, nil
+}
+
+type engramQueryPayloadParts struct {
+	topK                    int
+	projectID               *string
+	tags                    []string
+	keywords                []string
+	createdAfter            *time.Time
+	createdBefore           *time.Time
+	usefulCountMin          *int
+	accessCountMin          *int
+	feedbackCountMin        *int
+	contradictionCountMax   *int
+	contradictionRatioMax   *float64
+	freshnessScoreMin       *float64
+	usefulFeedbackRatioMin  *float64
+	avgRelevanceFeedbackMin *float64
+	sourceSessionQualityMin *float64
+	lastAccessedAfter       *time.Time
+	lastAccessedBefore      *time.Time
+	freshnessComputedAfter  *time.Time
+	freshnessComputedBefore *time.Time
+	relationType            *models.EngramLinkRelationType
+	traceDepth              *int
+}
+
+func parseRequiredQueryParam(params map[string]any) (string, *toolDispatchError) {
+	query, ok := requiredStringParam(params, "query")
+	if !ok {
+		return "", invalidParamError("query")
+	}
+	return query, nil
+}
+
+func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *toolDispatchError) {
+	topK, dispatchErr := parseEngramQueryTopKParam(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	tags, dispatchErr := parseOptionalParam(params, "tags", optionalStringArrayParam)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	keywords, dispatchErr := parseOptionalParam(params, "keywords", optionalStringArrayParam)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	temporalParts, dispatchErr := parseEngramQueryTemporalParts(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	engagementParts, dispatchErr := parseEngramQueryEngagementParts(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	traceParts, dispatchErr := parseEngramQueryTraceParts(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	return engramQueryPayloadParts{
+		topK:                    topK,
+		projectID:               optionalProjectIDParam(params, "project_id"),
+		tags:                    tags,
+		keywords:                keywords,
+		createdAfter:            temporalParts.createdAfter,
+		createdBefore:           temporalParts.createdBefore,
+		usefulCountMin:          engagementParts.usefulCountMin,
+		accessCountMin:          engagementParts.accessCountMin,
+		feedbackCountMin:        engagementParts.feedbackCountMin,
+		contradictionCountMax:   engagementParts.contradictionCountMax,
+		contradictionRatioMax:   engagementParts.contradictionRatioMax,
+		freshnessScoreMin:       engagementParts.freshnessScoreMin,
+		usefulFeedbackRatioMin:  engagementParts.usefulFeedbackRatioMin,
+		avgRelevanceFeedbackMin: engagementParts.avgRelevanceFeedbackMin,
+		sourceSessionQualityMin: engagementParts.sourceSessionQualityMin,
+		lastAccessedAfter:       temporalParts.lastAccessedAfter,
+		lastAccessedBefore:      temporalParts.lastAccessedBefore,
+		freshnessComputedAfter:  temporalParts.freshnessComputedAfter,
+		freshnessComputedBefore: temporalParts.freshnessComputedBefore,
+		relationType:            traceParts.relationType,
+		traceDepth:              traceParts.traceDepth,
+	}, nil
+}
+
+type engramQueryTemporalParts struct {
+	createdAfter            *time.Time
+	createdBefore           *time.Time
+	lastAccessedAfter       *time.Time
+	lastAccessedBefore      *time.Time
+	freshnessComputedAfter  *time.Time
+	freshnessComputedBefore *time.Time
+}
+
+func parseEngramQueryTemporalParts(params map[string]any) (engramQueryTemporalParts, *toolDispatchError) {
+	createdAfter, dispatchErr := parseOptionalParam(params, "created_after", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	createdBefore, dispatchErr := parseOptionalParam(params, "created_before", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	lastAccessedAfter, dispatchErr := parseOptionalParam(params, "last_accessed_after", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	lastAccessedBefore, dispatchErr := parseOptionalParam(params, "last_accessed_before", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	freshnessComputedAfter, dispatchErr := parseOptionalParam(params, "freshness_computed_after", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	freshnessComputedBefore, dispatchErr := parseOptionalParam(params, "freshness_computed_before", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	parts := engramQueryTemporalParts{
+		createdAfter:            createdAfter,
+		createdBefore:           createdBefore,
+		lastAccessedAfter:       lastAccessedAfter,
+		lastAccessedBefore:      lastAccessedBefore,
+		freshnessComputedAfter:  freshnessComputedAfter,
+		freshnessComputedBefore: freshnessComputedBefore,
+	}
+	dispatchErr = validateTemporalWindows(temporalWindowSpecs(parts))
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	return parts, nil
+}
+
+func temporalWindowSpecs(parts engramQueryTemporalParts) []temporalWindowSpec {
+	return []temporalWindowSpec{
+		{after: parts.createdAfter, before: parts.createdBefore, afterParam: "created_after"},
+		{after: parts.lastAccessedAfter, before: parts.lastAccessedBefore, afterParam: "last_accessed_after"},
+		{
+			after:      parts.freshnessComputedAfter,
+			before:     parts.freshnessComputedBefore,
+			afterParam: "freshness_computed_after",
+		},
+	}
+}
+
+type engramQueryEngagementParts struct {
+	usefulCountMin          *int
+	accessCountMin          *int
+	feedbackCountMin        *int
+	contradictionCountMax   *int
+	contradictionRatioMax   *float64
+	freshnessScoreMin       *float64
+	usefulFeedbackRatioMin  *float64
+	avgRelevanceFeedbackMin *float64
+	sourceSessionQualityMin *float64
+}
+
+func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngagementParts, *toolDispatchError) {
+	integerParts, dispatchErr := parseEngramQueryIntegerEngagementParts(params)
+	if dispatchErr != nil {
+		return engramQueryEngagementParts{}, dispatchErr
+	}
+	scoreParts, dispatchErr := parseEngramQueryScoreEngagementParts(params)
+	if dispatchErr != nil {
+		return engramQueryEngagementParts{}, dispatchErr
+	}
+	return engramQueryEngagementParts{
+		usefulCountMin:          integerParts.usefulCountMin,
+		accessCountMin:          integerParts.accessCountMin,
+		feedbackCountMin:        integerParts.feedbackCountMin,
+		contradictionCountMax:   integerParts.contradictionCountMax,
+		contradictionRatioMax:   scoreParts.contradictionRatioMax,
+		freshnessScoreMin:       scoreParts.freshnessScoreMin,
+		usefulFeedbackRatioMin:  scoreParts.usefulFeedbackRatioMin,
+		avgRelevanceFeedbackMin: scoreParts.avgRelevanceFeedbackMin,
+		sourceSessionQualityMin: scoreParts.sourceSessionQualityMin,
+	}, nil
+}
+
+type engramQueryIntegerEngagementParts struct {
+	usefulCountMin        *int
+	accessCountMin        *int
+	feedbackCountMin      *int
+	contradictionCountMax *int
+}
+
+func parseEngramQueryIntegerEngagementParts(
+	params map[string]any,
+) (engramQueryIntegerEngagementParts, *toolDispatchError) {
+	usefulCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "useful_count_min")
+	if dispatchErr != nil {
+		return engramQueryIntegerEngagementParts{}, dispatchErr
+	}
+	accessCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "access_count_min")
+	if dispatchErr != nil {
+		return engramQueryIntegerEngagementParts{}, dispatchErr
+	}
+	feedbackCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "feedback_count_min")
+	if dispatchErr != nil {
+		return engramQueryIntegerEngagementParts{}, dispatchErr
+	}
+	contradictionCountMax, dispatchErr := parseEngramQueryNonNegativeIntPointer(
+		params,
+		"contradiction_count_max",
+	)
+	if dispatchErr != nil {
+		return engramQueryIntegerEngagementParts{}, dispatchErr
+	}
+	return engramQueryIntegerEngagementParts{
+		usefulCountMin:        usefulCountMin,
+		accessCountMin:        accessCountMin,
+		feedbackCountMin:      feedbackCountMin,
+		contradictionCountMax: contradictionCountMax,
+	}, nil
+}
+
+type engramQueryScoreEngagementParts struct {
+	contradictionRatioMax   *float64
+	freshnessScoreMin       *float64
+	usefulFeedbackRatioMin  *float64
+	avgRelevanceFeedbackMin *float64
+	sourceSessionQualityMin *float64
+}
+
+func parseEngramQueryScoreEngagementParts(
+	params map[string]any,
+) (engramQueryScoreEngagementParts, *toolDispatchError) {
+	contradictionRatioMax, dispatchErr := parseEngramQueryContradictionFeedbackRatioMax(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
+	freshnessScoreMin, dispatchErr := parseEngramQueryFreshnessScoreMin(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
+	usefulFeedbackRatioMin, dispatchErr := parseEngramQueryUsefulFeedbackRatioMin(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
+	avgRelevanceFeedbackMin, dispatchErr := parseEngramQueryAvgRelevanceFeedbackMin(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
+	sourceSessionQualityMin, dispatchErr := parseEngramQuerySourceSessionQualityMin(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
+	return engramQueryScoreEngagementParts{
+		contradictionRatioMax:   contradictionRatioMax,
+		freshnessScoreMin:       freshnessScoreMin,
+		usefulFeedbackRatioMin:  usefulFeedbackRatioMin,
+		avgRelevanceFeedbackMin: avgRelevanceFeedbackMin,
+		sourceSessionQualityMin: sourceSessionQualityMin,
+	}, nil
+}
+
+type engramQueryTraceParts struct {
+	relationType *models.EngramLinkRelationType
+	traceDepth   *int
+}
+
+func parseEngramQueryTraceParts(params map[string]any) (engramQueryTraceParts, *toolDispatchError) {
+	relationType, ok := optionalEngramLinkRelationTypePointer(params, engramLinkParamKey("relation_type"))
+	if !ok {
+		return engramQueryTraceParts{}, invalidParamError("relation_type")
+	}
+	traceDepth, dispatchErr := parseTraceDepthParam(params, relationType)
+	if dispatchErr != nil {
+		return engramQueryTraceParts{}, dispatchErr
+	}
+	return engramQueryTraceParts{relationType: relationType, traceDepth: traceDepth}, nil
+}
+
+func parseTraceDepthParam(
+	params map[string]any,
+	relationType *models.EngramLinkRelationType,
+) (*int, *toolDispatchError) {
+	value, ok := optionalIntPointerParam(params, "trace_depth")
+	if !ok {
+		return nil, invalidParamError("trace_depth")
+	}
+	if value == nil {
+		if relationType == nil {
+			return nil, nil
+		}
+		defaultDepth := 1
+		return &defaultDepth, nil
+	}
+	if *value < 0 || *value > 1 {
+		return nil, invalidParamError("trace_depth")
+	}
+	if relationType != nil && *value == 0 {
+		return nil, invalidParamError("trace_depth")
+	}
+	return value, nil
+}
+
+func parseOptionalParam[T any](
+	params map[string]any,
+	key string,
+	parser func(map[string]any, string) (T, bool),
+) (T, *toolDispatchError) {
+	parsed, ok := parser(params, key)
+	if !ok {
+		var zero T
+		return zero, invalidParamError(key)
+	}
+	return parsed, nil
+}
+
+func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryRequest {
+	return models.EngramQueryRequest{
+		Query:                   query,
+		TopK:                    parts.topK,
+		ProjectID:               parts.projectID,
+		Tags:                    parts.tags,
+		Keywords:                parts.keywords,
+		CreatedAfter:            parts.createdAfter,
+		CreatedBefore:           parts.createdBefore,
+		UsefulCountMin:          parts.usefulCountMin,
+		AccessCountMin:          parts.accessCountMin,
+		FeedbackCountMin:        parts.feedbackCountMin,
+		ContradictionCountMax:   parts.contradictionCountMax,
+		ContradictionRatioMax:   parts.contradictionRatioMax,
+		FreshnessScoreMin:       parts.freshnessScoreMin,
+		UsefulFeedbackRatioMin:  parts.usefulFeedbackRatioMin,
+		AvgRelevanceFeedbackMin: parts.avgRelevanceFeedbackMin,
+		SourceSessionQualityMin: parts.sourceSessionQualityMin,
+		LastAccessedAfter:       parts.lastAccessedAfter,
+		LastAccessedBefore:      parts.lastAccessedBefore,
+		FreshnessComputedAfter:  parts.freshnessComputedAfter,
+		FreshnessComputedBefore: parts.freshnessComputedBefore,
+		RelationType:            parts.relationType,
+		TraceDepth:              parts.traceDepth,
+	}
+}
+
+type temporalWindowSpec struct {
+	after      *time.Time
+	before     *time.Time
+	afterParam string
+}
+
+func validateTemporalWindows(specs []temporalWindowSpec) *toolDispatchError {
+	for _, spec := range specs {
+		if spec.after == nil || spec.before == nil {
+			continue
+		}
+		if spec.after.After(*spec.before) {
+			return invalidParamError(spec.afterParam)
+		}
+	}
+	return nil
 }
 
 func parseEngramQueryTopKParam(params map[string]any) (int, *toolDispatchError) {
@@ -132,4 +461,62 @@ func parseRFC3339Pointer(raw string) (*time.Time, bool) {
 		return nil, false
 	}
 	return &parsed, true
+}
+
+func parseEngramQueryNonNegativeIntPointer(
+	params map[string]any,
+	paramName string,
+) (*int, *toolDispatchError) {
+	value, ok := optionalIntPointerParam(params, paramName)
+	if !ok {
+		return nil, invalidParamError(paramName)
+	}
+	if value != nil && *value < 0 {
+		return nil, invalidParamError(paramName)
+	}
+	return value, nil
+}
+
+func parseEngramQueryFreshnessScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "freshness_score_min")
+}
+
+func parseEngramQueryContradictionFeedbackRatioMax(
+	params map[string]any,
+) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "contradiction_feedback_ratio_max")
+}
+
+func parseEngramQueryUsefulFeedbackRatioMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "useful_feedback_ratio_min")
+}
+
+func parseEngramQueryAvgRelevanceFeedbackMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "avg_relevance_feedback_min")
+}
+
+func parseEngramQuerySourceSessionQualityMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "source_session_quality_min")
+}
+
+func parseEngramQueryBoundedScoreMin(
+	params map[string]any,
+	key string,
+) (*float64, *toolDispatchError) {
+	rawValue, found := optionalParamValue(params, key)
+	if !found {
+		return nil, nil
+	}
+	parsed, ok := parseFloatValue(rawValue)
+	if !ok {
+		return nil, invalidParamError(key)
+	}
+	if parsed < 0 {
+		return nil, invalidParamError(key)
+	}
+	if parsed > 1 {
+		return nil, invalidParamError(key)
+	}
+	copy := parsed
+	return &copy, nil
 }

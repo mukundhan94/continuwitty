@@ -949,14 +949,15 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In Progress (2026-03-03).
+- Completed (2026-03-03).
 - Delivered in this cycle:
   - explicit `engram_feedback` storage and aggregate updates (`useful_count`, `contradiction_count`).
   - REST endpoint `POST /api/v1/engrams/{engram_id}/feedback`.
   - MCP tool `engram.feedback` / `engram_feedback`.
   - feedback signal integration in retrieval reranking.
-- Remaining in this phase:
-  - complete engagement/freshness weighting calibration and benchmark notes under current latency targets.
+  - engagement/freshness weighting calibration in composite rerank scoring.
+  - deterministic ranking tests for feedback + engagement + freshness signal effects.
+  - latency benchmark notes captured in `docs/phase36-relevance-calibration.md`.
 
 ### Goals
 
@@ -1018,6 +1019,615 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 38 - Contradiction Detection + Warning Flows
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - contradiction-trace metadata (`has_contradiction`, `contradicting_link_ids`) propagated on recalled trace paths when relation type is `contradicts`.
+  - chat context now emits `contradiction_warnings` for contradiction-bearing trace paths with severity guidance.
+  - chat send responses and stream `meta`/`done` payloads now include `contradiction_warnings`.
+  - MCP `chat.send_message` parity now forwards `contradiction_warnings`.
+  - regression tests added for contradiction-warning generation and payload propagation.
+  - contradiction alert persistence baseline added with deterministic schema + repository workflows:
+    - `engram_contradiction_alerts` storage + indexes.
+    - repository refresh/list/resolve primitives with project scoping and deterministic alert hashing.
+    - repository/model unit tests for refresh/list/resolve behavior and status parsing.
+  - contradiction alert review tooling shipped across admin REST + MCP:
+    - admin REST endpoints for contradiction maintenance:
+      - `POST /api/v1/admin/memory/engrams/contradictions/refresh`
+      - `GET /api/v1/admin/memory/engrams/contradictions/alerts`
+      - `POST /api/v1/admin/memory/engrams/contradictions/alerts/{alert_id}/resolve`
+    - MCP tool parity for contradiction maintenance:
+      - `engram.refresh_contradictions`
+      - `engram.contradiction_list`
+      - `engram.contradiction_resolve`
+    - regression coverage for admin routes, service adapters, MCP parse/dispatch, and compatibility response parity.
+  - contradiction warning synthesis benchmark baseline documented:
+    - microbenchmarks for `buildContradictionWarnings` at 50/200 trace-path workloads.
+    - benchmark artifact captured in `docs/phase38-contradiction-benchmark.md`.
+  - contradiction warning quality benchmark coverage delivered:
+    - deterministic acceptance precision/recall scenario:
+      - `acceptance-tests/features/phase38-contradiction-mock.feature`
+      - `acceptance-tests/src/steps/phase38-contradiction-mock.steps.ts`
+    - scenario now included in default `@mock` suite after fixing contradiction-link create SQL CTE aliasing in `internal/repository/engram_links.go`.
+
+### Goals
+
+1. Detect contradictory memory traces before they are silently reused.
+2. Surface contradiction risk consistently across chat and MCP response paths.
+3. Establish a foundation for operator-assisted contradiction resolution.
+
+### Deliverables
+
+1. contradiction-warning metadata in chat context assembly.
+2. send/stream/MCP payload parity for contradiction warnings.
+3. contradiction alert persistence + resolution paths and benchmark notes.
+
+### Exit Criteria
+
+1. Contradiction risks are surfaced deterministically in chat and MCP outputs.
+2. Contradiction warnings are test-covered and benchmarked for precision/recall.
+
+---
+
+### Phase 39 - Temporal Query Extensions + Cost-Aware Context Assembly
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - trace-aware query constraints added for engram query paths:
+    - `relation_type` and `trace_depth` filters in `models.EngramQueryRequest`.
+    - repository trace filter support (`EXISTS` on active `engram_links`) with optional relation-type filtering.
+    - REST decode validation/defaulting for relation + trace depth (`trace_depth` defaults to `1` when relation is set).
+    - MCP parser/validation + catalog metadata parity for trace filters.
+  - temporal recall-window extensions added for engram query paths:
+    - `last_accessed_after` / `last_accessed_before`
+    - `freshness_computed_after` / `freshness_computed_before`
+    - repository query support using:
+      - `COALESCE(last_accessed_at, created_at)` window predicates.
+      - `COALESCE(freshness_last_computed_at, created_at)` window predicates.
+    - REST decode validation for temporal windows + range ordering.
+    - MCP parser/validation + catalog metadata parity for temporal windows.
+  - temporal query extensions added for engram query paths:
+    - `access_count_min` and `freshness_score_min` filters in `models.EngramQueryRequest`.
+    - repository query builder support via `COALESCE(access_count, 0)` and `COALESCE(freshness_score, 1.0)` predicates.
+    - MCP `engram.query` parser/validation + catalog metadata support for the new filters.
+  - bounded context-budget controls added for chat send paths:
+    - REST/MCP send-message payloads now accept `context_token_budget`.
+    - context assembly now enforces bounded estimated-token budgets with deterministic section truncation.
+    - retrieval audit now includes context-budget diagnostics:
+      - `context_token_budget`
+      - `context_token_estimate`
+      - `context_token_truncated`
+  - regression coverage added for:
+    - context-budget normalization and truncation behavior.
+    - context-budget audit metadata for empty/non-empty context assembly.
+    - REST/MCP forwarding of `context_token_budget` overrides.
+  - benchmark coverage expanded for complex temporal/engagement/trace query filters:
+    - repository microbenchmarks:
+      - `BenchmarkBuildEngramQueryWhereComplexTemporalEngagementTrace`
+      - `BenchmarkBuildEngramQueryWhereComplexFilterMatrix`
+    - benchmark artifact: `docs/phase39-query-benchmark.md`.
+
+### Goals
+
+1. Add explicit temporal controls so recall can prioritize the right time horizon.
+2. Keep chat context assembly budget-aware to reduce token waste.
+3. Preserve deterministic, traceable retrieval behavior across REST and MCP.
+
+### Deliverables
+
+1. Temporal query/filter extensions in engram query contracts.
+2. Cost-aware context assembly controls with retrieval audit metadata.
+3. Test and benchmark coverage for budget adherence and temporal filter correctness.
+
+### Exit Criteria
+
+1. Temporal filters can be applied consistently in REST and MCP query paths.
+2. Context assembly honors bounded budgets with deterministic audit metadata.
+3. Deterministic acceptance and unit coverage protects temporal + budget behavior.
+
+---
+
+### Phase 40 - Autonomous Memory Suggestions + Action Workflows
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - schema baseline for `memory_curation_suggestions` in `db/init/001_schema.sql`.
+  - model contracts in `internal/models/memory_curation_suggestion.go`:
+    - suggestion types (`auto_save`, `consolidate`, `contradiction`, `link`)
+    - suggestion statuses (`suggested`, `accepted`, `rejected`, `applied`)
+  - repository baseline in `internal/repository/memory_curation_suggestions.go`:
+    - `CreateMemoryCurationSuggestion`
+    - `ListMemoryCurationSuggestions`
+    - `ApplyMemoryCurationSuggestionAction`
+  - repository regression coverage in `internal/repository/memory_curation_suggestions_test.go`.
+  - API + MCP list/action parity for memory curation suggestions:
+    - admin REST routes:
+      - `POST /api/v1/admin/memory/engrams/{engram_id}/links/curation/refresh`
+      - `GET /api/v1/admin/memory/engrams/curation/suggestions`
+      - `POST /api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action`
+    - MCP tools:
+      - `engram.curation_refresh_links`
+      - `engram.curation_list`
+      - `engram.curation_action`
+    - compatibility catalog + token project-policy support + route/dispatch regression tests.
+  - scoped refresh hardening for project safety:
+    - optional `project_id` is now accepted on REST + MCP link-curation refresh flows.
+    - refresh rejects mismatched project scope with explicit bad-request semantics.
+  - apply-action orchestration for curation suggestions:
+    - `status=applied` now executes deterministic downstream actions before persisting curation status.
+    - `consolidate` suggestions dispatch `merged` action on referenced consolidation suggestions.
+    - `contradiction` suggestions dispatch `resolved` action on referenced contradiction alerts.
+    - `link` suggestions dispatch link archival for archive-oriented hygiene actions and `review_relation_conflict`.
+    - invalid/missing curation payload identifiers fail with explicit bad-request semantics.
+  - suggestion generation workflow hooks:
+    - consolidation refresh now regenerates type `consolidate` curation suggestions.
+    - contradiction refresh now regenerates type `contradiction` curation suggestions.
+    - admin link-curation refresh now persists deduped type `link` suggestions from on-demand hygiene recommendations.
+    - scheduled link-hygiene execution now generates type `link` curation suggestions for non-auto-archived recommendations.
+    - scheduled link-hygiene generation dedupes against existing pending link curation payload keys (`link_id`, `target_engram_id`, `suggested_action`).
+    - generation pass resets stale `suggested` curation rows per type/project before rebuilding deterministic candidates.
+  - acceptance coverage for curation generation/action quality:
+    - deterministic `@phase40 @mock` acceptance scenarios validate:
+      - generation + accepted action transitions.
+      - `applied` action cascades to downstream consolidation (`merged`) and contradiction (`resolved`) workflows.
+      - on-demand link-hygiene refresh generates actionable `link` curation suggestions and supports `status=applied`.
+  - benchmark coverage baseline:
+    - `internal/admin` benchmark suite for curation action latency, applied-side-effect orchestration, and sync-generation scaling.
+    - benchmark artifact: `docs/phase40-curation-benchmark.md`.
+
+### Goals
+
+1. Provide a deterministic persistence layer for autonomous memory recommendations.
+2. Enable safe action workflows with explicit accepted/rejected/applied states.
+3. Prepare API/MCP and UI integration on top of stable repository contracts.
+
+### Deliverables
+
+1. Memory curation suggestion schema + model contracts.
+2. Repository create/list/action workflows with validation.
+3. API/MCP workflow parity and acceptance/benchmark coverage.
+
+### Exit Criteria
+
+1. Suggestions can be created, listed, and actioned consistently through REST + MCP.
+2. Action transitions are validated and audit-friendly.
+3. Deterministic test and benchmark coverage protects suggestion quality and latency.
+
+---
+
+### Phase 41 - Feedback Signal Enrichment
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - explicit feedback supports optional `relevance_score` (`1-5`) across REST + MCP submit paths.
+  - explicit feedback supports optional `session_id` attribution across REST + MCP submit paths.
+  - explicit feedback supports optional `integration_depth` (`mentioned`/`elaborated`/`contradicted`/`ignored`) across REST + MCP submit paths.
+  - feedback persistence now tracks aggregate counters on `engrams`:
+    - `feedback_count`
+    - `avg_relevance_feedback`
+  - feedback records now persist optional per-event `relevance_score`, `session_id`, and `integration_depth`.
+  - regression coverage expanded across repository/API/MCP for relevance-score, session-attribution, and integration-depth validation and forwarding.
+
+### Goals
+
+1. Capture richer explicit feedback quality signals without breaking existing feedback flows.
+2. Improve downstream retrieval calibration inputs with durable aggregate relevance metrics.
+3. Preserve deterministic behavior and validation across REST, MCP, and repository write paths.
+
+### Deliverables
+
+1. Schema/model extensions for relevance-score, integration-depth, and aggregate counters.
+2. Repository feedback-write path updates for aggregate maintenance.
+3. REST/MCP payload parity plus validation and regression coverage.
+
+### Exit Criteria
+
+1. Feedback submissions remain backward-compatible while accepting optional `relevance_score`, `session_id`, and `integration_depth`.
+2. Aggregate counters are updated deterministically for each persisted feedback event.
+3. REST/MCP docs and tests fully reflect feedback contract changes.
+
+---
+
+### Phase 42 - Session Authority Scoring Baseline
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - schema baseline for session-authority quality signal:
+    - `engrams.source_session_quality_score` (`0.0-1.0`, default `0.5`) with idempotent check constraint.
+    - index added: `engrams_source_session_quality_idx`.
+  - retrieval query pipeline now selects `source_session_quality_score` into rerank candidates.
+  - composite rerank scoring now incorporates authority weighting via `source_session_quality_score`.
+  - feedback aggregation now updates `source_session_quality_score` deterministically when `relevance_score` is provided.
+  - regression coverage added for:
+    - authority-aware rerank ordering behavior.
+    - query-shape parity for authority column selection.
+
+### Goals
+
+1. Introduce an authority-quality signal tied to source-session trust.
+2. Improve retrieval ranking quality with a bounded authority factor.
+3. Keep scoring behavior deterministic, test-covered, and backward-compatible.
+
+### Deliverables
+
+1. Schema + indexing support for bounded `source_session_quality_score`.
+2. Rerank integration of authority signal in repository query path.
+3. Feedback-write calibration path for authority updates plus tests.
+
+### Exit Criteria
+
+1. Authority score exists in schema with deterministic defaults and guardrails.
+2. Rerank favors higher-authority memories when competing signals are otherwise equal.
+3. Feedback-driven updates and rerank behavior are protected by regression tests.
+
+---
+
+### Phase 43 - Authority-Aware Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `source_session_quality_min` filter to `models.EngramQueryRequest`.
+  - REST query validation now enforces `source_session_quality_min` bounds (`0..1`).
+  - repository query builder now supports `COALESCE(source_session_quality_score, 0.5) >= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `source_session_quality_min`.
+  - regression coverage expanded across repository/API/MCP for filter parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Let operators and agents explicitly filter recall by authority quality.
+2. Keep query behavior deterministic across REST and MCP.
+3. Preserve backward compatibility for existing query clients.
+
+### Deliverables
+
+1. Contract extension for `source_session_quality_min`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository query-predicate support with deterministic tests.
+
+### Exit Criteria
+
+1. Clients can request authority-threshold filtering in both REST and MCP query paths.
+2. Invalid authority thresholds are rejected with explicit validation errors.
+3. Query contract/docs/tests stay synchronized.
+
+---
+
+### Phase 44 - Authority Signal Transparency and Fallback Calibration
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - feedback authority calibration no longer depends solely on `relevance_score`; fallback mappings now apply when score is omitted:
+    - `integration_depth` fallback (`elaborated`/`mentioned`/`ignored`/`contradicted`) mapped to bounded authority signal.
+    - `feedback_type` fallback (`useful`/`contradiction`) used when integration depth is absent.
+  - feedback write path now updates `source_session_quality_score` deterministically from the resolved authority signal, while preserving existing average-relevance aggregation semantics.
+  - engram query results now expose `source_session_quality_score` in returned rows for REST + MCP clients.
+  - regression coverage expanded for authority fallback normalization and query-response authority-field parity.
+
+### Goals
+
+1. Keep authority scoring adaptive even when explicit relevance scores are missing.
+2. Expose authority diagnostics directly to clients to improve retrieval transparency.
+3. Preserve deterministic scoring behavior and backward-compatible query contracts.
+
+### Deliverables
+
+1. Fallback authority calibration logic in feedback repository write path.
+2. `source_session_quality_score` response-field parity in engram query model/repository mapping.
+3. REST/MCP/repository regression coverage plus docs synchronization.
+
+### Exit Criteria
+
+1. Feedback events without `relevance_score` still contribute bounded authority updates.
+2. Query responses include `source_session_quality_score` consistently in REST and MCP tool paths.
+3. Tests and docs protect the fallback-calibration and response-contract behavior.
+
+---
+
+### Phase 45 - Feedback-Aware Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `avg_relevance_feedback_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces `avg_relevance_feedback_min` bounds (`0..1`).
+  - repository query builder now supports `COALESCE(avg_relevance_feedback, 0.5) >= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `avg_relevance_feedback_min`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape parity.
+
+### Goals
+
+1. Let operators and agents filter recalled memory by explicit feedback quality.
+2. Keep query semantics deterministic and aligned across REST and MCP surfaces.
+3. Preserve backward compatibility for existing clients while expanding filter controls.
+
+### Deliverables
+
+1. Contract extension for `avg_relevance_feedback_min`.
+2. REST/MCP validation + schema metadata parity.
+3. Repository predicate support with regression coverage.
+
+### Exit Criteria
+
+1. Query clients can request minimum average relevance feedback thresholds across REST and MCP.
+2. Out-of-range values are rejected with explicit validation errors.
+3. Query contract, parser metadata, docs, and tests remain synchronized.
+
+---
+
+### Phase 46 - Contradiction-Aware Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `contradiction_count_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `contradiction_count_max`.
+  - repository query builder now supports `COALESCE(contradiction_count, 0) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `contradiction_count_max`.
+  - regression coverage expanded across repository/API/MCP for filter parsing, validation, and query-shape parity.
+
+### Goals
+
+1. Allow operators and agents to suppress high-conflict memories during recall.
+2. Keep contradiction-aware filtering deterministic and aligned across REST and MCP.
+3. Preserve backward-compatible query behavior for existing clients.
+
+### Deliverables
+
+1. Contract extension for `contradiction_count_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply contradiction-count ceilings across REST and MCP query paths.
+2. Invalid contradiction ceilings are rejected with explicit validation details.
+3. Query docs and tests stay synchronized with runtime parser and repository behavior.
+
+---
+
+### Phase 47 - Query Quality Diagnostics in Results
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - `models.EngramQueryResult` now includes `feedback_count` and `contradiction_count`.
+  - repository query SQL/mapping now forwards aggregate feedback diagnostics in query rows.
+  - REST and MCP query paths now return quality counters alongside authority score.
+  - regression coverage added for repository result mapping plus REST/MCP payload parity.
+
+### Goals
+
+1. Improve observability of recall quality signals in query responses.
+2. Let clients reason about conflict density and feedback volume per candidate engram.
+3. Preserve deterministic query payload shape across REST and MCP surfaces.
+
+### Deliverables
+
+1. Query-result contract extension for quality counters.
+2. Repository query projection/mapping updates.
+3. REST/MCP parity tests and docs synchronization.
+
+### Exit Criteria
+
+1. Query responses include `feedback_count` and `contradiction_count` consistently in REST and MCP.
+2. Repository mapping behavior is protected by regression tests.
+3. API/MCP docs reflect the new response diagnostics.
+
+---
+
+### Phase 48 - Query Engagement Diagnostics in Results
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - `models.EngramQueryResult` now includes `access_count` and `freshness_score`.
+  - repository query result mapping now forwards engagement diagnostics already used by rerank internals.
+  - REST and MCP query paths now return engagement counters/scores alongside authority and feedback diagnostics.
+  - regression coverage extended for repository mapping and REST/MCP payload parity.
+
+### Goals
+
+1. Expose engagement/recency signals in query output for downstream agent reasoning.
+2. Improve transparency of rerank inputs returned to clients.
+3. Keep query payload shape deterministic across REST and MCP paths.
+
+### Deliverables
+
+1. Query-result contract extension for `access_count` and `freshness_score`.
+2. Repository mapping updates for engagement diagnostics.
+3. REST/MCP parity tests and docs synchronization.
+
+### Exit Criteria
+
+1. Query responses include `access_count` and `freshness_score` in both REST and MCP.
+2. Mapping behavior is regression-tested in repository/API/MCP suites.
+3. API/MCP docs reflect engagement diagnostics in query result rows.
+
+---
+
+### Phase 49 - Feedback-Volume Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `feedback_count_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `feedback_count_min`.
+  - repository query builder now supports `COALESCE(feedback_count, 0) >= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `feedback_count_min`.
+  - regression coverage expanded across repository/API/MCP for filter parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to scope recall to memories with minimum explicit feedback volume.
+2. Keep feedback-volume filtering deterministic and consistent across REST and MCP.
+3. Preserve backward-compatible query behavior while extending quality controls.
+
+### Deliverables
+
+1. Contract extension for `feedback_count_min`.
+2. REST/MCP validation + schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply minimum feedback-count thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Docs and tests remain synchronized with parser and repository behavior.
+
+---
+
+### Phase 50 - Useful-Signal Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `useful_count_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `useful_count_min`.
+  - repository query builder now supports `COALESCE(useful_count, 0) >= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `useful_count_min`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape parity.
+
+### Goals
+
+1. Allow operators and agents to favor memories with stronger explicit usefulness history.
+2. Keep useful-signal filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `useful_count_min`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply minimum useful-feedback thresholds across REST and MCP query paths.
+2. Invalid values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for the new filter.
+
+---
+
+### Phase 51 - Useful-Ratio Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `useful_feedback_ratio_min` (`0..1`) to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `useful_feedback_ratio_min`.
+  - repository query builder now supports ratio predicate:
+    - `useful_count / feedback_count` when feedback exists.
+    - deterministic neutral fallback (`0.5`) when feedback is absent.
+  - MCP `engram.query` parser/catalog now accept and validate `useful_feedback_ratio_min`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Let operators and agents filter recall by explicit useful-feedback ratio quality.
+2. Keep ratio filtering deterministic and aligned across REST and MCP surfaces.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `useful_feedback_ratio_min`.
+2. REST/MCP validation and metadata parity.
+3. Repository ratio predicate support with regression coverage.
+
+### Exit Criteria
+
+1. Query clients can apply minimum useful-feedback ratio thresholds in REST and MCP.
+2. Out-of-range values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for ratio filtering behavior.
+
+---
+
+### Phase 52 - Useful Diagnostics in Query Results
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - `models.EngramQueryResult` now includes `useful_count`, `avg_relevance_feedback`, and `useful_feedback_ratio`.
+  - repository candidate projection now forwards `avg_relevance_feedback` with deterministic fallback (`0.5`).
+  - repository result mapping now computes and returns `useful_feedback_ratio` with neutral fallback (`0.5`) when `feedback_count` is zero.
+  - REST and MCP query flows now return useful-signal diagnostics alongside existing quality/engagement/authority signals.
+  - regression coverage expanded for repository mapping/runtime query SQL and REST/MCP payload parity.
+
+### Goals
+
+1. Expose useful-signal diagnostics so query filters and ranking behavior are transparent to clients.
+2. Keep feedback-quality diagnostics deterministic across REST and MCP query result payloads.
+3. Preserve backward compatibility while extending query observability.
+
+### Deliverables
+
+1. Query-result contract extension for useful diagnostics.
+2. Repository projection/mapping updates with deterministic ratio fallback behavior.
+3. REST/MCP parity tests and docs synchronization.
+
+### Exit Criteria
+
+1. Query responses include `useful_count`, `avg_relevance_feedback`, and `useful_feedback_ratio` in REST and MCP.
+2. Zero-feedback rows return deterministic neutral ratio fallback (`0.5`) and are regression-tested.
+3. API/MCP docs and tests remain synchronized with repository output behavior.
+
+---
+
+### Phase 53 - Contradiction-Ratio Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `contradiction_feedback_ratio_max` (`0..1`) to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `contradiction_feedback_ratio_max`.
+  - repository query builder now supports contradiction-ratio predicate:
+    - `contradiction_count / feedback_count` when feedback exists.
+    - deterministic low-risk fallback (`0.0`) when feedback is absent.
+  - MCP `engram.query` parser/catalog now accept and validate `contradiction_feedback_ratio_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Let operators and agents constrain recall by relative contradiction risk, not just raw contradiction counts.
+2. Keep contradiction-ratio filtering deterministic and aligned across REST and MCP surfaces.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `contradiction_feedback_ratio_max`.
+2. REST/MCP validation and metadata parity.
+3. Repository contradiction-ratio predicate support with regression coverage.
+
+### Exit Criteria
+
+1. Query clients can apply maximum contradiction-feedback ratio thresholds in REST and MCP.
+2. Out-of-range values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for contradiction-ratio filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1044,5 +1654,34 @@ Build a local-first memory system where agents and humans can:
    - [x] enable access-aware federated linked recall across projects
 5. Execute memory-intelligence foundation in order:
    - [x] Phase 35: memory engagement tracking baseline.
-   - [ ] Phase 36: feedback loop + relevance/freshness scoring.
+   - [x] Phase 36: feedback loop + relevance/freshness scoring.
    - [x] Phase 37: time-decay + consolidation suggestions.
+   - [x] Phase 38: contradiction detection + warning flows.
+   - [x] Phase 39: temporal query extensions + cost-aware context assembly.
+   - [x] Phase 40: autonomous memory suggestions and action workflows.
+6. Execute feedback-signal enrichment increment:
+   - [x] Phase 41: richer explicit feedback payloads + aggregate relevance counters.
+7. Execute authority-scoring baseline increment:
+   - [x] Phase 42: source-session authority scoring baseline in schema/retrieval/feedback loops.
+8. Execute authority-aware query contract increment:
+   - [x] Phase 43: authority-threshold query filter parity across REST/MCP/repository.
+9. Execute authority signal transparency increment:
+   - [x] Phase 44: fallback authority calibration + query-response authority signal exposure.
+10. Execute feedback-quality query filter increment:
+   - [x] Phase 45: `avg_relevance_feedback_min` parity across REST/MCP/repository.
+11. Execute contradiction-aware query filter increment:
+   - [x] Phase 46: `contradiction_count_max` parity across REST/MCP/repository.
+12. Execute query diagnostics increment:
+   - [x] Phase 47: expose `feedback_count` + `contradiction_count` in query results.
+13. Execute engagement diagnostics increment:
+   - [x] Phase 48: expose `access_count` + `freshness_score` in query results.
+14. Execute feedback-volume query filter increment:
+   - [x] Phase 49: `feedback_count_min` parity across REST/MCP/repository.
+15. Execute useful-signal query filter increment:
+   - [x] Phase 50: `useful_count_min` parity across REST/MCP/repository.
+16. Execute useful-ratio query filter increment:
+   - [x] Phase 51: `useful_feedback_ratio_min` parity across REST/MCP/repository.
+17. Execute useful-diagnostics query result increment:
+   - [x] Phase 52: expose `useful_count` + `avg_relevance_feedback` + `useful_feedback_ratio` in query results.
+18. Execute contradiction-ratio query filter increment:
+   - [x] Phase 53: `contradiction_feedback_ratio_max` parity across REST/MCP/repository.

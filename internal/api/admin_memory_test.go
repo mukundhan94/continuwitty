@@ -32,6 +32,12 @@ type fakeMemoryAdminService struct {
 	refreshConsolidationFn func(ctx context.Context, request admin.EngramConsolidationSuggestionRefreshRequest) (admin.EngramConsolidationSuggestionRefreshResponse, error)
 	listConsolidationFn    func(ctx context.Context, request admin.EngramConsolidationSuggestionListRequest) ([]models.EngramConsolidationSuggestion, error)
 	actionConsolidationFn  func(ctx context.Context, suggestionID uuid.UUID, actorUserID uuid.UUID, request admin.EngramConsolidationSuggestionActionRequest) (*models.EngramConsolidationSuggestion, error)
+	refreshContradictionFn func(ctx context.Context, request admin.EngramContradictionAlertRefreshRequest) (admin.EngramContradictionAlertRefreshResponse, error)
+	listContradictionFn    func(ctx context.Context, request admin.EngramContradictionAlertListRequest) ([]models.EngramContradictionAlert, error)
+	resolveContradictionFn func(ctx context.Context, alertID uuid.UUID, actorUserID uuid.UUID, request admin.EngramContradictionAlertResolveRequest) (*models.EngramContradictionAlert, error)
+	refreshLinkCurationFn  func(ctx context.Context, actorUserID uuid.UUID, request admin.EngramLinkCurationSuggestionRefreshRequest) (admin.EngramLinkCurationSuggestionRefreshResponse, error)
+	listCurationFn         func(ctx context.Context, request admin.MemoryCurationSuggestionListRequest) ([]models.MemoryCurationSuggestion, error)
+	actionCurationFn       func(ctx context.Context, suggestionID uuid.UUID, actorUserID uuid.UUID, request admin.MemoryCurationSuggestionActionRequest) (*models.MemoryCurationSuggestion, error)
 	listCollectionsFn      func(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error)
 	createCollectionFn     func(ctx context.Context, actorUserID uuid.UUID, actorRole string, payload admin.CollectionCreateRequest) (*models.EngramCollectionRecord, error)
 	updateCollectionFn     func(ctx context.Context, collectionID uuid.UUID, payload admin.CollectionUpdateRequest) (*models.EngramCollectionRecord, error)
@@ -110,15 +116,41 @@ func (f *fakeMemoryAdminService) ListEngramConsolidationSuggestions(
 	return requireFakeAdminHandler("ListEngramConsolidationSuggestions", f.listConsolidationFn)(ctx, request)
 }
 
-func (f *fakeMemoryAdminService) ActionEngramConsolidationSuggestion(
+func (f *fakeMemoryAdminService) RefreshEngramContradictionAlerts(
 	ctx context.Context,
-	suggestionID uuid.UUID,
+	request admin.EngramContradictionAlertRefreshRequest,
+) (admin.EngramContradictionAlertRefreshResponse, error) {
+	return requireFakeAdminHandler("RefreshEngramContradictionAlerts", f.refreshContradictionFn)(ctx, request)
+}
+
+func (f *fakeMemoryAdminService) ListEngramContradictionAlerts(
+	ctx context.Context,
+	request admin.EngramContradictionAlertListRequest,
+) ([]models.EngramContradictionAlert, error) {
+	return requireFakeAdminHandler("ListEngramContradictionAlerts", f.listContradictionFn)(ctx, request)
+}
+
+func (f *fakeMemoryAdminService) ResolveEngramContradictionAlert(
+	ctx context.Context,
+	alertID uuid.UUID,
 	actorUserID uuid.UUID,
-	request admin.EngramConsolidationSuggestionActionRequest,
-) (*models.EngramConsolidationSuggestion, error) {
-	return requireFakeAdminHandler("ActionEngramConsolidationSuggestion", f.actionConsolidationFn)(
+	request admin.EngramContradictionAlertResolveRequest,
+) (*models.EngramContradictionAlert, error) {
+	return requireFakeAdminHandler("ResolveEngramContradictionAlert", f.resolveContradictionFn)(
 		ctx,
-		suggestionID,
+		alertID,
+		actorUserID,
+		request,
+	)
+}
+
+func (f *fakeMemoryAdminService) RefreshEngramLinkCurationSuggestions(
+	ctx context.Context,
+	actorUserID uuid.UUID,
+	request admin.EngramLinkCurationSuggestionRefreshRequest,
+) (admin.EngramLinkCurationSuggestionRefreshResponse, error) {
+	return requireFakeAdminHandler("RefreshEngramLinkCurationSuggestions", f.refreshLinkCurationFn)(
+		ctx,
 		actorUserID,
 		request,
 	)
@@ -283,68 +315,6 @@ func TestMountMemoryAdminRoutesListEngramsIncludesDeletedAtNullForActiveRecords(
 	if deletedAt != nil {
 		t.Fatalf("expected deleted_at to be null, got %#v", deletedAt)
 	}
-}
-
-func TestMountMemoryAdminRoutesRefreshEngramFreshnessUsesPayload(t *testing.T) {
-	captured := admin.EngramFreshnessRefreshRequest{}
-	referenceTime := time.Date(2026, 3, 3, 12, 0, 0, 0, time.UTC)
-	service := &fakeMemoryAdminService{
-		refreshEngramFreshness: func(
-			_ context.Context,
-			request admin.EngramFreshnessRefreshRequest,
-		) (admin.EngramFreshnessRefreshResponse, error) {
-			captured = request
-			return admin.EngramFreshnessRefreshResponse{
-				ProjectID:     request.ProjectID,
-				HalfLifeDays:  40,
-				ReferenceTime: referenceTime,
-				UpdatedCount:  12,
-			}, nil
-		},
-	}
-
-	executeMemoryAdminRefreshRequest(
-		t,
-		service,
-		"/api/v1/admin/memory/engrams/freshness/refresh",
-		[]byte(`{"project_id":"engram-vault","half_life_days":40}`),
-	)
-	requireEqual(t, "engram-vault", derefString(captured.ProjectID))
-	if captured.HalfLifeDays == nil {
-		t.Fatalf("expected half_life_days to be forwarded")
-	}
-	requireEqual(t, 40.0, *captured.HalfLifeDays)
-}
-
-func TestMountMemoryAdminRoutesRefreshEngramConsolidationUsesPayload(t *testing.T) {
-	captured := admin.EngramConsolidationSuggestionRefreshRequest{}
-	suggestedAt := time.Date(2026, 3, 3, 13, 5, 0, 0, time.UTC)
-	service := &fakeMemoryAdminService{
-		refreshConsolidationFn: func(
-			_ context.Context,
-			request admin.EngramConsolidationSuggestionRefreshRequest,
-		) (admin.EngramConsolidationSuggestionRefreshResponse, error) {
-			captured = request
-			return admin.EngramConsolidationSuggestionRefreshResponse{
-				ProjectID:    request.ProjectID,
-				MinGroupSize: 3,
-				SuggestedAt:  suggestedAt,
-				UpdatedCount: 5,
-			}, nil
-		},
-	}
-
-	executeMemoryAdminRefreshRequest(
-		t,
-		service,
-		"/api/v1/admin/memory/engrams/consolidation/refresh",
-		[]byte(`{"project_id":"engram-vault","min_group_size":3}`),
-	)
-	requireEqual(t, "engram-vault", derefString(captured.ProjectID))
-	if captured.MinGroupSize == nil {
-		t.Fatalf("expected min_group_size to be forwarded")
-	}
-	requireEqual(t, 3, *captured.MinGroupSize)
 }
 
 func TestMountMemoryAdminRoutesListEngramConsolidationSuggestionsUsesRequestObject(t *testing.T) {

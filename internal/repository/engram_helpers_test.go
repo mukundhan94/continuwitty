@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -68,17 +69,41 @@ func TestLexicalOverlapScorePrefersMatchingTerms(t *testing.T) {
 }
 
 func TestCombinedRankScoreUsesDenseAndLexicalSignals(t *testing.T) {
-	weakDenseStrongLexical := combinedRankScore(rankScoreInput{distance: 0.8, lexicalOverlap: 1.0})
-	strongDenseWeakLexical := combinedRankScore(rankScoreInput{distance: 0.1, lexicalOverlap: 0.0})
-	if weakDenseStrongLexical <= 0 {
-		t.Fatalf("expected weakDenseStrongLexical > 0, got %v", weakDenseStrongLexical)
+	baseline := combinedRankScore(rankScoreInput{distance: 0.8, lexicalOverlap: 0.0})
+	lexicalBoosted := combinedRankScore(rankScoreInput{distance: 0.8, lexicalOverlap: 1.0})
+	denseBoosted := combinedRankScore(rankScoreInput{distance: 0.1, lexicalOverlap: 0.0})
+	if lexicalBoosted <= baseline {
+		t.Fatalf("expected lexical boost (%v) > baseline (%v)", lexicalBoosted, baseline)
 	}
-	if strongDenseWeakLexical <= weakDenseStrongLexical {
-		t.Fatalf(
-			"expected strongDenseWeakLexical (%v) > weakDenseStrongLexical (%v)",
-			strongDenseWeakLexical,
-			weakDenseStrongLexical,
-		)
+	if denseBoosted <= baseline {
+		t.Fatalf("expected dense boost (%v) > baseline (%v)", denseBoosted, baseline)
+	}
+}
+
+func TestNormalizeEngagementScoreUsesLogScaling(t *testing.T) {
+	none := normalizeEngagementScore(0)
+	moderate := normalizeEngagementScore(5)
+	high := normalizeEngagementScore(25)
+	if none != 0 {
+		t.Fatalf("expected 0-access score to be 0, got %v", none)
+	}
+	if moderate <= none {
+		t.Fatalf("expected moderate engagement > none, got %v <= %v", moderate, none)
+	}
+	if high < 0.95 {
+		t.Fatalf("expected high engagement to saturate near 1, got %v", high)
+	}
+}
+
+func TestNormalizeFreshnessScoreClampsAndHandlesInvalidValues(t *testing.T) {
+	if score := normalizeFreshnessScore(-1.2); score != 0 {
+		t.Fatalf("expected negative freshness to clamp to 0, got %v", score)
+	}
+	if score := normalizeFreshnessScore(1.3); score != 1 {
+		t.Fatalf("expected high freshness to clamp to 1, got %v", score)
+	}
+	if score := normalizeFreshnessScore(math.NaN()); score != 0.5 {
+		t.Fatalf("expected NaN freshness fallback to 0.5, got %v", score)
 	}
 }
 

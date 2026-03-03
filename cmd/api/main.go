@@ -351,6 +351,24 @@ func applyMCPEngramCompatibilityDependencies(
 	compatibilityDeps.EngramConsolidationAction = newMCPEngramConsolidationActionAdapter(
 		dependencies.memoryAdminService,
 	)
+	compatibilityDeps.EngramContradictionRefresh = newMCPEngramContradictionRefreshAdapter(
+		dependencies.memoryAdminService,
+	)
+	compatibilityDeps.EngramContradictionList = newMCPEngramContradictionListAdapter(
+		dependencies.memoryAdminService,
+	)
+	compatibilityDeps.EngramContradictionResolve = newMCPEngramContradictionResolveAdapter(
+		dependencies.memoryAdminService,
+	)
+	compatibilityDeps.EngramCurationList = newMCPEngramCurationListAdapter(
+		dependencies.memoryAdminService,
+	)
+	compatibilityDeps.EngramCurationRefresh = newMCPEngramCurationRefreshAdapter(
+		dependencies.memoryAdminService,
+	)
+	compatibilityDeps.EngramCurationAction = newMCPEngramCurationActionAdapter(
+		dependencies.memoryAdminService,
+	)
 	compatibilityDeps.EngramMove = newMCPEngramMoveAdapter(dependencies.memoryAdminService)
 	compatibilityDeps.EngramDelete = newMCPEngramDeleteAdapter(dependencies.memoryAdminService)
 	compatibilityDeps.EngramRestore = newMCPEngramRestoreAdapter(dependencies.memoryAdminService)
@@ -649,10 +667,13 @@ func submitEngramFeedbackDependency(
 			ctx,
 			pool,
 			repository.EngramFeedbackCreateInput{
-				EngramID:     input.EngramID,
-				ActorUserID:  input.ActorUserID,
-				FeedbackType: input.FeedbackType,
-				Note:         input.Note,
+				EngramID:         input.EngramID,
+				SessionID:        input.SessionID,
+				ActorUserID:      input.ActorUserID,
+				FeedbackType:     input.FeedbackType,
+				IntegrationDepth: input.IntegrationDepth,
+				Note:             input.Note,
+				RelevanceScore:   input.RelevanceScore,
 			},
 		)
 	}

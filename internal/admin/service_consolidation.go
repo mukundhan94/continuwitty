@@ -29,6 +29,9 @@ func (s *Service) RefreshEngramConsolidationSuggestions(
 	if err != nil {
 		return EngramConsolidationSuggestionRefreshResponse{}, err
 	}
+	if err := s.syncConsolidationCurationSuggestions(ctx, refreshed.ProjectID, refreshed.SuggestedAt); err != nil {
+		return EngramConsolidationSuggestionRefreshResponse{}, err
+	}
 	return EngramConsolidationSuggestionRefreshResponse{
 		ProjectID:    refreshed.ProjectID,
 		MinGroupSize: refreshed.MinGroupSize,

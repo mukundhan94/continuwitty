@@ -108,7 +108,12 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 			visibility_scope,
 			retrieval_text,
 			COALESCE(useful_count, 0) AS useful_count,
+			COALESCE(feedback_count, 0) AS feedback_count,
+			COALESCE(avg_relevance_feedback, 0.5) AS avg_relevance_feedback,
 			COALESCE(contradiction_count, 0) AS contradiction_count,
+			COALESCE(access_count, 0) AS access_count,
+			COALESCE(freshness_score, 1.0) AS freshness_score,
+			COALESCE(source_session_quality_score, 0.5) AS source_session_quality_score,
 			embed <=> $1::vector AS distance
 		FROM engrams
 		%s
@@ -192,19 +197,24 @@ func scanEngramCandidateRow(row interface {
 	Scan(dest ...any) error
 }) (map[string]any, error) {
 	var (
-		engramID        uuid.UUID
-		projectID       string
-		title           string
-		abstract        string
-		createdAt       time.Time
-		tags            []string
-		keywords        []string
-		ownerUserID     *uuid.UUID
-		visibilityScope *string
-		retrievalText   string
-		usefulCount     int
-		contradiction   int
-		distance        float64
+		engramID                  uuid.UUID
+		projectID                 string
+		title                     string
+		abstract                  string
+		createdAt                 time.Time
+		tags                      []string
+		keywords                  []string
+		ownerUserID               *uuid.UUID
+		visibilityScope           *string
+		retrievalText             string
+		usefulCount               int
+		feedbackCount             int
+		avgRelevanceFeedback      float64
+		contradiction             int
+		accessCount               int
+		freshnessScore            float64
+		sourceSessionQualityScore float64
+		distance                  float64
 	)
 
 	err := row.Scan(
@@ -219,7 +229,12 @@ func scanEngramCandidateRow(row interface {
 		&visibilityScope,
 		&retrievalText,
 		&usefulCount,
+		&feedbackCount,
+		&avgRelevanceFeedback,
 		&contradiction,
+		&accessCount,
+		&freshnessScore,
+		&sourceSessionQualityScore,
 		&distance,
 	)
 	if err != nil {
@@ -232,33 +247,46 @@ func scanEngramCandidateRow(row interface {
 		keywords = []string{}
 	}
 	return map[string]any{
-		"engram_id":           engramID,
-		"project_id":          projectID,
-		"title":               title,
-		"abstract":            abstract,
-		"created_at":          createdAt,
-		"tags":                tags,
-		"keywords":            keywords,
-		"owner_user_id":       ownerUserID,
-		"visibility_scope":    visibilityOrDefault(visibilityScope),
-		"retrieval_text":      retrievalText,
-		"useful_count":        usefulCount,
-		"contradiction_count": contradiction,
-		"distance":            distance,
+		"engram_id":                    engramID,
+		"project_id":                   projectID,
+		"title":                        title,
+		"abstract":                     abstract,
+		"created_at":                   createdAt,
+		"tags":                         tags,
+		"keywords":                     keywords,
+		"owner_user_id":                ownerUserID,
+		"visibility_scope":             visibilityOrDefault(visibilityScope),
+		"retrieval_text":               retrievalText,
+		"useful_count":                 usefulCount,
+		"feedback_count":               feedbackCount,
+		"avg_relevance_feedback":       avgRelevanceFeedback,
+		"contradiction_count":          contradiction,
+		"access_count":                 accessCount,
+		"freshness_score":              freshnessScore,
+		"source_session_quality_score": sourceSessionQualityScore,
+		"distance":                     distance,
 	}, nil
 }
 
 func mapEngramQueryResult(row map[string]any) models.EngramQueryResult {
 	result := models.EngramQueryResult{
-		EngramID:        uuidFromAny(row["engram_id"]),
-		ProjectID:       stringFromAny(row["project_id"]),
-		Title:           stringFromAny(row["title"]),
-		Abstract:        stringFromAny(row["abstract"]),
-		CreatedAt:       timeFromAny(row["created_at"]),
-		Tags:            stringSliceFromAny(row["tags"]),
-		Keywords:        stringSliceFromAny(row["keywords"]),
-		VisibilityScope: visibilityFromAny(row["visibility_scope"]),
-		Distance:        float64FromAny(row["distance"]),
+		EngramID:                  uuidFromAny(row["engram_id"]),
+		ProjectID:                 stringFromAny(row["project_id"]),
+		Title:                     stringFromAny(row["title"]),
+		Abstract:                  stringFromAny(row["abstract"]),
+		CreatedAt:                 timeFromAny(row["created_at"]),
+		Tags:                      stringSliceFromAny(row["tags"]),
+		Keywords:                  stringSliceFromAny(row["keywords"]),
+		VisibilityScope:           visibilityFromAny(row["visibility_scope"]),
+		AccessCount:               intFromAny(row["access_count"]),
+		FreshnessScore:            float64FromAny(row["freshness_score"]),
+		FeedbackCount:             intFromAny(row["feedback_count"]),
+		UsefulCount:               intFromAny(row["useful_count"]),
+		AvgRelevanceFeedback:      float64FromAny(row["avg_relevance_feedback"]),
+		UsefulFeedbackRatio:       usefulFeedbackRatioFromRow(row),
+		ContradictionCount:        intFromAny(row["contradiction_count"]),
+		SourceSessionQualityScore: float64FromAny(row["source_session_quality_score"]),
+		Distance:                  float64FromAny(row["distance"]),
 	}
 	if ownerUserID, ok := row["owner_user_id"].(*uuid.UUID); ok {
 		result.OwnerUserID = ownerUserID
@@ -278,6 +306,15 @@ func visibilityFromAny(value any) string {
 		return typed
 	}
 	return "private"
+}
+
+func usefulFeedbackRatioFromRow(row map[string]any) float64 {
+	feedbackCount := intFromAny(row["feedback_count"])
+	if feedbackCount <= 0 {
+		return 0.5
+	}
+	usefulCount := intFromAny(row["useful_count"])
+	return float64(usefulCount) / float64(feedbackCount)
 }
 
 func pgxPlaceholder(index int) string {

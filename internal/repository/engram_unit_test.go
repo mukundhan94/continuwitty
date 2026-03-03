@@ -12,52 +12,203 @@ import (
 )
 
 func TestBuildEngramQueryWhereIncludesAllFilters(t *testing.T) {
-	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	createdAfter := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-	createdBefore := time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC)
-	projectID := "engram-vault"
-	request := models.EngramQueryRequest{
-		Query:         "durable memory",
-		TopK:          5,
-		ProjectID:     &projectID,
-		Tags:          []string{"memory"},
-		Keywords:      []string{"checkpoint"},
-		CreatedAfter:  &createdAfter,
-		CreatedBefore: &createdBefore,
+	fixture := buildQueryWhereAllFiltersFixture()
+	whereSQL, params := buildEngramQueryWhere(
+		fixture.request,
+		&fixture.actorUserID,
+		"[0.1,0.2,0.3]",
+	)
+
+	for _, fragment := range fixture.expectedFragments {
+		if !strings.Contains(whereSQL, fragment) {
+			t.Fatalf("expected where sql to contain %q, got %q", fragment, whereSQL)
+		}
 	}
+	if !reflect.DeepEqual(params, fixture.expectedParams) {
+		t.Fatalf("expected params %#v, got %#v", fixture.expectedParams, params)
+	}
+}
 
-	whereSQL, params := buildEngramQueryWhere(request, &actorUserID, "[0.1,0.2,0.3]")
+type queryWhereAllFiltersFixture struct {
+	actorUserID       uuid.UUID
+	request           models.EngramQueryRequest
+	expectedFragments []string
+	expectedParams    []any
+}
 
-	expectedFragments := []string{
+func buildQueryWhereAllFiltersFixture() queryWhereAllFiltersFixture {
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	timeValues := queryWhereTimeValues{
+		createdAfter:           time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+		createdBefore:          time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC),
+		lastAccessedAfter:      time.Date(2026, 2, 7, 0, 0, 0, 0, time.UTC),
+		lastAccessedBefore:     time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC),
+		freshnessComputedAfter: time.Date(2026, 2, 8, 0, 0, 0, 0, time.UTC),
+		freshnessComputedBefore: time.Date(
+			2026,
+			2,
+			21,
+			0,
+			0,
+			0,
+			0,
+			time.UTC,
+		),
+	}
+	scoreValues := queryWhereScoreValues{
+		usefulCountMin:          2,
+		accessCountMin:          3,
+		feedbackCountMin:        4,
+		contradictionCountMax:   2,
+		contradictionRatioMax:   0.35,
+		freshnessScoreMin:       0.6,
+		usefulFeedbackRatioMin:  0.8,
+		avgRelevanceFeedbackMin: 0.55,
+		sourceSessionQualityMin: 0.7,
+	}
+	relationType := models.EngramLinkRelationSupports
+	traceDepth := 1
+	projectID := "engram-vault"
+	requestInput := queryWhereRequestInput{
+		projectID:    projectID,
+		timeValues:   timeValues,
+		scoreValues:  scoreValues,
+		relationType: relationType,
+		traceDepth:   traceDepth,
+	}
+	return queryWhereAllFiltersFixture{
+		actorUserID:       actorUserID,
+		request:           buildQueryWhereRequest(requestInput),
+		expectedFragments: queryWhereExpectedFragments(),
+		expectedParams: queryWhereExpectedParams(queryWhereExpectedParamsInput{
+			actorUserID: actorUserID,
+			request:     requestInput,
+		}),
+	}
+}
+
+type queryWhereTimeValues struct {
+	createdAfter            time.Time
+	createdBefore           time.Time
+	lastAccessedAfter       time.Time
+	lastAccessedBefore      time.Time
+	freshnessComputedAfter  time.Time
+	freshnessComputedBefore time.Time
+}
+
+type queryWhereScoreValues struct {
+	usefulCountMin          int
+	accessCountMin          int
+	feedbackCountMin        int
+	contradictionCountMax   int
+	contradictionRatioMax   float64
+	freshnessScoreMin       float64
+	usefulFeedbackRatioMin  float64
+	avgRelevanceFeedbackMin float64
+	sourceSessionQualityMin float64
+}
+
+type queryWhereRequestInput struct {
+	projectID    string
+	timeValues   queryWhereTimeValues
+	scoreValues  queryWhereScoreValues
+	relationType models.EngramLinkRelationType
+	traceDepth   int
+}
+
+func buildQueryWhereRequest(input queryWhereRequestInput) models.EngramQueryRequest {
+	return models.EngramQueryRequest{
+		Query:                   "durable memory",
+		TopK:                    5,
+		ProjectID:               &input.projectID,
+		Tags:                    []string{"memory"},
+		Keywords:                []string{"checkpoint"},
+		CreatedAfter:            &input.timeValues.createdAfter,
+		CreatedBefore:           &input.timeValues.createdBefore,
+		UsefulCountMin:          &input.scoreValues.usefulCountMin,
+		AccessCountMin:          &input.scoreValues.accessCountMin,
+		FeedbackCountMin:        &input.scoreValues.feedbackCountMin,
+		ContradictionCountMax:   &input.scoreValues.contradictionCountMax,
+		ContradictionRatioMax:   &input.scoreValues.contradictionRatioMax,
+		FreshnessScoreMin:       &input.scoreValues.freshnessScoreMin,
+		UsefulFeedbackRatioMin:  &input.scoreValues.usefulFeedbackRatioMin,
+		AvgRelevanceFeedbackMin: &input.scoreValues.avgRelevanceFeedbackMin,
+		SourceSessionQualityMin: &input.scoreValues.sourceSessionQualityMin,
+		LastAccessedAfter:       &input.timeValues.lastAccessedAfter,
+		LastAccessedBefore:      &input.timeValues.lastAccessedBefore,
+		FreshnessComputedAfter:  &input.timeValues.freshnessComputedAfter,
+		FreshnessComputedBefore: &input.timeValues.freshnessComputedBefore,
+		RelationType:            &input.relationType,
+		TraceDepth:              &input.traceDepth,
+	}
+}
+
+func queryWhereExpectedFragments() []string {
+	return []string{
 		"WHERE deleted_at IS NULL",
 		"project_id = $2",
 		"tags && $4",
 		"keywords && $5",
 		"created_at >= $6",
 		"created_at <= $7",
+		"COALESCE(useful_count, 0) >= $8",
+		"COALESCE(access_count, 0) >= $9",
+		"COALESCE(feedback_count, 0) >= $10",
+		"COALESCE(contradiction_count, 0) <= $11",
+		"THEN 0.0",
+		"ELSE COALESCE(contradiction_count, 0)::DOUBLE PRECISION /",
+		") <= $12",
+		"COALESCE(freshness_score, 1.0) >= $13",
+		"CASE",
+		"THEN 0.5",
+		"ELSE COALESCE(useful_count, 0)::DOUBLE PRECISION /",
+		"GREATEST(COALESCE(feedback_count, 0), 1)::DOUBLE PRECISION",
+		") >= $14",
+		"COALESCE(avg_relevance_feedback, 0.5) >= $15",
+		"COALESCE(source_session_quality_score, 0.5) >= $16",
+		"COALESCE(last_accessed_at, created_at) >= $17",
+		"COALESCE(last_accessed_at, created_at) <= $18",
+		"COALESCE(freshness_last_computed_at, created_at) >= $19",
+		"COALESCE(freshness_last_computed_at, created_at) <= $20",
+		"EXISTS (",
+		"link.status = 'active'",
+		"link.relation_type = $21",
 		"owner_user_id = $3",
 		"actor_user.user_id = $3",
 		"pm.project_id = project_id",
 		"pm.user_id = $3",
 		"visibility_scope = 'project'",
 	}
-	for _, fragment := range expectedFragments {
-		if !strings.Contains(whereSQL, fragment) {
-			t.Fatalf("expected where sql to contain %q, got %q", fragment, whereSQL)
-		}
-	}
+}
 
-	expectedParams := []any{
+type queryWhereExpectedParamsInput struct {
+	actorUserID uuid.UUID
+	request     queryWhereRequestInput
+}
+
+func queryWhereExpectedParams(input queryWhereExpectedParamsInput) []any {
+	return []any{
 		"[0.1,0.2,0.3]",
-		"engram-vault",
-		actorUserID,
+		input.request.projectID,
+		input.actorUserID,
 		[]string{"memory"},
 		[]string{"checkpoint"},
-		createdAfter,
-		createdBefore,
-	}
-	if !reflect.DeepEqual(params, expectedParams) {
-		t.Fatalf("expected params %#v, got %#v", expectedParams, params)
+		input.request.timeValues.createdAfter,
+		input.request.timeValues.createdBefore,
+		input.request.scoreValues.usefulCountMin,
+		input.request.scoreValues.accessCountMin,
+		input.request.scoreValues.feedbackCountMin,
+		input.request.scoreValues.contradictionCountMax,
+		input.request.scoreValues.contradictionRatioMax,
+		input.request.scoreValues.freshnessScoreMin,
+		input.request.scoreValues.usefulFeedbackRatioMin,
+		input.request.scoreValues.avgRelevanceFeedbackMin,
+		input.request.scoreValues.sourceSessionQualityMin,
+		input.request.timeValues.lastAccessedAfter,
+		input.request.timeValues.lastAccessedBefore,
+		input.request.timeValues.freshnessComputedAfter,
+		input.request.timeValues.freshnessComputedBefore,
+		string(input.request.relationType),
 	}
 }
 
@@ -104,32 +255,28 @@ func TestRerankByCombinedScorePrefersLexicalOverlap(t *testing.T) {
 
 func TestRerankByCombinedScoreIncorporatesFeedbackSignal(t *testing.T) {
 	rows := []map[string]any{
-		{
-			"engram_id":           uuid.MustParse("00000000-0000-0000-0000-000000000311"),
-			"project_id":          "engram-vault",
-			"title":               "Useful Memory",
-			"abstract":            "shared checkpoint details",
-			"created_at":          time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
-			"tags":                []string{},
-			"keywords":            []string{"checkpoint"},
-			"retrieval_text":      "checkpoint details",
-			"useful_count":        10,
-			"contradiction_count": 0,
-			"distance":            0.3,
-		},
-		{
-			"engram_id":           uuid.MustParse("00000000-0000-0000-0000-000000000312"),
-			"project_id":          "engram-vault",
-			"title":               "Contradicted Memory",
-			"abstract":            "shared checkpoint details",
-			"created_at":          time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
-			"tags":                []string{},
-			"keywords":            []string{"checkpoint"},
-			"retrieval_text":      "checkpoint details",
-			"useful_count":        0,
-			"contradiction_count": 8,
-			"distance":            0.3,
-		},
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:           uuid.MustParse("00000000-0000-0000-0000-000000000311"),
+				title:              "Useful Memory",
+				usefulCount:        10,
+				contradictionCount: 0,
+				accessCount:        6,
+				freshnessScore:     0.85,
+				distance:           0.3,
+			},
+		),
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:           uuid.MustParse("00000000-0000-0000-0000-000000000312"),
+				title:              "Contradicted Memory",
+				usefulCount:        0,
+				contradictionCount: 8,
+				accessCount:        6,
+				freshnessScore:     0.85,
+				distance:           0.3,
+			},
+		),
 	}
 
 	reranked := rerankByCombinedScore(
@@ -144,6 +291,98 @@ func TestRerankByCombinedScoreIncorporatesFeedbackSignal(t *testing.T) {
 	}
 	if title, _ := reranked[0]["title"].(string); title != "Useful Memory" {
 		t.Fatalf("expected positive feedback memory to rank first, got %q", title)
+	}
+}
+
+func TestRerankByCombinedScoreIncorporatesEngagementAndFreshnessSignals(t *testing.T) {
+	rows := []map[string]any{
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:           uuid.MustParse("00000000-0000-0000-0000-000000000321"),
+				title:              "Active Fresh Memory",
+				usefulCount:        2,
+				contradictionCount: 0,
+				accessCount:        28,
+				freshnessScore:     0.95,
+				distance:           0.35,
+				keywords:           []string{"runbook"},
+				retrievalText:      "runbook context",
+				abstract:           "shared runbook context",
+			},
+		),
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:           uuid.MustParse("00000000-0000-0000-0000-000000000322"),
+				title:              "Cold Stale Memory",
+				usefulCount:        2,
+				contradictionCount: 0,
+				accessCount:        0,
+				freshnessScore:     0.05,
+				distance:           0.35,
+				keywords:           []string{"runbook"},
+				retrievalText:      "runbook context",
+				abstract:           "shared runbook context",
+			},
+		),
+	}
+
+	reranked := rerankByCombinedScore(
+		rerankRowsInput{
+			rows:  rows,
+			query: "runbook context",
+			topK:  1,
+		},
+	)
+	if len(reranked) != 1 {
+		t.Fatalf("expected one reranked result, got %d", len(reranked))
+	}
+	if title, _ := reranked[0]["title"].(string); title != "Active Fresh Memory" {
+		t.Fatalf("expected active/fresh memory to rank first, got %q", title)
+	}
+}
+
+func TestRerankByCombinedScoreIncorporatesAuthoritySignal(t *testing.T) {
+	rows := []map[string]any{
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:                     uuid.MustParse("00000000-0000-0000-0000-000000000331"),
+				title:                        "High Authority Memory",
+				usefulCount:                  2,
+				contradictionCount:           0,
+				accessCount:                  8,
+				freshnessScore:               0.7,
+				sourceSessionQualityScore:    0.95,
+				hasSourceSessionQualityScore: true,
+				distance:                     0.35,
+			},
+		),
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:                     uuid.MustParse("00000000-0000-0000-0000-000000000332"),
+				title:                        "Low Authority Memory",
+				usefulCount:                  2,
+				contradictionCount:           0,
+				accessCount:                  8,
+				freshnessScore:               0.7,
+				sourceSessionQualityScore:    0.1,
+				hasSourceSessionQualityScore: true,
+				distance:                     0.35,
+			},
+		),
+	}
+
+	reranked := rerankByCombinedScore(
+		rerankRowsInput{
+			rows:  rows,
+			query: "checkpoint details",
+			topK:  1,
+		},
+	)
+	if len(reranked) != 1 {
+		t.Fatalf("expected one reranked result, got %d", len(reranked))
+	}
+	if title, _ := reranked[0]["title"].(string); title != "High Authority Memory" {
+		t.Fatalf("expected high-authority memory to rank first, got %q", title)
 	}
 }
 
@@ -319,4 +558,50 @@ func TestBuildEngramJSONPayloadSerializesReportAndSourceSessionID(t *testing.T) 
 
 func ptr(value string) *string {
 	return &value
+}
+
+type rerankSignalRowInput struct {
+	engramID                     uuid.UUID
+	title                        string
+	abstract                     string
+	keywords                     []string
+	retrievalText                string
+	usefulCount                  int
+	contradictionCount           int
+	accessCount                  int
+	freshnessScore               float64
+	sourceSessionQualityScore    float64
+	hasSourceSessionQualityScore bool
+	distance                     float64
+}
+
+func newRerankSignalRow(input rerankSignalRowInput) map[string]any {
+	if input.abstract == "" {
+		input.abstract = "shared checkpoint details"
+	}
+	if input.retrievalText == "" {
+		input.retrievalText = "checkpoint details"
+	}
+	if input.keywords == nil {
+		input.keywords = []string{"checkpoint"}
+	}
+	if !input.hasSourceSessionQualityScore {
+		input.sourceSessionQualityScore = 0.5
+	}
+	return map[string]any{
+		"engram_id":                    input.engramID,
+		"project_id":                   "engram-vault",
+		"title":                        input.title,
+		"abstract":                     input.abstract,
+		"created_at":                   time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
+		"tags":                         []string{},
+		"keywords":                     input.keywords,
+		"retrieval_text":               input.retrievalText,
+		"useful_count":                 input.usefulCount,
+		"contradiction_count":          input.contradictionCount,
+		"access_count":                 input.accessCount,
+		"freshness_score":              input.freshnessScore,
+		"source_session_quality_score": input.sourceSessionQualityScore,
+		"distance":                     input.distance,
+	}
 }

@@ -22,6 +22,7 @@ var errMessageRuntimeDependenciesIncomplete = errors.New("chat message runtime d
 // ChatMessageCreateRequest captures inbound chat message payloads for runtime preparation.
 type ChatMessageCreateRequest struct {
 	ContentText                 string   `json:"content_text"`
+	ContextTokenBudget          *int     `json:"context_token_budget,omitempty"`
 	LinkRecallEnabled           *bool    `json:"link_recall_enabled,omitempty"`
 	LinkRecallDepth             *int     `json:"link_recall_depth,omitempty"`
 	LinkRecallMaxNeighbors      *int     `json:"link_recall_max_neighbors,omitempty"`
@@ -242,6 +243,7 @@ func BuildStreamMetaPayload(prepared PreparedGeneration) map[string]any {
 		"used_engram_ids":         prepared.Context.UsedEngramIDs,
 		"used_engram_link_ids":    prepared.Context.UsedEngramLinkIDs,
 		"engram_trace_paths":      prepared.Context.EngramTracePaths,
+		"contradiction_warnings":  prepared.Context.ContradictionWarnings,
 		"used_document_chunk_ids": prepared.Context.UsedDocumentChunkIDs,
 		"source_references":       prepared.Context.SourceReferences,
 		"cw_plan_applied":         prepared.CWPlanApplied,
@@ -271,6 +273,7 @@ func BuildStreamDonePayload(
 		"used_engram_ids":         prepared.Context.UsedEngramIDs,
 		"used_engram_link_ids":    prepared.Context.UsedEngramLinkIDs,
 		"engram_trace_paths":      prepared.Context.EngramTracePaths,
+		"contradiction_warnings":  prepared.Context.ContradictionWarnings,
 		"used_document_chunk_ids": prepared.Context.UsedDocumentChunkIDs,
 		"source_references":       prepared.Context.SourceReferences,
 		"cw_plan_applied":         prepared.CWPlanApplied,
@@ -354,6 +357,7 @@ func (runtime *ChatMessageRuntime) prepareChatContext(
 			ActorUserID:                 actorUserID,
 			UserQuery:                   payload.ContentText,
 			EmbeddingDim:                runtime.embeddingDim,
+			ContextTokenBudget:          payload.ContextTokenBudget,
 			LinkRecallEnabled:           payload.LinkRecallEnabled,
 			LinkRecallDepth:             payload.LinkRecallDepth,
 			LinkRecallMaxNeighbors:      payload.LinkRecallMaxNeighbors,

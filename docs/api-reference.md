@@ -48,6 +48,7 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 | `POST` | `/api/v1/engrams/query` | Semantic query |
 | `GET` | `/api/v1/engrams/{engram_id}/sources` | Inspect provenance sources |
 | `GET` | `/api/v1/engrams/{engram_id}/rehydrate` | Get rehydration bundle |
+| `POST` | `/api/v1/engrams/{engram_id}/feedback` | Submit engram feedback (`feedback_type`, optional `session_id`, optional `integration_depth` [`mentioned`,`elaborated`,`contradicted`,`ignored`], optional `note`, optional `relevance_score` 1-5) |
 | `POST` | `/api/v1/engrams/{engram_id}/share` | Share engram to project-visible scope |
 | `POST` | `/api/v1/engrams/{engram_id}/unshare` | Revert engram visibility to private |
 
@@ -139,6 +140,12 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 | `POST` | `/api/v1/admin/memory/engrams/consolidation/refresh` | Refresh deterministic consolidation suggestions (admin) |
 | `GET` | `/api/v1/admin/memory/engrams/consolidation/suggestions` | List consolidation suggestions (admin) |
 | `POST` | `/api/v1/admin/memory/engrams/consolidation/suggestions/{suggestion_id}/action` | Mark consolidation suggestion as merged/rejected (admin) |
+| `POST` | `/api/v1/admin/memory/engrams/contradictions/refresh` | Refresh contradiction alerts from active contradiction links (admin) |
+| `GET` | `/api/v1/admin/memory/engrams/contradictions/alerts` | List contradiction alerts (admin) |
+| `POST` | `/api/v1/admin/memory/engrams/contradictions/alerts/{alert_id}/resolve` | Mark contradiction alert as resolved/dismissed (admin) |
+| `POST` | `/api/v1/admin/memory/engrams/{engram_id}/links/curation/refresh` | Refresh link hygiene recommendations into deduped `suggested` link curation suggestions (admin, optional scoped `project_id` must match source engram project) |
+| `GET` | `/api/v1/admin/memory/engrams/curation/suggestions` | List autonomous memory curation suggestions (admin) |
+| `POST` | `/api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action` | Mark memory curation suggestion as accepted/rejected/applied (admin); `applied` dispatches downstream consolidation/contradiction actions and payload-linked link archival actions (`archive_*`, `review_relation_conflict`) |
 | `GET` | `/api/v1/admin/memory/engrams/{engram_id}` | Get engram (admin) |
 | `PATCH` | `/api/v1/admin/memory/engrams/{engram_id}` | Update engram |
 | `POST` | `/api/v1/admin/memory/engrams/{engram_id}/move` | Move engram to project |
@@ -215,6 +222,7 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 
 `POST /api/v1/chat/sessions/{session_id}/messages` and `/messages/stream` support optional graph recall controls:
 
+- `context_token_budget` (int, bounded `200..8000`)
 - `link_recall_enabled` (bool)
 - `link_recall_depth` (int, bounded)
 - `link_recall_max_neighbors` (int, bounded)
@@ -229,6 +237,7 @@ Chat send responses and stream `meta`/`done` events include:
 - `used_engram_ids`
 - `used_engram_link_ids`
 - `engram_trace_paths`
+- `contradiction_warnings` (trace-derived contradiction risk guidance)
 - `used_document_chunk_ids`
 - `source_references`
 - `retrieval_audit` (blocked candidate count + trace suppression/filtering/truncation + cross-project usage signals)
@@ -273,6 +282,25 @@ curl -X POST http://localhost:8000/api/v1/engrams/query \
     "top_k": 5
   }'
 ```
+
+Optional temporal/engagement filters:
+
+- `created_after` / `created_before` (RFC3339 timestamp)
+- `last_accessed_after` / `last_accessed_before` (RFC3339 timestamp)
+- `freshness_computed_after` / `freshness_computed_before` (RFC3339 timestamp)
+- `useful_count_min` (int, minimum `0`)
+- `access_count_min` (int, minimum `0`)
+- `feedback_count_min` (int, minimum `0`)
+- `contradiction_count_max` (int, minimum `0`)
+- `contradiction_feedback_ratio_max` (number, bounded `0..1`)
+- `freshness_score_min` (number, bounded `0..1`)
+- `useful_feedback_ratio_min` (number, bounded `0..1`)
+- `avg_relevance_feedback_min` (number, bounded `0..1`)
+- `source_session_quality_min` (number, bounded `0..1`)
+- `relation_type` (`supports|depends_on|contradicts|related_to|derived_from`)
+- `trace_depth` (`0` or `1`; defaults to `1` when `relation_type` is set)
+
+Query results include `source_session_quality_score` (`0..1`), `access_count`, `freshness_score`, `feedback_count`, `useful_count`, `avg_relevance_feedback` (`0..1`), `useful_feedback_ratio` (`0..1`), and `contradiction_count` for recall-quality diagnostics.
 
 ### Agent Run (With Snapshots)
 

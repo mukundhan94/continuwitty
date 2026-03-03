@@ -243,11 +243,17 @@ curl -s -b "$COOKIE_JAR" \
 - `engram.link_archive`
 - `engram.link_suggest`
 - `engram.trace_path`
-- `engram.feedback`
+- `engram.feedback` (optional `session_id`, optional `integration_depth` [`mentioned`,`elaborated`,`contradicted`,`ignored`], optional `relevance_score` 1-5)
 - `engram.refresh_freshness` (admin maintenance)
 - `engram.consolidation_list` (admin maintenance)
 - `engram.refresh_consolidation` (admin maintenance)
 - `engram.consolidation_action` (admin maintenance)
+- `engram.contradiction_list` (admin maintenance)
+- `engram.refresh_contradictions` (admin maintenance)
+- `engram.contradiction_resolve` (admin maintenance)
+- `engram.curation_list` (admin maintenance)
+- `engram.curation_refresh_links` (admin maintenance; refreshes link-hygiene recommendations into curation suggestions for one source engram, optional `project_id` scope must match source engram project)
+- `engram.curation_action` (admin maintenance; `status=applied` triggers linked consolidation/contradiction downstream actions and payload-linked link archival actions (`archive_*`, `review_relation_conflict`))
 - `engram.pin_to_session`
 - `engram.share`
 - `engram.unshare`
@@ -303,6 +309,7 @@ Note: project audit-event listing is currently REST-only (`GET /api/v1/projects/
       "arguments": {
         "session_id": "00000000-0000-0000-0000-000000000000",
         "content_text": "Summarize the pinned engrams",
+        "context_token_budget": 1200,
         "link_recall_enabled": true,
         "link_recall_depth": 1,
         "link_recall_max_neighbors": 8,
@@ -419,6 +426,7 @@ curl -sN -b "$COOKIE_JAR" \
       "arguments": {
         "session_id": "00000000-0000-0000-0000-000000000000",
         "content_text": "Summarize pinned engrams and list action items.",
+        "context_token_budget": 1200,
         "link_recall_enabled": true,
         "link_recall_depth": 1,
         "link_recall_max_neighbors": 8,
@@ -464,6 +472,7 @@ curl -sN -b "$COOKIE_JAR" \
 - `used_engram_ids`
 - `used_engram_link_ids`
 - `engram_trace_paths`
+- `contradiction_warnings` (trace-derived contradiction risk guidance)
 - `used_document_chunk_ids`
 - `source_references`
 - `retrieval_audit` (blocked candidate count + trace suppression/filtering/truncation + cross-project usage signals)
@@ -472,6 +481,7 @@ curl -sN -b "$COOKIE_JAR" \
 
 `chat.send_message` request arguments can also include optional bounded recall controls:
 
+- `context_token_budget`
 - `link_recall_enabled`
 - `link_recall_depth`
 - `link_recall_max_neighbors`
@@ -519,10 +529,25 @@ Document pin/list helpers:
   "params": {
     "query": "incident mitigation",
     "project_id": "engram-vault",
-    "top_k": 5
+    "top_k": 5,
+    "useful_count_min": 1,
+    "access_count_min": 2,
+    "feedback_count_min": 3,
+    "contradiction_count_max": 2,
+    "contradiction_feedback_ratio_max": 0.4,
+    "freshness_score_min": 0.4,
+    "useful_feedback_ratio_min": 0.7,
+    "source_session_quality_min": 0.7,
+    "last_accessed_after": "2026-02-01T00:00:00Z",
+    "last_accessed_before": "2026-03-01T00:00:00Z",
+    "relation_type": "supports",
+    "trace_depth": 1
   }
 }
 ```
+
+`engram.query` also supports optional `created_after` / `created_before` and `freshness_computed_after` / `freshness_computed_before` (RFC3339), plus `useful_count_min`, `access_count_min`, `feedback_count_min`, `contradiction_count_max`, `contradiction_feedback_ratio_max`, `freshness_score_min`, `useful_feedback_ratio_min`, `avg_relevance_feedback_min`, `source_session_quality_min`, and trace constraints (`relation_type`, `trace_depth`).
+Returned rows include `source_session_quality_score` (`0..1`) plus `access_count`, `freshness_score`, `feedback_count`, `useful_count`, `avg_relevance_feedback` (`0..1`), `useful_feedback_ratio` (`0..1`), and `contradiction_count` for authority/quality diagnostics.
 
 Collection add-items flow (resolve collection UUID first):
 

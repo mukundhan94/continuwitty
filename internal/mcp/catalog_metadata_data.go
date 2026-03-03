@@ -218,6 +218,11 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 				"stream": map[string]any{
 					"type": "boolean",
 				},
+				"context_token_budget": map[string]any{
+					"type":    "integer",
+					"minimum": 200,
+					"maximum": 8000,
+				},
 				"link_recall_enabled": map[string]any{
 					"type": "boolean",
 				},
@@ -576,6 +581,78 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 				"created_before": map[string]any{
 					"type":   "string",
 					"format": "date-time",
+				},
+				"last_accessed_after": map[string]any{
+					"type":   "string",
+					"format": "date-time",
+				},
+				"last_accessed_before": map[string]any{
+					"type":   "string",
+					"format": "date-time",
+				},
+				"freshness_computed_after": map[string]any{
+					"type":   "string",
+					"format": "date-time",
+				},
+				"freshness_computed_before": map[string]any{
+					"type":   "string",
+					"format": "date-time",
+				},
+				"relation_type": map[string]any{
+					"type": "string",
+					"enum": []string{
+						"supports",
+						"depends_on",
+						"contradicts",
+						"related_to",
+						"derived_from",
+					},
+				},
+				"trace_depth": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"access_count_min": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+				"useful_count_min": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+				"feedback_count_min": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+				"contradiction_count_max": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+				"contradiction_feedback_ratio_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"freshness_score_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"useful_feedback_ratio_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"avg_relevance_feedback_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"source_session_quality_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
 				},
 			},
 		},
@@ -991,6 +1068,74 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"engram.contradiction_list": {
+		description: "List contradiction alerts by project/status (admin-only maintenance view).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"open",
+						"resolved",
+						"dismissed",
+					},
+				},
+				"limit": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"offset": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+			},
+		},
+	},
+	"engram.curation_list": {
+		description: "List autonomous memory curation suggestions by project/session/type/status (admin-only maintenance view).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"session_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"suggestion_type": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"auto_save",
+						"consolidate",
+						"contradiction",
+						"link",
+					},
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"suggested",
+						"accepted",
+						"rejected",
+						"applied",
+					},
+				},
+				"limit": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+				},
+				"offset": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+			},
+		},
+	},
 	"engram.get": {
 		description: "Get an engram in management format with editable source payload.",
 		inputSchema: map[string]any{
@@ -1269,6 +1414,10 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":   "string",
 					"format": "uuid",
 				},
+				"session_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
 				"feedback_type": map[string]any{
 					"type": "string",
 					"enum": []any{
@@ -1276,8 +1425,22 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 						"contradiction",
 					},
 				},
+				"integration_depth": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"mentioned",
+						"elaborated",
+						"contradicted",
+						"ignored",
+					},
+				},
 				"note": map[string]any{
 					"type": "string",
+				},
+				"relevance_score": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+					"maximum": 5,
 				},
 			},
 		},
@@ -1333,6 +1496,100 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"enum": []any{
 						"merged",
 						"rejected",
+					},
+				},
+			},
+		},
+	},
+	"engram.refresh_contradictions": {
+		description: "Refresh contradiction alerts from active contradiction links (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+			},
+		},
+	},
+	"engram.curation_refresh_links": {
+		description: "Refresh link hygiene recommendations into link curation suggestions for one source engram (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"source_engram_id",
+			},
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"source_engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"include_archived": map[string]any{
+					"type": "boolean",
+				},
+				"limit": map[string]any{
+					"type": "integer",
+				},
+				"stale_after_days": map[string]any{
+					"type": "integer",
+				},
+				"low_value_threshold": map[string]any{
+					"type": "number",
+				},
+			},
+		},
+	},
+	"engram.contradiction_resolve": {
+		description: "Mark one contradiction alert as resolved or dismissed (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"alert_id",
+				"status",
+			},
+			"properties": map[string]any{
+				"alert_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"resolved",
+						"dismissed",
+					},
+				},
+			},
+		},
+	},
+	"engram.curation_action": {
+		description: "Mark one memory curation suggestion as accepted, rejected, or applied (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"suggestion_id",
+				"status",
+			},
+			"properties": map[string]any{
+				"suggestion_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"accepted",
+						"rejected",
+						"applied",
 					},
 				},
 			},

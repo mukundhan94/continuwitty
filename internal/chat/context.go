@@ -48,13 +48,23 @@ type ChatSourceReference struct {
 
 // AssembledChatContext contains rendered context plus trace IDs for persistence/debug.
 type AssembledChatContext struct {
-	ContextMarkdown      string                `json:"context_markdown"`
-	UsedEngramIDs        []uuid.UUID           `json:"used_engram_ids"`
-	UsedEngramLinkIDs    []uuid.UUID           `json:"used_engram_link_ids"`
-	EngramTracePaths     []EngramTracePath     `json:"engram_trace_paths"`
-	UsedDocumentChunkIDs []uuid.UUID           `json:"used_document_chunk_ids"`
-	SourceReferences     []ChatSourceReference `json:"source_references"`
-	RetrievalAudit       *ChatRetrievalAudit   `json:"retrieval_audit,omitempty"`
+	ContextMarkdown       string                     `json:"context_markdown"`
+	UsedEngramIDs         []uuid.UUID                `json:"used_engram_ids"`
+	UsedEngramLinkIDs     []uuid.UUID                `json:"used_engram_link_ids"`
+	EngramTracePaths      []EngramTracePath          `json:"engram_trace_paths"`
+	ContradictionWarnings []ChatContradictionWarning `json:"contradiction_warnings,omitempty"`
+	UsedDocumentChunkIDs  []uuid.UUID                `json:"used_document_chunk_ids"`
+	SourceReferences      []ChatSourceReference      `json:"source_references"`
+	RetrievalAudit        *ChatRetrievalAudit        `json:"retrieval_audit,omitempty"`
+}
+
+// ChatContradictionWarning captures contradiction-risk guidance for recalled trace paths.
+type ChatContradictionWarning struct {
+	RootEngramID         uuid.UUID   `json:"root_engram_id"`
+	TargetEngramID       uuid.UUID   `json:"target_engram_id"`
+	ContradictingLinkIDs []uuid.UUID `json:"contradicting_link_ids"`
+	Severity             string      `json:"severity"`
+	Message              string      `json:"message"`
 }
 
 // ChatRetrievalAudit captures retrieval-path diagnostics for traceability and safety review.
@@ -69,16 +79,21 @@ type ChatRetrievalAudit struct {
 	CrossProjectEngramCount     int      `json:"cross_project_engram_count"`
 	CrossProjectTracePathCount  int      `json:"cross_project_trace_path_count"`
 	CrossProjectProjectIDs      []string `json:"cross_project_project_ids,omitempty"`
+	ContextTokenBudget          int      `json:"context_token_budget"`
+	ContextTokenEstimate        int      `json:"context_token_estimate"`
+	ContextTokenTruncated       bool     `json:"context_token_truncated"`
 }
 
 // EngramTracePath captures one compact root->target trace chain used in context recall.
 type EngramTracePath struct {
-	RootEngramID   uuid.UUID   `json:"root_engram_id"`
-	TargetEngramID uuid.UUID   `json:"target_engram_id"`
-	Depth          int         `json:"depth"`
-	LinkIDs        []uuid.UUID `json:"link_ids"`
-	EngramIDs      []uuid.UUID `json:"engram_ids"`
-	Score          float64     `json:"score"`
+	RootEngramID         uuid.UUID   `json:"root_engram_id"`
+	TargetEngramID       uuid.UUID   `json:"target_engram_id"`
+	Depth                int         `json:"depth"`
+	LinkIDs              []uuid.UUID `json:"link_ids"`
+	EngramIDs            []uuid.UUID `json:"engram_ids"`
+	HasContradiction     bool        `json:"has_contradiction,omitempty"`
+	ContradictingLinkIDs []uuid.UUID `json:"contradicting_link_ids,omitempty"`
+	Score                float64     `json:"score"`
 }
 
 // ChatContextRequest captures retrieval inputs used when building chat context.
@@ -87,6 +102,7 @@ type ChatContextRequest struct {
 	ActorUserID                 uuid.UUID
 	UserQuery                   string
 	EmbeddingDim                int
+	ContextTokenBudget          *int
 	MaxEngrams                  int
 	RetrievalTopK               int
 	DocumentTopK                int
@@ -115,11 +131,12 @@ type ChatContextDependencies struct {
 }
 
 type assembledEngramContext struct {
-	bundles           []models.RehydrationBundle
-	usedEngramID      []uuid.UUID
-	usedEngramLinkIDs []uuid.UUID
-	tracePaths        []EngramTracePath
-	retrievalAudit    ChatRetrievalAudit
+	bundles               []models.RehydrationBundle
+	usedEngramID          []uuid.UUID
+	usedEngramLinkIDs     []uuid.UUID
+	tracePaths            []EngramTracePath
+	contradictionWarnings []ChatContradictionWarning
+	retrievalAudit        ChatRetrievalAudit
 }
 
 type assembledDocumentContext struct {
@@ -148,6 +165,11 @@ type engramRetrievalAuditInput struct {
 	Bundles            []models.RehydrationBundle
 	FilteredTracePaths []EngramTracePath
 	UsedEngramIDs      []uuid.UUID
+}
+
+type engramCandidateSelection struct {
+	rankedCandidateIDs []uuid.UUID
+	linkSelection      linkedEngramSelection
 }
 
 // DefaultChatContextDependencies maps chat context dependencies to repository operations.
@@ -182,14 +204,19 @@ func AssembleChatContext(
 		return AssembledChatContext{}, err
 	}
 	if len(engramContext.bundles) == 0 && len(documentContext.selectedChunks) == 0 {
+		retrievalAudit := engramContext.retrievalAudit
+		retrievalAudit.ContextTokenBudget = *normalizedRequest.ContextTokenBudget
+		retrievalAudit.ContextTokenEstimate = 0
+		retrievalAudit.ContextTokenTruncated = false
 		return AssembledChatContext{
-			ContextMarkdown:      "",
-			UsedEngramIDs:        engramContext.usedEngramID,
-			UsedEngramLinkIDs:    engramContext.usedEngramLinkIDs,
-			EngramTracePaths:     engramContext.tracePaths,
-			UsedDocumentChunkIDs: documentContext.usedDocumentChunkIDs,
-			SourceReferences:     []ChatSourceReference{},
-			RetrievalAudit:       &engramContext.retrievalAudit,
+			ContextMarkdown:       "",
+			UsedEngramIDs:         engramContext.usedEngramID,
+			UsedEngramLinkIDs:     engramContext.usedEngramLinkIDs,
+			EngramTracePaths:      engramContext.tracePaths,
+			ContradictionWarnings: engramContext.contradictionWarnings,
+			UsedDocumentChunkIDs:  documentContext.usedDocumentChunkIDs,
+			SourceReferences:      []ChatSourceReference{},
+			RetrievalAudit:        &retrievalAudit,
 		}, nil
 	}
 
@@ -198,6 +225,10 @@ func AssembleChatContext(
 		documentContext.selectedChunks,
 		documentContext.pinnedChunks,
 	)
+	budgetedContext := buildBudgetedContextMarkdown(
+		contextSections,
+		*normalizedRequest.ContextTokenBudget,
+	)
 	sourceReferences := dedupeSourceReferences(
 		append(
 			collectBundleSourceReferences(engramContext.bundles),
@@ -205,14 +236,19 @@ func AssembleChatContext(
 		),
 		16,
 	)
+	retrievalAudit := engramContext.retrievalAudit
+	retrievalAudit.ContextTokenBudget = *normalizedRequest.ContextTokenBudget
+	retrievalAudit.ContextTokenEstimate = budgetedContext.tokenEstimate
+	retrievalAudit.ContextTokenTruncated = budgetedContext.truncated
 	return AssembledChatContext{
-		ContextMarkdown:      strings.Join(contextSections, "\n\n"),
-		UsedEngramIDs:        engramContext.usedEngramID,
-		UsedEngramLinkIDs:    engramContext.usedEngramLinkIDs,
-		EngramTracePaths:     engramContext.tracePaths,
-		UsedDocumentChunkIDs: documentContext.usedDocumentChunkIDs,
-		SourceReferences:     sourceReferences,
-		RetrievalAudit:       &engramContext.retrievalAudit,
+		ContextMarkdown:       budgetedContext.markdown,
+		UsedEngramIDs:         engramContext.usedEngramID,
+		UsedEngramLinkIDs:     engramContext.usedEngramLinkIDs,
+		EngramTracePaths:      engramContext.tracePaths,
+		ContradictionWarnings: engramContext.contradictionWarnings,
+		UsedDocumentChunkIDs:  documentContext.usedDocumentChunkIDs,
+		SourceReferences:      sourceReferences,
+		RetrievalAudit:        &retrievalAudit,
 	}, nil
 }
 
@@ -221,13 +257,66 @@ func assembleEngramContext(
 	request ChatContextRequest,
 	dependencies ChatContextDependencies,
 ) (assembledEngramContext, error) {
+	candidateSelection, err := selectEngramCandidates(
+		ctx,
+		request,
+		dependencies,
+	)
+	if err != nil {
+		return assembledEngramContext{}, err
+	}
+	bundleCollect, err := collectRehydrationBundles(
+		ctx,
+		dependencies,
+		rehydrationBundleCollectInput{
+			EngramIDs:   candidateSelection.rankedCandidateIDs,
+			ActorUserID: request.ActorUserID,
+			Limit:       request.MaxEngrams,
+		},
+	)
+	if err != nil {
+		return assembledEngramContext{}, err
+	}
+	bundles := bundleCollect.Bundles
+	usedEngramIDs := collectBundleEngramIDs(bundles)
+	filteredTracePaths := filterTracePathsForUsedEngrams(
+		candidateSelection.linkSelection.tracePaths,
+		usedEngramIDs,
+	)
+	contradictionWarnings := buildContradictionWarnings(filteredTracePaths)
+	retrievalAudit := buildEngramRetrievalAudit(
+		engramRetrievalAuditInput{
+			SessionProjectID:   request.Session.ProjectID,
+			RankedCandidateIDs: candidateSelection.rankedCandidateIDs,
+			LinkSelection:      candidateSelection.linkSelection,
+			BundleCollect:      bundleCollect,
+			Bundles:            bundles,
+			FilteredTracePaths: filteredTracePaths,
+			UsedEngramIDs:      usedEngramIDs,
+		},
+	)
+	return assembledEngramContext{
+		bundles:               bundles,
+		usedEngramID:          usedEngramIDs,
+		usedEngramLinkIDs:     collectUsedLinkIDs(filteredTracePaths),
+		tracePaths:            filteredTracePaths,
+		contradictionWarnings: contradictionWarnings,
+		retrievalAudit:        retrievalAudit,
+	}, nil
+}
+
+func selectEngramCandidates(
+	ctx context.Context,
+	request ChatContextRequest,
+	dependencies ChatContextDependencies,
+) (engramCandidateSelection, error) {
 	pinned, err := dependencies.ListPinnedEngramSummaries(
 		ctx,
 		request.Session.SessionID,
 		request.ActorUserID,
 	)
 	if err != nil {
-		return assembledEngramContext{}, err
+		return engramCandidateSelection{}, err
 	}
 	retrieved, err := dependencies.QueryEngrams(
 		ctx,
@@ -236,7 +325,7 @@ func assembleEngramContext(
 		request.EmbeddingDim,
 	)
 	if err != nil {
-		return assembledEngramContext{}, err
+		return engramCandidateSelection{}, err
 	}
 	selectedIDs := selectContextEngramIDs(request.MaxEngrams, pinned, retrieved)
 	seedScores := buildSeedRelevanceScores(pinned, retrieved)
@@ -248,50 +337,17 @@ func assembleEngramContext(
 		seedScores,
 	)
 	if err != nil {
-		return assembledEngramContext{}, err
+		return engramCandidateSelection{}, err
 	}
-	rankedCandidateIDs := rankEngramContextCandidates(
-		selectedIDs,
-		linkSelection.linkedIDs,
-		seedScores,
-		linkSelection.tracePaths,
-		request.MaxEngrams,
-	)
-	bundleCollect, err := collectRehydrationBundles(
-		ctx,
-		dependencies,
-		rehydrationBundleCollectInput{
-			EngramIDs:   rankedCandidateIDs,
-			ActorUserID: request.ActorUserID,
-			Limit:       request.MaxEngrams,
-		},
-	)
-	if err != nil {
-		return assembledEngramContext{}, err
-	}
-	bundles := bundleCollect.Bundles
-	usedEngramIDs := collectBundleEngramIDs(bundles)
-	filteredTracePaths := filterTracePathsForUsedEngrams(
-		linkSelection.tracePaths,
-		usedEngramIDs,
-	)
-	retrievalAudit := buildEngramRetrievalAudit(
-		engramRetrievalAuditInput{
-			SessionProjectID:   request.Session.ProjectID,
-			RankedCandidateIDs: rankedCandidateIDs,
-			LinkSelection:      linkSelection,
-			BundleCollect:      bundleCollect,
-			Bundles:            bundles,
-			FilteredTracePaths: filteredTracePaths,
-			UsedEngramIDs:      usedEngramIDs,
-		},
-	)
-	return assembledEngramContext{
-		bundles:           bundles,
-		usedEngramID:      usedEngramIDs,
-		usedEngramLinkIDs: collectUsedLinkIDs(filteredTracePaths),
-		tracePaths:        filteredTracePaths,
-		retrievalAudit:    retrievalAudit,
+	return engramCandidateSelection{
+		rankedCandidateIDs: rankEngramContextCandidates(
+			selectedIDs,
+			linkSelection.linkedIDs,
+			seedScores,
+			linkSelection.tracePaths,
+			request.MaxEngrams,
+		),
+		linkSelection: linkSelection,
 	}, nil
 }
 
@@ -374,6 +430,7 @@ func normalizeChatContextRequest(request ChatContextRequest) ChatContextRequest 
 	if request.DocumentTopK <= 0 {
 		request.DocumentTopK = defaultChatContextDocumentTop
 	}
+	request = normalizeContextTokenBudgetOption(request)
 	request = normalizeLinkRecallOptions(request)
 	request = normalizeLinkNoiseOptions(request)
 	return request

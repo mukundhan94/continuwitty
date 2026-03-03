@@ -7,6 +7,833 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 53: contradiction-ratio query filter parity)
+
+1. Added contradiction-ratio query contract extension:
+   - new optional filter: `contradiction_feedback_ratio_max` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `contradiction_feedback_ratio_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `contradiction_feedback_ratio_max`.
+3. Added repository ratio predicate support:
+   - query builder now supports contradiction-ratio filtering using `contradiction_count / feedback_count` when feedback exists.
+   - deterministic low-risk fallback `0.0` is applied when feedback_count is zero.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `contradiction_feedback_ratio_max`.
+   - repository where-clause/parameter assertions for contradiction-ratio predicate shape.
+   - MCP parity and validation coverage for contradiction-ratio filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 52: useful diagnostics in query result payloads)
+
+1. Extended engram query result contracts with useful-signal diagnostics:
+   - added `useful_count` to `EngramQueryResult`.
+   - added `avg_relevance_feedback` to `EngramQueryResult`.
+   - added `useful_feedback_ratio` to `EngramQueryResult`.
+2. Updated repository query projection/mapping:
+   - query SQL now projects `COALESCE(avg_relevance_feedback, 0.5)`.
+   - result mapping now forwards `useful_count` + `avg_relevance_feedback`.
+   - added deterministic ratio helper (`useful_count / feedback_count`, neutral fallback `0.5` when feedback is absent).
+3. Added parity/regression coverage:
+   - repository query/runtime assertions now verify useful diagnostics projection and payload mapping.
+   - REST query-route response test now asserts serialized `useful_count`, `avg_relevance_feedback`, and `useful_feedback_ratio`.
+   - MCP compatibility parity fixture now includes useful diagnostics fields.
+4. Documentation alignment:
+   - API and MCP query docs now describe returned useful diagnostics.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 51: useful-ratio query filter parity)
+
+1. Added useful-ratio query contract extension:
+   - new optional filter: `useful_feedback_ratio_min` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `useful_feedback_ratio_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `useful_feedback_ratio_min`.
+3. Added repository ratio predicate support:
+   - query builder now supports ratio filter using `useful_count / feedback_count` when feedback exists.
+   - deterministic neutral fallback `0.5` is applied when feedback_count is zero.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `useful_feedback_ratio_min`.
+   - repository where-clause/parameter assertions for ratio predicate shape.
+   - MCP parity and validation coverage for useful-ratio filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 50: useful-signal query filter parity)
+
+1. Added useful-signal query contract extension:
+   - new optional filter: `useful_count_min` (non-negative integer) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `useful_count_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `useful_count_min`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(useful_count, 0) >= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `useful_count_min`.
+   - repository where-clause/parameter assertions for useful-count predicate.
+   - MCP parity and validation coverage for useful-signal filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 49: feedback-volume query filter parity)
+
+1. Added feedback-volume query contract extension:
+   - new optional filter: `feedback_count_min` (non-negative integer) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `feedback_count_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `feedback_count_min`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(feedback_count, 0) >= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `feedback_count_min`.
+   - repository where-clause/parameter assertions for feedback-count predicate.
+   - MCP parity and validation coverage for feedback-volume filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 48: query engagement diagnostics in result payloads)
+
+1. Extended engram query result contracts with engagement diagnostics:
+   - added `access_count` to `EngramQueryResult`.
+   - added `freshness_score` to `EngramQueryResult`.
+2. Updated repository query mapping:
+   - mapped `access_count` and `freshness_score` from candidate-row projection into final query results.
+3. Added parity/regression coverage:
+   - repository query tests now assert engagement diagnostics in mapped results.
+   - REST query-route response test now asserts serialized `access_count` and `freshness_score`.
+   - MCP compatibility parity fixture now includes engagement diagnostics.
+4. Documentation alignment:
+   - API and MCP query docs now describe returned engagement diagnostics.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 47: query quality diagnostics in result payloads)
+
+1. Extended engram query result contracts with feedback diagnostics:
+   - added `feedback_count` to `EngramQueryResult`.
+   - added `contradiction_count` to `EngramQueryResult`.
+2. Updated repository query projection/mapping:
+   - query SQL now projects `COALESCE(feedback_count, 0)`.
+   - query-row mapping forwards `feedback_count` and `contradiction_count` to result payloads.
+3. Added parity/regression coverage:
+   - repository query tests now assert quality counters in mapped results.
+   - REST query-route response test now asserts serialized diagnostics.
+   - MCP compatibility parity fixture now includes query diagnostics fields.
+4. Documentation alignment:
+   - API and MCP query docs now describe returned `feedback_count` and `contradiction_count`.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 46: contradiction-aware query filter parity)
+
+1. Added contradiction-aware query contract extension:
+   - new optional filter: `contradiction_count_max` (non-negative integer) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `contradiction_count_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `contradiction_count_max`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(contradiction_count, 0) <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `contradiction_count_max`.
+   - repository where-clause/parameter assertions for contradiction predicate.
+   - MCP parity and validation coverage for contradiction-count filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 45: feedback-aware query filter parity)
+
+1. Added feedback-quality query contract extension:
+   - new optional filter: `avg_relevance_feedback_min` (`0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates `avg_relevance_feedback_min` bounds.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `avg_relevance_feedback_min`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(avg_relevance_feedback, 0.5) >= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `avg_relevance_feedback_min`.
+   - repository where-clause/parameter assertions for the new predicate.
+   - MCP parity and validation coverage for the new filter.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 44: authority transparency + fallback calibration)
+
+1. Expanded feedback-driven authority calibration:
+   - feedback authority updates now resolve from prioritized signals:
+     - normalized `relevance_score` when present.
+     - `integration_depth` mapping when relevance is omitted.
+     - `feedback_type` fallback when both are absent.
+   - authority updates remain bounded in `0..1` and continue to use deterministic running-average aggregation.
+2. Exposed authority signal in query response payloads:
+   - `models.EngramQueryResult` now includes `source_session_quality_score`.
+   - repository query result mapping now forwards `source_session_quality_score` to REST and MCP consumers.
+3. Added regression coverage:
+   - repository authority-signal normalization coverage for precedence/fallback behavior.
+   - REST query-route response coverage for serialized `source_session_quality_score`.
+   - MCP compatibility parity coverage for authority-score response payloads.
+4. Updated roadmap/checkpoint alignment:
+   - added Phase 44 section in `Plan.md`.
+   - added Phase 44 tracker and completion timeline updates in `migration/checkpoints/checkpoint.md`.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+   - `make lint`
+
+### 2026-03-03 (Phase 43: authority-threshold query filter parity)
+
+1. Added authority-aware query contract extension:
+   - new optional filter: `source_session_quality_min` (`0..1`) on engram query payloads.
+2. Added REST/MCP validation + parser parity:
+   - REST query decode now validates `source_session_quality_min` bounds.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `source_session_quality_min`.
+3. Added repository query predicate support:
+   - query builder now supports `COALESCE(source_session_quality_score, 0.5) >= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `source_session_quality_min`.
+   - repository where-clause and parameter assertions for the new predicate.
+   - MCP parity and validation coverage for the new filter.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker` -> `26 passed`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
+### 2026-03-03 (Phase 42: source-session authority scoring baseline)
+
+1. Added schema baseline for authority scoring on engrams:
+   - `engrams.source_session_quality_score` (`0.0-1.0`, default `0.5`).
+   - idempotent check constraint `engrams_source_session_quality_score_check`.
+   - index added: `engrams_source_session_quality_idx`.
+2. Integrated authority into retrieval reranking:
+   - engram query candidate SQL now selects `COALESCE(source_session_quality_score, 0.5)`.
+   - composite rerank scoring now includes `authorityScore` as a bounded signal.
+3. Added deterministic authority calibration from feedback:
+   - feedback persistence update now adjusts `source_session_quality_score` when `relevance_score` is supplied.
+4. Added regression coverage:
+   - rerank ordering test for authority signal influence.
+   - query-shape assertions for authority column projection.
+   - feedback SQL assertions for authority update path.
+5. Validation:
+   - `go test ./internal/repository ./cmd/api ./internal/api ./internal/mcp -count=1`
+   - `make lint`
+
+### 2026-03-03 (Phase 41 closeout: integration-depth feedback signal)
+
+1. Extended explicit feedback contracts with optional `integration_depth` across REST + MCP:
+   - accepted values: `mentioned`, `elaborated`, `contradicted`, `ignored`.
+   - REST decode path now validates `integration_depth` and returns explicit bad-request detail on invalid input.
+   - MCP `engram.feedback` parser and catalog schema now validate/document `integration_depth`.
+2. Added schema/model support for integration depth:
+   - `engram_feedback.integration_depth` column + idempotent enum check constraint.
+   - index added: `engram_feedback_integration_depth_created_idx`.
+   - `EngramFeedbackRecord` now returns optional `integration_depth`.
+3. Updated repository and runtime forwarding:
+   - feedback repository input + SQL write/read paths now persist optional `integration_depth`.
+   - API and MCP adapters now forward `integration_depth` end-to-end.
+4. Updated roadmap/docs parity:
+   - `Plan.md` Phase 41 marked completed.
+   - API/MCP reference docs updated for `integration_depth`.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+
+### 2026-03-03 (Phase 41 continuation: session-scoped feedback attribution)
+
+1. Extended feedback event contracts with optional `session_id` across REST + MCP:
+   - REST feedback payload now accepts optional `session_id` (UUID).
+   - MCP `engram.feedback` now accepts optional `session_id` with schema/parser validation.
+2. Added persistence support for session attribution:
+   - `engram_feedback` now stores optional `session_id` (`chat_sessions` FK, `ON DELETE SET NULL`).
+   - added `engram_feedback_session_created_idx` for session-scoped feedback retrieval paths.
+3. Updated repository write path and response model:
+   - repository input now forwards optional `session_id`.
+   - feedback record payload now returns optional `session_id`.
+4. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker` -> `26 passed`
+
+### 2026-03-03 (Phase 41 kickoff: explicit feedback relevance enrichment)
+
+1. Extended explicit feedback contracts with optional `relevance_score` (`1-5`) across REST + MCP:
+   - REST payload model now accepts `relevance_score`.
+   - MCP `engram.feedback` parser + compatibility request schema now accept and validate `relevance_score`.
+2. Added schema/model support for richer feedback signals:
+   - `engrams.feedback_count` and `engrams.avg_relevance_feedback`.
+   - optional `engram_feedback.relevance_score` with DB check constraint.
+   - `EngramFeedbackRecord` now includes:
+     - `relevance_score`
+     - `feedback_count`
+     - `avg_relevance_feedback`
+3. Updated feedback persistence and aggregation logic:
+   - feedback write path now persists optional per-event `relevance_score`.
+   - aggregate update now increments `feedback_count` and updates `avg_relevance_feedback` when score is supplied.
+4. Updated docs and schema discoverability:
+   - API reference now includes `POST /api/v1/engrams/{engram_id}/feedback` with optional relevance score.
+   - MCP guide and tool catalog metadata now document `relevance_score`.
+5. Validation:
+   - `go test ./internal/models ./internal/repository ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker` -> `26 passed`
+
+### 2026-03-03 (Phase 40 hardening: MCP catalog/schema parity for scoped curation refresh)
+
+1. Updated MCP tool metadata for `engram.curation_refresh_links`:
+   - `internal/mcp/catalog_metadata_data.go` now exposes optional `project_id` in input schema.
+2. Added compatibility schema regression coverage:
+   - `internal/mcp/compatibility_service_test.go` now asserts `engram_curation_refresh_links` includes `project_id` in `tools/list` metadata.
+3. Updated reference docs to match runtime behavior:
+   - `docs/mcp-guide.md` now documents optional scoped `project_id` behavior.
+   - `docs/api-reference.md` now documents scoped `project_id` matching for admin link-curation refresh route.
+4. Validation:
+   - `go test ./internal/mcp -count=1`
+
+### 2026-03-03 (Phase 40 hardening: acceptance coverage for scoped link-curation refresh)
+
+1. Extended Phase 40 acceptance feature in `acceptance-tests/features/phase40-curation-mock.feature`:
+   - added scenario: "Link hygiene refresh rejects mismatched project scope".
+2. Added step support in `acceptance-tests/src/steps/phase40-curation-mock.steps.ts`:
+   - refresh helper now supports scoped payloads.
+   - happy-path link refresh now sends scoped `project_id`.
+   - mismatch scenario asserts HTTP `400` and detail:
+     - `project_id does not match target engram project`.
+3. Validation:
+   - `make acceptance-bddgen`
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock-docker` -> `26 passed`
+
+### 2026-03-03 (Phase 40 hardening: scoped project guard for link-curation refresh)
+
+1. Added scoped project enforcement for link-curation refresh in `internal/admin/service_link_curation.go`:
+   - `EngramLinkCurationSuggestionRefreshRequest` now accepts optional `project_id`.
+   - refresh now returns `ErrProjectScopeMismatch` when scoped `project_id` does not match the source engram project.
+2. Extended REST + MCP parity for scoped refresh:
+   - REST route `POST /api/v1/admin/memory/engrams/{engram_id}/links/curation/refresh` now accepts optional `project_id` and forwards it to service.
+   - MCP `engram.curation_refresh_links` now accepts optional `project_id` and forwards scope through compatibility dispatch + runtime adapter.
+3. Extended bad-request error mapping:
+   - REST admin error writer now maps `ErrProjectScopeMismatch` to HTTP `400`.
+   - MCP dispatch now maps `ErrProjectScopeMismatch` to invalid-params response.
+4. Added regression coverage:
+   - admin service mismatch guard test.
+   - REST refresh-route payload forwarding + mismatch-to-400 test.
+   - MCP parity/validation tests for `project_id` forwarding and mismatch error mapping.
+5. Validation:
+   - `go test ./internal/admin ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
+### 2026-03-03 (Phase 40 continuation: MCP parity for link-curation refresh)
+
+1. Added MCP tool support for on-demand link curation refresh:
+   - new tool: `engram.curation_refresh_links`
+   - dispatch parses admin-only inputs (`source_engram_id`, optional hygiene controls) and returns `curation_refresh` payload.
+2. Extended MCP compatibility contracts:
+   - added `EngramCurationRefreshService` plus request/response types in `internal/mcp/compatibility_service.go`.
+   - wired dispatch handler registration, tool catalog visibility, and metadata schema entries.
+3. Added runtime adapter wiring:
+   - `cmd/api/mcp_engram_admin_curation_adapter.go` now bridges MCP refresh requests to `admin.Service.RefreshEngramLinkCurationSuggestions`.
+   - `cmd/api/main.go` now injects `EngramCurationRefresh` dependency into compatibility service construction.
+4. Added MCP regression coverage:
+   - `internal/mcp/compatibility_service_engram_curation_refresh_test.go` validates direct/tools-call parity, request mapping, admin-only enforcement, input validation, and service error mapping.
+5. Validation:
+   - `go test ./internal/mcp ./cmd/api -count=1`
+
+### 2026-03-03 (Phase 40 continuation: on-demand admin link-curation refresh route)
+
+1. Added on-demand link curation refresh workflow in `internal/admin/service_link_curation.go`:
+   - new service method `RefreshEngramLinkCurationSuggestions` generates link hygiene recommendations for one source engram and persists deduped `suggested` link curation rows.
+   - persisted payload dedupe key uses (`link_id`, `target_engram_id`, `suggested_action`) to avoid duplicate pending records.
+   - skips auto-archived hygiene action (`archive_stale_low_value`) while preserving actionable/manual-review link curation suggestions.
+2. Extended admin service dependencies/contracts in `internal/admin/service.go`:
+   - added `EngramLinkCurationSuggestionRefreshRequest/Response`.
+   - added `recommendLinkHygiene` dependency with graph-service default binding.
+3. Added admin REST route in `internal/api`:
+   - `POST /api/v1/admin/memory/engrams/{engram_id}/links/curation/refresh`
+   - payload supports optional hygiene controls (`include_archived`, `limit`, `stale_after_days`, `low_value_threshold`).
+4. Expanded test coverage:
+   - `internal/admin/service_link_curation_test.go` for create/dedupe/not-found behavior.
+   - `internal/api/admin_memory_curation_routes_test.go` for refresh route actor/payload forwarding and validation.
+   - `acceptance-tests/features/phase40-curation-mock.feature` + steps now validate on-demand link refresh generates actionable `link` curation suggestions and `status=applied` succeeds.
+5. Code health refactors:
+   - refactored duplicated acceptance/action assertions and API route tests to satisfy CodeScene duplication gates.
+   - split admin refresh route payload tests into a dedicated file to keep test modules below CodeScene duplication thresholds.
+6. Validation:
+   - `go test ./internal/admin ./internal/api -count=1`
+   - `make acceptance-bddgen`
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock-docker` -> `25 passed`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
+### 2026-03-03 (Phase 40 continuation: conflict-review link curation apply support)
+
+1. Extended link curation apply-action handling in `internal/admin/service_curation.go`:
+   - `status=applied` for `suggestion_type=link` now treats `review_relation_conflict` as an actionable link-archive workflow.
+   - this aligns generated link curation suggestions with apply behavior so conflict-review suggestions no longer fail as unsupported.
+2. Expanded regression coverage in `internal/admin/service_curation_test.go`:
+   - added apply-path test for `review_relation_conflict`.
+   - retained unsupported-action rejection by asserting unknown link actions still return `ErrMemoryCurationSuggestionApplyUnsupported`.
+3. Validation:
+   - `go test ./internal/admin -count=1`
+
+### 2026-03-03 (Phase 40 continuation: scheduled link-hygiene curation persistence)
+
+1. Extended scheduled hygiene execution in `cmd/api/chat_link_reinforcement.go`:
+   - successful reinforcement hygiene runs now persist `suggestion_type=link` curation records for non-auto-archived recommendations.
+   - link curation payloads include source/target/link identifiers, suggested action, hygiene category/severity/score, and detail metadata.
+   - pending-suggestion dedupe now reuses payload identity (`link_id`, `target_engram_id`, `suggested_action`) to avoid duplicate suggestions across repeated scheduler runs.
+2. Added targeted regression coverage in `cmd/api/chat_link_reinforcement_test.go`:
+   - validates mixed auto-archive + manual-review recommendation handling.
+   - validates dedupe behavior when matching pending link curation suggestions already exist.
+3. Code health refactor:
+   - decomposed curation persistence workflow into focused helpers to keep complexity and argument count within CodeScene gates.
+4. Validation:
+   - `go test ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
+### 2026-03-03 (Phase 40 continuation: link-applied curation orchestration)
+
+1. Extended curation apply behavior for link suggestions in `internal/admin/service_curation.go`:
+   - `status=applied` now supports `suggestion_type=link` payloads with archive-oriented hygiene actions.
+   - archive actions dispatch through link archive workflow using payload `link_id`.
+   - unsupported/non-archive link actions return `ErrMemoryCurationSuggestionApplyUnsupported`.
+2. Expanded regression coverage:
+   - admin service tests for link-archive apply success and unsupported-link-action rejection.
+   - REST route test for bad-request mapping of unsupported apply workflow.
+   - MCP compatibility test for unsupported apply error mapping.
+3. Validation:
+   - `go test ./internal/admin ./internal/api ./internal/mcp -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
+### 2026-03-03 (Phase 40 continuation: applied-side-effect benchmark expansion)
+
+1. Expanded curation benchmark suite in `internal/admin/service_curation_benchmark_test.go`:
+   - `BenchmarkActionMemoryCurationSuggestionAppliedConsolidate`
+   - `BenchmarkActionMemoryCurationSuggestionAppliedContradiction`
+2. Updated benchmark artifact in `docs/phase40-curation-benchmark.md`:
+   - refreshed command and benchmark table to include applied-side-effect baselines.
+3. Validation:
+   - `go test ./internal/admin -run '^$' -bench 'Benchmark(ActionMemoryCurationSuggestion|ActionMemoryCurationSuggestionAppliedConsolidate|ActionMemoryCurationSuggestionAppliedContradiction|SyncConsolidationCurationSuggestions(50Candidates|200Candidates))$' -benchmem`
+
+### 2026-03-03 (Phase 40 continuation: applied-cascade acceptance coverage)
+
+1. Extended Phase 40 acceptance feature with downstream-apply scenario:
+   - `acceptance-tests/features/phase40-curation-mock.feature`
+   - new scenario validates `status=applied` curation actions for both consolidation and contradiction paths.
+2. Added step coverage in `acceptance-tests/src/steps/phase40-curation-mock.steps.ts`:
+   - verifies curation payload references contain downstream record ids.
+   - actions both curation suggestions with `status=applied`.
+   - asserts applied curation status records include action audit fields.
+   - asserts downstream records transition as expected:
+     - consolidation suggestion `status=merged`
+     - contradiction alert `status=resolved` with resolver metadata.
+3. Validation:
+   - `make acceptance-bddgen`
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock-docker` -> `24 passed`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
+### 2026-03-03 (Phase 40 continuation: curation applied-status orchestration)
+
+1. Extended curation action behavior in `internal/admin/service_curation.go`:
+   - `status=applied` now loads the targeted curation suggestion and executes deterministic downstream actions before status transition.
+   - `consolidate` suggestions dispatch consolidation action as `merged`.
+   - `contradiction` suggestions dispatch contradiction-alert resolve as `resolved`.
+2. Added repository read primitive:
+   - `GetMemoryCurationSuggestion` in `internal/repository/memory_curation_suggestions.go`.
+   - regression coverage for get-by-id + project scope in `internal/repository/memory_curation_suggestions_test.go`.
+3. Expanded regression coverage:
+   - admin service curation tests for apply-side-effect dispatch and invalid payload rejection.
+   - REST route test for bad-request mapping of invalid curation payload actions.
+   - MCP compatibility test for payload-invalid error mapping.
+4. Validation:
+   - `go test ./internal/admin ./internal/repository ./internal/api ./internal/mcp -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker` -> `23 passed`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
+### 2026-03-03 (Code health refactor: acceptance step argument-shape cleanup)
+
+1. Refactored acceptance step helper signatures in:
+   - `acceptance-tests/src/steps/phase38-contradiction-mock.steps.ts`
+   - `acceptance-tests/src/steps/phase40-curation-mock.steps.ts`
+2. Replaced multi-string helper arguments with structured input objects to reduce string-heavy argument density while preserving scenario behavior.
+3. Validation:
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock-docker` -> `23 passed`
+   - CodeScene `analyze_change_set` against `origin/migrate`: `quality_gates=passed`
+
+### 2026-03-03 (Phase 39 closeout: complex temporal/engagement/trace benchmark coverage)
+
+1. Added Phase 39 repository benchmark coverage in `internal/repository/engram_benchmark_test.go`:
+   - `BenchmarkBuildEngramQueryWhereComplexTemporalEngagementTrace`
+   - `BenchmarkBuildEngramQueryWhereComplexFilterMatrix`
+2. Added benchmark artifact in `docs/phase39-query-benchmark.md`:
+   - command, environment, `ns/op`, memory, and allocation profiles.
+3. Validation:
+   - `go test ./internal/repository -run '^$' -bench 'Benchmark(BuildEngramQueryWhereComplexTemporalEngagementTrace|BuildEngramQueryWhereComplexFilterMatrix)$' -benchmem`
+
+### 2026-03-03 (Phase 40 closeout: curation benchmark baseline)
+
+1. Added Phase 40 benchmark suite in `internal/admin/service_curation_benchmark_test.go`:
+   - `BenchmarkActionMemoryCurationSuggestion`
+   - `BenchmarkSyncConsolidationCurationSuggestions50Candidates`
+   - `BenchmarkSyncConsolidationCurationSuggestions200Candidates`
+2. Captured benchmark artifact in `docs/phase40-curation-benchmark.md`:
+   - command, environment, `ns/op`, memory, and allocation profiles.
+3. Validation:
+   - `go test ./internal/admin -run '^$' -bench 'Benchmark(ActionMemoryCurationSuggestion|SyncConsolidationCurationSuggestions(50Candidates|200Candidates))$' -benchmem`
+
+### 2026-03-03 (Phase 40 continuation: curation acceptance coverage)
+
+1. Added deterministic acceptance coverage for Phase 40 curation flows:
+   - feature: `acceptance-tests/features/phase40-curation-mock.feature`
+   - steps: `acceptance-tests/src/steps/phase40-curation-mock.steps.ts`
+2. Scenario validates end-to-end curation behavior:
+   - seeds deterministic consolidation + contradiction prerequisites.
+   - triggers consolidation/contradiction refresh workflows.
+   - asserts generated curation type coverage (`consolidate`, `contradiction`).
+   - actions one curation suggestion to `accepted`.
+   - verifies accepted-list payload includes actioned record + audit fields.
+3. Validation:
+   - `make acceptance-bddgen`
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock-docker` -> `23 passed`
+
+### 2026-03-03 (Phase 40 continuation: deterministic curation-generation hooks)
+
+1. Added deterministic curation-generation sync in admin service:
+   - new generation helpers in `internal/admin/service_curation_generation.go`.
+   - `RefreshEngramConsolidationSuggestions` now rebuilds type `consolidate` curation suggestions from current `suggested` consolidation candidates.
+   - `RefreshEngramContradictionAlerts` now rebuilds type `contradiction` curation suggestions from current `open` contradiction alerts.
+2. Added repository reset primitive for deterministic rebuild:
+   - `ResetSuggestedMemoryCurationSuggestions` with optional project scope and per-type filtering.
+   - regression coverage added in `internal/repository/memory_curation_suggestions_test.go`.
+3. Added generation-focused admin tests:
+   - `internal/admin/service_curation_generation_test.go`.
+   - updated refresh tests to assert/allow curation hook behavior.
+4. Validation:
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+
+### 2026-03-03 (Phase 40 continuation: memory curation suggestion API + MCP list/action parity)
+
+1. Added admin memory service workflows for curation suggestion review/action:
+   - `internal/admin/service_curation.go`:
+     - `ListMemoryCurationSuggestions`
+     - `ActionMemoryCurationSuggestion`
+   - new admin-domain errors and request contracts in `internal/admin/service.go`.
+2. Added admin REST routes for curation suggestion management:
+   - `GET /api/v1/admin/memory/engrams/curation/suggestions`
+   - `POST /api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action`
+   - route parsing supports `project_id`, `session_id`, `suggestion_type`, `status`, paging.
+3. Added MCP curation tooling parity:
+   - `engram.curation_list`
+   - `engram.curation_action`
+   - compatibility dispatch parsers/handlers, catalog metadata entries, handler registration, and token project-policy coverage.
+4. Added MCP runtime adapters in `cmd/api` for memory-admin service bridging:
+   - `newMCPEngramCurationListAdapter`
+   - `newMCPEngramCurationActionAdapter`
+5. Added regression coverage:
+   - admin service tests: `internal/admin/service_curation_test.go`
+   - admin route tests: `internal/api/admin_memory_curation_routes_test.go`
+   - MCP compatibility tests:
+     - `internal/mcp/compatibility_service_engram_curation_list_test.go`
+     - `internal/mcp/compatibility_service_engram_curation_action_test.go`
+6. Validation:
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+
+### 2026-03-03 (Phase 40 kickoff: memory curation suggestion schema/model/repository baseline)
+
+1. Added schema baseline in `db/init/001_schema.sql`:
+   - new table `memory_curation_suggestions`.
+   - type/status checks:
+     - `suggestion_type`: `auto_save`, `consolidate`, `contradiction`, `link`
+     - `status`: `suggested`, `accepted`, `rejected`, `applied`
+   - indexes:
+     - `memory_curation_suggestions_project_status_idx`
+     - `memory_curation_suggestions_session_type_idx`
+2. Added model contracts in `internal/models/memory_curation_suggestion.go`:
+   - `MemoryCurationSuggestionType` + parse helper.
+   - `MemoryCurationSuggestionStatus` + parse helper.
+   - `MemoryCurationSuggestion` persisted record shape.
+3. Added repository baseline in `internal/repository/memory_curation_suggestions.go`:
+   - `CreateMemoryCurationSuggestion`
+   - `ListMemoryCurationSuggestions`
+   - `ApplyMemoryCurationSuggestionAction`
+   - normalized validation for project/reason/confidence/status inputs.
+4. Added repository regression coverage in `internal/repository/memory_curation_suggestions_test.go`:
+   - create defaults.
+   - list filters + argument wiring.
+   - action transition success, invalid status, and missing suggestion handling.
+5. Validation:
+   - `go test ./internal/models ./internal/repository -count=1`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+
+### 2026-03-03 (Phase 39 extension: trace-aware relation/depth query constraints)
+
+1. Extended engram query contracts with trace-aware filters:
+   - `relation_type`
+   - `trace_depth`
+2. Added repository trace filter support:
+   - `internal/repository/engram.go` now applies depth-1 `EXISTS` filtering over active `engram_links`.
+   - optional `relation_type` filtering is applied within trace constraints.
+3. Added REST + MCP parity:
+   - `internal/api/session_engrams.go` validates relation/trace filter contracts and defaults `trace_depth` to `1` when `relation_type` is provided.
+   - `internal/mcp/compatibility_dispatch_engram_query_support.go` parses/validates `relation_type` + `trace_depth` and applies the same default.
+   - `internal/mcp/catalog_metadata_data.go` exposes the new `engram.query` schema fields.
+4. Added regression coverage:
+   - repository SQL/parameter coverage in `internal/repository/engram_unit_test.go`.
+   - MCP parity/validation coverage in `internal/mcp/compatibility_service_engram_query_test.go`.
+   - session route request parsing/validation coverage in `internal/api/session_engrams_test.go`.
+5. Validation:
+   - `go test ./internal/models ./internal/repository ./internal/mcp ./internal/api -count=1`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+
+### 2026-03-03 (Phase 39 extension: recall/timeline temporal windows)
+
+1. Extended engram query contracts with recall/timeline window filters:
+   - `last_accessed_after`
+   - `last_accessed_before`
+   - `freshness_computed_after`
+   - `freshness_computed_before`
+2. Added repository query support:
+   - `internal/repository/engram.go` now applies optional predicates on:
+     - `COALESCE(last_accessed_at, created_at)`
+     - `COALESCE(freshness_last_computed_at, created_at)`
+3. Added REST + MCP parity:
+   - `internal/api/session_engrams.go` validates temporal window ordering for:
+     - created window
+     - last-accessed window
+     - freshness-computed window
+   - `internal/mcp/compatibility_dispatch_engram_query_support.go` parses and validates the same windows.
+   - `internal/mcp/catalog_metadata_data.go` exposes the new `engram.query` arguments.
+4. Added regression coverage:
+   - repository SQL/placeholder/arg coverage in `internal/repository/engram_unit_test.go`.
+   - MCP parity/validation coverage in `internal/mcp/compatibility_service_engram_query_test.go`.
+   - session route parsing/validation coverage in `internal/api/session_engrams_test.go`.
+5. Validation:
+   - `go test ./internal/models ./internal/repository ./internal/mcp ./internal/api -count=1`
+
+### 2026-03-03 (Phase 39 extension: temporal query filters for engagement + freshness)
+
+1. Extended engram query contracts with temporal/engagement filters:
+   - `internal/models/engram.go` now includes:
+     - `access_count_min`
+     - `freshness_score_min`
+2. Added repository query support:
+   - `internal/repository/engram.go` now applies optional predicates:
+     - `COALESCE(access_count, 0) >= access_count_min`
+     - `COALESCE(freshness_score, 1.0) >= freshness_score_min`
+3. Added MCP `engram.query` parser + catalog support:
+   - `internal/mcp/compatibility_dispatch_engram_query_support.go` parses and validates the new filters.
+   - `internal/mcp/catalog_metadata_data.go` exposes schema metadata for both arguments.
+4. Added regression coverage:
+   - repository SQL/placeholder/arg coverage in `internal/repository/engram_unit_test.go`.
+   - MCP parity/validation coverage in `internal/mcp/compatibility_service_engram_query_test.go`.
+5. Validation:
+   - `go test ./internal/models ./internal/repository ./internal/mcp -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+   - CodeScene scores on touched Go files: `10.0`
+
+### 2026-03-03 (Phase 39 kickoff: cost-aware context token budget baseline)
+
+1. Added bounded context-budget controls to chat send workflows:
+   - new optional `context_token_budget` in `chat.ChatMessageCreateRequest`.
+   - forwarded from MCP `chat.send_message` params via `SessionMessageSendRequest` and message-send adapters.
+2. Added cost-aware context assembly enforcement:
+   - `internal/chat/context_token_budget.go` introduces deterministic token estimation and section-budget truncation helpers.
+   - `AssembleChatContext` now applies bounded markdown assembly using normalized token budgets.
+3. Added retrieval-audit budget diagnostics in chat context metadata:
+   - `context_token_budget`
+   - `context_token_estimate`
+   - `context_token_truncated`
+4. Updated tool schema metadata:
+   - `internal/mcp/catalog_metadata_data.go` now advertises `context_token_budget` for `chat.send_message`.
+5. Added regression tests:
+   - context-budget unit coverage in `internal/chat/context_token_budget_test.go`.
+   - context-budget assembly audit coverage in `internal/chat/context_budget_assembly_test.go`.
+   - message runtime forwarding coverage in `internal/chat/message_runtime_test.go`.
+   - REST forwarding coverage in `internal/api/chat_api_messages_test.go`.
+   - MCP forwarding/validation coverage in:
+     - `internal/mcp/compatibility_service_chat_send_message_test.go`
+     - `internal/mcp/compatibility_service_chat_send_message_stream_test.go`
+6. Validation:
+   - `go test ./internal/chat ./internal/mcp ./internal/api ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+   - CodeScene scores on touched Go files: `10.0`
+
+### 2026-03-03 (Phase 38 closeout: contradiction quality acceptance enabled in default mock gate)
+
+1. Fixed contradiction-link create SQL defect in `internal/repository/engram_links.go`:
+   - `source_engram` and `target_engram` CTE membership filters referenced aliased columns without aliasing the `FROM engrams` relation.
+   - updated CTEs to `FROM engrams source_engram` / `FROM engrams target_engram`, removing PostgreSQL missing-from-clause failures that surfaced as `500` in contradiction seed workflows.
+2. Added regression guard in `internal/repository/engram_links_test.go`:
+   - create-link SQL assertions now require explicit source/target CTE aliases.
+3. Enabled contradiction warning quality scenario in default deterministic acceptance suite:
+   - `acceptance-tests/features/phase38-contradiction-mock.feature` now includes `@mock` tag.
+4. Validation:
+   - targeted repo tests: `go test ./internal/repository -run 'TestCreateEngramLinkReturnsRecord|TestCreateEngramLinkReturnsDuplicateError' -count=1`
+   - contradiction quality scenario: `ACCEPTANCE_BDD_TAGS='@phase38' docker compose --profile acceptance up --build --force-recreate --abort-on-container-exit acceptance-tests`
+   - deterministic acceptance gate: `make acceptance-test-mock-docker`
+   - backend quality gates: `make lint`, `make test-unit`
+
+### 2026-03-03 (Phase 38 benchmark pass: contradiction warning synthesis latency baseline)
+
+1. Added contradiction warning microbenchmarks in `internal/chat/context_contradictions_benchmark_test.go`:
+   - `BenchmarkBuildContradictionWarnings50Paths`
+   - `BenchmarkBuildContradictionWarnings200Paths`
+2. Captured benchmark artifact in `docs/phase38-contradiction-benchmark.md`:
+   - command, environment, measured `ns/op`, memory, and allocation profiles.
+3. Added phase-scoped acceptance benchmark scenario scaffolding:
+   - `acceptance-tests/features/phase38-contradiction-mock.feature`
+   - `acceptance-tests/src/steps/phase38-contradiction-mock.steps.ts`
+   - tagged for explicit Phase 38 runs (`@phase38`) and excluded from default `@mock` CI gate while contradiction-link seed path investigation continues.
+4. Validation:
+   - `go test ./internal/chat -run '^$' -bench 'BenchmarkBuildContradictionWarnings(50Paths|200Paths)$' -benchmem`
+   - `make acceptance-bddgen`
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock`
+
+### 2026-03-03 (Phase 38 continuation: contradiction alert admin API + MCP maintenance parity)
+
+1. Added contradiction alert maintenance workflows in admin service:
+   - new contracts and methods:
+     - `RefreshEngramContradictionAlerts`
+     - `ListEngramContradictionAlerts`
+     - `ResolveEngramContradictionAlert`
+   - repository dependency wiring for contradiction refresh/list/resolve paths.
+   - admin-domain validation/not-found errors for contradiction resolve workflows.
+2. Added admin REST routes for contradiction alerts:
+   - `POST /api/v1/admin/memory/engrams/contradictions/refresh`
+   - `GET /api/v1/admin/memory/engrams/contradictions/alerts`
+   - `POST /api/v1/admin/memory/engrams/contradictions/alerts/{alert_id}/resolve`
+   - route/query/payload validation for contradiction status (`open|resolved|dismissed`) with resolve-path guardrails (`resolved|dismissed` only).
+3. Added MCP contradiction maintenance tools:
+   - `engram.refresh_contradictions`
+   - `engram.contradiction_list`
+   - `engram.contradiction_resolve`
+   - end-to-end MCP compatibility wiring: tool parsing, dispatch handlers, dependency interfaces, runtime dependencies, token project-policy scoping, and catalog metadata.
+4. Added adapters and tests:
+   - admin service tests in `internal/admin/service_contradiction_test.go`.
+   - admin REST contradiction route tests in `internal/api/admin_memory_contradiction_routes_test.go`.
+   - MCP compatibility tests:
+     - `internal/mcp/compatibility_service_engram_refresh_contradictions_test.go`
+     - `internal/mcp/compatibility_service_engram_contradiction_list_test.go`
+     - `internal/mcp/compatibility_service_engram_contradiction_resolve_test.go`
+   - API + MCP docs updated (`docs/api-reference.md`, `docs/mcp-guide.md`).
+5. Validation:
+   - `go test ./internal/admin ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+   - CodeScene scores on touched Go files: `10.0` (catalog metadata data file reports `None` in score API).
+
+### 2026-03-03 (Phase 38 continuation: contradiction alert persistence baseline)
+
+1. Added contradiction alert persistence schema in `db/init/001_schema.sql`:
+   - new `engram_contradiction_alerts` table keyed by `alert_id` + deterministic `alert_hash`.
+   - status lifecycle (`open`/`resolved`/`dismissed`), contradiction link references, confidence, and resolve metadata.
+   - supporting indexes for hash uniqueness, project/status recency reads, source-target lifecycle lookups, and link-id GIN lookup.
+2. Added contradiction alert domain model in `internal/models/engram_contradiction.go`:
+   - `ContradictionAlertStatus` enum with parser validation.
+   - `EngramContradictionAlert` record used by repository + future API/MCP surfaces.
+3. Added repository workflows in `internal/repository/engram_contradiction_alerts.go`:
+   - `RefreshContradictionAlerts` groups active `contradicts` links and upserts deterministic alerts.
+   - `ListContradictionAlerts` supports optional project/status filters and pagination.
+   - `ResolveContradictionAlert` supports `resolved`/`dismissed` transitions for open alerts.
+4. Added tests:
+   - `internal/repository/engram_contradiction_alerts_test.go` for refresh/list/resolve behavior, filter forwarding, status validation, and missing-row handling.
+   - `internal/models/engram_contradiction_test.go` for status parser coverage.
+5. Validation:
+   - `go test ./internal/models ./internal/repository -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+   - CodeScene scores: touched Go files `10.0`.
+
+### 2026-03-03 (Phase 38 kickoff: contradiction warning baseline for chat + MCP)
+
+1. Added contradiction trace metadata in linked-recall path assembly:
+   - `internal/chat/context_links_trace.go` now marks contradiction-bearing paths when any traversed link relation is `contradicts`.
+   - `EngramTracePath` now carries:
+     - `has_contradiction`
+     - `contradicting_link_ids`
+2. Added contradiction warning synthesis in assembled chat context:
+   - new warning model in `internal/chat/context.go`:
+     - `ChatContradictionWarning`
+     - `AssembledChatContext.contradiction_warnings`
+   - new warning builder module `internal/chat/context_contradictions.go` with severity mapping and deterministic ordering.
+3. Added response-payload parity across runtime surfaces:
+   - `internal/chat/service.go`: send response now includes `contradiction_warnings`.
+   - `internal/chat/message_runtime.go`: stream `meta`/`done` payloads now include `contradiction_warnings`.
+   - `internal/mcp/compatibility_service.go` + `cmd/api/mcp_message_send_adapter.go`: MCP send-message response now forwards `contradiction_warnings`.
+4. Expanded tests:
+   - `internal/chat/context_test.go` now covers contradiction-warning generation for `contradicts` trace paths.
+   - `internal/chat/message_runtime_test.go` and `internal/chat/service_test.go` now assert contradiction-warning propagation in send/stream payloads.
+   - split linked-recall helper content into `internal/chat/context_linked_helpers_test.go` to keep test-module size maintainable and preserve code-health thresholds.
+5. Roadmap and docs alignment:
+   - `Plan.md`: added Phase 38 section and marked as in-progress with delivered baseline + remaining scope.
+   - `migration/checkpoints/checkpoint.md`: added Phase 38 progress tracker and current-state summary.
+   - `docs/api-reference.md` and `docs/mcp-guide.md`: chat response metadata now documents `contradiction_warnings`.
+6. Validation:
+   - `go test ./internal/chat ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
+### 2026-03-03 (Phase 36 closeout: engagement/freshness weighting calibration + latency benchmarks)
+
+1. Calibrated retrieval reranking with engagement/freshness signals:
+   - `internal/repository/engram_store.go` now includes:
+     - `COALESCE(access_count, 0) AS access_count`
+     - `COALESCE(freshness_score, 1.0) AS freshness_score`
+   - composite ranking weights now include five deterministic factors:
+     - dense `0.55`
+     - lexical `0.20`
+     - feedback `0.10`
+     - engagement `0.10`
+     - freshness `0.05`
+2. Refactored ranking logic into focused module for maintainability and code health:
+   - moved ranking/tokenization/score-normalization routines into `internal/repository/engram_rerank.go`.
+   - kept `internal/repository/engram.go` focused on retrieval text/context helpers.
+3. Expanded deterministic coverage:
+   - `internal/repository/engram_unit_test.go` now validates engagement+freshness preference behavior.
+   - `internal/repository/engram_repository_test.go` asserts query projection includes calibrated ranking inputs.
+   - added microbenchmarks in `internal/repository/engram_benchmark_test.go`:
+     - `BenchmarkRerankByCombinedScore50Candidates`
+     - `BenchmarkRerankByCombinedScore200Candidates`
+4. Captured benchmark notes and calibration rationale:
+   - `docs/phase36-relevance-calibration.md` records weight rationale, command, environment, and measured latency.
+5. Roadmap/checkpoint alignment:
+   - `Plan.md`: Phase 36 marked completed with calibration + benchmark documentation in delivered scope.
+   - `migration/checkpoints/checkpoint.md`: Phase 36 summary/tracker marked completed.
+6. Validation:
+   - `go test ./internal/repository -count=1`
+   - `go test ./internal/repository -run '^$' -bench 'BenchmarkRerankByCombinedScore(50Candidates|200Candidates)$' -benchmem`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
 ### 2026-03-03 (Phase 37 kickoff slice: freshness maintenance baseline)
 
 1. Added freshness schema baseline in `db/init/001_schema.sql`:
