@@ -7,6 +7,17 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 closeout: curation benchmark baseline)
+
+1. Added Phase 40 benchmark suite in `internal/admin/service_curation_benchmark_test.go`:
+   - `BenchmarkActionMemoryCurationSuggestion`
+   - `BenchmarkSyncConsolidationCurationSuggestions50Candidates`
+   - `BenchmarkSyncConsolidationCurationSuggestions200Candidates`
+2. Captured benchmark artifact in `docs/phase40-curation-benchmark.md`:
+   - command, environment, `ns/op`, memory, and allocation profiles.
+3. Validation:
+   - `go test ./internal/admin -run '^$' -bench 'Benchmark(ActionMemoryCurationSuggestion|SyncConsolidationCurationSuggestions(50Candidates|200Candidates))$' -benchmem`
+
 ### 2026-03-03 (Phase 40 continuation: curation acceptance coverage)
 
 1. Added deterministic acceptance coverage for Phase 40 curation flows:

@@ -1133,7 +1133,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In Progress (2026-03-03).
+- Completed (2026-03-03).
 - Delivered in this checkpoint:
   - schema baseline for `memory_curation_suggestions` in `db/init/001_schema.sql`.
   - model contracts in `internal/models/memory_curation_suggestion.go`:
@@ -1156,8 +1156,11 @@ Build a local-first memory system where agents and humans can:
     - consolidation refresh now regenerates type `consolidate` curation suggestions.
     - contradiction refresh now regenerates type `contradiction` curation suggestions.
     - generation pass resets stale `suggested` curation rows per type/project before rebuilding deterministic candidates.
-- Remaining in this phase:
-  - benchmark coverage for curation suggestion precision/recall and action latency.
+  - acceptance coverage for curation generation/action quality:
+    - deterministic `@phase40 @mock` acceptance scenario validates generation + action transitions.
+  - benchmark coverage baseline:
+    - `internal/admin` benchmark suite for curation action latency and sync-generation scaling.
+    - benchmark artifact: `docs/phase40-curation-benchmark.md`.
 
 ### Goals
 
@@ -1209,4 +1212,4 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 37: time-decay + consolidation suggestions.
    - [x] Phase 38: contradiction detection + warning flows.
    - [x] Phase 39: temporal query extensions + cost-aware context assembly.
-   - [ ] Phase 40: autonomous memory suggestions and action workflows.
+   - [x] Phase 40: autonomous memory suggestions and action workflows.
