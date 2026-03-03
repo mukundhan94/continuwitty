@@ -1019,6 +1019,41 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 38 - Contradiction Detection + Warning Flows
+
+### Status
+
+- In Progress (2026-03-03).
+- Delivered in this checkpoint:
+  - contradiction-trace metadata (`has_contradiction`, `contradicting_link_ids`) propagated on recalled trace paths when relation type is `contradicts`.
+  - chat context now emits `contradiction_warnings` for contradiction-bearing trace paths with severity guidance.
+  - chat send responses and stream `meta`/`done` payloads now include `contradiction_warnings`.
+  - MCP `chat.send_message` parity now forwards `contradiction_warnings`.
+  - regression tests added for contradiction-warning generation and payload propagation.
+- Remaining in this phase:
+  - contradiction alert persistence and resolution workflows.
+  - contradiction review tooling via API/MCP maintenance routes.
+  - precision/recall benchmark coverage for contradiction warning quality.
+
+### Goals
+
+1. Detect contradictory memory traces before they are silently reused.
+2. Surface contradiction risk consistently across chat and MCP response paths.
+3. Establish a foundation for operator-assisted contradiction resolution.
+
+### Deliverables
+
+1. contradiction-warning metadata in chat context assembly.
+2. send/stream/MCP payload parity for contradiction warnings.
+3. contradiction alert persistence + resolution paths and benchmark notes.
+
+### Exit Criteria
+
+1. Contradiction risks are surfaced deterministically in chat and MCP outputs.
+2. Contradiction warnings are test-covered and benchmarked for precision/recall.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1047,3 +1082,6 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 35: memory engagement tracking baseline.
    - [x] Phase 36: feedback loop + relevance/freshness scoring.
    - [x] Phase 37: time-decay + consolidation suggestions.
+   - [ ] Phase 38: contradiction detection + warning flows.
+   - [ ] Phase 39: temporal query extensions + cost-aware context assembly.
+   - [ ] Phase 40: autonomous memory suggestions and action workflows.

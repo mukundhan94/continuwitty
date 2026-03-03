@@ -7,6 +7,36 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 38 kickoff: contradiction warning baseline for chat + MCP)
+
+1. Added contradiction trace metadata in linked-recall path assembly:
+   - `internal/chat/context_links_trace.go` now marks contradiction-bearing paths when any traversed link relation is `contradicts`.
+   - `EngramTracePath` now carries:
+     - `has_contradiction`
+     - `contradicting_link_ids`
+2. Added contradiction warning synthesis in assembled chat context:
+   - new warning model in `internal/chat/context.go`:
+     - `ChatContradictionWarning`
+     - `AssembledChatContext.contradiction_warnings`
+   - new warning builder module `internal/chat/context_contradictions.go` with severity mapping and deterministic ordering.
+3. Added response-payload parity across runtime surfaces:
+   - `internal/chat/service.go`: send response now includes `contradiction_warnings`.
+   - `internal/chat/message_runtime.go`: stream `meta`/`done` payloads now include `contradiction_warnings`.
+   - `internal/mcp/compatibility_service.go` + `cmd/api/mcp_message_send_adapter.go`: MCP send-message response now forwards `contradiction_warnings`.
+4. Expanded tests:
+   - `internal/chat/context_test.go` now covers contradiction-warning generation for `contradicts` trace paths.
+   - `internal/chat/message_runtime_test.go` and `internal/chat/service_test.go` now assert contradiction-warning propagation in send/stream payloads.
+   - split linked-recall helper content into `internal/chat/context_linked_helpers_test.go` to keep test-module size maintainable and preserve code-health thresholds.
+5. Roadmap and docs alignment:
+   - `Plan.md`: added Phase 38 section and marked as in-progress with delivered baseline + remaining scope.
+   - `migration/checkpoints/checkpoint.md`: added Phase 38 progress tracker and current-state summary.
+   - `docs/api-reference.md` and `docs/mcp-guide.md`: chat response metadata now documents `contradiction_warnings`.
+6. Validation:
+   - `go test ./internal/chat ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
 ### 2026-03-03 (Phase 36 closeout: engagement/freshness weighting calibration + latency benchmarks)
 
 1. Calibrated retrieval reranking with engagement/freshness signals:

@@ -219,7 +219,7 @@ func unavailableLinkedTraversal(
 		return []models.EngramLinkTraversalStep{
 			{
 				Depth: 1,
-				Link:  contextLinkRecord(linkID, rootEngramID, linkedEngramID),
+				Link:  contextLinkRecord(linkID, rootEngramID, linkedEngramID, models.EngramLinkRelationSupports),
 			},
 		}, nil
 	}

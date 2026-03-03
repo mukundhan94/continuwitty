@@ -229,6 +229,7 @@ Chat send responses and stream `meta`/`done` events include:
 - `used_engram_ids`
 - `used_engram_link_ids`
 - `engram_trace_paths`
+- `contradiction_warnings` (trace-derived contradiction risk guidance)
 - `used_document_chunk_ids`
 - `source_references`
 - `retrieval_audit` (blocked candidate count + trace suppression/filtering/truncation + cross-project usage signals)

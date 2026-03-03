@@ -10,10 +10,12 @@ import (
 )
 
 type traceChain struct {
-	engramIDs []uuid.UUID
-	linkIDs   []uuid.UUID
-	depth     int
-	score     float64
+	engramIDs            []uuid.UUID
+	linkIDs              []uuid.UUID
+	contradictingLinkIDs []uuid.UUID
+	hasContradiction     bool
+	depth                int
+	score                float64
 }
 
 func buildTracePathsForRoot(
@@ -36,10 +38,12 @@ func buildTracePathsForRoot(
 func initializeTraceChains(rootEngramID uuid.UUID, seedScore float64) map[uuid.UUID]traceChain {
 	return map[uuid.UUID]traceChain{
 		rootEngramID: {
-			engramIDs: []uuid.UUID{rootEngramID},
-			linkIDs:   []uuid.UUID{},
-			depth:     0,
-			score:     clampFloat(seedScore, 0.0, 1.0),
+			engramIDs:            []uuid.UUID{rootEngramID},
+			linkIDs:              []uuid.UUID{},
+			contradictingLinkIDs: []uuid.UUID{},
+			hasContradiction:     false,
+			depth:                0,
+			score:                clampFloat(seedScore, 0.0, 1.0),
 		},
 	}
 }
@@ -81,11 +85,19 @@ func buildTraceChainCandidate(
 	sourceChain traceChain,
 	step models.EngramLinkTraversalStep,
 ) traceChain {
+	contradictingLinkIDs := append([]uuid.UUID(nil), sourceChain.contradictingLinkIDs...)
+	hasContradiction := sourceChain.hasContradiction
+	if step.Link.RelationType == models.EngramLinkRelationContradicts {
+		hasContradiction = true
+		contradictingLinkIDs = appendUUIDCopy(contradictingLinkIDs, step.Link.LinkID)
+	}
 	return traceChain{
-		engramIDs: appendUUIDCopy(sourceChain.engramIDs, step.Link.TargetEngramID),
-		linkIDs:   appendUUIDCopy(sourceChain.linkIDs, step.Link.LinkID),
-		depth:     step.Depth,
-		score:     scoreTracePath(sourceChain.score, step),
+		engramIDs:            appendUUIDCopy(sourceChain.engramIDs, step.Link.TargetEngramID),
+		linkIDs:              appendUUIDCopy(sourceChain.linkIDs, step.Link.LinkID),
+		contradictingLinkIDs: contradictingLinkIDs,
+		hasContradiction:     hasContradiction,
+		depth:                step.Depth,
+		score:                scoreTracePath(sourceChain.score, step),
 	}
 }
 
@@ -112,12 +124,14 @@ func shouldSkipTraceChain(rootEngramID uuid.UUID, engramID uuid.UUID, chain trac
 
 func tracePathFromChain(rootEngramID uuid.UUID, engramID uuid.UUID, chain traceChain) EngramTracePath {
 	return EngramTracePath{
-		RootEngramID:   rootEngramID,
-		TargetEngramID: engramID,
-		Depth:          chain.depth,
-		LinkIDs:        append([]uuid.UUID(nil), chain.linkIDs...),
-		EngramIDs:      append([]uuid.UUID(nil), chain.engramIDs...),
-		Score:          chain.score,
+		RootEngramID:         rootEngramID,
+		TargetEngramID:       engramID,
+		Depth:                chain.depth,
+		LinkIDs:              append([]uuid.UUID(nil), chain.linkIDs...),
+		EngramIDs:            append([]uuid.UUID(nil), chain.engramIDs...),
+		HasContradiction:     chain.hasContradiction,
+		ContradictingLinkIDs: append([]uuid.UUID(nil), chain.contradictingLinkIDs...),
+		Score:                chain.score,
 	}
 }
 

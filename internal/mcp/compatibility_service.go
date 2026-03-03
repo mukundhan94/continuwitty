@@ -599,19 +599,20 @@ type SessionMessageSendRequest struct {
 
 // MessageSendResponse captures send-message outputs.
 type MessageSendResponse struct {
-	SessionID            uuid.UUID      `json:"session_id"`
-	MessageID            uuid.UUID      `json:"message_id"`
-	ReplyMessageID       uuid.UUID      `json:"reply_message_id"`
-	AssistantText        string         `json:"assistant_text"`
-	PromptPolicyVersion  string         `json:"prompt_policy_version,omitempty"`
-	CWPlanApplied        any            `json:"cw_plan_applied,omitempty"`
-	UsedEngramIDs        []uuid.UUID    `json:"used_engram_ids"`
-	UsedEngramLinkIDs    []uuid.UUID    `json:"used_engram_link_ids"`
-	EngramTracePaths     any            `json:"engram_trace_paths"`
-	UsedDocumentChunkIDs []uuid.UUID    `json:"used_document_chunk_ids"`
-	SourceReferences     any            `json:"source_references"`
-	RetrievalAudit       any            `json:"retrieval_audit,omitempty"`
-	DebugTrace           map[string]any `json:"debug_trace,omitempty"`
+	SessionID             uuid.UUID      `json:"session_id"`
+	MessageID             uuid.UUID      `json:"message_id"`
+	ReplyMessageID        uuid.UUID      `json:"reply_message_id"`
+	AssistantText         string         `json:"assistant_text"`
+	PromptPolicyVersion   string         `json:"prompt_policy_version,omitempty"`
+	CWPlanApplied         any            `json:"cw_plan_applied,omitempty"`
+	UsedEngramIDs         []uuid.UUID    `json:"used_engram_ids"`
+	UsedEngramLinkIDs     []uuid.UUID    `json:"used_engram_link_ids"`
+	EngramTracePaths      any            `json:"engram_trace_paths"`
+	ContradictionWarnings any            `json:"contradiction_warnings,omitempty"`
+	UsedDocumentChunkIDs  []uuid.UUID    `json:"used_document_chunk_ids"`
+	SourceReferences      any            `json:"source_references"`
+	RetrievalAudit        any            `json:"retrieval_audit,omitempty"`
+	DebugTrace            map[string]any `json:"debug_trace,omitempty"`
 }
 
 // MessageStreamEvent captures compatibility-level stream event payload emitted by chat.send_message.
