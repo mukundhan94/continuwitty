@@ -319,6 +319,97 @@ func TestRefreshEngramFreshnessUsesRepositoryRequestObject(t *testing.T) {
 	requireEqual(t, 9, response.UpdatedCount)
 }
 
+func TestRefreshEngramConsolidationSuggestionsUsesRepositoryRequestObject(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	suggestedAt := time.Date(2026, 3, 3, 13, 45, 0, 0, time.UTC)
+	called := false
+	service.deps.refreshConsolidationSuggestions = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.ConsolidationSuggestionRefreshInput,
+	) (repository.ConsolidationSuggestionRefreshInput, error) {
+		if input.ProjectID != nil {
+			t.Fatalf("expected nil project id")
+		}
+		if input.MinGroupSize != 4 {
+			t.Fatalf("expected min group size to be forwarded")
+		}
+		called = true
+		return repository.ConsolidationSuggestionRefreshInput{
+			MinGroupSize: 4,
+			SuggestedAt:  suggestedAt,
+			UpdatedCount: 6,
+		}, nil
+	}
+	minGroupSize := 4
+
+	response, err := service.RefreshEngramConsolidationSuggestions(
+		context.Background(),
+		EngramConsolidationSuggestionRefreshRequest{
+			MinGroupSize: &minGroupSize,
+		},
+	)
+	requireNoError(t, err)
+	if !called {
+		t.Fatalf("expected repository refresh to be called")
+	}
+	requireEqual(t, "", derefString(response.ProjectID))
+	requireEqual(t, 4, response.MinGroupSize)
+	requireEqual(t, suggestedAt, response.SuggestedAt)
+	requireEqual(t, 6, response.UpdatedCount)
+}
+
+func TestRefreshEngramConsolidationSuggestionsRejectsInvalidMinGroupSize(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	minGroupSize := 1
+	_, err := service.RefreshEngramConsolidationSuggestions(
+		context.Background(),
+		EngramConsolidationSuggestionRefreshRequest{MinGroupSize: &minGroupSize},
+	)
+	if !errors.Is(err, ErrConsolidationMinGroupSizeInvalid) {
+		t.Fatalf("expected ErrConsolidationMinGroupSizeInvalid, got %v", err)
+	}
+}
+
+func TestListEngramConsolidationSuggestionsUsesRepositoryRequestObject(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	projectID := "engram-vault"
+	status := models.ConsolidationSuggestionStatusSuggested
+	captured := repository.ConsolidationSuggestionListInput{}
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000d001")
+	service.deps.listConsolidationSuggestions = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.ConsolidationSuggestionListInput,
+	) ([]models.EngramConsolidationSuggestion, error) {
+		captured = input
+		return []models.EngramConsolidationSuggestion{
+			{
+				SuggestionID: suggestionID,
+				ProjectID:    "engram-vault",
+				Status:       models.ConsolidationSuggestionStatusSuggested,
+			},
+		}, nil
+	}
+
+	listed, err := service.ListEngramConsolidationSuggestions(
+		context.Background(),
+		EngramConsolidationSuggestionListRequest{
+			ProjectID: &projectID,
+			Status:    &status,
+			Limit:     10,
+			Offset:    3,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, "engram-vault", derefString(captured.ProjectID))
+	requireEqual(t, status, *captured.Status)
+	requireEqual(t, 10, captured.Limit)
+	requireEqual(t, 3, captured.Offset)
+	requireEqual(t, 1, len(listed))
+	requireEqual(t, suggestionID, listed[0].SuggestionID)
+}
+
 func derefString(value *string) string {
 	if value == nil {
 		return ""

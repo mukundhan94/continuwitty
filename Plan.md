@@ -988,9 +988,13 @@ Build a local-first memory system where agents and humans can:
   - MCP maintenance tool to trigger freshness refresh (`engram.refresh_freshness` / `engram_refresh_freshness`, admin-only).
   - consolidation suggestion schema baseline (`engram_consolidation_suggestions` + indexes).
   - repository consolidation suggestion routines for deterministic exact-duplicate refresh/list operations.
+  - admin service + REST routes for consolidation maintenance/listing:
+    - `POST /api/v1/admin/memory/engrams/consolidation/refresh`
+    - `GET /api/v1/admin/memory/engrams/consolidation/suggestions`
   - repository/model tests for consolidation refresh/list defaulting, filtering, and status parsing.
 - Remaining in this phase:
-  - MCP/API tooling for consolidation listing/action.
+  - MCP consolidation tooling for refresh/list parity.
+  - API/MCP consolidation action workflows (`merged`/`rejected`) with audit-friendly actor attribution.
   - acceptance + precision/recall benchmark coverage for grouping criteria.
 
 ### Goals

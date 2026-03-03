@@ -39,6 +39,14 @@ type MemoryAdminService interface {
 	DeleteEngram(ctx context.Context, engramID, actorUserID uuid.UUID, payload admin.EngramDeleteRequest) (admin.EngramDeleteResponse, error)
 	RestoreEngram(ctx context.Context, engramID uuid.UUID) (admin.EngramRestoreResponse, error)
 	RefreshEngramFreshness(ctx context.Context, request admin.EngramFreshnessRefreshRequest) (admin.EngramFreshnessRefreshResponse, error)
+	RefreshEngramConsolidationSuggestions(
+		ctx context.Context,
+		request admin.EngramConsolidationSuggestionRefreshRequest,
+	) (admin.EngramConsolidationSuggestionRefreshResponse, error)
+	ListEngramConsolidationSuggestions(
+		ctx context.Context,
+		request admin.EngramConsolidationSuggestionListRequest,
+	) ([]models.EngramConsolidationSuggestion, error)
 
 	ListCollections(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error)
 	CreateCollection(ctx context.Context, actorUserID uuid.UUID, actorRole string, payload admin.CollectionCreateRequest) (*models.EngramCollectionRecord, error)
@@ -116,6 +124,43 @@ func parseMemoryAdminEngramListRequest(
 		SessionID:              sessionID,
 		QueryText:              optionalTrimmedString(request.URL.Query().Get("q")),
 	}, true
+}
+
+func parseMemoryAdminConsolidationSuggestionListRequest(
+	writer http.ResponseWriter,
+	request *http.Request,
+) (admin.EngramConsolidationSuggestionListRequest, bool) {
+	base, ok := parseMemoryAdminListRequest(writer, request, false)
+	if !ok {
+		return admin.EngramConsolidationSuggestionListRequest{}, false
+	}
+	status, ok := parseOptionalConsolidationSuggestionStatusQuery(writer, request, "status")
+	if !ok {
+		return admin.EngramConsolidationSuggestionListRequest{}, false
+	}
+	return admin.EngramConsolidationSuggestionListRequest{
+		ProjectID: base.ProjectID,
+		Status:    status,
+		Limit:     base.Limit,
+		Offset:    base.Offset,
+	}, true
+}
+
+func parseOptionalConsolidationSuggestionStatusQuery(
+	writer http.ResponseWriter,
+	request *http.Request,
+	key string,
+) (*models.ConsolidationSuggestionStatus, bool) {
+	value := strings.TrimSpace(request.URL.Query().Get(key))
+	if value == "" {
+		return nil, true
+	}
+	parsed, err := models.ParseConsolidationSuggestionStatus(value)
+	if err != nil {
+		writeInvalidParameter(writer, key)
+		return nil, false
+	}
+	return &parsed, true
 }
 
 func requireActor(writer http.ResponseWriter, request *http.Request, requireAdminActor RequireAdminActor) (AdminActor, bool) {
@@ -236,6 +281,9 @@ func writeServiceError(writer http.ResponseWriter, err error) {
 		statusCode = http.StatusNotFound
 		detail = err.Error()
 	case errors.Is(err, admin.ErrProjectIDRequired):
+		statusCode = http.StatusBadRequest
+		detail = err.Error()
+	case errors.Is(err, admin.ErrConsolidationMinGroupSizeInvalid):
 		statusCode = http.StatusBadRequest
 		detail = err.Error()
 	case errors.Is(err, admin.ErrEngramStale),

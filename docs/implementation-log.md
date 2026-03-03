@@ -86,6 +86,31 @@
    - `make test-unit`
    - CodeScene scores on touched Go files: `10.0`.
 
+### 2026-03-03 (Phase 37 extension: admin consolidation refresh/list service + REST routes)
+
+1. Added admin-service contracts and methods for consolidation suggestions:
+   - `RefreshEngramConsolidationSuggestions`
+   - `ListEngramConsolidationSuggestions`
+   - request/response contracts in `internal/admin/service.go` + implementation in `internal/admin/service_consolidation.go`.
+2. Added memory-admin API routes:
+   - `POST /api/v1/admin/memory/engrams/consolidation/refresh`
+   - `GET /api/v1/admin/memory/engrams/consolidation/suggestions`
+3. Added API parsing and error handling support:
+   - status query parsing (`suggested|merged|rejected`) for consolidation listing.
+   - explicit invalid min-group guardrail mapping to `400`.
+4. Added regression coverage:
+   - `internal/admin/service_test.go` consolidation refresh/list forwarding and validation tests.
+   - `internal/api/admin_memory_test.go` consolidation refresh/list route tests + invalid-status coverage.
+5. Refactored admin memory route wiring into focused route files and shared helper file to preserve maintainability and restore full CodeScene quality gates.
+6. Documentation/state alignment:
+   - `docs/api-reference.md` now documents the two consolidation admin endpoints.
+   - `plan.md` and `migration/checkpoints/checkpoint.md` updated for Phase 37 admin-API progress.
+7. Validation:
+   - `go test ./internal/admin ./internal/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
 ### 2026-03-01 (Security follow-up closeout: OIDC rollout validation + centralized audit sink regression)
 
 1. Added explicit OIDC-to-sink integration coverage in `internal/api/session_ui_oidc_test.go`:
