@@ -536,6 +536,36 @@ CREATE INDEX IF NOT EXISTS engram_feedback_actor_created_idx
 CREATE INDEX IF NOT EXISTS engram_feedback_type_created_idx
   ON engram_feedback (feedback_type, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS engram_consolidation_suggestions (
+  suggestion_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  source_engram_ids UUID[] NOT NULL,
+  consolidation_type TEXT NOT NULL CHECK (
+    consolidation_type IN ('exact_duplicate', 'theme_duplicate', 'superseded', 'complementary')
+  ),
+  reason TEXT NOT NULL,
+  consolidation_hash TEXT NOT NULL,
+  confidence_score DOUBLE PRECISION NOT NULL DEFAULT 0.0 CHECK (
+    confidence_score >= 0.0 AND confidence_score <= 1.0
+  ),
+  status TEXT NOT NULL DEFAULT 'suggested' CHECK (
+    status IN ('suggested', 'merged', 'rejected')
+  ),
+  suggested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  actioned_at TIMESTAMPTZ,
+  action_taken_by UUID REFERENCES users(user_id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS engram_consolidation_suggestions_hash_uidx
+  ON engram_consolidation_suggestions (consolidation_hash);
+
+CREATE INDEX IF NOT EXISTS engram_consolidation_suggestions_project_status_idx
+  ON engram_consolidation_suggestions (project_id, status, suggested_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_consolidation_suggestions_source_gin_idx
+  ON engram_consolidation_suggestions USING GIN (source_engram_ids);
+
 CREATE TABLE IF NOT EXISTS session_pinned_engrams (
   session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
   engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,

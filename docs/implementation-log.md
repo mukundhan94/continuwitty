@@ -56,6 +56,36 @@
    - `make test-unit`
    - CodeScene scores on touched Go files: `10.0`.
 
+### 2026-03-03 (Phase 37 extension: consolidation suggestion schema + repository baseline)
+
+1. Added consolidation suggestion persistence baseline in `db/init/001_schema.sql`:
+   - new table `engram_consolidation_suggestions`.
+   - new indexes:
+     - `engram_consolidation_suggestions_hash_uidx`
+     - `engram_consolidation_suggestions_project_status_idx`
+     - `engram_consolidation_suggestions_source_gin_idx`
+2. Added consolidation suggestion domain model in `internal/models/engram_consolidation.go`:
+   - suggestion type and status enums.
+   - status parser (`ParseConsolidationSuggestionStatus`).
+   - persisted entity contract (`EngramConsolidationSuggestion`).
+3. Added repository baseline in `internal/repository/engram_consolidation_suggestions.go`:
+   - `RefreshExactDuplicateConsolidationSuggestions` for deterministic exact-duplicate grouping (`LOWER(TRIM(title))`) with configurable minimum group size.
+   - conflict-safe upsert keyed by deterministic `consolidation_hash`.
+   - confidence scoring tied to duplicate cluster size.
+   - `ListEngramConsolidationSuggestions` with project/status filtering and pagination.
+4. Added repository coverage in `internal/repository/engram_consolidation_suggestions_test.go`:
+   - default normalization and query argument assertions.
+   - invalid min-group guardrail coverage.
+   - list filtering and status parsing assertions.
+5. Documentation/state alignment:
+   - `plan.md`: Phase 37 delivered-scope updated to include consolidation schema/repository baseline.
+   - `migration/checkpoints/checkpoint.md`: Phase 37 tracker and summary updated for consolidation baseline progress.
+6. Validation:
+   - `go test ./internal/models ./internal/repository -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
 ### 2026-03-01 (Security follow-up closeout: OIDC rollout validation + centralized audit sink regression)
 
 1. Added explicit OIDC-to-sink integration coverage in `internal/api/session_ui_oidc_test.go`:
