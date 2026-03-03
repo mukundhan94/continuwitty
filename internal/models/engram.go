@@ -66,6 +66,7 @@ type EngramQueryRequest struct {
 	UsefulCountMin          *int                    `json:"useful_count_min,omitempty"`
 	AccessCountMin          *int                    `json:"access_count_min,omitempty"`
 	FeedbackCountMin        *int                    `json:"feedback_count_min,omitempty"`
+	FeedbackCountMax        *int                    `json:"feedback_count_max,omitempty"`
 	ContradictionCountMax   *int                    `json:"contradiction_count_max,omitempty"`
 	ContradictionRatioMax   *float64                `json:"contradiction_feedback_ratio_max,omitempty"`
 	FreshnessScoreMin       *float64                `json:"freshness_score_min,omitempty"`

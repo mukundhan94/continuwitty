@@ -1661,6 +1661,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 55 - Feedback-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `feedback_count_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `feedback_count_max`.
+  - repository query builder now supports `COALESCE(feedback_count, 0) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `feedback_count_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to scope recall to low-feedback memories that need review or curation.
+2. Keep feedback-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `feedback_count_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum feedback-count thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for feedback-ceiling filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1720,3 +1752,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 53: `contradiction_feedback_ratio_max` parity across REST/MCP/repository.
 19. Execute contradiction-ratio diagnostics increment:
    - [x] Phase 54: expose `contradiction_feedback_ratio` in query results.
+20. Execute feedback-ceiling query filter increment:
+   - [x] Phase 55: `feedback_count_max` parity across REST/MCP/repository.

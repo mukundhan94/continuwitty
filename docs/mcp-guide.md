@@ -533,6 +533,7 @@ Document pin/list helpers:
     "useful_count_min": 1,
     "access_count_min": 2,
     "feedback_count_min": 3,
+    "feedback_count_max": 12,
     "contradiction_count_max": 2,
     "contradiction_feedback_ratio_max": 0.4,
     "freshness_score_min": 0.4,
@@ -546,7 +547,7 @@ Document pin/list helpers:
 }
 ```
 
-`engram.query` also supports optional `created_after` / `created_before` and `freshness_computed_after` / `freshness_computed_before` (RFC3339), plus `useful_count_min`, `access_count_min`, `feedback_count_min`, `contradiction_count_max`, `contradiction_feedback_ratio_max`, `freshness_score_min`, `useful_feedback_ratio_min`, `avg_relevance_feedback_min`, `source_session_quality_min`, and trace constraints (`relation_type`, `trace_depth`).
+`engram.query` also supports optional `created_after` / `created_before` and `freshness_computed_after` / `freshness_computed_before` (RFC3339), plus `useful_count_min`, `access_count_min`, `feedback_count_min`, `feedback_count_max`, `contradiction_count_max`, `contradiction_feedback_ratio_max`, `freshness_score_min`, `useful_feedback_ratio_min`, `avg_relevance_feedback_min`, `source_session_quality_min`, and trace constraints (`relation_type`, `trace_depth`).
 Returned rows include `source_session_quality_score` (`0..1`) plus `access_count`, `freshness_score`, `feedback_count`, `useful_count`, `avg_relevance_feedback` (`0..1`), `useful_feedback_ratio` (`0..1`), `contradiction_count`, and `contradiction_feedback_ratio` (`0..1`) for authority/quality diagnostics.
 
 Collection add-items flow (resolve collection UUID first):
