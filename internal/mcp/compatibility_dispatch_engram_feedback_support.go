@@ -49,12 +49,35 @@ func parseEngramFeedbackRequest(
 	if !ok {
 		return EngramFeedbackRequest{}, invalidParamError("note")
 	}
+	relevanceScore, ok := optionalFeedbackRelevanceScoreParam(params, "relevance_score")
+	if !ok {
+		return EngramFeedbackRequest{}, invalidParamError("relevance_score")
+	}
 	return EngramFeedbackRequest{
-		ActorUserID:  actor.UserID,
-		EngramID:     engramID,
-		FeedbackType: feedbackType,
-		Note:         normalizeOptionalTrimmedParamString(note),
+		ActorUserID:    actor.UserID,
+		EngramID:       engramID,
+		FeedbackType:   feedbackType,
+		Note:           normalizeOptionalTrimmedParamString(note),
+		RelevanceScore: relevanceScore,
 	}, nil
+}
+
+func optionalFeedbackRelevanceScoreParam(
+	params map[string]any,
+	key string,
+) (*int, bool) {
+	rawValue, found := optionalParamValue(params, key)
+	if !found {
+		return nil, true
+	}
+	parsed, ok := parseIntValue(rawValue)
+	if !ok {
+		return nil, false
+	}
+	if parsed < 1 || parsed > 5 {
+		return nil, false
+	}
+	return &parsed, true
 }
 
 func normalizeOptionalTrimmedParamString(value *string) *string {

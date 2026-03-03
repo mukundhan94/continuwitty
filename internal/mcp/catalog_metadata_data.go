@@ -1392,6 +1392,11 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 				"note": map[string]any{
 					"type": "string",
 				},
+				"relevance_score": map[string]any{
+					"type":    "integer",
+					"minimum": 1,
+					"maximum": 5,
+				},
 			},
 		},
 	},

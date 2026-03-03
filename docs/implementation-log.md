@@ -7,6 +7,30 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 41 kickoff: explicit feedback relevance enrichment)
+
+1. Extended explicit feedback contracts with optional `relevance_score` (`1-5`) across REST + MCP:
+   - REST payload model now accepts `relevance_score`.
+   - MCP `engram.feedback` parser + compatibility request schema now accept and validate `relevance_score`.
+2. Added schema/model support for richer feedback signals:
+   - `engrams.feedback_count` and `engrams.avg_relevance_feedback`.
+   - optional `engram_feedback.relevance_score` with DB check constraint.
+   - `EngramFeedbackRecord` now includes:
+     - `relevance_score`
+     - `feedback_count`
+     - `avg_relevance_feedback`
+3. Updated feedback persistence and aggregation logic:
+   - feedback write path now persists optional per-event `relevance_score`.
+   - aggregate update now increments `feedback_count` and updates `avg_relevance_feedback` when score is supplied.
+4. Updated docs and schema discoverability:
+   - API reference now includes `POST /api/v1/engrams/{engram_id}/feedback` with optional relevance score.
+   - MCP guide and tool catalog metadata now document `relevance_score`.
+5. Validation:
+   - `go test ./internal/models ./internal/repository ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker` -> `26 passed`
+
 ### 2026-03-03 (Phase 40 hardening: MCP catalog/schema parity for scoped curation refresh)
 
 1. Updated MCP tool metadata for `engram.curation_refresh_links`:

@@ -854,10 +854,11 @@ type EngramUpdateRequest struct {
 
 // EngramFeedbackRequest captures compatibility-level engram feedback inputs.
 type EngramFeedbackRequest struct {
-	ActorUserID  uuid.UUID
-	EngramID     uuid.UUID
-	FeedbackType models.EngramFeedbackType
-	Note         *string
+	ActorUserID    uuid.UUID
+	EngramID       uuid.UUID
+	FeedbackType   models.EngramFeedbackType
+	Note           *string
+	RelevanceScore *int
 }
 
 // EngramFreshnessRefreshRequest captures compatibility-level engram freshness refresh inputs.

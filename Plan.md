@@ -1202,6 +1202,39 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 41 - Feedback Signal Enrichment
+
+### Status
+
+- In progress (2026-03-03).
+- Delivered in this checkpoint:
+  - explicit feedback supports optional `relevance_score` (`1-5`) across REST + MCP submit paths.
+  - feedback persistence now tracks aggregate counters on `engrams`:
+    - `feedback_count`
+    - `avg_relevance_feedback`
+  - feedback records now persist optional per-event `relevance_score`.
+  - regression coverage expanded across repository/API/MCP for relevance-score validation and forwarding.
+
+### Goals
+
+1. Capture richer explicit feedback quality signals without breaking existing feedback flows.
+2. Improve downstream retrieval calibration inputs with durable aggregate relevance metrics.
+3. Preserve deterministic behavior and validation across REST, MCP, and repository write paths.
+
+### Deliverables
+
+1. Schema/model extensions for relevance-score and aggregate counters.
+2. Repository feedback-write path updates for aggregate maintenance.
+3. REST/MCP payload parity plus validation and regression coverage.
+
+### Exit Criteria
+
+1. Feedback submissions remain backward-compatible while accepting optional relevance score.
+2. Aggregate counters are updated deterministically for each persisted feedback event.
+3. REST/MCP docs and tests fully reflect feedback contract changes.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1233,3 +1266,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 38: contradiction detection + warning flows.
    - [x] Phase 39: temporal query extensions + cost-aware context assembly.
    - [x] Phase 40: autonomous memory suggestions and action workflows.
+6. Execute feedback-signal enrichment increment:
+   - [ ] Phase 41: richer explicit feedback payloads + aggregate relevance counters.

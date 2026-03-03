@@ -667,10 +667,11 @@ func submitEngramFeedbackDependency(
 			ctx,
 			pool,
 			repository.EngramFeedbackCreateInput{
-				EngramID:     input.EngramID,
-				ActorUserID:  input.ActorUserID,
-				FeedbackType: input.FeedbackType,
-				Note:         input.Note,
+				EngramID:       input.EngramID,
+				ActorUserID:    input.ActorUserID,
+				FeedbackType:   input.FeedbackType,
+				Note:           input.Note,
+				RelevanceScore: input.RelevanceScore,
 			},
 		)
 	}

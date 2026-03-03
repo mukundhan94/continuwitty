@@ -113,6 +113,19 @@ func TestCompatibilityServiceToolsListIncludesProjectScopeForCurationRefresh(t *
 	}
 }
 
+func TestCompatibilityServiceToolsListIncludesRelevanceScoreForEngramFeedback(t *testing.T) {
+	frame := runCompatibilityRequest(
+		t,
+		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "tools-list", Method: "tools/list"}},
+	)
+	tool := findPublicToolByName(t, frame, "engram_feedback")
+	inputSchema := mapFromMap(t, tool, "inputSchema")
+	properties := mapFromMap(t, inputSchema, "properties")
+	if _, exists := properties["relevance_score"]; !exists {
+		t.Fatalf("expected relevance_score property in engram_feedback schema")
+	}
+}
+
 func TestBuildVisiblePublicToolCatalogClonesInputSchemas(t *testing.T) {
 	tools := buildVisiblePublicToolCatalog(nil)
 	first := findToolByPublicName(tools, "chat_save_as_engram")

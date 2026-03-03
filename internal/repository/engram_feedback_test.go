@@ -27,9 +27,12 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 				actorUserID,
 				string(models.EngramFeedbackTypeUseful),
 				"helpful in triage",
+				5,
 				createdAt,
 				4,
 				1,
+				6,
+				4.5,
 			},
 		},
 	}
@@ -43,11 +46,12 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 		context.Background(),
 		db,
 		EngramFeedbackCreateInput{
-			EngramID:     engramID,
-			ActorUserID:  actorUserID,
-			FeedbackType: models.EngramFeedbackTypeUseful,
-			Note:         &note,
-			CreatedAt:    createdAt,
+			EngramID:       engramID,
+			ActorUserID:    actorUserID,
+			FeedbackType:   models.EngramFeedbackTypeUseful,
+			Note:           &note,
+			RelevanceScore: intPtr(5),
+			CreatedAt:      createdAt,
 		},
 	)
 	requireNoError(t, err)
@@ -57,123 +61,60 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 	requireEqual(t, actorUserID, record.ActorUserID)
 	requireEqual(t, models.EngramFeedbackTypeUseful, record.FeedbackType)
 	requireEqual(t, "helpful in triage", record.Note)
+	if record.RelevanceScore == nil {
+		t.Fatalf("expected relevance score in feedback record")
+	}
+	requireEqual(t, 5, *record.RelevanceScore)
 	requireEqual(t, 4, record.UsefulCount)
 	requireEqual(t, 1, record.ContradictionCount)
+	requireEqual(t, 6, record.FeedbackCount)
+	if record.AvgRelevanceFeedback == nil {
+		t.Fatalf("expected avg relevance feedback in feedback record")
+	}
+	requireEqual(t, 4.5, *record.AvgRelevanceFeedback)
 
-	requireEqual(t, 1, len(db.queryRowSQL))
-	query := db.queryRowSQL[0]
-	if !strings.Contains(query, "INSERT INTO engram_feedback") {
-		t.Fatalf("expected feedback insert statement, got %q", query)
-	}
-	if !strings.Contains(query, "UPDATE engrams") {
-		t.Fatalf("expected aggregate update statement, got %q", query)
-	}
-	if !strings.Contains(query, "visibility_scope = 'project'") {
-		t.Fatalf("expected visibility enforcement in query, got %q", query)
-	}
 	expectedArgs := []any{
 		feedbackID,
 		engramID,
 		actorUserID,
 		"useful",
 		"helpful in triage",
+		5,
 		createdAt,
 	}
-	if !reflect.DeepEqual(expectedArgs, db.queryRowArgs[0]) {
-		t.Fatalf("expected args %#v, got %#v", expectedArgs, db.queryRowArgs[0])
-	}
+	assertRecordEngramFeedbackQuery(t, db, expectedArgs)
 }
 
-func TestRecordEngramFeedbackDefaultsTimestampAndTrimsNote(t *testing.T) {
-	feedbackID := uuid.MustParse("00000000-0000-0000-0000-000000000a11")
-	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000a12")
-	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000a13")
+func TestRecordEngramFeedbackNormalizesNoteAndDefaultsTimestamp(t *testing.T) {
 	now := time.Date(2026, 3, 2, 9, 30, 0, 0, time.UTC)
-	db := &fakeQueryer{
-		queryRowResult: &fakeRow{
-			values: []any{
-				feedbackID,
-				engramID,
-				actorUserID,
-				string(models.EngramFeedbackTypeContradiction),
-				"mismatch",
-				now,
-				2,
-				3,
-			},
+	testCases := []feedbackNormalizationCase{
+		{
+			name:            "trimmed note",
+			feedbackID:      uuid.MustParse("00000000-0000-0000-0000-000000000a11"),
+			engramID:        uuid.MustParse("00000000-0000-0000-0000-000000000a12"),
+			actorUserID:     uuid.MustParse("00000000-0000-0000-0000-000000000a13"),
+			feedbackType:    models.EngramFeedbackTypeContradiction,
+			note:            "  mismatch  ",
+			expectedNote:    "mismatch",
+			expectedSQLNote: "mismatch",
+		},
+		{
+			name:            "blank note becomes nil SQL value",
+			feedbackID:      uuid.MustParse("00000000-0000-0000-0000-000000000a16"),
+			engramID:        uuid.MustParse("00000000-0000-0000-0000-000000000a17"),
+			actorUserID:     uuid.MustParse("00000000-0000-0000-0000-000000000a18"),
+			feedbackType:    models.EngramFeedbackTypeUseful,
+			note:            "   ",
+			expectedNote:    "",
+			expectedSQLNote: nil,
 		},
 	}
-
-	originalIDFactory := newEngramFeedbackUUID
-	newEngramFeedbackUUID = func() uuid.UUID { return feedbackID }
-	t.Cleanup(func() { newEngramFeedbackUUID = originalIDFactory })
-
-	originalNow := nowEngramFeedbackUTC
-	nowEngramFeedbackUTC = func() time.Time { return now }
-	t.Cleanup(func() { nowEngramFeedbackUTC = originalNow })
-
-	note := "  mismatch  "
-	record, err := RecordEngramFeedback(
-		context.Background(),
-		db,
-		EngramFeedbackCreateInput{
-			EngramID:     engramID,
-			ActorUserID:  actorUserID,
-			FeedbackType: models.EngramFeedbackTypeContradiction,
-			Note:         &note,
-		},
-	)
-	requireNoError(t, err)
-	requireNotNil(t, record)
-	requireEqual(t, "mismatch", record.Note)
-	requireEqual(t, now, record.CreatedAt)
-}
-
-func TestRecordEngramFeedbackNormalizesBlankNoteToNil(t *testing.T) {
-	feedbackID := uuid.MustParse("00000000-0000-0000-0000-000000000a16")
-	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000a17")
-	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000a18")
-	now := time.Date(2026, 3, 2, 9, 40, 0, 0, time.UTC)
-	db := &fakeQueryer{
-		queryRowResult: &fakeRow{
-			values: []any{
-				feedbackID,
-				engramID,
-				actorUserID,
-				string(models.EngramFeedbackTypeUseful),
-				"",
-				now,
-				1,
-				0,
-			},
-		},
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			assertFeedbackNoteNormalizationCase(t, testCase, now)
+		})
 	}
-
-	originalIDFactory := newEngramFeedbackUUID
-	newEngramFeedbackUUID = func() uuid.UUID { return feedbackID }
-	t.Cleanup(func() { newEngramFeedbackUUID = originalIDFactory })
-
-	originalNow := nowEngramFeedbackUTC
-	nowEngramFeedbackUTC = func() time.Time { return now }
-	t.Cleanup(func() { nowEngramFeedbackUTC = originalNow })
-
-	note := "   "
-	record, err := RecordEngramFeedback(
-		context.Background(),
-		db,
-		EngramFeedbackCreateInput{
-			EngramID:     engramID,
-			ActorUserID:  actorUserID,
-			FeedbackType: models.EngramFeedbackTypeUseful,
-			Note:         &note,
-		},
-	)
-	requireNoError(t, err)
-	requireNotNil(t, record)
-	requireEqual(t, "", record.Note)
-
-	requireEqual(t, 1, len(db.queryRowArgs))
-	requireEqual(t, nil, db.queryRowArgs[0][4])
 }
 
 func TestRecordEngramFeedbackReturnsNilWhenEngramNotVisible(t *testing.T) {
@@ -214,6 +155,16 @@ func TestRecordEngramFeedbackValidation(t *testing.T) {
 			name:      "missing feedback type",
 			input:     EngramFeedbackCreateInput{EngramID: uuid.New(), ActorUserID: uuid.New()},
 			expectErr: errEngramFeedbackTypeRequired,
+		},
+		{
+			name: "invalid relevance score",
+			input: EngramFeedbackCreateInput{
+				EngramID:       uuid.New(),
+				ActorUserID:    uuid.New(),
+				FeedbackType:   models.EngramFeedbackTypeUseful,
+				RelevanceScore: intPtr(9),
+			},
+			expectErr: errEngramFeedbackRelevanceInvalid,
 		},
 		{
 			name: "invalid feedback type",
@@ -261,4 +212,95 @@ func assertFeedbackValidationError(
 	if !strings.Contains(err.Error(), expectedMessage) {
 		t.Fatalf("expected error message to contain %q, got %v", expectedMessage, err)
 	}
+}
+
+func assertRecordEngramFeedbackQuery(
+	t *testing.T,
+	db *fakeQueryer,
+	expectedArgs []any,
+) {
+	t.Helper()
+	requireEqual(t, 1, len(db.queryRowSQL))
+	query := db.queryRowSQL[0]
+	if !strings.Contains(query, "INSERT INTO engram_feedback") {
+		t.Fatalf("expected feedback insert statement, got %q", query)
+	}
+	if !strings.Contains(query, "UPDATE engrams") {
+		t.Fatalf("expected aggregate update statement, got %q", query)
+	}
+	if !strings.Contains(query, "visibility_scope = 'project'") {
+		t.Fatalf("expected visibility enforcement in query, got %q", query)
+	}
+	if !reflect.DeepEqual(expectedArgs, db.queryRowArgs[0]) {
+		t.Fatalf("expected args %#v, got %#v", expectedArgs, db.queryRowArgs[0])
+	}
+}
+
+type feedbackNormalizationCase struct {
+	name            string
+	feedbackID      uuid.UUID
+	engramID        uuid.UUID
+	actorUserID     uuid.UUID
+	feedbackType    models.EngramFeedbackType
+	note            string
+	expectedNote    string
+	expectedSQLNote any
+}
+
+func assertFeedbackNoteNormalizationCase(
+	t *testing.T,
+	testCase feedbackNormalizationCase,
+	now time.Time,
+) {
+	t.Helper()
+	db := &fakeQueryer{
+		queryRowResult: &fakeRow{
+			values: []any{
+				testCase.feedbackID,
+				testCase.engramID,
+				testCase.actorUserID,
+				string(testCase.feedbackType),
+				testCase.expectedNote,
+				nil,
+				now,
+				2,
+				3,
+				5,
+				nil,
+			},
+		},
+	}
+
+	originalIDFactory := newEngramFeedbackUUID
+	newEngramFeedbackUUID = func() uuid.UUID { return testCase.feedbackID }
+	t.Cleanup(func() { newEngramFeedbackUUID = originalIDFactory })
+
+	originalNow := nowEngramFeedbackUTC
+	nowEngramFeedbackUTC = func() time.Time { return now }
+	t.Cleanup(func() { nowEngramFeedbackUTC = originalNow })
+
+	note := testCase.note
+	record, err := RecordEngramFeedback(
+		context.Background(),
+		db,
+		EngramFeedbackCreateInput{
+			EngramID:     testCase.engramID,
+			ActorUserID:  testCase.actorUserID,
+			FeedbackType: testCase.feedbackType,
+			Note:         &note,
+		},
+	)
+	requireNoError(t, err)
+	requireNotNil(t, record)
+	requireEqual(t, testCase.expectedNote, record.Note)
+	requireEqual(t, now, record.CreatedAt)
+	if record.RelevanceScore != nil {
+		t.Fatalf("expected relevance score to be nil when omitted")
+	}
+	requireEqual(t, testCase.expectedSQLNote, db.queryRowArgs[0][4])
+	requireEqual(t, nil, db.queryRowArgs[0][5])
+}
+
+func intPtr(value int) *int {
+	return &value
 }

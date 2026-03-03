@@ -16,6 +16,7 @@ var (
 	errEngramFeedbackEngramIDRequired = errors.New("engram id is required")
 	errEngramFeedbackActorIDRequired  = errors.New("actor user id is required")
 	errEngramFeedbackTypeRequired     = errors.New("feedback type is required")
+	errEngramFeedbackRelevanceInvalid = errors.New("relevance score must be between 1 and 5")
 
 	newEngramFeedbackUUID = uuid.New
 	nowEngramFeedbackUTC  = func() time.Time { return time.Now().UTC() }
@@ -23,11 +24,12 @@ var (
 
 // EngramFeedbackCreateInput captures feedback write-path dependencies.
 type EngramFeedbackCreateInput struct {
-	EngramID     uuid.UUID
-	ActorUserID  uuid.UUID
-	FeedbackType models.EngramFeedbackType
-	Note         *string
-	CreatedAt    time.Time
+	EngramID       uuid.UUID
+	ActorUserID    uuid.UUID
+	FeedbackType   models.EngramFeedbackType
+	Note           *string
+	RelevanceScore *int
+	CreatedAt      time.Time
 }
 
 // RecordEngramFeedback persists explicit feedback and updates aggregate counters.
@@ -41,6 +43,7 @@ func RecordEngramFeedback(
 		return nil, err
 	}
 	noteValue := feedbackNoteSQLValue(normalized.Note)
+	relevanceScoreValue := feedbackRelevanceScoreSQLValue(normalized.RelevanceScore)
 	row := db.QueryRow(
 		ctx,
 		recordEngramFeedbackSQL(),
@@ -49,6 +52,7 @@ func RecordEngramFeedback(
 		normalized.ActorUserID,
 		string(normalized.FeedbackType),
 		noteValue,
+		relevanceScoreValue,
 		normalized.CreatedAt,
 	)
 
@@ -59,9 +63,12 @@ func RecordEngramFeedback(
 		&record.ActorUserID,
 		&record.FeedbackType,
 		&record.Note,
+		&record.RelevanceScore,
 		&record.CreatedAt,
 		&record.UsefulCount,
 		&record.ContradictionCount,
+		&record.FeedbackCount,
+		&record.AvgRelevanceFeedback,
 	); errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	} else if err != nil {
@@ -88,6 +95,11 @@ func normalizeEngramFeedbackInput(
 	}
 	input.FeedbackType = parsedType
 	input.Note = normalizeFeedbackNote(input.Note)
+	relevanceScore, err := normalizeFeedbackRelevanceScore(input.RelevanceScore)
+	if err != nil {
+		return EngramFeedbackCreateInput{}, err
+	}
+	input.RelevanceScore = relevanceScore
 	if input.CreatedAt.IsZero() {
 		input.CreatedAt = nowEngramFeedbackUTC()
 	}
@@ -112,6 +124,24 @@ func feedbackNoteSQLValue(note *string) any {
 	return *note
 }
 
+func feedbackRelevanceScoreSQLValue(relevanceScore *int) any {
+	if relevanceScore == nil {
+		return nil
+	}
+	return *relevanceScore
+}
+
+func normalizeFeedbackRelevanceScore(relevanceScore *int) (*int, error) {
+	if relevanceScore == nil {
+		return nil, nil
+	}
+	if *relevanceScore < 1 || *relevanceScore > 5 {
+		return nil, errEngramFeedbackRelevanceInvalid
+	}
+	normalized := *relevanceScore
+	return &normalized, nil
+}
+
 func recordEngramFeedbackSQL() string {
 	actorPlaceholder := pgxPlaceholder(3)
 	engramReadClause := buildMembershipReadClause(
@@ -123,14 +153,21 @@ func recordEngramFeedbackSQL() string {
 			includeOwnerless: true,
 		},
 	)
-	return `
+	return strings.ReplaceAll(
+		recordEngramFeedbackSQLTemplate,
+		"{{ENGRAM_READ_CLAUSE}}",
+		engramReadClause,
+	)
+}
+
+const recordEngramFeedbackSQLTemplate = `
 		WITH visible_engram AS (
 			SELECT e.engram_id
 			FROM engrams e
 			WHERE
 				e.engram_id = $2
 				AND e.deleted_at IS NULL
-				AND (` + engramReadClause + `)
+				AND ({{ENGRAM_READ_CLAUSE}})
 		),
 		inserted AS (
 			INSERT INTO engram_feedback (
@@ -139,6 +176,7 @@ func recordEngramFeedbackSQL() string {
 				actor_user_id,
 				feedback_type,
 				note,
+				relevance_score,
 				created_at
 			)
 			SELECT
@@ -147,19 +185,39 @@ func recordEngramFeedbackSQL() string {
 				$3,
 				$4,
 				COALESCE($5, ''),
-				$6
+				$6,
+				$7
 			FROM visible_engram ve
-			RETURNING feedback_id, engram_id, actor_user_id, feedback_type, note, created_at
+			RETURNING
+				feedback_id,
+				engram_id,
+				actor_user_id,
+				feedback_type,
+				note,
+				relevance_score,
+				created_at
 		),
 		updated AS (
 			UPDATE engrams e
 			SET
 				useful_count = COALESCE(useful_count, 0) + CASE WHEN $4 = 'useful' THEN 1 ELSE 0 END,
 				contradiction_count = COALESCE(contradiction_count, 0) + CASE WHEN $4 = 'contradiction' THEN 1 ELSE 0 END,
-				updated_at = GREATEST(updated_at, $6)
+				feedback_count = COALESCE(feedback_count, 0) + 1,
+				avg_relevance_feedback = CASE
+					WHEN $6 IS NULL THEN avg_relevance_feedback
+					ELSE (
+						(COALESCE(avg_relevance_feedback, 0.0) * COALESCE(feedback_count, 0)::DOUBLE PRECISION) +
+						$6::DOUBLE PRECISION
+					) / (COALESCE(feedback_count, 0)::DOUBLE PRECISION + 1.0)
+				END,
+				updated_at = GREATEST(updated_at, $7)
 			FROM inserted i
 			WHERE e.engram_id = i.engram_id
-			RETURNING e.useful_count, e.contradiction_count
+			RETURNING
+				e.useful_count,
+				e.contradiction_count,
+				e.feedback_count,
+				e.avg_relevance_feedback
 		)
 		SELECT
 			i.feedback_id,
@@ -167,10 +225,12 @@ func recordEngramFeedbackSQL() string {
 			i.actor_user_id,
 			i.feedback_type,
 			i.note,
+			i.relevance_score,
 			i.created_at,
 			u.useful_count,
-			u.contradiction_count
+			u.contradiction_count,
+			u.feedback_count,
+			u.avg_relevance_feedback
 		FROM inserted i
 		JOIN updated u ON TRUE;
 	`
-}

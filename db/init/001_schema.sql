@@ -27,6 +27,8 @@ ALTER TABLE engrams
   ADD COLUMN IF NOT EXISTS freshness_score DOUBLE PRECISION NOT NULL DEFAULT 1.0,
   ADD COLUMN IF NOT EXISTS freshness_last_computed_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS useful_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS feedback_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS avg_relevance_feedback DOUBLE PRECISION,
   ADD COLUMN IF NOT EXISTS contradiction_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS deleted_by_user_id UUID,
@@ -523,9 +525,25 @@ CREATE TABLE IF NOT EXISTS engram_feedback (
   engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
   actor_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   feedback_type TEXT NOT NULL CHECK (feedback_type IN ('useful', 'contradiction')),
+  relevance_score INTEGER CHECK (relevance_score >= 1 AND relevance_score <= 5),
   note TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE engram_feedback
+  ADD COLUMN IF NOT EXISTS relevance_score INTEGER;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'engram_feedback_relevance_score_check'
+  ) THEN
+    ALTER TABLE engram_feedback
+      ADD CONSTRAINT engram_feedback_relevance_score_check
+      CHECK (relevance_score IS NULL OR (relevance_score >= 1 AND relevance_score <= 5));
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS engram_feedback_engram_created_idx
   ON engram_feedback (engram_id, created_at DESC);

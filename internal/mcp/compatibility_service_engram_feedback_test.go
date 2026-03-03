@@ -17,20 +17,24 @@ func TestCompatibilityServiceEngramFeedbackParity(t *testing.T) {
 	engramID := uuid.MustParse("39910000-0000-0000-0000-000000000400")
 	feedbackID := uuid.MustParse("39910000-0000-0000-0000-000000000401")
 	record := models.EngramFeedbackRecord{
-		FeedbackID:         feedbackID,
-		EngramID:           engramID,
-		ActorUserID:        actorUserID,
-		FeedbackType:       models.EngramFeedbackTypeUseful,
-		Note:               "helpful",
-		CreatedAt:          time.Date(2026, 3, 2, 13, 0, 0, 0, time.UTC),
-		UsefulCount:        8,
-		ContradictionCount: 1,
+		FeedbackID:           feedbackID,
+		EngramID:             engramID,
+		ActorUserID:          actorUserID,
+		FeedbackType:         models.EngramFeedbackTypeUseful,
+		Note:                 "helpful",
+		RelevanceScore:       intPtr(5),
+		CreatedAt:            time.Date(2026, 3, 2, 13, 0, 0, 0, time.UTC),
+		UsefulCount:          8,
+		FeedbackCount:        9,
+		AvgRelevanceFeedback: float64Ptr(4.4),
+		ContradictionCount:   1,
 	}
 	service := &fakeEngramFeedbackService{record: &record}
 	params := map[string]any{
-		"engram_id":     engramID.String(),
-		"feedback_type": "useful",
-		"note":          "helpful",
+		"engram_id":       engramID.String(),
+		"feedback_type":   "useful",
+		"note":            "helpful",
+		"relevance_score": 5,
 	}
 	testCases := []struct {
 		name            string
@@ -65,10 +69,11 @@ func TestCompatibilityServiceEngramFeedbackParity(t *testing.T) {
 				t,
 				service.call,
 				EngramFeedbackRequest{
-					ActorUserID:  actorUserID,
-					EngramID:     engramID,
-					FeedbackType: models.EngramFeedbackTypeUseful,
-					Note:         stringPtr("helpful"),
+					ActorUserID:    actorUserID,
+					EngramID:       engramID,
+					FeedbackType:   models.EngramFeedbackTypeUseful,
+					Note:           stringPtr("helpful"),
+					RelevanceScore: intPtr(5),
 				},
 			)
 		})
@@ -113,6 +118,7 @@ func TestCompatibilityServiceEngramFeedbackNormalizesOptionalNote(t *testing.T) 
 					FeedbackType:       testCase.feedbackType,
 					CreatedAt:          time.Date(2026, 3, 2, 13, 10, 0, 0, time.UTC),
 					UsefulCount:        0,
+					FeedbackCount:      2,
 					ContradictionCount: 2,
 				},
 			}
@@ -144,6 +150,7 @@ func TestCompatibilityServiceEngramFeedbackValidationAndErrors(t *testing.T) {
 		{name: "missing feedback type", params: map[string]any{"engram_id": uuid.NewString()}},
 		{name: "invalid feedback type", params: map[string]any{"engram_id": uuid.NewString(), "feedback_type": "bad"}},
 		{name: "invalid note", params: map[string]any{"engram_id": uuid.NewString(), "feedback_type": "useful", "note": 123}},
+		{name: "invalid relevance score", params: map[string]any{"engram_id": uuid.NewString(), "feedback_type": "useful", "relevance_score": 7}},
 	}
 	for _, testCase := range testCases {
 		testCase := testCase
@@ -236,6 +243,28 @@ func assertEngramFeedbackCall(
 		t.Fatalf("expected feedback type to be forwarded")
 	}
 	assertOptionalDeleteReason(t, actual.Note, expected.Note)
+	assertOptionalIntPointer(t, actual.RelevanceScore, expected.RelevanceScore)
+}
+
+func float64Ptr(value float64) *float64 {
+	return &value
+}
+
+func assertOptionalIntPointer(
+	t *testing.T,
+	actual *int,
+	expected *int,
+) {
+	t.Helper()
+	if actual == nil && expected == nil {
+		return
+	}
+	if actual == nil || expected == nil {
+		t.Fatalf("expected optional int pointers to match")
+	}
+	if *actual != *expected {
+		t.Fatalf("expected optional int pointers to match")
+	}
 }
 
 type fakeEngramFeedbackService struct {

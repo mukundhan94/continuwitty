@@ -34,10 +34,11 @@ type SessionProjectResolution struct {
 
 // SessionEngramFeedbackInput captures feedback route payload + actor context.
 type SessionEngramFeedbackInput struct {
-	EngramID     uuid.UUID
-	ActorUserID  uuid.UUID
-	FeedbackType models.EngramFeedbackType
-	Note         *string
+	EngramID       uuid.UUID
+	ActorUserID    uuid.UUID
+	FeedbackType   models.EngramFeedbackType
+	Note           *string
+	RelevanceScore *int
 }
 
 func (dependencies sessionAuthDependencies) handleCreateEngram(writer http.ResponseWriter, request *http.Request) {
@@ -212,10 +213,11 @@ func (dependencies sessionAuthDependencies) handleSubmitEngramFeedback(
 	record, err := dependencies.submitEngramFeedback(
 		request.Context(),
 		SessionEngramFeedbackInput{
-			EngramID:     engramID,
-			ActorUserID:  actor.UserID,
-			FeedbackType: payload.FeedbackType,
-			Note:         payload.Note,
+			EngramID:       engramID,
+			ActorUserID:    actor.UserID,
+			FeedbackType:   payload.FeedbackType,
+			Note:           payload.Note,
+			RelevanceScore: payload.RelevanceScore,
 		},
 	)
 	if err != nil {
@@ -485,10 +487,33 @@ func decodeEngramFeedbackRequest(
 		)
 		return SessionEngramFeedbackInput{}, false
 	}
+	relevanceScore, ok := normalizeOptionalFeedbackRelevanceScore(payload.RelevanceScore)
+	if !ok {
+		writeJSON(
+			writer,
+			http.StatusBadRequest,
+			map[string]string{"detail": "relevance_score must be an integer between 1 and 5"},
+		)
+		return SessionEngramFeedbackInput{}, false
+	}
 	return SessionEngramFeedbackInput{
-		FeedbackType: parsedType,
-		Note:         normalizeOptionalTrimmedString(payload.Note),
+		FeedbackType:   parsedType,
+		Note:           normalizeOptionalTrimmedString(payload.Note),
+		RelevanceScore: relevanceScore,
 	}, true
+}
+
+func normalizeOptionalFeedbackRelevanceScore(
+	relevanceScore *int,
+) (*int, bool) {
+	if relevanceScore == nil {
+		return nil, true
+	}
+	if *relevanceScore < 1 || *relevanceScore > 5 {
+		return nil, false
+	}
+	normalized := *relevanceScore
+	return &normalized, true
 }
 
 func normalizeCreateEngramPayload(payload *models.MemoryEngramCreate) {
