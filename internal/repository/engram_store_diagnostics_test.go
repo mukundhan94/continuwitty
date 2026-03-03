@@ -34,6 +34,7 @@ func TestMapEngramQueryResultIncludesFeedbackQualityDiagnostics(t *testing.T) {
 	requireEqual(t, 3, result.UsefulCount)
 	requireEqual(t, 0.83, result.AvgRelevanceFeedback)
 	requireEqual(t, 0.75, result.UsefulFeedbackRatio)
+	requireEqual(t, 0.25, result.ContradictionFeedbackRatio)
 }
 
 func TestUsefulFeedbackRatioFromRowUsesNeutralFallbackWhenNoFeedback(t *testing.T) {
@@ -42,4 +43,12 @@ func TestUsefulFeedbackRatioFromRowUsesNeutralFallbackWhenNoFeedback(t *testing.
 		"useful_count":   5,
 	}
 	requireEqual(t, 0.5, usefulFeedbackRatioFromRow(row))
+}
+
+func TestContradictionFeedbackRatioFromRowUsesLowRiskFallbackWhenNoFeedback(t *testing.T) {
+	row := map[string]any{
+		"feedback_count":      0,
+		"contradiction_count": 5,
+	}
+	requireEqual(t, 0.0, contradictionFeedbackRatioFromRow(row))
 }

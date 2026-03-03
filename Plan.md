@@ -1628,6 +1628,39 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 54 - Contradiction-Ratio Diagnostics in Query Results
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - `models.EngramQueryResult` now includes `contradiction_feedback_ratio`.
+  - repository result mapping now computes and returns contradiction ratio using:
+    - `contradiction_count / feedback_count` when feedback exists.
+    - deterministic low-risk fallback (`0.0`) when feedback is absent.
+  - REST and MCP query flows now return contradiction-ratio diagnostics alongside existing quality/engagement/usefulness signals.
+  - regression coverage expanded for repository mapping helpers and REST/MCP payload parity.
+
+### Goals
+
+1. Expose contradiction-risk diagnostics so contradiction-aware filtering is transparent in retrieval output.
+2. Keep contradiction-ratio diagnostics deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending query observability.
+
+### Deliverables
+
+1. Query-result contract extension for `contradiction_feedback_ratio`.
+2. Repository mapping updates with deterministic fallback behavior.
+3. REST/MCP parity tests and docs synchronization.
+
+### Exit Criteria
+
+1. Query responses include `contradiction_feedback_ratio` in REST and MCP.
+2. Zero-feedback rows return deterministic low-risk fallback (`0.0`) and are regression-tested.
+3. API/MCP docs and tests remain synchronized with repository output behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1685,3 +1718,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 52: expose `useful_count` + `avg_relevance_feedback` + `useful_feedback_ratio` in query results.
 18. Execute contradiction-ratio query filter increment:
    - [x] Phase 53: `contradiction_feedback_ratio_max` parity across REST/MCP/repository.
+19. Execute contradiction-ratio diagnostics increment:
+   - [x] Phase 54: expose `contradiction_feedback_ratio` in query results.

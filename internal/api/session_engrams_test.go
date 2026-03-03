@@ -269,21 +269,22 @@ func TestMountSessionAuthRoutesQueryEngramsReturnsAuthorityScore(t *testing.T) {
 				requireEqual(t, actor.UserID, actorUserID)
 				return []models.EngramQueryResult{
 					{
-						EngramID:                  uuid.MustParse("00000000-0000-0000-0000-000000000a81"),
-						ProjectID:                 "proj-1",
-						Title:                     "Authority scoped memory",
-						Abstract:                  "Authority score should be visible",
-						CreatedAt:                 time.Date(2026, 3, 3, 11, 0, 0, 0, time.UTC),
-						VisibilityScope:           "private",
-						AccessCount:               8,
-						FreshnessScore:            0.74,
-						FeedbackCount:             6,
-						UsefulCount:               5,
-						AvgRelevanceFeedback:      0.77,
-						UsefulFeedbackRatio:       0.83,
-						ContradictionCount:        2,
-						SourceSessionQualityScore: 0.81,
-						Distance:                  0.12,
+						EngramID:                   uuid.MustParse("00000000-0000-0000-0000-000000000a81"),
+						ProjectID:                  "proj-1",
+						Title:                      "Authority scoped memory",
+						Abstract:                   "Authority score should be visible",
+						CreatedAt:                  time.Date(2026, 3, 3, 11, 0, 0, 0, time.UTC),
+						VisibilityScope:            "private",
+						AccessCount:                8,
+						FreshnessScore:             0.74,
+						FeedbackCount:              6,
+						UsefulCount:                5,
+						AvgRelevanceFeedback:       0.77,
+						UsefulFeedbackRatio:        0.83,
+						ContradictionCount:         2,
+						ContradictionFeedbackRatio: 0.33,
+						SourceSessionQualityScore:  0.81,
+						Distance:                   0.12,
 					},
 				}, nil
 			},
@@ -323,6 +324,7 @@ func TestMountSessionAuthRoutesQueryEngramsReturnsAuthorityScore(t *testing.T) {
 	requireEqual(t, 0.77, payload[0]["avg_relevance_feedback"].(float64))
 	requireEqual(t, 0.83, payload[0]["useful_feedback_ratio"].(float64))
 	requireEqual(t, float64(2), payload[0]["contradiction_count"].(float64))
+	requireEqual(t, 0.33, payload[0]["contradiction_feedback_ratio"].(float64))
 	requireEqual(t, 0.81, payload[0]["source_session_quality_score"].(float64))
 }
 

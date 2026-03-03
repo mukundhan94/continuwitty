@@ -270,23 +270,24 @@ func scanEngramCandidateRow(row interface {
 
 func mapEngramQueryResult(row map[string]any) models.EngramQueryResult {
 	result := models.EngramQueryResult{
-		EngramID:                  uuidFromAny(row["engram_id"]),
-		ProjectID:                 stringFromAny(row["project_id"]),
-		Title:                     stringFromAny(row["title"]),
-		Abstract:                  stringFromAny(row["abstract"]),
-		CreatedAt:                 timeFromAny(row["created_at"]),
-		Tags:                      stringSliceFromAny(row["tags"]),
-		Keywords:                  stringSliceFromAny(row["keywords"]),
-		VisibilityScope:           visibilityFromAny(row["visibility_scope"]),
-		AccessCount:               intFromAny(row["access_count"]),
-		FreshnessScore:            float64FromAny(row["freshness_score"]),
-		FeedbackCount:             intFromAny(row["feedback_count"]),
-		UsefulCount:               intFromAny(row["useful_count"]),
-		AvgRelevanceFeedback:      float64FromAny(row["avg_relevance_feedback"]),
-		UsefulFeedbackRatio:       usefulFeedbackRatioFromRow(row),
-		ContradictionCount:        intFromAny(row["contradiction_count"]),
-		SourceSessionQualityScore: float64FromAny(row["source_session_quality_score"]),
-		Distance:                  float64FromAny(row["distance"]),
+		EngramID:                   uuidFromAny(row["engram_id"]),
+		ProjectID:                  stringFromAny(row["project_id"]),
+		Title:                      stringFromAny(row["title"]),
+		Abstract:                   stringFromAny(row["abstract"]),
+		CreatedAt:                  timeFromAny(row["created_at"]),
+		Tags:                       stringSliceFromAny(row["tags"]),
+		Keywords:                   stringSliceFromAny(row["keywords"]),
+		VisibilityScope:            visibilityFromAny(row["visibility_scope"]),
+		AccessCount:                intFromAny(row["access_count"]),
+		FreshnessScore:             float64FromAny(row["freshness_score"]),
+		FeedbackCount:              intFromAny(row["feedback_count"]),
+		UsefulCount:                intFromAny(row["useful_count"]),
+		AvgRelevanceFeedback:       float64FromAny(row["avg_relevance_feedback"]),
+		UsefulFeedbackRatio:        usefulFeedbackRatioFromRow(row),
+		ContradictionCount:         intFromAny(row["contradiction_count"]),
+		ContradictionFeedbackRatio: contradictionFeedbackRatioFromRow(row),
+		SourceSessionQualityScore:  float64FromAny(row["source_session_quality_score"]),
+		Distance:                   float64FromAny(row["distance"]),
 	}
 	if ownerUserID, ok := row["owner_user_id"].(*uuid.UUID); ok {
 		result.OwnerUserID = ownerUserID
@@ -315,6 +316,15 @@ func usefulFeedbackRatioFromRow(row map[string]any) float64 {
 	}
 	usefulCount := intFromAny(row["useful_count"])
 	return float64(usefulCount) / float64(feedbackCount)
+}
+
+func contradictionFeedbackRatioFromRow(row map[string]any) float64 {
+	feedbackCount := intFromAny(row["feedback_count"])
+	if feedbackCount <= 0 {
+		return 0.0
+	}
+	contradictionCount := intFromAny(row["contradiction_count"])
+	return float64(contradictionCount) / float64(feedbackCount)
 }
 
 func pgxPlaceholder(index int) string {

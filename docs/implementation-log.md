@@ -7,6 +7,23 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 54: contradiction-ratio diagnostics in query result payloads)
+
+1. Extended engram query result contracts with contradiction-ratio diagnostics:
+   - added `contradiction_feedback_ratio` to `EngramQueryResult`.
+2. Updated repository query result mapping:
+   - result mapping now computes contradiction ratio as `contradiction_count / feedback_count` when feedback exists.
+   - deterministic low-risk fallback `0.0` is returned when `feedback_count` is zero.
+3. Added parity/regression coverage:
+   - repository diagnostics tests now assert contradiction-ratio mapping and fallback semantics.
+   - repository query runtime test now asserts contradiction-ratio field on returned results.
+   - REST query-route response test now asserts serialized `contradiction_feedback_ratio`.
+   - MCP compatibility parity fixture now includes contradiction-ratio diagnostics.
+4. Documentation alignment:
+   - API and MCP query docs now describe returned `contradiction_feedback_ratio`.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 53: contradiction-ratio query filter parity)
 
 1. Added contradiction-ratio query contract extension:

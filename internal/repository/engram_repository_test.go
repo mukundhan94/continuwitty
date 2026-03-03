@@ -156,6 +156,7 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	requireEqual(t, 0.82, results[0].AvgRelevanceFeedback)
 	requireEqual(t, 0.0, results[0].UsefulFeedbackRatio)
 	requireEqual(t, 0, results[0].ContradictionCount)
+	requireEqual(t, 0.0, results[0].ContradictionFeedbackRatio)
 	requireEqual(t, 0.5, results[0].SourceSessionQualityScore)
 	assertQueryEngramsRuntimeQuery(
 		t,
