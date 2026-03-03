@@ -7,6 +7,16 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 78: optional CI benchmark workflow)
+
+1. Extended CI manual-dispatch controls:
+   - added `run_query_benchmarks` boolean input to `.github/workflows/ci.yml`.
+2. Added optional CI benchmark job:
+   - new `query-benchmark` job runs only for `workflow_dispatch` with `run_query_benchmarks=true`.
+   - job executes `make benchmark-query-score-bands` and uploads benchmark output as `query-score-band-benchmark` artifact.
+3. Validation:
+   - YAML parse check for `.github/workflows/ci.yml` passed via local Ruby parser.
+
 ### 2026-03-03 (Phase 77: score-band benchmark operationalization)
 
 1. Added benchmark execution target:

@@ -2399,6 +2399,36 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 78 - Optional CI Benchmark Workflow
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - extended `workflow_dispatch` inputs in `.github/workflows/ci.yml` with `run_query_benchmarks`.
+  - added optional `query-benchmark` CI job that runs only when manually dispatched with `run_query_benchmarks=true`.
+  - benchmark job executes `make benchmark-query-score-bands` and uploads `query-score-band-benchmark.txt` as a workflow artifact.
+
+### Goals
+
+1. Enable reproducible benchmark execution in CI without impacting default PR/push duration.
+2. Keep benchmark runs opt-in and separate from mandatory unit/acceptance gates.
+3. Preserve existing disabled live-provider/release-smoke policy while adding benchmark observability.
+
+### Deliverables
+
+1. Manual-dispatch CI input for query benchmark execution.
+2. Optional CI benchmark job with output artifact upload.
+3. Roadmap/checkpoint/docs alignment for CI benchmark workflow support.
+
+### Exit Criteria
+
+1. CI benchmark job remains skipped on standard push/pull-request events.
+2. Manual workflow dispatch can run benchmark job and publish output artifact.
+3. Existing unit/acceptance CI paths remain unchanged.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2504,3 +2534,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 76: repository score-band regression + benchmark baseline for full filter matrices.
 42. Execute score-band benchmark operationalization increment:
    - [x] Phase 77: Makefile benchmark target + committed benchmark artifact for score-band query/rerank/filter paths.
+43. Execute optional CI benchmark workflow increment:
+   - [x] Phase 78: workflow-dispatch benchmark toggle + artifact publishing for query score-band benchmarks.
