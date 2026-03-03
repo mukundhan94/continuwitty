@@ -457,6 +457,14 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 			invalid: invalidFeedbackSignalScoreMax(payload.FeedbackSignalScoreMax),
 		},
 		{
+			detail:  "invalid engagement_signal_score_min",
+			invalid: invalidEngagementSignalScoreMin(payload.EngagementSignalScoreMin),
+		},
+		{
+			detail:  "invalid engagement_signal_score_max",
+			invalid: invalidEngagementSignalScoreMax(payload.EngagementSignalScoreMax),
+		},
+		{
 			detail:  "invalid composite_rank_score_min",
 			invalid: invalidCompositeRankScoreMin(payload.CompositeRankScoreMin),
 		},
@@ -574,6 +582,14 @@ func invalidFeedbackSignalScoreMin(value *float64) bool {
 }
 
 func invalidFeedbackSignalScoreMax(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidEngagementSignalScoreMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidEngagementSignalScoreMax(value *float64) bool {
 	return invalidBoundedUnitInterval(value)
 }
 
@@ -712,6 +728,9 @@ func invalidQueryNumericWindowDetail(payload models.EngramQueryRequest) string {
 	}
 	if hasInvalidScoreWindow(payload.FeedbackSignalScoreMin, payload.FeedbackSignalScoreMax) {
 		return "invalid feedback_signal_score window"
+	}
+	if hasInvalidScoreWindow(payload.EngagementSignalScoreMin, payload.EngagementSignalScoreMax) {
+		return "invalid engagement_signal_score window"
 	}
 	if hasInvalidScoreWindow(payload.CompositeRankScoreMin, payload.CompositeRankScoreMax) {
 		return "invalid composite_rank_score window"

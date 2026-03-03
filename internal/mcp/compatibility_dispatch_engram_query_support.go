@@ -46,46 +46,48 @@ func buildEngramQueryDispatchRequest(
 }
 
 type engramQueryPayloadParts struct {
-	topK                    int
-	projectID               *string
-	tags                    []string
-	keywords                []string
-	createdAfter            *time.Time
-	createdBefore           *time.Time
-	distanceMin             *float64
-	distanceMax             *float64
-	usefulCountMin          *int
-	usefulCountMax          *int
-	accessCountMin          *int
-	accessCountMax          *int
-	feedbackCountMin        *int
-	feedbackCountMax        *int
-	contradictionCountMin   *int
-	contradictionCountMax   *int
-	contradictionRatioMin   *float64
-	contradictionRatioMax   *float64
-	freshnessScoreMin       *float64
-	freshnessScoreMax       *float64
-	usefulFeedbackRatioMin  *float64
-	usefulFeedbackRatioMax  *float64
-	avgRelevanceFeedbackMin *float64
-	avgRelevanceFeedbackMax *float64
-	sourceSessionQualityMin *float64
-	sourceSessionQualityMax *float64
-	denseScoreMin           *float64
-	denseScoreMax           *float64
-	lexicalOverlapScoreMin  *float64
-	lexicalOverlapScoreMax  *float64
-	feedbackSignalScoreMin  *float64
-	feedbackSignalScoreMax  *float64
-	compositeRankScoreMin   *float64
-	compositeRankScoreMax   *float64
-	lastAccessedAfter       *time.Time
-	lastAccessedBefore      *time.Time
-	freshnessComputedAfter  *time.Time
-	freshnessComputedBefore *time.Time
-	relationType            *models.EngramLinkRelationType
-	traceDepth              *int
+	topK                     int
+	projectID                *string
+	tags                     []string
+	keywords                 []string
+	createdAfter             *time.Time
+	createdBefore            *time.Time
+	distanceMin              *float64
+	distanceMax              *float64
+	usefulCountMin           *int
+	usefulCountMax           *int
+	accessCountMin           *int
+	accessCountMax           *int
+	feedbackCountMin         *int
+	feedbackCountMax         *int
+	contradictionCountMin    *int
+	contradictionCountMax    *int
+	contradictionRatioMin    *float64
+	contradictionRatioMax    *float64
+	freshnessScoreMin        *float64
+	freshnessScoreMax        *float64
+	usefulFeedbackRatioMin   *float64
+	usefulFeedbackRatioMax   *float64
+	avgRelevanceFeedbackMin  *float64
+	avgRelevanceFeedbackMax  *float64
+	sourceSessionQualityMin  *float64
+	sourceSessionQualityMax  *float64
+	denseScoreMin            *float64
+	denseScoreMax            *float64
+	lexicalOverlapScoreMin   *float64
+	lexicalOverlapScoreMax   *float64
+	feedbackSignalScoreMin   *float64
+	feedbackSignalScoreMax   *float64
+	engagementSignalScoreMin *float64
+	engagementSignalScoreMax *float64
+	compositeRankScoreMin    *float64
+	compositeRankScoreMax    *float64
+	lastAccessedAfter        *time.Time
+	lastAccessedBefore       *time.Time
+	freshnessComputedAfter   *time.Time
+	freshnessComputedBefore  *time.Time
+	relationType             *models.EngramLinkRelationType
+	traceDepth               *int
 }
 
 func parseRequiredQueryParam(params map[string]any) (string, *toolDispatchError) {
@@ -133,46 +135,48 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		return engramQueryPayloadParts{}, dispatchErr
 	}
 	return engramQueryPayloadParts{
-		topK:                    topK,
-		projectID:               optionalProjectIDParam(params, "project_id"),
-		tags:                    tags,
-		keywords:                keywords,
-		createdAfter:            temporalParts.createdAfter,
-		createdBefore:           temporalParts.createdBefore,
-		distanceMin:             distanceMin,
-		distanceMax:             distanceMax,
-		usefulCountMin:          engagementParts.usefulCountMin,
-		usefulCountMax:          engagementParts.usefulCountMax,
-		accessCountMin:          engagementParts.accessCountMin,
-		accessCountMax:          engagementParts.accessCountMax,
-		feedbackCountMin:        engagementParts.feedbackCountMin,
-		feedbackCountMax:        engagementParts.feedbackCountMax,
-		contradictionCountMin:   engagementParts.contradictionCountMin,
-		contradictionCountMax:   engagementParts.contradictionCountMax,
-		contradictionRatioMin:   engagementParts.contradictionRatioMin,
-		contradictionRatioMax:   engagementParts.contradictionRatioMax,
-		freshnessScoreMin:       engagementParts.freshnessScoreMin,
-		freshnessScoreMax:       engagementParts.freshnessScoreMax,
-		usefulFeedbackRatioMin:  engagementParts.usefulFeedbackRatioMin,
-		usefulFeedbackRatioMax:  engagementParts.usefulFeedbackRatioMax,
-		avgRelevanceFeedbackMin: engagementParts.avgRelevanceFeedbackMin,
-		avgRelevanceFeedbackMax: engagementParts.avgRelevanceFeedbackMax,
-		sourceSessionQualityMin: engagementParts.sourceSessionQualityMin,
-		sourceSessionQualityMax: engagementParts.sourceSessionQualityMax,
-		denseScoreMin:           engagementParts.denseScoreMin,
-		denseScoreMax:           engagementParts.denseScoreMax,
-		lexicalOverlapScoreMin:  engagementParts.lexicalOverlapScoreMin,
-		lexicalOverlapScoreMax:  engagementParts.lexicalOverlapScoreMax,
-		feedbackSignalScoreMin:  engagementParts.feedbackSignalScoreMin,
-		feedbackSignalScoreMax:  engagementParts.feedbackSignalScoreMax,
-		compositeRankScoreMin:   engagementParts.compositeRankScoreMin,
-		compositeRankScoreMax:   engagementParts.compositeRankScoreMax,
-		lastAccessedAfter:       temporalParts.lastAccessedAfter,
-		lastAccessedBefore:      temporalParts.lastAccessedBefore,
-		freshnessComputedAfter:  temporalParts.freshnessComputedAfter,
-		freshnessComputedBefore: temporalParts.freshnessComputedBefore,
-		relationType:            traceParts.relationType,
-		traceDepth:              traceParts.traceDepth,
+		topK:                     topK,
+		projectID:                optionalProjectIDParam(params, "project_id"),
+		tags:                     tags,
+		keywords:                 keywords,
+		createdAfter:             temporalParts.createdAfter,
+		createdBefore:            temporalParts.createdBefore,
+		distanceMin:              distanceMin,
+		distanceMax:              distanceMax,
+		usefulCountMin:           engagementParts.usefulCountMin,
+		usefulCountMax:           engagementParts.usefulCountMax,
+		accessCountMin:           engagementParts.accessCountMin,
+		accessCountMax:           engagementParts.accessCountMax,
+		feedbackCountMin:         engagementParts.feedbackCountMin,
+		feedbackCountMax:         engagementParts.feedbackCountMax,
+		contradictionCountMin:    engagementParts.contradictionCountMin,
+		contradictionCountMax:    engagementParts.contradictionCountMax,
+		contradictionRatioMin:    engagementParts.contradictionRatioMin,
+		contradictionRatioMax:    engagementParts.contradictionRatioMax,
+		freshnessScoreMin:        engagementParts.freshnessScoreMin,
+		freshnessScoreMax:        engagementParts.freshnessScoreMax,
+		usefulFeedbackRatioMin:   engagementParts.usefulFeedbackRatioMin,
+		usefulFeedbackRatioMax:   engagementParts.usefulFeedbackRatioMax,
+		avgRelevanceFeedbackMin:  engagementParts.avgRelevanceFeedbackMin,
+		avgRelevanceFeedbackMax:  engagementParts.avgRelevanceFeedbackMax,
+		sourceSessionQualityMin:  engagementParts.sourceSessionQualityMin,
+		sourceSessionQualityMax:  engagementParts.sourceSessionQualityMax,
+		denseScoreMin:            engagementParts.denseScoreMin,
+		denseScoreMax:            engagementParts.denseScoreMax,
+		lexicalOverlapScoreMin:   engagementParts.lexicalOverlapScoreMin,
+		lexicalOverlapScoreMax:   engagementParts.lexicalOverlapScoreMax,
+		feedbackSignalScoreMin:   engagementParts.feedbackSignalScoreMin,
+		feedbackSignalScoreMax:   engagementParts.feedbackSignalScoreMax,
+		engagementSignalScoreMin: engagementParts.engagementSignalScoreMin,
+		engagementSignalScoreMax: engagementParts.engagementSignalScoreMax,
+		compositeRankScoreMin:    engagementParts.compositeRankScoreMin,
+		compositeRankScoreMax:    engagementParts.compositeRankScoreMax,
+		lastAccessedAfter:        temporalParts.lastAccessedAfter,
+		lastAccessedBefore:       temporalParts.lastAccessedBefore,
+		freshnessComputedAfter:   temporalParts.freshnessComputedAfter,
+		freshnessComputedBefore:  temporalParts.freshnessComputedBefore,
+		relationType:             traceParts.relationType,
+		traceDepth:               traceParts.traceDepth,
 	}, nil
 }
 
@@ -238,32 +242,34 @@ func temporalWindowSpecs(parts engramQueryTemporalParts) []temporalWindowSpec {
 }
 
 type engramQueryEngagementParts struct {
-	usefulCountMin          *int
-	usefulCountMax          *int
-	accessCountMin          *int
-	accessCountMax          *int
-	feedbackCountMin        *int
-	feedbackCountMax        *int
-	contradictionCountMin   *int
-	contradictionCountMax   *int
-	contradictionRatioMin   *float64
-	contradictionRatioMax   *float64
-	freshnessScoreMin       *float64
-	freshnessScoreMax       *float64
-	usefulFeedbackRatioMin  *float64
-	usefulFeedbackRatioMax  *float64
-	avgRelevanceFeedbackMin *float64
-	avgRelevanceFeedbackMax *float64
-	sourceSessionQualityMin *float64
-	sourceSessionQualityMax *float64
-	denseScoreMin           *float64
-	denseScoreMax           *float64
-	lexicalOverlapScoreMin  *float64
-	lexicalOverlapScoreMax  *float64
-	feedbackSignalScoreMin  *float64
-	feedbackSignalScoreMax  *float64
-	compositeRankScoreMin   *float64
-	compositeRankScoreMax   *float64
+	usefulCountMin           *int
+	usefulCountMax           *int
+	accessCountMin           *int
+	accessCountMax           *int
+	feedbackCountMin         *int
+	feedbackCountMax         *int
+	contradictionCountMin    *int
+	contradictionCountMax    *int
+	contradictionRatioMin    *float64
+	contradictionRatioMax    *float64
+	freshnessScoreMin        *float64
+	freshnessScoreMax        *float64
+	usefulFeedbackRatioMin   *float64
+	usefulFeedbackRatioMax   *float64
+	avgRelevanceFeedbackMin  *float64
+	avgRelevanceFeedbackMax  *float64
+	sourceSessionQualityMin  *float64
+	sourceSessionQualityMax  *float64
+	denseScoreMin            *float64
+	denseScoreMax            *float64
+	lexicalOverlapScoreMin   *float64
+	lexicalOverlapScoreMax   *float64
+	feedbackSignalScoreMin   *float64
+	feedbackSignalScoreMax   *float64
+	engagementSignalScoreMin *float64
+	engagementSignalScoreMax *float64
+	compositeRankScoreMin    *float64
+	compositeRankScoreMax    *float64
 }
 
 func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngagementParts, *toolDispatchError) {
@@ -276,32 +282,34 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 		return engramQueryEngagementParts{}, dispatchErr
 	}
 	parts := engramQueryEngagementParts{
-		usefulCountMin:          integerParts.usefulCountMin,
-		usefulCountMax:          integerParts.usefulCountMax,
-		accessCountMin:          integerParts.accessCountMin,
-		accessCountMax:          integerParts.accessCountMax,
-		feedbackCountMin:        integerParts.feedbackCountMin,
-		feedbackCountMax:        integerParts.feedbackCountMax,
-		contradictionCountMin:   integerParts.contradictionCountMin,
-		contradictionCountMax:   integerParts.contradictionCountMax,
-		contradictionRatioMin:   scoreParts.contradictionRatioMin,
-		contradictionRatioMax:   scoreParts.contradictionRatioMax,
-		freshnessScoreMin:       scoreParts.freshnessScoreMin,
-		freshnessScoreMax:       scoreParts.freshnessScoreMax,
-		usefulFeedbackRatioMin:  scoreParts.usefulFeedbackRatioMin,
-		usefulFeedbackRatioMax:  scoreParts.usefulFeedbackRatioMax,
-		avgRelevanceFeedbackMin: scoreParts.avgRelevanceFeedbackMin,
-		avgRelevanceFeedbackMax: scoreParts.avgRelevanceFeedbackMax,
-		sourceSessionQualityMin: scoreParts.sourceSessionQualityMin,
-		sourceSessionQualityMax: scoreParts.sourceSessionQualityMax,
-		denseScoreMin:           scoreParts.denseScoreMin,
-		denseScoreMax:           scoreParts.denseScoreMax,
-		lexicalOverlapScoreMin:  scoreParts.lexicalOverlapScoreMin,
-		lexicalOverlapScoreMax:  scoreParts.lexicalOverlapScoreMax,
-		feedbackSignalScoreMin:  scoreParts.feedbackSignalScoreMin,
-		feedbackSignalScoreMax:  scoreParts.feedbackSignalScoreMax,
-		compositeRankScoreMin:   scoreParts.compositeRankScoreMin,
-		compositeRankScoreMax:   scoreParts.compositeRankScoreMax,
+		usefulCountMin:           integerParts.usefulCountMin,
+		usefulCountMax:           integerParts.usefulCountMax,
+		accessCountMin:           integerParts.accessCountMin,
+		accessCountMax:           integerParts.accessCountMax,
+		feedbackCountMin:         integerParts.feedbackCountMin,
+		feedbackCountMax:         integerParts.feedbackCountMax,
+		contradictionCountMin:    integerParts.contradictionCountMin,
+		contradictionCountMax:    integerParts.contradictionCountMax,
+		contradictionRatioMin:    scoreParts.contradictionRatioMin,
+		contradictionRatioMax:    scoreParts.contradictionRatioMax,
+		freshnessScoreMin:        scoreParts.freshnessScoreMin,
+		freshnessScoreMax:        scoreParts.freshnessScoreMax,
+		usefulFeedbackRatioMin:   scoreParts.usefulFeedbackRatioMin,
+		usefulFeedbackRatioMax:   scoreParts.usefulFeedbackRatioMax,
+		avgRelevanceFeedbackMin:  scoreParts.avgRelevanceFeedbackMin,
+		avgRelevanceFeedbackMax:  scoreParts.avgRelevanceFeedbackMax,
+		sourceSessionQualityMin:  scoreParts.sourceSessionQualityMin,
+		sourceSessionQualityMax:  scoreParts.sourceSessionQualityMax,
+		denseScoreMin:            scoreParts.denseScoreMin,
+		denseScoreMax:            scoreParts.denseScoreMax,
+		lexicalOverlapScoreMin:   scoreParts.lexicalOverlapScoreMin,
+		lexicalOverlapScoreMax:   scoreParts.lexicalOverlapScoreMax,
+		feedbackSignalScoreMin:   scoreParts.feedbackSignalScoreMin,
+		feedbackSignalScoreMax:   scoreParts.feedbackSignalScoreMax,
+		engagementSignalScoreMin: scoreParts.engagementSignalScoreMin,
+		engagementSignalScoreMax: scoreParts.engagementSignalScoreMax,
+		compositeRankScoreMin:    scoreParts.compositeRankScoreMin,
+		compositeRankScoreMax:    scoreParts.compositeRankScoreMax,
 	}
 	if dispatchErr := invalidQueryEngagementWindowError(parts); dispatchErr != nil {
 		return engramQueryEngagementParts{}, dispatchErr
@@ -358,6 +366,9 @@ func invalidQueryEngagementWindowError(
 	}
 	if hasInvalidScoreWindow(parts.feedbackSignalScoreMin, parts.feedbackSignalScoreMax) {
 		return invalidParamError("feedback_signal_score_min")
+	}
+	if hasInvalidScoreWindow(parts.engagementSignalScoreMin, parts.engagementSignalScoreMax) {
+		return invalidParamError("engagement_signal_score_min")
 	}
 	if hasInvalidScoreWindow(parts.compositeRankScoreMin, parts.compositeRankScoreMax) {
 		return invalidParamError("composite_rank_score_min")
@@ -433,24 +444,26 @@ func parseEngramQueryIntegerEngagementParts(
 }
 
 type engramQueryScoreEngagementParts struct {
-	contradictionRatioMin   *float64
-	contradictionRatioMax   *float64
-	freshnessScoreMin       *float64
-	freshnessScoreMax       *float64
-	usefulFeedbackRatioMin  *float64
-	usefulFeedbackRatioMax  *float64
-	avgRelevanceFeedbackMin *float64
-	avgRelevanceFeedbackMax *float64
-	sourceSessionQualityMin *float64
-	sourceSessionQualityMax *float64
-	denseScoreMin           *float64
-	denseScoreMax           *float64
-	lexicalOverlapScoreMin  *float64
-	lexicalOverlapScoreMax  *float64
-	feedbackSignalScoreMin  *float64
-	feedbackSignalScoreMax  *float64
-	compositeRankScoreMin   *float64
-	compositeRankScoreMax   *float64
+	contradictionRatioMin    *float64
+	contradictionRatioMax    *float64
+	freshnessScoreMin        *float64
+	freshnessScoreMax        *float64
+	usefulFeedbackRatioMin   *float64
+	usefulFeedbackRatioMax   *float64
+	avgRelevanceFeedbackMin  *float64
+	avgRelevanceFeedbackMax  *float64
+	sourceSessionQualityMin  *float64
+	sourceSessionQualityMax  *float64
+	denseScoreMin            *float64
+	denseScoreMax            *float64
+	lexicalOverlapScoreMin   *float64
+	lexicalOverlapScoreMax   *float64
+	feedbackSignalScoreMin   *float64
+	feedbackSignalScoreMax   *float64
+	engagementSignalScoreMin *float64
+	engagementSignalScoreMax *float64
+	compositeRankScoreMin    *float64
+	compositeRankScoreMax    *float64
 }
 
 func parseEngramQueryScoreEngagementParts(
@@ -520,6 +533,14 @@ func parseEngramQueryScoreEngagementParts(
 	if dispatchErr != nil {
 		return engramQueryScoreEngagementParts{}, dispatchErr
 	}
+	engagementSignalScoreMin, dispatchErr := parseEngramQueryEngagementSignalScoreMin(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
+	engagementSignalScoreMax, dispatchErr := parseEngramQueryEngagementSignalScoreMax(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
 	compositeRankScoreMin, dispatchErr := parseEngramQueryCompositeRankScoreMin(params)
 	if dispatchErr != nil {
 		return engramQueryScoreEngagementParts{}, dispatchErr
@@ -529,24 +550,26 @@ func parseEngramQueryScoreEngagementParts(
 		return engramQueryScoreEngagementParts{}, dispatchErr
 	}
 	return engramQueryScoreEngagementParts{
-		contradictionRatioMin:   contradictionRatioMin,
-		contradictionRatioMax:   contradictionRatioMax,
-		freshnessScoreMin:       freshnessScoreMin,
-		freshnessScoreMax:       freshnessScoreMax,
-		usefulFeedbackRatioMin:  usefulFeedbackRatioMin,
-		usefulFeedbackRatioMax:  usefulFeedbackRatioMax,
-		avgRelevanceFeedbackMin: avgRelevanceFeedbackMin,
-		avgRelevanceFeedbackMax: avgRelevanceFeedbackMax,
-		sourceSessionQualityMin: sourceSessionQualityMin,
-		sourceSessionQualityMax: sourceSessionQualityMax,
-		denseScoreMin:           denseScoreMin,
-		denseScoreMax:           denseScoreMax,
-		lexicalOverlapScoreMin:  lexicalOverlapScoreMin,
-		lexicalOverlapScoreMax:  lexicalOverlapScoreMax,
-		feedbackSignalScoreMin:  feedbackSignalScoreMin,
-		feedbackSignalScoreMax:  feedbackSignalScoreMax,
-		compositeRankScoreMin:   compositeRankScoreMin,
-		compositeRankScoreMax:   compositeRankScoreMax,
+		contradictionRatioMin:    contradictionRatioMin,
+		contradictionRatioMax:    contradictionRatioMax,
+		freshnessScoreMin:        freshnessScoreMin,
+		freshnessScoreMax:        freshnessScoreMax,
+		usefulFeedbackRatioMin:   usefulFeedbackRatioMin,
+		usefulFeedbackRatioMax:   usefulFeedbackRatioMax,
+		avgRelevanceFeedbackMin:  avgRelevanceFeedbackMin,
+		avgRelevanceFeedbackMax:  avgRelevanceFeedbackMax,
+		sourceSessionQualityMin:  sourceSessionQualityMin,
+		sourceSessionQualityMax:  sourceSessionQualityMax,
+		denseScoreMin:            denseScoreMin,
+		denseScoreMax:            denseScoreMax,
+		lexicalOverlapScoreMin:   lexicalOverlapScoreMin,
+		lexicalOverlapScoreMax:   lexicalOverlapScoreMax,
+		feedbackSignalScoreMin:   feedbackSignalScoreMin,
+		feedbackSignalScoreMax:   feedbackSignalScoreMax,
+		engagementSignalScoreMin: engagementSignalScoreMin,
+		engagementSignalScoreMax: engagementSignalScoreMax,
+		compositeRankScoreMin:    compositeRankScoreMin,
+		compositeRankScoreMax:    compositeRankScoreMax,
 	}, nil
 }
 
@@ -606,47 +629,49 @@ func parseOptionalParam[T any](
 
 func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryRequest {
 	return models.EngramQueryRequest{
-		Query:                   query,
-		TopK:                    parts.topK,
-		ProjectID:               parts.projectID,
-		Tags:                    parts.tags,
-		Keywords:                parts.keywords,
-		CreatedAfter:            parts.createdAfter,
-		CreatedBefore:           parts.createdBefore,
-		DistanceMin:             parts.distanceMin,
-		DistanceMax:             parts.distanceMax,
-		UsefulCountMin:          parts.usefulCountMin,
-		UsefulCountMax:          parts.usefulCountMax,
-		AccessCountMin:          parts.accessCountMin,
-		AccessCountMax:          parts.accessCountMax,
-		FeedbackCountMin:        parts.feedbackCountMin,
-		FeedbackCountMax:        parts.feedbackCountMax,
-		ContradictionCountMin:   parts.contradictionCountMin,
-		ContradictionCountMax:   parts.contradictionCountMax,
-		ContradictionRatioMin:   parts.contradictionRatioMin,
-		ContradictionRatioMax:   parts.contradictionRatioMax,
-		FreshnessScoreMin:       parts.freshnessScoreMin,
-		FreshnessScoreMax:       parts.freshnessScoreMax,
-		UsefulFeedbackRatioMin:  parts.usefulFeedbackRatioMin,
-		UsefulFeedbackRatioMax:  parts.usefulFeedbackRatioMax,
-		AvgRelevanceFeedbackMin: parts.avgRelevanceFeedbackMin,
-		AvgRelevanceFeedbackMax: parts.avgRelevanceFeedbackMax,
-		SourceSessionQualityMin: parts.sourceSessionQualityMin,
-		SourceSessionQualityMax: parts.sourceSessionQualityMax,
-		DenseScoreMin:           parts.denseScoreMin,
-		DenseScoreMax:           parts.denseScoreMax,
-		LexicalOverlapScoreMin:  parts.lexicalOverlapScoreMin,
-		LexicalOverlapScoreMax:  parts.lexicalOverlapScoreMax,
-		FeedbackSignalScoreMin:  parts.feedbackSignalScoreMin,
-		FeedbackSignalScoreMax:  parts.feedbackSignalScoreMax,
-		CompositeRankScoreMin:   parts.compositeRankScoreMin,
-		CompositeRankScoreMax:   parts.compositeRankScoreMax,
-		LastAccessedAfter:       parts.lastAccessedAfter,
-		LastAccessedBefore:      parts.lastAccessedBefore,
-		FreshnessComputedAfter:  parts.freshnessComputedAfter,
-		FreshnessComputedBefore: parts.freshnessComputedBefore,
-		RelationType:            parts.relationType,
-		TraceDepth:              parts.traceDepth,
+		Query:                    query,
+		TopK:                     parts.topK,
+		ProjectID:                parts.projectID,
+		Tags:                     parts.tags,
+		Keywords:                 parts.keywords,
+		CreatedAfter:             parts.createdAfter,
+		CreatedBefore:            parts.createdBefore,
+		DistanceMin:              parts.distanceMin,
+		DistanceMax:              parts.distanceMax,
+		UsefulCountMin:           parts.usefulCountMin,
+		UsefulCountMax:           parts.usefulCountMax,
+		AccessCountMin:           parts.accessCountMin,
+		AccessCountMax:           parts.accessCountMax,
+		FeedbackCountMin:         parts.feedbackCountMin,
+		FeedbackCountMax:         parts.feedbackCountMax,
+		ContradictionCountMin:    parts.contradictionCountMin,
+		ContradictionCountMax:    parts.contradictionCountMax,
+		ContradictionRatioMin:    parts.contradictionRatioMin,
+		ContradictionRatioMax:    parts.contradictionRatioMax,
+		FreshnessScoreMin:        parts.freshnessScoreMin,
+		FreshnessScoreMax:        parts.freshnessScoreMax,
+		UsefulFeedbackRatioMin:   parts.usefulFeedbackRatioMin,
+		UsefulFeedbackRatioMax:   parts.usefulFeedbackRatioMax,
+		AvgRelevanceFeedbackMin:  parts.avgRelevanceFeedbackMin,
+		AvgRelevanceFeedbackMax:  parts.avgRelevanceFeedbackMax,
+		SourceSessionQualityMin:  parts.sourceSessionQualityMin,
+		SourceSessionQualityMax:  parts.sourceSessionQualityMax,
+		DenseScoreMin:            parts.denseScoreMin,
+		DenseScoreMax:            parts.denseScoreMax,
+		LexicalOverlapScoreMin:   parts.lexicalOverlapScoreMin,
+		LexicalOverlapScoreMax:   parts.lexicalOverlapScoreMax,
+		FeedbackSignalScoreMin:   parts.feedbackSignalScoreMin,
+		FeedbackSignalScoreMax:   parts.feedbackSignalScoreMax,
+		EngagementSignalScoreMin: parts.engagementSignalScoreMin,
+		EngagementSignalScoreMax: parts.engagementSignalScoreMax,
+		CompositeRankScoreMin:    parts.compositeRankScoreMin,
+		CompositeRankScoreMax:    parts.compositeRankScoreMax,
+		LastAccessedAfter:        parts.lastAccessedAfter,
+		LastAccessedBefore:       parts.lastAccessedBefore,
+		FreshnessComputedAfter:   parts.freshnessComputedAfter,
+		FreshnessComputedBefore:  parts.freshnessComputedBefore,
+		RelationType:             parts.relationType,
+		TraceDepth:               parts.traceDepth,
 	}
 }
 
@@ -845,6 +870,14 @@ func parseEngramQueryFeedbackSignalScoreMin(params map[string]any) (*float64, *t
 
 func parseEngramQueryFeedbackSignalScoreMax(params map[string]any) (*float64, *toolDispatchError) {
 	return parseEngramQueryBoundedScoreMin(params, "feedback_signal_score_max")
+}
+
+func parseEngramQueryEngagementSignalScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "engagement_signal_score_min")
+}
+
+func parseEngramQueryEngagementSignalScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "engagement_signal_score_max")
 }
 
 func parseEngramQueryCompositeRankScoreMin(params map[string]any) (*float64, *toolDispatchError) {

@@ -2244,6 +2244,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 73 - Engagement-Signal Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `engagement_signal_score_min` and `engagement_signal_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded engagement-signal filters (`0..1`) and rejects inverted engagement-signal windows.
+  - repository query pipeline now supports post-rerank engagement-signal filtering in combination with other score-band filters.
+  - MCP `engram.query` parser/catalog now accept and validate engagement-signal filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain retrieval by normalized engagement strength.
+2. Keep engagement-signal filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit engagement-signal filters.
+
+### Deliverables
+
+1. Contract extension for `engagement_signal_score_min` and `engagement_signal_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank engagement-signal filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply engagement-signal floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted engagement-signal windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for engagement-signal band filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2339,3 +2371,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 71: `lexical_overlap_score_min` + `lexical_overlap_score_max` parity across REST/MCP/repository.
 37. Execute feedback-signal filter increment:
    - [x] Phase 72: `feedback_signal_score_min` + `feedback_signal_score_max` parity across REST/MCP/repository.
+38. Execute engagement-signal filter increment:
+   - [x] Phase 73: `engagement_signal_score_min` + `engagement_signal_score_max` parity across REST/MCP/repository.

@@ -158,6 +158,8 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 		input.Request.LexicalOverlapScoreMax,
 		input.Request.FeedbackSignalScoreMin,
 		input.Request.FeedbackSignalScoreMax,
+		input.Request.EngagementSignalScoreMin,
+		input.Request.EngagementSignalScoreMax,
 		input.Request.CompositeRankScoreMin,
 		input.Request.CompositeRankScoreMax,
 	)
@@ -178,6 +180,8 @@ func filterByRankScoreBands(
 	lexicalOverlapScoreMax *float64,
 	feedbackSignalScoreMin *float64,
 	feedbackSignalScoreMax *float64,
+	engagementSignalScoreMin *float64,
+	engagementSignalScoreMax *float64,
 	minScore *float64,
 	maxScore *float64,
 ) []map[string]any {
@@ -187,6 +191,8 @@ func filterByRankScoreBands(
 		lexicalOverlapScoreMax == nil &&
 		feedbackSignalScoreMin == nil &&
 		feedbackSignalScoreMax == nil &&
+		engagementSignalScoreMin == nil &&
+		engagementSignalScoreMax == nil &&
 		minScore == nil &&
 		maxScore == nil {
 		return rows
@@ -212,6 +218,13 @@ func filterByRankScoreBands(
 			continue
 		}
 		if feedbackSignalScoreMax != nil && feedbackSignal > *feedbackSignalScoreMax {
+			continue
+		}
+		engagementSignal := engagementSignalScoreFromRow(row)
+		if engagementSignalScoreMin != nil && engagementSignal < *engagementSignalScoreMin {
+			continue
+		}
+		if engagementSignalScoreMax != nil && engagementSignal > *engagementSignalScoreMax {
 			continue
 		}
 		score := compositeRankScoreFromRow(row)
