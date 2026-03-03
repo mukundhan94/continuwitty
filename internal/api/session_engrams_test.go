@@ -221,6 +221,14 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid contradiction_count_max",
 		},
 		{
+			name: "invalid contradiction feedback ratio max",
+			body: map[string]any{
+				"query":                            "durable memory",
+				"contradiction_feedback_ratio_max": 1.2,
+			},
+			expectedDetail: "invalid contradiction_feedback_ratio_max",
+		},
+		{
 			name: "invalid feedback count min",
 			body: map[string]any{
 				"query":              "durable memory",
@@ -378,21 +386,22 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 				method: http.MethodPost,
 				path:   "/api/v1/engrams/query",
 				body: map[string]any{
-					"query":                      "durable memory",
-					"top_k":                      5,
-					"useful_count_min":           1,
-					"access_count_min":           2,
-					"feedback_count_min":         4,
-					"contradiction_count_max":    3,
-					"freshness_score_min":        0.4,
-					"useful_feedback_ratio_min":  0.8,
-					"avg_relevance_feedback_min": 0.55,
-					"source_session_quality_min": 0.7,
-					"last_accessed_after":        "2026-02-01T00:00:00Z",
-					"last_accessed_before":       "2026-02-20T00:00:00Z",
-					"freshness_computed_after":   "2026-02-02T00:00:00Z",
-					"freshness_computed_before":  "2026-02-21T00:00:00Z",
-					"relation_type":              "supports",
+					"query":                            "durable memory",
+					"top_k":                            5,
+					"useful_count_min":                 1,
+					"access_count_min":                 2,
+					"feedback_count_min":               4,
+					"contradiction_count_max":          3,
+					"contradiction_feedback_ratio_max": 0.3,
+					"freshness_score_min":              0.4,
+					"useful_feedback_ratio_min":        0.8,
+					"avg_relevance_feedback_min":       0.55,
+					"source_session_quality_min":       0.7,
+					"last_accessed_after":              "2026-02-01T00:00:00Z",
+					"last_accessed_before":             "2026-02-20T00:00:00Z",
+					"freshness_computed_after":         "2026-02-02T00:00:00Z",
+					"freshness_computed_before":        "2026-02-21T00:00:00Z",
+					"relation_type":                    "supports",
 				},
 			},
 		},
@@ -498,6 +507,15 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 		t,
 		3,
 		requireIntPointer(t, request.ContradictionCountMax, "contradiction_count_max"),
+	)
+	requireEqual(
+		t,
+		0.3,
+		requireFloat64Pointer(
+			t,
+			request.ContradictionRatioMax,
+			"contradiction_feedback_ratio_max",
+		),
 	)
 	requireEqual(t, 0.4, requireFloat64Pointer(t, request.FreshnessScoreMin, "freshness_score_min"))
 	requireEqual(

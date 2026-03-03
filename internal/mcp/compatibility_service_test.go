@@ -149,6 +149,9 @@ func TestCompatibilityServiceToolsListIncludesAuthorityFilterForEngramQuery(t *t
 	if _, exists := properties["contradiction_count_max"]; !exists {
 		t.Fatalf("expected contradiction_count_max property in engram_query schema")
 	}
+	if _, exists := properties["contradiction_feedback_ratio_max"]; !exists {
+		t.Fatalf("expected contradiction_feedback_ratio_max property in engram_query schema")
+	}
 	if _, exists := properties["feedback_count_min"]; !exists {
 		t.Fatalf("expected feedback_count_min property in engram_query schema")
 	}

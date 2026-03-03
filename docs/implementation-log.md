@@ -7,6 +7,23 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 53: contradiction-ratio query filter parity)
+
+1. Added contradiction-ratio query contract extension:
+   - new optional filter: `contradiction_feedback_ratio_max` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `contradiction_feedback_ratio_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `contradiction_feedback_ratio_max`.
+3. Added repository ratio predicate support:
+   - query builder now supports contradiction-ratio filtering using `contradiction_count / feedback_count` when feedback exists.
+   - deterministic low-risk fallback `0.0` is applied when feedback_count is zero.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `contradiction_feedback_ratio_max`.
+   - repository where-clause/parameter assertions for contradiction-ratio predicate shape.
+   - MCP parity and validation coverage for contradiction-ratio filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 52: useful diagnostics in query result payloads)
 
 1. Extended engram query result contracts with useful-signal diagnostics:

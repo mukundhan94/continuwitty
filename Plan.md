@@ -1594,6 +1594,40 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 53 - Contradiction-Ratio Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `contradiction_feedback_ratio_max` (`0..1`) to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `contradiction_feedback_ratio_max`.
+  - repository query builder now supports contradiction-ratio predicate:
+    - `contradiction_count / feedback_count` when feedback exists.
+    - deterministic low-risk fallback (`0.0`) when feedback is absent.
+  - MCP `engram.query` parser/catalog now accept and validate `contradiction_feedback_ratio_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Let operators and agents constrain recall by relative contradiction risk, not just raw contradiction counts.
+2. Keep contradiction-ratio filtering deterministic and aligned across REST and MCP surfaces.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `contradiction_feedback_ratio_max`.
+2. REST/MCP validation and metadata parity.
+3. Repository contradiction-ratio predicate support with regression coverage.
+
+### Exit Criteria
+
+1. Query clients can apply maximum contradiction-feedback ratio thresholds in REST and MCP.
+2. Out-of-range values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for contradiction-ratio filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1649,3 +1683,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 51: `useful_feedback_ratio_min` parity across REST/MCP/repository.
 17. Execute useful-diagnostics query result increment:
    - [x] Phase 52: expose `useful_count` + `avg_relevance_feedback` + `useful_feedback_ratio` in query results.
+18. Execute contradiction-ratio query filter increment:
+   - [x] Phase 53: `contradiction_feedback_ratio_max` parity across REST/MCP/repository.

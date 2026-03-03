@@ -392,6 +392,10 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 			detail:  "invalid contradiction_count_max",
 			invalid: invalidContradictionCountMax(payload.ContradictionCountMax),
 		},
+		{
+			detail:  "invalid contradiction_feedback_ratio_max",
+			invalid: invalidContradictionRatioMax(payload.ContradictionRatioMax),
+		},
 		{detail: "invalid freshness_score_min", invalid: invalidFreshnessScoreMin(payload.FreshnessScoreMin)},
 		{
 			detail:  "invalid useful_feedback_ratio_min",
@@ -428,6 +432,10 @@ func invalidFeedbackCountMin(value *int) bool {
 
 func invalidContradictionCountMax(value *int) bool {
 	return value != nil && *value < 0
+}
+
+func invalidContradictionRatioMax(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
 }
 
 func invalidFreshnessScoreMin(value *float64) bool {

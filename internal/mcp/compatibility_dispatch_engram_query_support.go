@@ -56,6 +56,7 @@ type engramQueryPayloadParts struct {
 	accessCountMin          *int
 	feedbackCountMin        *int
 	contradictionCountMax   *int
+	contradictionRatioMax   *float64
 	freshnessScoreMin       *float64
 	usefulFeedbackRatioMin  *float64
 	avgRelevanceFeedbackMin *float64
@@ -112,6 +113,7 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		accessCountMin:          engagementParts.accessCountMin,
 		feedbackCountMin:        engagementParts.feedbackCountMin,
 		contradictionCountMax:   engagementParts.contradictionCountMax,
+		contradictionRatioMax:   engagementParts.contradictionRatioMax,
 		freshnessScoreMin:       engagementParts.freshnessScoreMin,
 		usefulFeedbackRatioMin:  engagementParts.usefulFeedbackRatioMin,
 		avgRelevanceFeedbackMin: engagementParts.avgRelevanceFeedbackMin,
@@ -191,6 +193,7 @@ type engramQueryEngagementParts struct {
 	accessCountMin          *int
 	feedbackCountMin        *int
 	contradictionCountMax   *int
+	contradictionRatioMax   *float64
 	freshnessScoreMin       *float64
 	usefulFeedbackRatioMin  *float64
 	avgRelevanceFeedbackMin *float64
@@ -211,6 +214,7 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 		accessCountMin:          integerParts.accessCountMin,
 		feedbackCountMin:        integerParts.feedbackCountMin,
 		contradictionCountMax:   integerParts.contradictionCountMax,
+		contradictionRatioMax:   scoreParts.contradictionRatioMax,
 		freshnessScoreMin:       scoreParts.freshnessScoreMin,
 		usefulFeedbackRatioMin:  scoreParts.usefulFeedbackRatioMin,
 		avgRelevanceFeedbackMin: scoreParts.avgRelevanceFeedbackMin,
@@ -256,6 +260,7 @@ func parseEngramQueryIntegerEngagementParts(
 }
 
 type engramQueryScoreEngagementParts struct {
+	contradictionRatioMax   *float64
 	freshnessScoreMin       *float64
 	usefulFeedbackRatioMin  *float64
 	avgRelevanceFeedbackMin *float64
@@ -265,6 +270,10 @@ type engramQueryScoreEngagementParts struct {
 func parseEngramQueryScoreEngagementParts(
 	params map[string]any,
 ) (engramQueryScoreEngagementParts, *toolDispatchError) {
+	contradictionRatioMax, dispatchErr := parseEngramQueryContradictionFeedbackRatioMax(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
 	freshnessScoreMin, dispatchErr := parseEngramQueryFreshnessScoreMin(params)
 	if dispatchErr != nil {
 		return engramQueryScoreEngagementParts{}, dispatchErr
@@ -282,6 +291,7 @@ func parseEngramQueryScoreEngagementParts(
 		return engramQueryScoreEngagementParts{}, dispatchErr
 	}
 	return engramQueryScoreEngagementParts{
+		contradictionRatioMax:   contradictionRatioMax,
 		freshnessScoreMin:       freshnessScoreMin,
 		usefulFeedbackRatioMin:  usefulFeedbackRatioMin,
 		avgRelevanceFeedbackMin: avgRelevanceFeedbackMin,
@@ -356,6 +366,7 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		AccessCountMin:          parts.accessCountMin,
 		FeedbackCountMin:        parts.feedbackCountMin,
 		ContradictionCountMax:   parts.contradictionCountMax,
+		ContradictionRatioMax:   parts.contradictionRatioMax,
 		FreshnessScoreMin:       parts.freshnessScoreMin,
 		UsefulFeedbackRatioMin:  parts.usefulFeedbackRatioMin,
 		AvgRelevanceFeedbackMin: parts.avgRelevanceFeedbackMin,
@@ -468,6 +479,12 @@ func parseEngramQueryNonNegativeIntPointer(
 
 func parseEngramQueryFreshnessScoreMin(params map[string]any) (*float64, *toolDispatchError) {
 	return parseEngramQueryBoundedScoreMin(params, "freshness_score_min")
+}
+
+func parseEngramQueryContradictionFeedbackRatioMax(
+	params map[string]any,
+) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "contradiction_feedback_ratio_max")
 }
 
 func parseEngramQueryUsefulFeedbackRatioMin(params map[string]any) (*float64, *toolDispatchError) {
