@@ -24,6 +24,7 @@ func TestCompatibilityServiceEngramCurationRefreshParity(t *testing.T) {
 	}
 	service := &fakeEngramCurationRefreshService{response: &response}
 	params := map[string]any{
+		"project_id":          projectID,
 		"source_engram_id":    sourceEngramID.String(),
 		"include_archived":    true,
 		"limit":               40,
@@ -66,6 +67,7 @@ func TestCompatibilityServiceEngramCurationRefreshParity(t *testing.T) {
 				EngramCurationRefreshRequest{
 					ActorUserID:       actorUserID,
 					ActorRole:         "admin",
+					ProjectID:         &projectID,
 					SourceEngramID:    sourceEngramID,
 					IncludeArchived:   true,
 					Limit:             40,
@@ -133,6 +135,17 @@ func TestCompatibilityServiceEngramCurationRefreshValidationAndErrors(t *testing
 		),
 	)
 	requireErrorCode(t, errorPayloadFromFrame(t, notFoundFrame), -32602)
+
+	scopeMismatchFrame := runCompatibilityRequestWithService(
+		t,
+		newEngramCurationRefreshCompatibilityService(
+			&fakeEngramCurationRefreshService{err: admin.ErrProjectScopeMismatch},
+		),
+		asAdminActor(
+			toolsCallRequest(actorUserID.String(), "engram_curation_refresh_links", validParams),
+		),
+	)
+	requireErrorCode(t, errorPayloadFromFrame(t, scopeMismatchFrame), -32602)
 
 	internalFrame := runCompatibilityRequestWithService(
 		t,

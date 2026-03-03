@@ -188,6 +188,43 @@ func TestRefreshEngramLinkCurationSuggestionsReturnsNotFoundWhenSourceMissing(t 
 	}
 }
 
+func TestRefreshEngramLinkCurationSuggestionsReturnsScopeMismatch(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	sourceEngramID := uuid.MustParse("00000000-0000-0000-0000-00000000d401")
+	service.deps.getAdminEngram = func(
+		context.Context,
+		repository.Queryer,
+		uuid.UUID,
+		bool,
+	) (*models.AdminEngramRecord, error) {
+		return &models.AdminEngramRecord{
+			EngramID:  sourceEngramID,
+			ProjectID: "engram-vault",
+		}, nil
+	}
+	service.deps.recommendLinkHygiene = func(
+		context.Context,
+		repository.Queryer,
+		graph.LinkHygieneInput,
+	) ([]models.EngramLinkHygieneRecommendation, error) {
+		t.Fatalf("did not expect link hygiene recommendation call when project scope mismatches")
+		return nil, nil
+	}
+
+	scopedProjectID := "different-project"
+	_, err := service.RefreshEngramLinkCurationSuggestions(
+		context.Background(),
+		uuid.MustParse("00000000-0000-0000-0000-00000000d402"),
+		EngramLinkCurationSuggestionRefreshRequest{
+			ProjectID:      &scopedProjectID,
+			SourceEngramID: sourceEngramID,
+		},
+	)
+	if !errors.Is(err, ErrProjectScopeMismatch) {
+		t.Fatalf("expected ErrProjectScopeMismatch, got %v", err)
+	}
+}
+
 func derefCurationType(value *models.MemoryCurationSuggestionType) models.MemoryCurationSuggestionType {
 	if value == nil {
 		return ""

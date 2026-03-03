@@ -1157,6 +1157,9 @@ Build a local-first memory system where agents and humans can:
       - `engram.curation_list`
       - `engram.curation_action`
     - compatibility catalog + token project-policy support + route/dispatch regression tests.
+  - scoped refresh hardening for project safety:
+    - optional `project_id` is now accepted on REST + MCP link-curation refresh flows.
+    - refresh rejects mismatched project scope with explicit bad-request semantics.
   - apply-action orchestration for curation suggestions:
     - `status=applied` now executes deterministic downstream actions before persisting curation status.
     - `consolidate` suggestions dispatch `merged` action on referenced consolidation suggestions.

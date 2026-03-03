@@ -23,7 +23,8 @@ func (service *CompatibilityService) dispatchEngramCurationRefreshTool(
 		switch {
 		case err == admin.ErrEngramNotFound:
 			return nil, true, invalidParamsWithStatus(404, err.Error())
-		case err == admin.ErrProjectIDRequired:
+		case err == admin.ErrProjectIDRequired,
+			err == admin.ErrProjectScopeMismatch:
 			return nil, true, invalidParamsWithStatus(400, err.Error())
 		}
 		return nil, true, internalToolDispatchError()

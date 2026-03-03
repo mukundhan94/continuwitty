@@ -11,6 +11,7 @@ func refreshMemoryAdminEngramLinkCurationRoute(
 	requireAdminActor RequireAdminActor,
 ) http.HandlerFunc {
 	type payload struct {
+		ProjectID         *string  `json:"project_id,omitempty"`
 		IncludeArchived   *bool    `json:"include_archived,omitempty"`
 		Limit             *int     `json:"limit,omitempty"`
 		StaleAfterDays    *int     `json:"stale_after_days,omitempty"`
@@ -27,6 +28,9 @@ func refreshMemoryAdminEngramLinkCurationRoute(
 		}
 		refreshRequest := admin.EngramLinkCurationSuggestionRefreshRequest{
 			SourceEngramID: engramID,
+		}
+		if decoded.ProjectID != nil {
+			refreshRequest.ProjectID = optionalTrimmedString(*decoded.ProjectID)
 		}
 		if decoded.IncludeArchived != nil {
 			refreshRequest.IncludeArchived = *decoded.IncludeArchived

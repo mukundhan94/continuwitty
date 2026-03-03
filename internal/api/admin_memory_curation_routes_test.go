@@ -108,15 +108,37 @@ func TestMountMemoryAdminRoutesRefreshMemoryLinkCurationUsesActorAndPayload(t *t
 		router,
 		http.MethodPost,
 		"/api/v1/admin/memory/engrams/"+engramID.String()+"/links/curation/refresh",
-		[]byte(`{"include_archived":true,"limit":40,"stale_after_days":30,"low_value_threshold":0.4}`),
+		[]byte(`{"project_id":"engram-vault","include_archived":true,"limit":40,"stale_after_days":30,"low_value_threshold":0.4}`),
 	)
 	requireEqual(t, http.StatusOK, response.Code)
 	requireEqual(t, actorUserID, capturedActorUserID)
+	requireEqual(t, "engram-vault", derefString(capturedRequest.ProjectID))
 	requireEqual(t, engramID, capturedRequest.SourceEngramID)
 	requireEqual(t, true, capturedRequest.IncludeArchived)
 	requireEqual(t, 40, capturedRequest.Limit)
 	requireEqual(t, 30, capturedRequest.StaleAfterDays)
 	requireEqual(t, 0.4, capturedRequest.LowValueThreshold)
+}
+
+func TestMountMemoryAdminRoutesRefreshMemoryLinkCurationScopeMismatchMapsTo400(t *testing.T) {
+	service := &fakeMemoryAdminService{
+		refreshLinkCurationFn: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ admin.EngramLinkCurationSuggestionRefreshRequest,
+		) (admin.EngramLinkCurationSuggestionRefreshResponse, error) {
+			return admin.EngramLinkCurationSuggestionRefreshResponse{}, admin.ErrProjectScopeMismatch
+		},
+	}
+	router := curationAdminRouter(service, uuid.MustParse("00000000-0000-0000-0000-000000000205"))
+
+	response := executeRequest(
+		router,
+		http.MethodPost,
+		"/api/v1/admin/memory/engrams/00000000-0000-0000-0000-000000000206/links/curation/refresh",
+		[]byte(`{"project_id":"engram-vault"}`),
+	)
+	requireEqual(t, http.StatusBadRequest, response.Code)
 }
 
 func TestMountMemoryAdminRoutesCurationRoutesRejectInvalidValues(t *testing.T) {

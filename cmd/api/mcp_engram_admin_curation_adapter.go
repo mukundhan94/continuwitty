@@ -69,6 +69,7 @@ func (adapter mcpEngramAdminAdapter) RefreshEngramLinkCurationSuggestions(
 		ctx,
 		request.ActorUserID,
 		admin.EngramLinkCurationSuggestionRefreshRequest{
+			ProjectID:         request.ProjectID,
 			SourceEngramID:    request.SourceEngramID,
 			IncludeArchived:   request.IncludeArchived,
 			Limit:             request.Limit,

@@ -7,6 +7,27 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 hardening: scoped project guard for link-curation refresh)
+
+1. Added scoped project enforcement for link-curation refresh in `internal/admin/service_link_curation.go`:
+   - `EngramLinkCurationSuggestionRefreshRequest` now accepts optional `project_id`.
+   - refresh now returns `ErrProjectScopeMismatch` when scoped `project_id` does not match the source engram project.
+2. Extended REST + MCP parity for scoped refresh:
+   - REST route `POST /api/v1/admin/memory/engrams/{engram_id}/links/curation/refresh` now accepts optional `project_id` and forwards it to service.
+   - MCP `engram.curation_refresh_links` now accepts optional `project_id` and forwards scope through compatibility dispatch + runtime adapter.
+3. Extended bad-request error mapping:
+   - REST admin error writer now maps `ErrProjectScopeMismatch` to HTTP `400`.
+   - MCP dispatch now maps `ErrProjectScopeMismatch` to invalid-params response.
+4. Added regression coverage:
+   - admin service mismatch guard test.
+   - REST refresh-route payload forwarding + mismatch-to-400 test.
+   - MCP parity/validation tests for `project_id` forwarding and mismatch error mapping.
+5. Validation:
+   - `go test ./internal/admin ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
 ### 2026-03-03 (Phase 40 continuation: MCP parity for link-curation refresh)
 
 1. Added MCP tool support for on-demand link curation refresh:

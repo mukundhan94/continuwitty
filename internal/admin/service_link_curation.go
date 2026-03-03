@@ -31,6 +31,9 @@ func (s *Service) RefreshEngramLinkCurationSuggestions(
 	if projectID == "" {
 		return EngramLinkCurationSuggestionRefreshResponse{}, ErrProjectIDRequired
 	}
+	if requestProjectID, ok := scopedProjectID(request.ProjectID); ok && requestProjectID != projectID {
+		return EngramLinkCurationSuggestionRefreshResponse{}, ErrProjectScopeMismatch
+	}
 	recommendations, err := s.deps.recommendLinkHygiene(
 		ctx,
 		s.db,
@@ -217,6 +220,17 @@ func payloadStringValue(payload map[string]any, key string) (string, bool) {
 		return "", false
 	}
 	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", false
+	}
+	return trimmed, true
+}
+
+func scopedProjectID(projectID *string) (string, bool) {
+	if projectID == nil {
+		return "", false
+	}
+	trimmed := strings.TrimSpace(*projectID)
 	if trimmed == "" {
 		return "", false
 	}

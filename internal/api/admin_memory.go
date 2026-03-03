@@ -384,7 +384,8 @@ func writeServiceError(writer http.ResponseWriter, err error) {
 		errors.Is(err, admin.ErrMemoryCurationSuggestionNotFound):
 		statusCode = http.StatusNotFound
 		detail = err.Error()
-	case errors.Is(err, admin.ErrProjectIDRequired):
+	case errors.Is(err, admin.ErrProjectIDRequired),
+		errors.Is(err, admin.ErrProjectScopeMismatch):
 		statusCode = http.StatusBadRequest
 		detail = err.Error()
 	case errors.Is(err, admin.ErrConsolidationMinGroupSizeInvalid):

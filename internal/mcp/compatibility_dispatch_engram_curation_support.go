@@ -123,6 +123,7 @@ func parseEngramCurationRefreshRequest(
 	return EngramCurationRefreshRequest{
 		ActorUserID:       actor.UserID,
 		ActorRole:         actorRole,
+		ProjectID:         optionalProjectIDParam(params, "project_id"),
 		SourceEngramID:    sourceEngramID,
 		IncludeArchived:   includeArchived,
 		Limit:             limit,

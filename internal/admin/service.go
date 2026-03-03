@@ -28,6 +28,8 @@ var (
 	ErrProjectResolverNotConfigured = errors.New("project resolver is not configured")
 	// ErrProjectIDRequired indicates that a write operation is missing project context.
 	ErrProjectIDRequired = errors.New("project_id is required")
+	// ErrProjectScopeMismatch indicates a scoped project_id does not match the target resource project.
+	ErrProjectScopeMismatch = errors.New("project_id does not match target engram project")
 	// ErrConsolidationMinGroupSizeInvalid indicates invalid consolidation minimum group-size input.
 	ErrConsolidationMinGroupSizeInvalid = errors.New("min_group_size must be at least 2")
 	// ErrConsolidationSuggestionNotFound indicates a requested consolidation suggestion does not exist.
@@ -175,6 +177,7 @@ type EngramContradictionAlertRefreshResponse struct {
 
 // EngramLinkCurationSuggestionRefreshRequest captures refresh options for link curation suggestions.
 type EngramLinkCurationSuggestionRefreshRequest struct {
+	ProjectID         *string   `json:"project_id,omitempty"`
 	SourceEngramID    uuid.UUID `json:"source_engram_id"`
 	IncludeArchived   bool      `json:"include_archived,omitempty"`
 	Limit             int       `json:"limit,omitempty"`

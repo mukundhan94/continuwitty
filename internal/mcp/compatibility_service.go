@@ -960,6 +960,7 @@ type EngramCurationListRequest struct {
 type EngramCurationRefreshRequest struct {
 	ActorUserID       uuid.UUID
 	ActorRole         models.UserRole
+	ProjectID         *string
 	SourceEngramID    uuid.UUID
 	IncludeArchived   bool
 	Limit             int
