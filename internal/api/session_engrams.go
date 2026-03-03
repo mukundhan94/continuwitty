@@ -410,6 +410,10 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 			invalid: invalidAvgRelevanceFeedbackMin(payload.AvgRelevanceFeedbackMin),
 		},
 		{
+			detail:  "invalid avg_relevance_feedback_max",
+			invalid: invalidAvgRelevanceFeedbackMax(payload.AvgRelevanceFeedbackMax),
+		},
+		{
 			detail:  "invalid source_session_quality_min",
 			invalid: invalidSourceSessionQualityMin(payload.SourceSessionQualityMin),
 		},
@@ -471,6 +475,10 @@ func invalidUsefulFeedbackRatioMin(value *float64) bool {
 }
 
 func invalidAvgRelevanceFeedbackMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidAvgRelevanceFeedbackMax(value *float64) bool {
 	return invalidBoundedUnitInterval(value)
 }
 

@@ -285,6 +285,14 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid source_session_quality_max",
 		},
 		{
+			name: "invalid avg relevance feedback max",
+			body: map[string]any{
+				"query":                      "durable memory",
+				"avg_relevance_feedback_max": 1.2,
+			},
+			expectedDetail: "invalid avg_relevance_feedback_max",
+		},
+		{
 			name: "invalid useful feedback ratio min",
 			body: map[string]any{
 				"query":                     "durable memory",
@@ -442,6 +450,7 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"freshness_score_max":              0.9,
 					"useful_feedback_ratio_min":        0.8,
 					"avg_relevance_feedback_min":       0.55,
+					"avg_relevance_feedback_max":       0.9,
 					"source_session_quality_min":       0.7,
 					"source_session_quality_max":       0.9,
 					"last_accessed_after":              "2026-02-01T00:00:00Z",
@@ -578,6 +587,11 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 		t,
 		0.55,
 		requireFloat64Pointer(t, request.AvgRelevanceFeedbackMin, "avg_relevance_feedback_min"),
+	)
+	requireEqual(
+		t,
+		0.9,
+		requireFloat64Pointer(t, request.AvgRelevanceFeedbackMax, "avg_relevance_feedback_max"),
 	)
 	requireEqual(
 		t,

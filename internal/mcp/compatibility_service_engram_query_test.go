@@ -111,6 +111,7 @@ func buildEngramQueryParityExpectations(
 	freshnessScoreMax := 0.91
 	usefulFeedbackRatioMin := 0.8
 	avgRelevanceFeedbackMin := 0.58
+	avgRelevanceFeedbackMax := 0.92
 	sourceSessionQualityMin := 0.73
 	sourceSessionQualityMax := 0.95
 	relationType := models.EngramLinkRelationSupports
@@ -135,6 +136,7 @@ func buildEngramQueryParityExpectations(
 		"freshness_score_max":              freshnessScoreMax,
 		"useful_feedback_ratio_min":        usefulFeedbackRatioMin,
 		"avg_relevance_feedback_min":       avgRelevanceFeedbackMin,
+		"avg_relevance_feedback_max":       avgRelevanceFeedbackMax,
 		"source_session_quality_min":       sourceSessionQualityMin,
 		"source_session_quality_max":       sourceSessionQualityMax,
 		"last_accessed_after":              lastAccessedAfter.Format(time.RFC3339),
@@ -166,6 +168,7 @@ func buildEngramQueryParityExpectations(
 			FreshnessScoreMax:       &freshnessScoreMax,
 			UsefulFeedbackRatioMin:  &usefulFeedbackRatioMin,
 			AvgRelevanceFeedbackMin: &avgRelevanceFeedbackMin,
+			AvgRelevanceFeedbackMax: &avgRelevanceFeedbackMax,
 			SourceSessionQualityMin: &sourceSessionQualityMin,
 			SourceSessionQualityMax: &sourceSessionQualityMax,
 			LastAccessedAfter:       &lastAccessedAfter,
@@ -293,6 +296,9 @@ func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
 		{name: "invalid avg_relevance_feedback_min type", params: map[string]any{"query": "x", "avg_relevance_feedback_min": "bad"}},
 		{name: "invalid avg_relevance_feedback_min low", params: map[string]any{"query": "x", "avg_relevance_feedback_min": -0.1}},
 		{name: "invalid avg_relevance_feedback_min high", params: map[string]any{"query": "x", "avg_relevance_feedback_min": 1.1}},
+		{name: "invalid avg_relevance_feedback_max type", params: map[string]any{"query": "x", "avg_relevance_feedback_max": "bad"}},
+		{name: "invalid avg_relevance_feedback_max low", params: map[string]any{"query": "x", "avg_relevance_feedback_max": -0.1}},
+		{name: "invalid avg_relevance_feedback_max high", params: map[string]any{"query": "x", "avg_relevance_feedback_max": 1.1}},
 		{name: "invalid source_session_quality_min type", params: map[string]any{"query": "x", "source_session_quality_min": "bad"}},
 		{name: "invalid source_session_quality_min low", params: map[string]any{"query": "x", "source_session_quality_min": -0.1}},
 		{name: "invalid source_session_quality_min high", params: map[string]any{"query": "x", "source_session_quality_min": 1.1}},

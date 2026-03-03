@@ -1821,6 +1821,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 60 - Relevance-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `avg_relevance_feedback_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `avg_relevance_feedback_max` (`0..1`).
+  - repository query builder now supports `COALESCE(avg_relevance_feedback, 0.5) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `avg_relevance_feedback_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to target lower-confidence memories by capping average relevance feedback.
+2. Keep relevance-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `avg_relevance_feedback_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum average relevance-feedback thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for relevance-ceiling filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1890,3 +1922,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 58: `freshness_score_max` parity across REST/MCP/repository.
 24. Execute authority-ceiling query filter increment:
    - [x] Phase 59: `source_session_quality_max` parity across REST/MCP/repository.
+25. Execute relevance-ceiling query filter increment:
+   - [x] Phase 60: `avg_relevance_feedback_max` parity across REST/MCP/repository.
