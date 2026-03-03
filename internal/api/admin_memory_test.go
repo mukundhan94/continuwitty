@@ -27,6 +27,7 @@ type fakeMemoryAdminService struct {
 	moveEngramFn           func(ctx context.Context, engramID uuid.UUID, actor admin.WriteActor, payload admin.EngramMoveRequest) (*models.AdminEngramRecord, error)
 	deleteEngramFn         func(ctx context.Context, engramID, actorUserID uuid.UUID, payload admin.EngramDeleteRequest) (admin.EngramDeleteResponse, error)
 	restoreEngramFn        func(ctx context.Context, engramID uuid.UUID) (admin.EngramRestoreResponse, error)
+	refreshEngramFreshness func(ctx context.Context, request admin.EngramFreshnessRefreshRequest) (admin.EngramFreshnessRefreshResponse, error)
 	listCollectionsFn      func(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error)
 	createCollectionFn     func(ctx context.Context, actorUserID uuid.UUID, actorRole string, payload admin.CollectionCreateRequest) (*models.EngramCollectionRecord, error)
 	updateCollectionFn     func(ctx context.Context, collectionID uuid.UUID, payload admin.CollectionUpdateRequest) (*models.EngramCollectionRecord, error)
@@ -101,6 +102,16 @@ func (f *fakeMemoryAdminService) RestoreEngram(ctx context.Context, engramID uui
 		panic("unexpected RestoreEngram call")
 	}
 	return f.restoreEngramFn(ctx, engramID)
+}
+
+func (f *fakeMemoryAdminService) RefreshEngramFreshness(
+	ctx context.Context,
+	request admin.EngramFreshnessRefreshRequest,
+) (admin.EngramFreshnessRefreshResponse, error) {
+	if f.refreshEngramFreshness == nil {
+		panic("unexpected RefreshEngramFreshness call")
+	}
+	return f.refreshEngramFreshness(ctx, request)
 }
 
 func (f *fakeMemoryAdminService) ListCollections(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error) {
@@ -280,6 +291,42 @@ func TestMountMemoryAdminRoutesListEngramsIncludesDeletedAtNullForActiveRecords(
 	if deletedAt != nil {
 		t.Fatalf("expected deleted_at to be null, got %#v", deletedAt)
 	}
+}
+
+func TestMountMemoryAdminRoutesRefreshEngramFreshnessUsesPayload(t *testing.T) {
+	captured := admin.EngramFreshnessRefreshRequest{}
+	referenceTime := time.Date(2026, 3, 3, 12, 0, 0, 0, time.UTC)
+	service := &fakeMemoryAdminService{
+		refreshEngramFreshness: func(
+			_ context.Context,
+			request admin.EngramFreshnessRefreshRequest,
+		) (admin.EngramFreshnessRefreshResponse, error) {
+			captured = request
+			return admin.EngramFreshnessRefreshResponse{
+				ProjectID:     request.ProjectID,
+				HalfLifeDays:  40,
+				ReferenceTime: referenceTime,
+				UpdatedCount:  12,
+			}, nil
+		},
+	}
+	router := chi.NewRouter()
+	MountMemoryAdminRoutes(router, service, func(_ *http.Request) (AdminActor, error) {
+		return AdminActor{UserID: uuid.MustParse("00000000-0000-0000-0000-000000000139"), Role: "admin"}, nil
+	})
+
+	response := executeRequest(
+		router,
+		http.MethodPost,
+		"/api/v1/admin/memory/engrams/freshness/refresh",
+		[]byte(`{"project_id":"engram-vault","half_life_days":40}`),
+	)
+	requireEqual(t, http.StatusOK, response.Code)
+	requireEqual(t, "engram-vault", derefString(captured.ProjectID))
+	if captured.HalfLifeDays == nil {
+		t.Fatalf("expected half_life_days to be forwarded")
+	}
+	requireEqual(t, 40.0, *captured.HalfLifeDays)
 }
 
 func TestMountMemoryAdminRoutesUpdateEngramMapsStaleTo409(t *testing.T) {

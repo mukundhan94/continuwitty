@@ -4,17 +4,44 @@ import (
 	"context"
 	"net/http"
 
+	"engram/internal/admin"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 func mountMemoryAdminEngramRoutes(memory chi.Router, service MemoryAdminService, requireAdminActor RequireAdminActor) {
+	memory.Post("/engrams/freshness/refresh", refreshMemoryAdminEngramFreshnessRoute(service, requireAdminActor))
 	memory.Get("/engrams", listMemoryAdminEngramsRoute(service, requireAdminActor))
 	memory.Get("/engrams/{engram_id}", getMemoryAdminEngramRoute(service, requireAdminActor))
 	memory.Patch("/engrams/{engram_id}", updateMemoryAdminEngramRoute(service, requireAdminActor))
 	memory.Post("/engrams/{engram_id}/move", moveMemoryAdminEngramRoute(service, requireAdminActor))
 	memory.Delete("/engrams/{engram_id}", deleteMemoryAdminEngramRoute(service, requireAdminActor))
 	memory.Post("/engrams/{engram_id}/restore", restoreMemoryAdminEngramRoute(service, requireAdminActor))
+}
+
+func refreshMemoryAdminEngramFreshnessRoute(service MemoryAdminService, requireAdminActor RequireAdminActor) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		if _, ok := requireActor(writer, request, requireAdminActor); !ok {
+			return
+		}
+		payload := struct {
+			ProjectID    *string  `json:"project_id,omitempty"`
+			HalfLifeDays *float64 `json:"half_life_days,omitempty"`
+		}{}
+		if !decodeJSONAllowEmpty(writer, request, &payload) {
+			return
+		}
+		writeServiceCall(writer, http.StatusOK, func() (any, error) {
+			return service.RefreshEngramFreshness(
+				request.Context(),
+				admin.EngramFreshnessRefreshRequest{
+					ProjectID:    payload.ProjectID,
+					HalfLifeDays: payload.HalfLifeDays,
+				},
+			)
+		})
+	}
 }
 
 func listMemoryAdminEngramsRoute(service MemoryAdminService, requireAdminActor RequireAdminActor) http.HandlerFunc {

@@ -24,6 +24,8 @@ ALTER TABLE engrams
   ADD COLUMN IF NOT EXISTS source_session_id UUID,
   ADD COLUMN IF NOT EXISTS access_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS freshness_score DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+  ADD COLUMN IF NOT EXISTS freshness_last_computed_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS useful_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS contradiction_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ,
@@ -70,6 +72,9 @@ CREATE INDEX IF NOT EXISTS engrams_deleted_at_idx
 
 CREATE INDEX IF NOT EXISTS engrams_access_last_accessed_idx
   ON engrams (access_count DESC, last_accessed_at DESC);
+
+CREATE INDEX IF NOT EXISTS engrams_freshness_idx
+  ON engrams (freshness_score DESC, freshness_last_computed_at DESC);
 
 CREATE INDEX IF NOT EXISTS engrams_embed_hnsw_idx
   ON engrams USING hnsw (embed vector_cosine_ops);

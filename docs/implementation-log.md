@@ -7,6 +7,30 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 37 kickoff slice: freshness maintenance baseline)
+
+1. Added freshness schema baseline in `db/init/001_schema.sql`:
+   - `engrams.freshness_score` (`DOUBLE PRECISION`, default `1.0`).
+   - `engrams.freshness_last_computed_at` (`TIMESTAMPTZ`).
+   - `engrams_freshness_idx` for freshness/recency maintenance queries.
+2. Added repository maintenance routine in `internal/repository/engram_freshness.go`:
+   - `RefreshEngramFreshnessScores` recomputes freshness using exponential half-life decay (`exp(-ln(2) * age_days / half_life_days)`).
+   - supports optional project scoping and deterministic defaults (`half_life_days=70`, `reference_time=utc now`).
+3. Added admin service and API wiring for explicit maintenance execution:
+   - `internal/admin/service.go`: `RefreshEngramFreshness`.
+   - `internal/api/admin_memory_engrams.go`: `POST /api/v1/admin/memory/engrams/freshness/refresh`.
+4. Added/updated tests:
+   - `internal/repository/engram_freshness_test.go`.
+   - `internal/admin/service_test.go`.
+   - `internal/api/admin_memory_test.go`.
+5. Documentation/state alignment:
+   - `plan.md`: Phase 35 marked completed; Phase 36/37 set to in-progress with delivered/remaining details.
+   - `migration/checkpoints/checkpoint.md`: added Phase 36 and Phase 37 progress trackers.
+6. Validation:
+   - `go test ./internal/repository ./internal/admin ./internal/api -count=1`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
 ### 2026-03-01 (Security follow-up closeout: OIDC rollout validation + centralized audit sink regression)
 
 1. Added explicit OIDC-to-sink integration coverage in `internal/api/session_ui_oidc_test.go`:

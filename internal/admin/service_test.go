@@ -283,6 +283,42 @@ func TestUpdateEngramUsesRepositoryRequestObject(t *testing.T) {
 	requireEqual(t, 256, captured.EmbeddingDim)
 }
 
+func TestRefreshEngramFreshnessUsesRepositoryRequestObject(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	projectID := "engram-vault"
+	captured := repository.EngramFreshnessRefreshInput{}
+	referenceTime := time.Date(2026, 3, 3, 12, 30, 0, 0, time.UTC)
+	service.deps.refreshEngramFreshness = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.EngramFreshnessRefreshInput,
+	) (repository.EngramFreshnessRefreshInput, error) {
+		captured = input
+		return repository.EngramFreshnessRefreshInput{
+			ProjectID:     input.ProjectID,
+			HalfLifeDays:  45,
+			ReferenceTime: referenceTime,
+			UpdatedCount:  9,
+		}, nil
+	}
+	halfLifeDays := 45.0
+
+	response, err := service.RefreshEngramFreshness(
+		context.Background(),
+		EngramFreshnessRefreshRequest{
+			ProjectID:    &projectID,
+			HalfLifeDays: &halfLifeDays,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, "engram-vault", derefString(captured.ProjectID))
+	requireEqual(t, 45.0, captured.HalfLifeDays)
+	requireEqual(t, "engram-vault", derefString(response.ProjectID))
+	requireEqual(t, 45.0, response.HalfLifeDays)
+	requireEqual(t, referenceTime, response.ReferenceTime)
+	requireEqual(t, 9, response.UpdatedCount)
+}
+
 func derefString(value *string) string {
 	if value == nil {
 		return ""

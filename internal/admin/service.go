@@ -100,6 +100,20 @@ type EngramRestoreResponse struct {
 	Restored bool      `json:"restored"`
 }
 
+// EngramFreshnessRefreshRequest captures freshness maintenance refresh options.
+type EngramFreshnessRefreshRequest struct {
+	ProjectID    *string  `json:"project_id,omitempty"`
+	HalfLifeDays *float64 `json:"half_life_days,omitempty"`
+}
+
+// EngramFreshnessRefreshResponse captures freshness maintenance refresh results.
+type EngramFreshnessRefreshResponse struct {
+	ProjectID     *string   `json:"project_id,omitempty"`
+	HalfLifeDays  float64   `json:"half_life_days"`
+	ReferenceTime time.Time `json:"reference_time"`
+	UpdatedCount  int       `json:"updated_count"`
+}
+
 // CollectionCreateRequest captures collection create payload values.
 type CollectionCreateRequest struct {
 	ProjectID   string `json:"project_id"`
@@ -176,6 +190,11 @@ type serviceDeps struct {
 	moveAdminEngramProject func(ctx context.Context, db repository.Queryer, input repository.AdminEngramMoveProjectInput) (*models.AdminEngramRecord, error)
 	softDeleteEngram       func(ctx context.Context, db repository.Queryer, input repository.AdminEngramSoftDeleteInput) (bool, error)
 	restoreEngram          func(ctx context.Context, db repository.Queryer, engramID uuid.UUID) (bool, error)
+	refreshEngramFreshness func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.EngramFreshnessRefreshInput,
+	) (repository.EngramFreshnessRefreshInput, error)
 
 	listCollections      func(ctx context.Context, db repository.Queryer, input repository.CollectionListInput) ([]models.EngramCollectionRecord, error)
 	getCollection        func(ctx context.Context, db repository.Queryer, collectionID uuid.UUID, includeDeleted bool) (*models.EngramCollectionRecord, error)
@@ -200,6 +219,7 @@ func defaultServiceDeps() serviceDeps {
 		moveAdminEngramProject: repository.MoveAdminEngramProject,
 		softDeleteEngram:       repository.SoftDeleteEngram,
 		restoreEngram:          repository.RestoreEngram,
+		refreshEngramFreshness: repository.RefreshEngramFreshnessScores,
 
 		listCollections:      repository.ListCollections,
 		getCollection:        repository.GetCollection,
@@ -419,6 +439,29 @@ func (s *Service) RestoreEngram(ctx context.Context, engramID uuid.UUID) (Engram
 		return EngramRestoreResponse{}, err
 	}
 	return EngramRestoreResponse{EngramID: engramID, Restored: true}, nil
+}
+
+// RefreshEngramFreshness recomputes freshness scores for active engrams.
+func (s *Service) RefreshEngramFreshness(
+	ctx context.Context,
+	request EngramFreshnessRefreshRequest,
+) (EngramFreshnessRefreshResponse, error) {
+	refreshInput := repository.EngramFreshnessRefreshInput{
+		ProjectID: request.ProjectID,
+	}
+	if request.HalfLifeDays != nil {
+		refreshInput.HalfLifeDays = *request.HalfLifeDays
+	}
+	refreshed, err := s.deps.refreshEngramFreshness(ctx, s.db, refreshInput)
+	if err != nil {
+		return EngramFreshnessRefreshResponse{}, err
+	}
+	return EngramFreshnessRefreshResponse{
+		ProjectID:     refreshed.ProjectID,
+		HalfLifeDays:  refreshed.HalfLifeDays,
+		ReferenceTime: refreshed.ReferenceTime,
+		UpdatedCount:  refreshed.UpdatedCount,
+	}, nil
 }
 
 // ListCollections returns collections filtered by request fields.
