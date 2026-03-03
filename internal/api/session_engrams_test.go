@@ -270,6 +270,9 @@ func TestMountSessionAuthRoutesQueryEngramsReturnsAuthorityScore(t *testing.T) {
 						AccessCount:               8,
 						FreshnessScore:            0.74,
 						FeedbackCount:             6,
+						UsefulCount:               5,
+						AvgRelevanceFeedback:      0.77,
+						UsefulFeedbackRatio:       0.83,
 						ContradictionCount:        2,
 						SourceSessionQualityScore: 0.81,
 						Distance:                  0.12,
@@ -308,6 +311,9 @@ func TestMountSessionAuthRoutesQueryEngramsReturnsAuthorityScore(t *testing.T) {
 	requireEqual(t, float64(8), payload[0]["access_count"].(float64))
 	requireEqual(t, 0.74, payload[0]["freshness_score"].(float64))
 	requireEqual(t, float64(6), payload[0]["feedback_count"].(float64))
+	requireEqual(t, float64(5), payload[0]["useful_count"].(float64))
+	requireEqual(t, 0.77, payload[0]["avg_relevance_feedback"].(float64))
+	requireEqual(t, 0.83, payload[0]["useful_feedback_ratio"].(float64))
 	requireEqual(t, float64(2), payload[0]["contradiction_count"].(float64))
 	requireEqual(t, 0.81, payload[0]["source_session_quality_score"].(float64))
 }

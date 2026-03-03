@@ -115,6 +115,9 @@ type EngramQueryResult struct {
 	AccessCount               int        `json:"access_count"`
 	FreshnessScore            float64    `json:"freshness_score"`
 	FeedbackCount             int        `json:"feedback_count"`
+	UsefulCount               int        `json:"useful_count"`
+	AvgRelevanceFeedback      float64    `json:"avg_relevance_feedback"`
+	UsefulFeedbackRatio       float64    `json:"useful_feedback_ratio"`
 	ContradictionCount        int        `json:"contradiction_count"`
 	SourceSessionQualityScore float64    `json:"source_session_quality_score"`
 	Distance                  float64    `json:"distance"`

@@ -7,6 +7,25 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 52: useful diagnostics in query result payloads)
+
+1. Extended engram query result contracts with useful-signal diagnostics:
+   - added `useful_count` to `EngramQueryResult`.
+   - added `avg_relevance_feedback` to `EngramQueryResult`.
+   - added `useful_feedback_ratio` to `EngramQueryResult`.
+2. Updated repository query projection/mapping:
+   - query SQL now projects `COALESCE(avg_relevance_feedback, 0.5)`.
+   - result mapping now forwards `useful_count` + `avg_relevance_feedback`.
+   - added deterministic ratio helper (`useful_count / feedback_count`, neutral fallback `0.5` when feedback is absent).
+3. Added parity/regression coverage:
+   - repository query/runtime assertions now verify useful diagnostics projection and payload mapping.
+   - REST query-route response test now asserts serialized `useful_count`, `avg_relevance_feedback`, and `useful_feedback_ratio`.
+   - MCP compatibility parity fixture now includes useful diagnostics fields.
+4. Documentation alignment:
+   - API and MCP query docs now describe returned useful diagnostics.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 51: useful-ratio query filter parity)
 
 1. Added useful-ratio query contract extension:

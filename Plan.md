@@ -1562,6 +1562,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 52 - Useful Diagnostics in Query Results
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - `models.EngramQueryResult` now includes `useful_count`, `avg_relevance_feedback`, and `useful_feedback_ratio`.
+  - repository candidate projection now forwards `avg_relevance_feedback` with deterministic fallback (`0.5`).
+  - repository result mapping now computes and returns `useful_feedback_ratio` with neutral fallback (`0.5`) when `feedback_count` is zero.
+  - REST and MCP query flows now return useful-signal diagnostics alongside existing quality/engagement/authority signals.
+  - regression coverage expanded for repository mapping/runtime query SQL and REST/MCP payload parity.
+
+### Goals
+
+1. Expose useful-signal diagnostics so query filters and ranking behavior are transparent to clients.
+2. Keep feedback-quality diagnostics deterministic across REST and MCP query result payloads.
+3. Preserve backward compatibility while extending query observability.
+
+### Deliverables
+
+1. Query-result contract extension for useful diagnostics.
+2. Repository projection/mapping updates with deterministic ratio fallback behavior.
+3. REST/MCP parity tests and docs synchronization.
+
+### Exit Criteria
+
+1. Query responses include `useful_count`, `avg_relevance_feedback`, and `useful_feedback_ratio` in REST and MCP.
+2. Zero-feedback rows return deterministic neutral ratio fallback (`0.5`) and are regression-tested.
+3. API/MCP docs and tests remain synchronized with repository output behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1615,3 +1647,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 50: `useful_count_min` parity across REST/MCP/repository.
 16. Execute useful-ratio query filter increment:
    - [x] Phase 51: `useful_feedback_ratio_min` parity across REST/MCP/repository.
+17. Execute useful-diagnostics query result increment:
+   - [x] Phase 52: expose `useful_count` + `avg_relevance_feedback` + `useful_feedback_ratio` in query results.

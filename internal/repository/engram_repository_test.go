@@ -152,6 +152,9 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	requireEqual(t, 7, results[0].AccessCount)
 	requireEqual(t, 0.88, results[0].FreshnessScore)
 	requireEqual(t, 1, results[0].FeedbackCount)
+	requireEqual(t, 0, results[0].UsefulCount)
+	requireEqual(t, 0.82, results[0].AvgRelevanceFeedback)
+	requireEqual(t, 0.0, results[0].UsefulFeedbackRatio)
 	requireEqual(t, 0, results[0].ContradictionCount)
 	requireEqual(t, 0.5, results[0].SourceSessionQualityScore)
 	assertQueryEngramsRuntimeQuery(
@@ -184,6 +187,7 @@ func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 					"unrelated text",
 					0,
 					2,
+					0.55,
 					0,
 					1,
 					0.4,
@@ -203,6 +207,7 @@ func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 					"durable checkpoint lifecycle",
 					0,
 					1,
+					0.82,
 					0,
 					7,
 					0.88,
@@ -256,6 +261,9 @@ func assertQueryHasRerankSignalClauses(t *testing.T, query string) {
 	}
 	if !strings.Contains(query, "COALESCE(freshness_score, 1.0) AS freshness_score") {
 		t.Fatalf("expected freshness_score clause in query, got %q", query)
+	}
+	if !strings.Contains(query, "COALESCE(avg_relevance_feedback, 0.5) AS avg_relevance_feedback") {
+		t.Fatalf("expected avg_relevance_feedback clause in query, got %q", query)
 	}
 	if !strings.Contains(query, "COALESCE(source_session_quality_score, 0.5) AS source_session_quality_score") {
 		t.Fatalf("expected source_session_quality_score clause in query, got %q", query)

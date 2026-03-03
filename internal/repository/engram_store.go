@@ -109,6 +109,7 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 			retrieval_text,
 			COALESCE(useful_count, 0) AS useful_count,
 			COALESCE(feedback_count, 0) AS feedback_count,
+			COALESCE(avg_relevance_feedback, 0.5) AS avg_relevance_feedback,
 			COALESCE(contradiction_count, 0) AS contradiction_count,
 			COALESCE(access_count, 0) AS access_count,
 			COALESCE(freshness_score, 1.0) AS freshness_score,
@@ -208,6 +209,7 @@ func scanEngramCandidateRow(row interface {
 		retrievalText             string
 		usefulCount               int
 		feedbackCount             int
+		avgRelevanceFeedback      float64
 		contradiction             int
 		accessCount               int
 		freshnessScore            float64
@@ -228,6 +230,7 @@ func scanEngramCandidateRow(row interface {
 		&retrievalText,
 		&usefulCount,
 		&feedbackCount,
+		&avgRelevanceFeedback,
 		&contradiction,
 		&accessCount,
 		&freshnessScore,
@@ -256,6 +259,7 @@ func scanEngramCandidateRow(row interface {
 		"retrieval_text":               retrievalText,
 		"useful_count":                 usefulCount,
 		"feedback_count":               feedbackCount,
+		"avg_relevance_feedback":       avgRelevanceFeedback,
 		"contradiction_count":          contradiction,
 		"access_count":                 accessCount,
 		"freshness_score":              freshnessScore,
@@ -277,6 +281,9 @@ func mapEngramQueryResult(row map[string]any) models.EngramQueryResult {
 		AccessCount:               intFromAny(row["access_count"]),
 		FreshnessScore:            float64FromAny(row["freshness_score"]),
 		FeedbackCount:             intFromAny(row["feedback_count"]),
+		UsefulCount:               intFromAny(row["useful_count"]),
+		AvgRelevanceFeedback:      float64FromAny(row["avg_relevance_feedback"]),
+		UsefulFeedbackRatio:       usefulFeedbackRatioFromRow(row),
 		ContradictionCount:        intFromAny(row["contradiction_count"]),
 		SourceSessionQualityScore: float64FromAny(row["source_session_quality_score"]),
 		Distance:                  float64FromAny(row["distance"]),
@@ -299,6 +306,15 @@ func visibilityFromAny(value any) string {
 		return typed
 	}
 	return "private"
+}
+
+func usefulFeedbackRatioFromRow(row map[string]any) float64 {
+	feedbackCount := intFromAny(row["feedback_count"])
+	if feedbackCount <= 0 {
+		return 0.5
+	}
+	usefulCount := intFromAny(row["useful_count"])
+	return float64(usefulCount) / float64(feedbackCount)
 }
 
 func pgxPlaceholder(index int) string {
