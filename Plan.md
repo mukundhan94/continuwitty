@@ -1149,6 +1149,7 @@ Build a local-first memory system where agents and humans can:
   - repository regression coverage in `internal/repository/memory_curation_suggestions_test.go`.
   - API + MCP list/action parity for memory curation suggestions:
     - admin REST routes:
+      - `POST /api/v1/admin/memory/engrams/{engram_id}/links/curation/refresh`
       - `GET /api/v1/admin/memory/engrams/curation/suggestions`
       - `POST /api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action`
     - MCP tools:
@@ -1164,6 +1165,7 @@ Build a local-first memory system where agents and humans can:
   - suggestion generation workflow hooks:
     - consolidation refresh now regenerates type `consolidate` curation suggestions.
     - contradiction refresh now regenerates type `contradiction` curation suggestions.
+    - admin link-curation refresh now persists deduped type `link` suggestions from on-demand hygiene recommendations.
     - scheduled link-hygiene execution now generates type `link` curation suggestions for non-auto-archived recommendations.
     - scheduled link-hygiene generation dedupes against existing pending link curation payload keys (`link_id`, `target_engram_id`, `suggested_action`).
     - generation pass resets stale `suggested` curation rows per type/project before rebuilding deterministic candidates.
@@ -1171,6 +1173,7 @@ Build a local-first memory system where agents and humans can:
     - deterministic `@phase40 @mock` acceptance scenarios validate:
       - generation + accepted action transitions.
       - `applied` action cascades to downstream consolidation (`merged`) and contradiction (`resolved`) workflows.
+      - on-demand link-hygiene refresh generates actionable `link` curation suggestions and supports `status=applied`.
   - benchmark coverage baseline:
     - `internal/admin` benchmark suite for curation action latency, applied-side-effect orchestration, and sync-generation scaling.
     - benchmark artifact: `docs/phase40-curation-benchmark.md`.

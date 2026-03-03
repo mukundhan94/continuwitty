@@ -20,3 +20,11 @@ Feature: Phase 40 autonomous curation suggestions
     When I apply consolidation and contradiction curation suggestions for the seeded project
     Then applied curation suggestions should include both actioned records
     And downstream consolidation and contradiction records should be actioned
+
+  Scenario: Link hygiene refresh generates actionable link curation suggestions
+    Given I am signed in
+    When I seed deterministic memory curation prerequisites
+    And I refresh link hygiene curation suggestions for the seeded source engram
+    Then curation suggestion type coverage should include link
+    When I apply one link curation suggestion for the seeded project
+    Then applied curation suggestions should include the link actioned record

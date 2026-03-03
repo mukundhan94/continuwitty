@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"engram/internal/graph"
 	"engram/internal/models"
 	"engram/internal/repository"
 
@@ -172,6 +173,23 @@ type EngramContradictionAlertRefreshResponse struct {
 	UpdatedCount int       `json:"updated_count"`
 }
 
+// EngramLinkCurationSuggestionRefreshRequest captures refresh options for link curation suggestions.
+type EngramLinkCurationSuggestionRefreshRequest struct {
+	SourceEngramID    uuid.UUID `json:"source_engram_id"`
+	IncludeArchived   bool      `json:"include_archived,omitempty"`
+	Limit             int       `json:"limit,omitempty"`
+	StaleAfterDays    int       `json:"stale_after_days,omitempty"`
+	LowValueThreshold float64   `json:"low_value_threshold,omitempty"`
+}
+
+// EngramLinkCurationSuggestionRefreshResponse captures refresh results for link curation suggestions.
+type EngramLinkCurationSuggestionRefreshResponse struct {
+	ProjectID      *string   `json:"project_id,omitempty"`
+	SourceEngramID uuid.UUID `json:"source_engram_id"`
+	SuggestedAt    time.Time `json:"suggested_at"`
+	UpdatedCount   int       `json:"updated_count"`
+}
+
 // EngramContradictionAlertListRequest captures list filters for contradiction alerts.
 type EngramContradictionAlertListRequest struct {
 	ProjectID *string                          `json:"project_id,omitempty"`
@@ -313,6 +331,11 @@ type serviceDeps struct {
 		db repository.Queryer,
 		input repository.ContradictionAlertResolveInput,
 	) (*models.EngramContradictionAlert, error)
+	recommendLinkHygiene func(
+		ctx context.Context,
+		db repository.Queryer,
+		input graph.LinkHygieneInput,
+	) ([]models.EngramLinkHygieneRecommendation, error)
 	createMemoryCurationSuggestion func(
 		ctx context.Context,
 		db repository.Queryer,
@@ -362,19 +385,30 @@ func defaultServiceDeps() serviceDeps {
 		restoreSession:          repository.RestoreSession,
 		softDeleteLinkedEngrams: repository.SoftDeleteLinkedEngrams,
 
-		listAdminEngrams:                    repository.ListAdminEngrams,
-		getAdminEngram:                      repository.GetAdminEngram,
-		updateAdminEngram:                   repository.UpdateAdminEngram,
-		moveAdminEngramProject:              repository.MoveAdminEngramProject,
-		softDeleteEngram:                    repository.SoftDeleteEngram,
-		restoreEngram:                       repository.RestoreEngram,
-		refreshEngramFreshness:              repository.RefreshEngramFreshnessScores,
-		refreshConsolidationSuggestions:     repository.RefreshExactDuplicateConsolidationSuggestions,
-		listConsolidationSuggestions:        repository.ListEngramConsolidationSuggestions,
-		applyConsolidationSuggestionAction:  repository.ApplyEngramConsolidationSuggestionAction,
-		refreshContradictionAlerts:          repository.RefreshContradictionAlerts,
-		listContradictionAlerts:             repository.ListContradictionAlerts,
-		resolveContradictionAlert:           repository.ResolveContradictionAlert,
+		listAdminEngrams:                   repository.ListAdminEngrams,
+		getAdminEngram:                     repository.GetAdminEngram,
+		updateAdminEngram:                  repository.UpdateAdminEngram,
+		moveAdminEngramProject:             repository.MoveAdminEngramProject,
+		softDeleteEngram:                   repository.SoftDeleteEngram,
+		restoreEngram:                      repository.RestoreEngram,
+		refreshEngramFreshness:             repository.RefreshEngramFreshnessScores,
+		refreshConsolidationSuggestions:    repository.RefreshExactDuplicateConsolidationSuggestions,
+		listConsolidationSuggestions:       repository.ListEngramConsolidationSuggestions,
+		applyConsolidationSuggestionAction: repository.ApplyEngramConsolidationSuggestionAction,
+		refreshContradictionAlerts:         repository.RefreshContradictionAlerts,
+		listContradictionAlerts:            repository.ListContradictionAlerts,
+		resolveContradictionAlert:          repository.ResolveContradictionAlert,
+		recommendLinkHygiene: func(
+			ctx context.Context,
+			db repository.Queryer,
+			input graph.LinkHygieneInput,
+		) ([]models.EngramLinkHygieneRecommendation, error) {
+			service := graph.NewLinkHygieneService(db)
+			if service == nil {
+				return []models.EngramLinkHygieneRecommendation{}, nil
+			}
+			return service.Recommend(ctx, input)
+		},
 		createMemoryCurationSuggestion:      repository.CreateMemoryCurationSuggestion,
 		resetMemoryCurationSuggestions:      repository.ResetSuggestedMemoryCurationSuggestions,
 		getMemoryCurationSuggestion:         repository.GetMemoryCurationSuggestion,

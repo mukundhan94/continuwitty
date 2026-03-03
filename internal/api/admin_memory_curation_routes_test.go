@@ -82,6 +82,43 @@ func TestMountMemoryAdminRoutesActionMemoryCurationSuggestionUsesActorAndPayload
 	requireEqual(t, models.MemoryCurationSuggestionStatusAccepted, capturedRequest.Status)
 }
 
+func TestMountMemoryAdminRoutesRefreshMemoryLinkCurationUsesActorAndPayload(t *testing.T) {
+	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000201")
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000202")
+	capturedActorUserID := uuid.Nil
+	capturedRequest := admin.EngramLinkCurationSuggestionRefreshRequest{}
+	service := &fakeMemoryAdminService{
+		refreshLinkCurationFn: func(
+			_ context.Context,
+			receivedActorUserID uuid.UUID,
+			request admin.EngramLinkCurationSuggestionRefreshRequest,
+		) (admin.EngramLinkCurationSuggestionRefreshResponse, error) {
+			capturedActorUserID = receivedActorUserID
+			capturedRequest = request
+			return admin.EngramLinkCurationSuggestionRefreshResponse{
+				ProjectID:      pointerToString("engram-vault"),
+				SourceEngramID: engramID,
+				UpdatedCount:   1,
+			}, nil
+		},
+	}
+	router := curationAdminRouter(service, actorUserID)
+
+	response := executeRequest(
+		router,
+		http.MethodPost,
+		"/api/v1/admin/memory/engrams/"+engramID.String()+"/links/curation/refresh",
+		[]byte(`{"include_archived":true,"limit":40,"stale_after_days":30,"low_value_threshold":0.4}`),
+	)
+	requireEqual(t, http.StatusOK, response.Code)
+	requireEqual(t, actorUserID, capturedActorUserID)
+	requireEqual(t, engramID, capturedRequest.SourceEngramID)
+	requireEqual(t, true, capturedRequest.IncludeArchived)
+	requireEqual(t, 40, capturedRequest.Limit)
+	requireEqual(t, 30, capturedRequest.StaleAfterDays)
+	requireEqual(t, 0.4, capturedRequest.LowValueThreshold)
+}
+
 func TestMountMemoryAdminRoutesCurationRoutesRejectInvalidValues(t *testing.T) {
 	service := &fakeMemoryAdminService{
 		listCurationFn: func(
@@ -122,6 +159,12 @@ func TestMountMemoryAdminRoutesCurationRoutesRejectInvalidValues(t *testing.T) {
 			path:   "/api/v1/admin/memory/engrams/curation/suggestions/00000000-0000-0000-0000-000000000196/action",
 			body:   []byte(`{"status":"suggested"}`),
 		},
+		{
+			name:   "refresh link curation invalid engram id",
+			method: http.MethodPost,
+			path:   "/api/v1/admin/memory/engrams/not-a-uuid/links/curation/refresh",
+			body:   []byte(`{}`),
+		},
 	}
 	for _, testCase := range testCases {
 		testCase := testCase
@@ -132,48 +175,49 @@ func TestMountMemoryAdminRoutesCurationRoutesRejectInvalidValues(t *testing.T) {
 	}
 }
 
-func TestMountMemoryAdminRoutesActionMemoryCurationSuggestionReturnsBadRequestForPayloadError(t *testing.T) {
-	service := &fakeMemoryAdminService{
-		actionCurationFn: func(
-			_ context.Context,
-			_ uuid.UUID,
-			_ uuid.UUID,
-			_ admin.MemoryCurationSuggestionActionRequest,
-		) (*models.MemoryCurationSuggestion, error) {
-			return nil, admin.ErrMemoryCurationSuggestionPayloadInvalid
+func TestMountMemoryAdminRoutesActionMemoryCurationSuggestionReturnsBadRequestForApplyErrors(t *testing.T) {
+	testCases := []struct {
+		name string
+		err  error
+		path string
+	}{
+		{
+			name: "payload invalid",
+			err:  admin.ErrMemoryCurationSuggestionPayloadInvalid,
+			path: "/api/v1/admin/memory/engrams/curation/suggestions/00000000-0000-0000-0000-000000000198/action",
+		},
+		{
+			name: "apply unsupported",
+			err:  admin.ErrMemoryCurationSuggestionApplyUnsupported,
+			path: "/api/v1/admin/memory/engrams/curation/suggestions/00000000-0000-0000-0000-000000000200/action",
 		},
 	}
-	router := curationAdminRouter(service, uuid.MustParse("00000000-0000-0000-0000-000000000197"))
-
-	response := executeRequest(
-		router,
-		http.MethodPost,
-		"/api/v1/admin/memory/engrams/curation/suggestions/00000000-0000-0000-0000-000000000198/action",
-		[]byte(`{"status":"applied"}`),
-	)
-	requireEqual(t, http.StatusBadRequest, response.Code)
-}
-
-func TestMountMemoryAdminRoutesActionMemoryCurationSuggestionReturnsBadRequestForUnsupportedApply(t *testing.T) {
-	service := &fakeMemoryAdminService{
-		actionCurationFn: func(
-			_ context.Context,
-			_ uuid.UUID,
-			_ uuid.UUID,
-			_ admin.MemoryCurationSuggestionActionRequest,
-		) (*models.MemoryCurationSuggestion, error) {
-			return nil, admin.ErrMemoryCurationSuggestionApplyUnsupported
-		},
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			service := &fakeMemoryAdminService{
+				actionCurationFn: func(
+					_ context.Context,
+					_ uuid.UUID,
+					_ uuid.UUID,
+					_ admin.MemoryCurationSuggestionActionRequest,
+				) (*models.MemoryCurationSuggestion, error) {
+					return nil, testCase.err
+				},
+			}
+			router := curationAdminRouter(
+				service,
+				uuid.MustParse("00000000-0000-0000-0000-000000000199"),
+			)
+			response := executeRequest(
+				router,
+				http.MethodPost,
+				testCase.path,
+				[]byte(`{"status":"applied"}`),
+			)
+			requireEqual(t, http.StatusBadRequest, response.Code)
+		})
 	}
-	router := curationAdminRouter(service, uuid.MustParse("00000000-0000-0000-0000-000000000199"))
-
-	response := executeRequest(
-		router,
-		http.MethodPost,
-		"/api/v1/admin/memory/engrams/curation/suggestions/00000000-0000-0000-0000-000000000200/action",
-		[]byte(`{"status":"applied"}`),
-	)
-	requireEqual(t, http.StatusBadRequest, response.Code)
 }
 
 func curationAdminRouter(service MemoryAdminService, actorUserID uuid.UUID) http.Handler {
@@ -182,4 +226,8 @@ func curationAdminRouter(service MemoryAdminService, actorUserID uuid.UUID) http
 		return AdminActor{UserID: actorUserID, Role: "admin"}, nil
 	})
 	return router
+}
+
+func pointerToString(value string) *string {
+	return &value
 }

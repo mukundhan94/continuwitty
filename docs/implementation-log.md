@@ -7,6 +7,32 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: on-demand admin link-curation refresh route)
+
+1. Added on-demand link curation refresh workflow in `internal/admin/service_link_curation.go`:
+   - new service method `RefreshEngramLinkCurationSuggestions` generates link hygiene recommendations for one source engram and persists deduped `suggested` link curation rows.
+   - persisted payload dedupe key uses (`link_id`, `target_engram_id`, `suggested_action`) to avoid duplicate pending records.
+   - skips auto-archived hygiene action (`archive_stale_low_value`) while preserving actionable/manual-review link curation suggestions.
+2. Extended admin service dependencies/contracts in `internal/admin/service.go`:
+   - added `EngramLinkCurationSuggestionRefreshRequest/Response`.
+   - added `recommendLinkHygiene` dependency with graph-service default binding.
+3. Added admin REST route in `internal/api`:
+   - `POST /api/v1/admin/memory/engrams/{engram_id}/links/curation/refresh`
+   - payload supports optional hygiene controls (`include_archived`, `limit`, `stale_after_days`, `low_value_threshold`).
+4. Expanded test coverage:
+   - `internal/admin/service_link_curation_test.go` for create/dedupe/not-found behavior.
+   - `internal/api/admin_memory_curation_routes_test.go` for refresh route actor/payload forwarding and validation.
+   - `acceptance-tests/features/phase40-curation-mock.feature` + steps now validate on-demand link refresh generates actionable `link` curation suggestions and `status=applied` succeeds.
+5. Code health refactors:
+   - refactored duplicated acceptance/action assertions and API route tests to satisfy CodeScene duplication gates.
+   - split admin refresh route payload tests into a dedicated file to keep test modules below CodeScene duplication thresholds.
+6. Validation:
+   - `go test ./internal/admin ./internal/api -count=1`
+   - `make acceptance-bddgen`
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock-docker` -> `25 passed`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
 ### 2026-03-03 (Phase 40 continuation: conflict-review link curation apply support)
 
 1. Extended link curation apply-action handling in `internal/admin/service_curation.go`:

@@ -67,6 +67,11 @@ type MemoryAdminService interface {
 		actorUserID uuid.UUID,
 		request admin.EngramContradictionAlertResolveRequest,
 	) (*models.EngramContradictionAlert, error)
+	RefreshEngramLinkCurationSuggestions(
+		ctx context.Context,
+		actorUserID uuid.UUID,
+		request admin.EngramLinkCurationSuggestionRefreshRequest,
+	) (admin.EngramLinkCurationSuggestionRefreshResponse, error)
 	ListMemoryCurationSuggestions(
 		ctx context.Context,
 		request admin.MemoryCurationSuggestionListRequest,

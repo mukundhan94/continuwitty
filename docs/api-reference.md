@@ -142,6 +142,7 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 | `POST` | `/api/v1/admin/memory/engrams/contradictions/refresh` | Refresh contradiction alerts from active contradiction links (admin) |
 | `GET` | `/api/v1/admin/memory/engrams/contradictions/alerts` | List contradiction alerts (admin) |
 | `POST` | `/api/v1/admin/memory/engrams/contradictions/alerts/{alert_id}/resolve` | Mark contradiction alert as resolved/dismissed (admin) |
+| `POST` | `/api/v1/admin/memory/engrams/{engram_id}/links/curation/refresh` | Refresh link hygiene recommendations into deduped `suggested` link curation suggestions (admin) |
 | `GET` | `/api/v1/admin/memory/engrams/curation/suggestions` | List autonomous memory curation suggestions (admin) |
 | `POST` | `/api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action` | Mark memory curation suggestion as accepted/rejected/applied (admin); `applied` dispatches downstream consolidation/contradiction actions and payload-linked link archival actions (`archive_*`, `review_relation_conflict`) |
 | `GET` | `/api/v1/admin/memory/engrams/{engram_id}` | Get engram (admin) |

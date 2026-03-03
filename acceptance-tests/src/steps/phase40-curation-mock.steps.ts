@@ -35,8 +35,10 @@ let listedSuggestions: CurationSuggestion[] = []
 let selectedSuggestionID: string | null = null
 let selectedConsolidationCurationSuggestionID: string | null = null
 let selectedContradictionCurationSuggestionID: string | null = null
+let selectedLinkCurationSuggestionID: string | null = null
 let targetConsolidationSuggestionID: string | null = null
 let targetContradictionAlertID: string | null = null
+let seededLinkSourceEngramID: string | null = null
 
 type ExpectJSONInput = {
   response: APIResponse
@@ -58,6 +60,7 @@ type CreateContradictionLinkInput = {
   request: APIRequestContext
   sourceEngramID: string
   targetEngramID: string
+  relationType: string
 }
 
 type ActionCurationSuggestionInput = {
@@ -82,6 +85,13 @@ type DownstreamTargets = {
 type SelectedCurationContext = {
   projectID: string
   suggestionID: string
+}
+
+type ActionedCurationAssertionInput = {
+  request: APIRequestContext
+  context: SelectedCurationContext
+  status: 'accepted' | 'applied'
+  listContext: string
 }
 
 async function expectJSON<T>(input: ExpectJSONInput): Promise<T> {
@@ -127,7 +137,7 @@ async function createContradictionLink(input: CreateContradictionLinkInput): Pro
   const response = await input.request.post(`/api/v1/engrams/${input.sourceEngramID}/links`, {
     data: {
       target_engram_id: input.targetEngramID,
-      relation_type: 'contradicts',
+      relation_type: input.relationType,
       weight: 0.9,
       temporal_weight: 0.8,
       confidence: 0.95,
@@ -153,6 +163,36 @@ async function actionCurationSuggestion(input: ActionCurationSuggestionInput): P
     response,
     context: 'phase40 curation action',
   })
+}
+
+async function applyCurationSuggestionStatus(
+  request: APIRequestContext,
+  context: SelectedCurationContext,
+  status: 'accepted' | 'applied',
+): Promise<void> {
+  const payload = await actionCurationSuggestion({
+    request,
+    projectID: context.projectID,
+    suggestionID: context.suggestionID,
+    status,
+  })
+  expect(payload.suggestion_id).toBe(context.suggestionID)
+  expect(payload.status).toBe(status)
+}
+
+async function assertActionedCurationSuggestion(input: ActionedCurationAssertionInput): Promise<void> {
+  const response = await input.request.get(
+    `/api/v1/admin/memory/engrams/curation/suggestions?project_id=${input.context.projectID}&status=${input.status}&limit=50&offset=0`,
+  )
+  const listed = await expectJSON<CurationSuggestion[]>({
+    response,
+    context: input.listContext,
+  })
+  const actioned = listed.find((entry) => entry.suggestion_id === input.context.suggestionID)
+  expect(actioned).toBeTruthy()
+  expect(actioned?.status).toBe(input.status)
+  expect(actioned?.actioned_at).toBeTruthy()
+  expect(actioned?.action_taken_by).toBeTruthy()
 }
 
 function requirePayloadString(suggestion: CurationSuggestion, key: string): string {
@@ -188,6 +228,16 @@ function requireSelectedCurationContext(): SelectedCurationContext {
   return {
     projectID: requireSeededProjectID(),
     suggestionID: requireStringID(selectedSuggestionID, 'Missing selected curation suggestion id'),
+  }
+}
+
+function requireLinkCurationContext(): SelectedCurationContext {
+  return {
+    projectID: requireSeededProjectID(),
+    suggestionID: requireStringID(
+      selectedLinkCurationSuggestionID,
+      'Missing link curation suggestion id',
+    ),
   }
 }
 
@@ -251,8 +301,10 @@ When('I seed deterministic memory curation prerequisites', async ({ page }) => {
   selectedSuggestionID = null
   selectedConsolidationCurationSuggestionID = null
   selectedContradictionCurationSuggestionID = null
+  selectedLinkCurationSuggestionID = null
   targetConsolidationSuggestionID = null
   targetContradictionAlertID = null
+  seededLinkSourceEngramID = null
 
   await createProject({ projectID: seededProjectID, request: page.request })
 
@@ -283,7 +335,15 @@ When('I seed deterministic memory curation prerequisites', async ({ page }) => {
     request: page.request,
     sourceEngramID: sourceID,
     targetEngramID: targetID,
+    relationType: 'contradicts',
   })
+  await createContradictionLink({
+    request: page.request,
+    sourceEngramID: sourceID,
+    targetEngramID: targetID,
+    relationType: 'supports',
+  })
+  seededLinkSourceEngramID = sourceID
 })
 
 When('I refresh consolidation and contradiction workflows for memory curation', async ({ page }) => {
@@ -338,30 +398,16 @@ Then('curation suggestion type coverage should include consolidate and contradic
 
 When('I accept one curation suggestion for the seeded project', async ({ page }) => {
   const context = requireSelectedCurationContext()
-  const payload = await actionCurationSuggestion({
-    request: page.request,
-    projectID: context.projectID,
-    suggestionID: context.suggestionID,
-    status: 'accepted',
-  })
-  expect(payload.suggestion_id).toBe(context.suggestionID)
-  expect(payload.status).toBe('accepted')
+  await applyCurationSuggestionStatus(page.request, context, 'accepted')
 })
 
 Then('accepted curation suggestions should include the actioned record', async ({ page }) => {
-  const context = requireSelectedCurationContext()
-  const response = await page.request.get(
-    `/api/v1/admin/memory/engrams/curation/suggestions?project_id=${context.projectID}&status=accepted&limit=50&offset=0`,
-  )
-  const accepted = await expectJSON<CurationSuggestion[]>({
-    response,
-    context: 'phase40 curation list accepted',
+  await assertActionedCurationSuggestion({
+    request: page.request,
+    context: requireSelectedCurationContext(),
+    status: 'accepted',
+    listContext: 'phase40 curation list accepted',
   })
-  const actioned = accepted.find((entry) => entry.suggestion_id === context.suggestionID)
-  expect(actioned).toBeTruthy()
-  expect(actioned?.status).toBe('accepted')
-  expect(actioned?.actioned_at).toBeTruthy()
-  expect(actioned?.action_taken_by).toBeTruthy()
 })
 
 Then('curation suggestion payloads should include consolidation and contradiction references', async () => {
@@ -439,4 +485,56 @@ Then('downstream consolidation and contradiction records should be actioned', as
     targets.projectID,
     targets.contradictionAlertID,
   )
+})
+
+When(
+  'I refresh link hygiene curation suggestions for the seeded source engram',
+  async ({ page }) => {
+    const sourceEngramID = requireStringID(
+      seededLinkSourceEngramID,
+      'Missing seeded link source engram id',
+    )
+    const refresh = await page.request.post(
+      `/api/v1/admin/memory/engrams/${sourceEngramID}/links/curation/refresh`,
+      { data: { include_archived: false, limit: 50 } },
+    )
+    const refreshPayload = await expectJSON<RefreshResponse>({
+      response: refresh,
+      context: 'phase40 link curation refresh',
+    })
+    expect(refreshPayload.updated_count).toBeGreaterThanOrEqual(1)
+
+    const projectID = requireSeededProjectID()
+    const listed = await page.request.get(
+      `/api/v1/admin/memory/engrams/curation/suggestions?project_id=${projectID}&suggestion_type=link&status=suggested&limit=50&offset=0`,
+    )
+    listedSuggestions = await expectJSON<CurationSuggestion[]>({
+      response: listed,
+      context: 'phase40 link curation list suggested',
+    })
+    const selected = listedSuggestions.find(
+      (entry) => entry.suggestion_type === 'link' && entry.status === 'suggested',
+    )
+    selectedLinkCurationSuggestionID = selected?.suggestion_id ?? null
+    expect(selectedLinkCurationSuggestionID).toBeTruthy()
+  },
+)
+
+Then('curation suggestion type coverage should include link', async () => {
+  const observedTypes = new Set<string>(listedSuggestions.map((item) => item.suggestion_type))
+  expect(observedTypes.has('link')).toBeTruthy()
+})
+
+When('I apply one link curation suggestion for the seeded project', async ({ page }) => {
+  const context = requireLinkCurationContext()
+  await applyCurationSuggestionStatus(page.request, context, 'applied')
+})
+
+Then('applied curation suggestions should include the link actioned record', async ({ page }) => {
+  await assertActionedCurationSuggestion({
+    request: page.request,
+    context: requireLinkCurationContext(),
+    status: 'applied',
+    listContext: 'phase40 link curation list applied',
+  })
 })
