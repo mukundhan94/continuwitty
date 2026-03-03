@@ -310,10 +310,13 @@
   - `contradiction` payloads trigger contradiction-alert `resolved` transitions.
   - payload parse failures now return explicit bad-request errors in REST/MCP action flows.
 - [x] Added acceptance coverage for curation generation/action quality.
-  - deterministic `@phase40 @mock` scenario validates:
+  - deterministic `@phase40 @mock` scenarios validate:
     - curation generation via consolidation + contradiction refresh flows.
     - curation type coverage (`consolidate`, `contradiction`).
-    - curation action transition (`suggested` -> `accepted`) and audit fields.
+    - curation action transitions (`suggested` -> `accepted`, `suggested` -> `applied`) and audit fields.
+    - applied-status downstream effects:
+      - consolidation suggestion status transitions to `merged`.
+      - contradiction alert status transitions to `resolved`.
 - [x] Added benchmark coverage for curation suggestion action latency and sync scaling.
   - benchmark suite:
     - `BenchmarkActionMemoryCurationSuggestion`

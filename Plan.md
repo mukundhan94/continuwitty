@@ -1165,7 +1165,9 @@ Build a local-first memory system where agents and humans can:
     - contradiction refresh now regenerates type `contradiction` curation suggestions.
     - generation pass resets stale `suggested` curation rows per type/project before rebuilding deterministic candidates.
   - acceptance coverage for curation generation/action quality:
-    - deterministic `@phase40 @mock` acceptance scenario validates generation + action transitions.
+    - deterministic `@phase40 @mock` acceptance scenarios validate:
+      - generation + accepted action transitions.
+      - `applied` action cascades to downstream consolidation (`merged`) and contradiction (`resolved`) workflows.
   - benchmark coverage baseline:
     - `internal/admin` benchmark suite for curation action latency and sync-generation scaling.
     - benchmark artifact: `docs/phase40-curation-benchmark.md`.

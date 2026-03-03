@@ -7,6 +7,24 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: applied-cascade acceptance coverage)
+
+1. Extended Phase 40 acceptance feature with downstream-apply scenario:
+   - `acceptance-tests/features/phase40-curation-mock.feature`
+   - new scenario validates `status=applied` curation actions for both consolidation and contradiction paths.
+2. Added step coverage in `acceptance-tests/src/steps/phase40-curation-mock.steps.ts`:
+   - verifies curation payload references contain downstream record ids.
+   - actions both curation suggestions with `status=applied`.
+   - asserts applied curation status records include action audit fields.
+   - asserts downstream records transition as expected:
+     - consolidation suggestion `status=merged`
+     - contradiction alert `status=resolved` with resolver metadata.
+3. Validation:
+   - `make acceptance-bddgen`
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock-docker` -> `24 passed`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
 ### 2026-03-03 (Phase 40 continuation: curation applied-status orchestration)
 
 1. Extended curation action behavior in `internal/admin/service_curation.go`:
