@@ -856,6 +856,7 @@ type EngramUpdateRequest struct {
 type EngramFeedbackRequest struct {
 	ActorUserID    uuid.UUID
 	EngramID       uuid.UUID
+	SessionID      *uuid.UUID
 	FeedbackType   models.EngramFeedbackType
 	Note           *string
 	RelevanceScore *int

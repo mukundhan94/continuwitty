@@ -45,6 +45,10 @@ func parseEngramFeedbackRequest(
 	if err != nil {
 		return EngramFeedbackRequest{}, invalidParamError("feedback_type")
 	}
+	sessionID, ok := optionalUUIDParam(params, "session_id")
+	if !ok {
+		return EngramFeedbackRequest{}, invalidParamError("session_id")
+	}
 	note, ok := optionalStringPointerParam(params, "note")
 	if !ok {
 		return EngramFeedbackRequest{}, invalidParamError("note")
@@ -56,6 +60,7 @@ func parseEngramFeedbackRequest(
 	return EngramFeedbackRequest{
 		ActorUserID:    actor.UserID,
 		EngramID:       engramID,
+		SessionID:      sessionID,
 		FeedbackType:   feedbackType,
 		Note:           normalizeOptionalTrimmedParamString(note),
 		RelevanceScore: relevanceScore,

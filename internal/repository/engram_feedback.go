@@ -14,6 +14,7 @@ import (
 
 var (
 	errEngramFeedbackEngramIDRequired = errors.New("engram id is required")
+	errEngramFeedbackSessionIDInvalid = errors.New("session id must be non-empty when provided")
 	errEngramFeedbackActorIDRequired  = errors.New("actor user id is required")
 	errEngramFeedbackTypeRequired     = errors.New("feedback type is required")
 	errEngramFeedbackRelevanceInvalid = errors.New("relevance score must be between 1 and 5")
@@ -25,6 +26,7 @@ var (
 // EngramFeedbackCreateInput captures feedback write-path dependencies.
 type EngramFeedbackCreateInput struct {
 	EngramID       uuid.UUID
+	SessionID      *uuid.UUID
 	ActorUserID    uuid.UUID
 	FeedbackType   models.EngramFeedbackType
 	Note           *string
@@ -49,6 +51,7 @@ func RecordEngramFeedback(
 		recordEngramFeedbackSQL(),
 		newEngramFeedbackUUID(),
 		normalized.EngramID,
+		feedbackSessionIDSQLValue(normalized.SessionID),
 		normalized.ActorUserID,
 		string(normalized.FeedbackType),
 		noteValue,
@@ -60,6 +63,7 @@ func RecordEngramFeedback(
 	if err := row.Scan(
 		&record.FeedbackID,
 		&record.EngramID,
+		&record.SessionID,
 		&record.ActorUserID,
 		&record.FeedbackType,
 		&record.Note,
@@ -86,6 +90,11 @@ func normalizeEngramFeedbackInput(
 	if input.ActorUserID == uuid.Nil {
 		return EngramFeedbackCreateInput{}, errEngramFeedbackActorIDRequired
 	}
+	sessionID, err := normalizeFeedbackSessionID(input.SessionID)
+	if err != nil {
+		return EngramFeedbackCreateInput{}, err
+	}
+	input.SessionID = sessionID
 	if strings.TrimSpace(string(input.FeedbackType)) == "" {
 		return EngramFeedbackCreateInput{}, errEngramFeedbackTypeRequired
 	}
@@ -131,6 +140,24 @@ func feedbackRelevanceScoreSQLValue(relevanceScore *int) any {
 	return *relevanceScore
 }
 
+func feedbackSessionIDSQLValue(sessionID *uuid.UUID) any {
+	if sessionID == nil {
+		return nil
+	}
+	return *sessionID
+}
+
+func normalizeFeedbackSessionID(sessionID *uuid.UUID) (*uuid.UUID, error) {
+	if sessionID == nil {
+		return nil, nil
+	}
+	if *sessionID == uuid.Nil {
+		return nil, errEngramFeedbackSessionIDInvalid
+	}
+	normalized := *sessionID
+	return &normalized, nil
+}
+
 func normalizeFeedbackRelevanceScore(relevanceScore *int) (*int, error) {
 	if relevanceScore == nil {
 		return nil, nil
@@ -143,7 +170,7 @@ func normalizeFeedbackRelevanceScore(relevanceScore *int) (*int, error) {
 }
 
 func recordEngramFeedbackSQL() string {
-	actorPlaceholder := pgxPlaceholder(3)
+	actorPlaceholder := pgxPlaceholder(4)
 	engramReadClause := buildMembershipReadClause(
 		membershipReadClauseInput{
 			ownerColumn:      "e.owner_user_id",
@@ -173,6 +200,7 @@ const recordEngramFeedbackSQLTemplate = `
 			INSERT INTO engram_feedback (
 				feedback_id,
 				engram_id,
+				session_id,
 				actor_user_id,
 				feedback_type,
 				note,
@@ -184,13 +212,15 @@ const recordEngramFeedbackSQLTemplate = `
 				ve.engram_id,
 				$3,
 				$4,
-				COALESCE($5, ''),
-				$6,
-				$7
+				$5,
+				COALESCE($6, ''),
+				$7,
+				$8
 			FROM visible_engram ve
 			RETURNING
 				feedback_id,
 				engram_id,
+				session_id,
 				actor_user_id,
 				feedback_type,
 				note,
@@ -200,17 +230,17 @@ const recordEngramFeedbackSQLTemplate = `
 		updated AS (
 			UPDATE engrams e
 			SET
-				useful_count = COALESCE(useful_count, 0) + CASE WHEN $4 = 'useful' THEN 1 ELSE 0 END,
-				contradiction_count = COALESCE(contradiction_count, 0) + CASE WHEN $4 = 'contradiction' THEN 1 ELSE 0 END,
+				useful_count = COALESCE(useful_count, 0) + CASE WHEN $5 = 'useful' THEN 1 ELSE 0 END,
+				contradiction_count = COALESCE(contradiction_count, 0) + CASE WHEN $5 = 'contradiction' THEN 1 ELSE 0 END,
 				feedback_count = COALESCE(feedback_count, 0) + 1,
 				avg_relevance_feedback = CASE
-					WHEN $6 IS NULL THEN avg_relevance_feedback
+					WHEN $7 IS NULL THEN avg_relevance_feedback
 					ELSE (
 						(COALESCE(avg_relevance_feedback, 0.0) * COALESCE(feedback_count, 0)::DOUBLE PRECISION) +
-						$6::DOUBLE PRECISION
+						$7::DOUBLE PRECISION
 					) / (COALESCE(feedback_count, 0)::DOUBLE PRECISION + 1.0)
 				END,
-				updated_at = GREATEST(updated_at, $7)
+				updated_at = GREATEST(updated_at, $8)
 			FROM inserted i
 			WHERE e.engram_id = i.engram_id
 			RETURNING
@@ -222,6 +252,7 @@ const recordEngramFeedbackSQLTemplate = `
 		SELECT
 			i.feedback_id,
 			i.engram_id,
+			i.session_id,
 			i.actor_user_id,
 			i.feedback_type,
 			i.note,

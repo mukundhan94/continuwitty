@@ -124,6 +124,9 @@ func TestCompatibilityServiceToolsListIncludesRelevanceScoreForEngramFeedback(t 
 	if _, exists := properties["relevance_score"]; !exists {
 		t.Fatalf("expected relevance_score property in engram_feedback schema")
 	}
+	if _, exists := properties["session_id"]; !exists {
+		t.Fatalf("expected session_id property in engram_feedback schema")
+	}
 }
 
 func TestBuildVisiblePublicToolCatalogClonesInputSchemas(t *testing.T) {

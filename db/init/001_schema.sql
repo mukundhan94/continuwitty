@@ -523,6 +523,7 @@ CREATE INDEX IF NOT EXISTS engram_access_events_source_accessed_idx
 CREATE TABLE IF NOT EXISTS engram_feedback (
   feedback_id UUID PRIMARY KEY,
   engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
+  session_id UUID REFERENCES chat_sessions(session_id) ON DELETE SET NULL,
   actor_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   feedback_type TEXT NOT NULL CHECK (feedback_type IN ('useful', 'contradiction')),
   relevance_score INTEGER CHECK (relevance_score >= 1 AND relevance_score <= 5),
@@ -531,7 +532,20 @@ CREATE TABLE IF NOT EXISTS engram_feedback (
 );
 
 ALTER TABLE engram_feedback
+  ADD COLUMN IF NOT EXISTS session_id UUID,
   ADD COLUMN IF NOT EXISTS relevance_score INTEGER;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'engram_feedback_session_id_fkey'
+  ) THEN
+    ALTER TABLE engram_feedback
+      ADD CONSTRAINT engram_feedback_session_id_fkey
+      FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 DO $$
 BEGIN
@@ -547,6 +561,9 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS engram_feedback_engram_created_idx
   ON engram_feedback (engram_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_feedback_session_created_idx
+  ON engram_feedback (session_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS engram_feedback_actor_created_idx
   ON engram_feedback (actor_user_id, created_at DESC);

@@ -1209,10 +1209,11 @@ Build a local-first memory system where agents and humans can:
 - In progress (2026-03-03).
 - Delivered in this checkpoint:
   - explicit feedback supports optional `relevance_score` (`1-5`) across REST + MCP submit paths.
+  - explicit feedback supports optional `session_id` attribution across REST + MCP submit paths.
   - feedback persistence now tracks aggregate counters on `engrams`:
     - `feedback_count`
     - `avg_relevance_feedback`
-  - feedback records now persist optional per-event `relevance_score`.
+  - feedback records now persist optional per-event `relevance_score` and `session_id`.
   - regression coverage expanded across repository/API/MCP for relevance-score validation and forwarding.
 
 ### Goals

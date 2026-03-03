@@ -1382,6 +1382,10 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":   "string",
 					"format": "uuid",
 				},
+				"session_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
 				"feedback_type": map[string]any{
 					"type": "string",
 					"enum": []any{

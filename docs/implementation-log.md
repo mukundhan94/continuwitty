@@ -7,6 +7,23 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 41 continuation: session-scoped feedback attribution)
+
+1. Extended feedback event contracts with optional `session_id` across REST + MCP:
+   - REST feedback payload now accepts optional `session_id` (UUID).
+   - MCP `engram.feedback` now accepts optional `session_id` with schema/parser validation.
+2. Added persistence support for session attribution:
+   - `engram_feedback` now stores optional `session_id` (`chat_sessions` FK, `ON DELETE SET NULL`).
+   - added `engram_feedback_session_created_idx` for session-scoped feedback retrieval paths.
+3. Updated repository write path and response model:
+   - repository input now forwards optional `session_id`.
+   - feedback record payload now returns optional `session_id`.
+4. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker` -> `26 passed`
+
 ### 2026-03-03 (Phase 41 kickoff: explicit feedback relevance enrichment)
 
 1. Extended explicit feedback contracts with optional `relevance_score` (`1-5`) across REST + MCP:

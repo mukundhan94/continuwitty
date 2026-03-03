@@ -243,7 +243,7 @@ curl -s -b "$COOKIE_JAR" \
 - `engram.link_archive`
 - `engram.link_suggest`
 - `engram.trace_path`
-- `engram.feedback` (optional `relevance_score` 1-5)
+- `engram.feedback` (optional `session_id`, optional `relevance_score` 1-5)
 - `engram.refresh_freshness` (admin maintenance)
 - `engram.consolidation_list` (admin maintenance)
 - `engram.refresh_consolidation` (admin maintenance)

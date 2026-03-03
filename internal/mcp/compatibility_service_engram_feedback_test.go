@@ -15,10 +15,12 @@ import (
 func TestCompatibilityServiceEngramFeedbackParity(t *testing.T) {
 	actorUserID := uuid.MustParse("39910000-0000-0000-0000-000000000399")
 	engramID := uuid.MustParse("39910000-0000-0000-0000-000000000400")
+	sessionID := uuid.MustParse("39910000-0000-0000-0000-000000000498")
 	feedbackID := uuid.MustParse("39910000-0000-0000-0000-000000000401")
 	record := models.EngramFeedbackRecord{
 		FeedbackID:           feedbackID,
 		EngramID:             engramID,
+		SessionID:            &sessionID,
 		ActorUserID:          actorUserID,
 		FeedbackType:         models.EngramFeedbackTypeUseful,
 		Note:                 "helpful",
@@ -32,6 +34,7 @@ func TestCompatibilityServiceEngramFeedbackParity(t *testing.T) {
 	service := &fakeEngramFeedbackService{record: &record}
 	params := map[string]any{
 		"engram_id":       engramID.String(),
+		"session_id":      sessionID.String(),
 		"feedback_type":   "useful",
 		"note":            "helpful",
 		"relevance_score": 5,
@@ -71,6 +74,7 @@ func TestCompatibilityServiceEngramFeedbackParity(t *testing.T) {
 				EngramFeedbackRequest{
 					ActorUserID:    actorUserID,
 					EngramID:       engramID,
+					SessionID:      &sessionID,
 					FeedbackType:   models.EngramFeedbackTypeUseful,
 					Note:           stringPtr("helpful"),
 					RelevanceScore: intPtr(5),
@@ -149,6 +153,7 @@ func TestCompatibilityServiceEngramFeedbackValidationAndErrors(t *testing.T) {
 		{name: "invalid engram id", params: map[string]any{"engram_id": "bad"}},
 		{name: "missing feedback type", params: map[string]any{"engram_id": uuid.NewString()}},
 		{name: "invalid feedback type", params: map[string]any{"engram_id": uuid.NewString(), "feedback_type": "bad"}},
+		{name: "invalid session id", params: map[string]any{"engram_id": uuid.NewString(), "session_id": "bad", "feedback_type": "useful"}},
 		{name: "invalid note", params: map[string]any{"engram_id": uuid.NewString(), "feedback_type": "useful", "note": 123}},
 		{name: "invalid relevance score", params: map[string]any{"engram_id": uuid.NewString(), "feedback_type": "useful", "relevance_score": 7}},
 	}
@@ -243,27 +248,28 @@ func assertEngramFeedbackCall(
 		t.Fatalf("expected feedback type to be forwarded")
 	}
 	assertOptionalDeleteReason(t, actual.Note, expected.Note)
-	assertOptionalIntPointer(t, actual.RelevanceScore, expected.RelevanceScore)
+	assertOptionalPointerValue(t, actual.RelevanceScore, expected.RelevanceScore)
+	assertOptionalPointerValue(t, actual.SessionID, expected.SessionID)
 }
 
 func float64Ptr(value float64) *float64 {
 	return &value
 }
 
-func assertOptionalIntPointer(
+func assertOptionalPointerValue[T comparable](
 	t *testing.T,
-	actual *int,
-	expected *int,
+	actual *T,
+	expected *T,
 ) {
 	t.Helper()
 	if actual == nil && expected == nil {
 		return
 	}
 	if actual == nil || expected == nil {
-		t.Fatalf("expected optional int pointers to match")
+		t.Fatalf("expected optional pointers to match")
 	}
 	if *actual != *expected {
-		t.Fatalf("expected optional int pointers to match")
+		t.Fatalf("expected optional pointers to match")
 	}
 }
 

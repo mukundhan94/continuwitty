@@ -17,6 +17,7 @@ import (
 func TestMountSessionAuthRoutesSubmitEngramFeedbackUsesRepository(t *testing.T) {
 	actor := newSessionRoutesTestActor(t, models.UserRoleAnalyst)
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000f01")
+	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000f09")
 	feedbackID := uuid.MustParse("00000000-0000-0000-0000-000000000f02")
 	note := "helpful answer"
 	relevanceScore := 5
@@ -35,6 +36,7 @@ func TestMountSessionAuthRoutesSubmitEngramFeedbackUsesRepository(t *testing.T) 
 				return &models.EngramFeedbackRecord{
 					FeedbackID:           feedbackID,
 					EngramID:             input.EngramID,
+					SessionID:            input.SessionID,
 					ActorUserID:          input.ActorUserID,
 					FeedbackType:         input.FeedbackType,
 					Note:                 note,
@@ -58,43 +60,41 @@ func TestMountSessionAuthRoutesSubmitEngramFeedbackUsesRepository(t *testing.T) 
 		},
 	)
 
-	body, _ := json.Marshal(map[string]any{
-		"feedback_type":   "useful",
-		"note":            "  helpful answer  ",
-		"relevance_score": 5,
-	})
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/api/v1/engrams/"+engramID.String()+"/feedback",
-		bytes.NewReader(body),
+	response := executeSubmitEngramFeedbackRequest(
+		t,
+		submitEngramFeedbackRequestInput{
+			handler:     handler,
+			loginCookie: loginCookie,
+			engramID:    engramID,
+			bodyPayload: map[string]any{
+				"feedback_type":   "useful",
+				"session_id":      sessionID.String(),
+				"note":            "  helpful answer  ",
+				"relevance_score": 5,
+			},
+		},
 	)
-	request.Header.Set("Content-Type", "application/json")
-	request.AddCookie(loginCookie)
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
 
 	requireEqual(t, http.StatusOK, response.Code)
-	requireEqual(t, engramID, capturedInput.EngramID)
-	requireEqual(t, actor.UserID, capturedInput.ActorUserID)
-	requireEqual(t, models.EngramFeedbackTypeUseful, capturedInput.FeedbackType)
-	if capturedInput.Note == nil {
-		t.Fatalf("expected note to be forwarded")
-	}
-	requireEqual(t, "helpful answer", *capturedInput.Note)
-	if capturedInput.RelevanceScore == nil {
-		t.Fatalf("expected relevance score to be forwarded")
-	}
-	requireEqual(t, 5, *capturedInput.RelevanceScore)
-
-	var payload map[string]any
-	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	requireEqual(t, feedbackID.String(), payload["feedback_id"].(string))
-	requireEqual(t, engramID.String(), payload["engram_id"].(string))
-	requireEqual(t, actor.UserID.String(), payload["actor_user_id"].(string))
-	requireEqual(t, "useful", payload["feedback_type"].(string))
-	requireEqual(t, 5.0, payload["relevance_score"].(float64))
+	assertCapturedFeedbackForwarding(
+		t,
+		capturedInput,
+		feedbackForwardingExpectation{
+			engramID:    engramID,
+			sessionID:   sessionID,
+			actorUserID: actor.UserID,
+		},
+	)
+	assertFeedbackResponsePayload(
+		t,
+		response.Body.Bytes(),
+		feedbackResponseExpectation{
+			feedbackID:  feedbackID,
+			engramID:    engramID,
+			sessionID:   sessionID,
+			actorUserID: actor.UserID,
+		},
+	)
 }
 
 func TestMountSessionAuthRoutesSubmitEngramFeedbackValidation(t *testing.T) {
@@ -126,18 +126,18 @@ func TestMountSessionAuthRoutesSubmitEngramFeedbackValidation(t *testing.T) {
 	testCases := []map[string]any{
 		{"feedback_type": "invalid"},
 		{"feedback_type": "useful", "relevance_score": 6},
+		{"feedback_type": "useful", "session_id": "bad"},
 	}
 	for _, bodyPayload := range testCases {
-		body, _ := json.Marshal(bodyPayload)
-		request := httptest.NewRequest(
-			http.MethodPost,
-			"/api/v1/engrams/"+engramID.String()+"/feedback",
-			bytes.NewReader(body),
+		response := executeSubmitEngramFeedbackRequest(
+			t,
+			submitEngramFeedbackRequestInput{
+				handler:     handler,
+				loginCookie: loginCookie,
+				engramID:    engramID,
+				bodyPayload: bodyPayload,
+			},
 		)
-		request.Header.Set("Content-Type", "application/json")
-		request.AddCookie(loginCookie)
-		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, request)
 		requireEqual(t, http.StatusBadRequest, response.Code)
 	}
 }
@@ -167,16 +167,92 @@ func TestMountSessionAuthRoutesSubmitEngramFeedbackReturnsNotFound(t *testing.T)
 		},
 	)
 
-	body, _ := json.Marshal(map[string]any{"feedback_type": "useful"})
+	response := executeSubmitEngramFeedbackRequest(
+		t,
+		submitEngramFeedbackRequestInput{
+			handler:     handler,
+			loginCookie: loginCookie,
+			engramID:    engramID,
+			bodyPayload: map[string]any{"feedback_type": "useful"},
+		},
+	)
+
+	requireEqual(t, http.StatusNotFound, response.Code)
+}
+
+func assertCapturedFeedbackForwarding(
+	t *testing.T,
+	capturedInput SessionEngramFeedbackInput,
+	expected feedbackForwardingExpectation,
+) {
+	t.Helper()
+	requireEqual(t, expected.engramID, capturedInput.EngramID)
+	requireEqual(t, expected.sessionID, derefUUID(capturedInput.SessionID))
+	requireEqual(t, expected.actorUserID, capturedInput.ActorUserID)
+	requireEqual(t, models.EngramFeedbackTypeUseful, capturedInput.FeedbackType)
+	if capturedInput.Note == nil {
+		t.Fatalf("expected note to be forwarded")
+	}
+	requireEqual(t, "helpful answer", *capturedInput.Note)
+	if capturedInput.RelevanceScore == nil {
+		t.Fatalf("expected relevance score to be forwarded")
+	}
+	requireEqual(t, 5, *capturedInput.RelevanceScore)
+}
+
+func assertFeedbackResponsePayload(
+	t *testing.T,
+	responseBody []byte,
+	expected feedbackResponseExpectation,
+) {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(responseBody, &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	requireEqual(t, expected.feedbackID.String(), payload["feedback_id"].(string))
+	requireEqual(t, expected.engramID.String(), payload["engram_id"].(string))
+	requireEqual(t, expected.sessionID.String(), payload["session_id"].(string))
+	requireEqual(t, expected.actorUserID.String(), payload["actor_user_id"].(string))
+	requireEqual(t, "useful", payload["feedback_type"].(string))
+	requireEqual(t, 5.0, payload["relevance_score"].(float64))
+}
+
+func executeSubmitEngramFeedbackRequest(
+	t *testing.T,
+	input submitEngramFeedbackRequestInput,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(input.bodyPayload)
+	requireNoError(t, err)
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/engrams/"+engramID.String()+"/feedback",
+		"/api/v1/engrams/"+input.engramID.String()+"/feedback",
 		bytes.NewReader(body),
 	)
 	request.Header.Set("Content-Type", "application/json")
-	request.AddCookie(loginCookie)
+	request.AddCookie(input.loginCookie)
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
+	input.handler.ServeHTTP(response, request)
+	return response
+}
 
-	requireEqual(t, http.StatusNotFound, response.Code)
+type submitEngramFeedbackRequestInput struct {
+	handler     http.Handler
+	loginCookie *http.Cookie
+	engramID    uuid.UUID
+	bodyPayload map[string]any
+}
+
+type feedbackForwardingExpectation struct {
+	engramID    uuid.UUID
+	sessionID   uuid.UUID
+	actorUserID uuid.UUID
+}
+
+type feedbackResponseExpectation struct {
+	feedbackID  uuid.UUID
+	engramID    uuid.UUID
+	sessionID   uuid.UUID
+	actorUserID uuid.UUID
 }

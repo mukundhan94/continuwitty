@@ -35,6 +35,7 @@ type SessionProjectResolution struct {
 // SessionEngramFeedbackInput captures feedback route payload + actor context.
 type SessionEngramFeedbackInput struct {
 	EngramID       uuid.UUID
+	SessionID      *uuid.UUID
 	ActorUserID    uuid.UUID
 	FeedbackType   models.EngramFeedbackType
 	Note           *string
@@ -214,6 +215,7 @@ func (dependencies sessionAuthDependencies) handleSubmitEngramFeedback(
 		request.Context(),
 		SessionEngramFeedbackInput{
 			EngramID:       engramID,
+			SessionID:      payload.SessionID,
 			ActorUserID:    actor.UserID,
 			FeedbackType:   payload.FeedbackType,
 			Note:           payload.Note,
@@ -496,10 +498,20 @@ func decodeEngramFeedbackRequest(
 		)
 		return SessionEngramFeedbackInput{}, false
 	}
+	sessionID, ok := parseOptionalFeedbackSessionID(payload.SessionID)
+	if !ok {
+		writeJSON(
+			writer,
+			http.StatusBadRequest,
+			map[string]string{"detail": "session_id must be a valid uuid when provided"},
+		)
+		return SessionEngramFeedbackInput{}, false
+	}
 	return SessionEngramFeedbackInput{
 		FeedbackType:   parsedType,
 		Note:           normalizeOptionalTrimmedString(payload.Note),
 		RelevanceScore: relevanceScore,
+		SessionID:      sessionID,
 	}, true
 }
 
@@ -514,6 +526,21 @@ func normalizeOptionalFeedbackRelevanceScore(
 	}
 	normalized := *relevanceScore
 	return &normalized, true
+}
+
+func parseOptionalFeedbackSessionID(sessionID *string) (*uuid.UUID, bool) {
+	if sessionID == nil {
+		return nil, true
+	}
+	trimmed := strings.TrimSpace(*sessionID)
+	if trimmed == "" {
+		return nil, false
+	}
+	parsed, err := uuid.Parse(trimmed)
+	if err != nil {
+		return nil, false
+	}
+	return &parsed, true
 }
 
 func normalizeCreateEngramPayload(payload *models.MemoryEngramCreate) {

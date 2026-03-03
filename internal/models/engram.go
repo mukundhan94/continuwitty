@@ -134,6 +134,7 @@ func ParseEngramFeedbackType(value string) (EngramFeedbackType, error) {
 type EngramFeedbackRecord struct {
 	FeedbackID           uuid.UUID          `json:"feedback_id"`
 	EngramID             uuid.UUID          `json:"engram_id"`
+	SessionID            *uuid.UUID         `json:"session_id,omitempty"`
 	ActorUserID          uuid.UUID          `json:"actor_user_id"`
 	FeedbackType         EngramFeedbackType `json:"feedback_type"`
 	Note                 string             `json:"note"`
@@ -150,6 +151,7 @@ type EngramFeedbackCreateRequest struct {
 	FeedbackType   string  `json:"feedback_type"`
 	Note           *string `json:"note,omitempty"`
 	RelevanceScore *int    `json:"relevance_score,omitempty"`
+	SessionID      *string `json:"session_id,omitempty"`
 }
 
 // EngramCreateResponse is returned when a new engram is persisted.

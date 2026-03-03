@@ -17,6 +17,7 @@ import (
 func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testing.T) {
 	feedbackID := uuid.MustParse("00000000-0000-0000-0000-000000000a01")
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000a02")
+	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000a04")
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000a03")
 	createdAt := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 	db := &fakeQueryer{
@@ -24,6 +25,7 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 			values: []any{
 				feedbackID,
 				engramID,
+				sessionID,
 				actorUserID,
 				string(models.EngramFeedbackTypeUseful),
 				"helpful in triage",
@@ -47,6 +49,7 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 		db,
 		EngramFeedbackCreateInput{
 			EngramID:       engramID,
+			SessionID:      &sessionID,
 			ActorUserID:    actorUserID,
 			FeedbackType:   models.EngramFeedbackTypeUseful,
 			Note:           &note,
@@ -58,6 +61,10 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 	requireNotNil(t, record)
 	requireEqual(t, feedbackID, record.FeedbackID)
 	requireEqual(t, engramID, record.EngramID)
+	if record.SessionID == nil {
+		t.Fatalf("expected session id in feedback record")
+	}
+	requireEqual(t, sessionID, *record.SessionID)
 	requireEqual(t, actorUserID, record.ActorUserID)
 	requireEqual(t, models.EngramFeedbackTypeUseful, record.FeedbackType)
 	requireEqual(t, "helpful in triage", record.Note)
@@ -76,6 +83,7 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 	expectedArgs := []any{
 		feedbackID,
 		engramID,
+		sessionID,
 		actorUserID,
 		"useful",
 		"helpful in triage",
@@ -165,6 +173,16 @@ func TestRecordEngramFeedbackValidation(t *testing.T) {
 				RelevanceScore: intPtr(9),
 			},
 			expectErr: errEngramFeedbackRelevanceInvalid,
+		},
+		{
+			name: "invalid session id",
+			input: EngramFeedbackCreateInput{
+				EngramID:     uuid.New(),
+				SessionID:    uuidPointer(uuid.Nil),
+				ActorUserID:  uuid.New(),
+				FeedbackType: models.EngramFeedbackTypeUseful,
+			},
+			expectErr: errEngramFeedbackSessionIDInvalid,
 		},
 		{
 			name: "invalid feedback type",
@@ -258,6 +276,7 @@ func assertFeedbackNoteNormalizationCase(
 			values: []any{
 				testCase.feedbackID,
 				testCase.engramID,
+				nil,
 				testCase.actorUserID,
 				string(testCase.feedbackType),
 				testCase.expectedNote,
@@ -297,10 +316,14 @@ func assertFeedbackNoteNormalizationCase(
 	if record.RelevanceScore != nil {
 		t.Fatalf("expected relevance score to be nil when omitted")
 	}
-	requireEqual(t, testCase.expectedSQLNote, db.queryRowArgs[0][4])
-	requireEqual(t, nil, db.queryRowArgs[0][5])
+	requireEqual(t, testCase.expectedSQLNote, db.queryRowArgs[0][5])
+	requireEqual(t, nil, db.queryRowArgs[0][6])
 }
 
 func intPtr(value int) *int {
+	return &value
+}
+
+func uuidPointer(value uuid.UUID) *uuid.UUID {
 	return &value
 }

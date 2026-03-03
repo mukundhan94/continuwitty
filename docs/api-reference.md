@@ -48,7 +48,7 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 | `POST` | `/api/v1/engrams/query` | Semantic query |
 | `GET` | `/api/v1/engrams/{engram_id}/sources` | Inspect provenance sources |
 | `GET` | `/api/v1/engrams/{engram_id}/rehydrate` | Get rehydration bundle |
-| `POST` | `/api/v1/engrams/{engram_id}/feedback` | Submit engram feedback (`feedback_type`, optional `note`, optional `relevance_score` 1-5) |
+| `POST` | `/api/v1/engrams/{engram_id}/feedback` | Submit engram feedback (`feedback_type`, optional `session_id`, optional `note`, optional `relevance_score` 1-5) |
 | `POST` | `/api/v1/engrams/{engram_id}/share` | Share engram to project-visible scope |
 | `POST` | `/api/v1/engrams/{engram_id}/unshare` | Revert engram visibility to private |
 
