@@ -1402,6 +1402,37 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 47 - Query Quality Diagnostics in Results
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - `models.EngramQueryResult` now includes `feedback_count` and `contradiction_count`.
+  - repository query SQL/mapping now forwards aggregate feedback diagnostics in query rows.
+  - REST and MCP query paths now return quality counters alongside authority score.
+  - regression coverage added for repository result mapping plus REST/MCP payload parity.
+
+### Goals
+
+1. Improve observability of recall quality signals in query responses.
+2. Let clients reason about conflict density and feedback volume per candidate engram.
+3. Preserve deterministic query payload shape across REST and MCP surfaces.
+
+### Deliverables
+
+1. Query-result contract extension for quality counters.
+2. Repository query projection/mapping updates.
+3. REST/MCP parity tests and docs synchronization.
+
+### Exit Criteria
+
+1. Query responses include `feedback_count` and `contradiction_count` consistently in REST and MCP.
+2. Repository mapping behavior is protected by regression tests.
+3. API/MCP docs reflect the new response diagnostics.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1445,3 +1476,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 45: `avg_relevance_feedback_min` parity across REST/MCP/repository.
 11. Execute contradiction-aware query filter increment:
    - [x] Phase 46: `contradiction_count_max` parity across REST/MCP/repository.
+12. Execute query diagnostics increment:
+   - [x] Phase 47: expose `feedback_count` + `contradiction_count` in query results.

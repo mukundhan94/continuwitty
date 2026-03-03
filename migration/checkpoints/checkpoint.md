@@ -437,6 +437,20 @@
   - repository where-clause/params assertions for contradiction predicate.
   - MCP parity and validation tests for contradiction-count filter behavior.
 
+### Phase 47 Progress Tracker
+
+- [x] Added query-result diagnostics contract extension:
+  - `feedback_count` on `models.EngramQueryResult`.
+  - `contradiction_count` on `models.EngramQueryResult`.
+- [x] Added repository query projection parity:
+  - query SQL now projects `COALESCE(feedback_count, 0)`.
+  - result mapping now forwards both feedback and contradiction counters.
+- [x] Added REST/MCP parity coverage:
+  - REST query route response test asserts `feedback_count` + `contradiction_count` serialization.
+  - MCP compatibility query parity test includes quality counters in returned payloads.
+- [x] Added repository regression coverage:
+  - query fixture/mapping assertions now verify feedback and contradiction counters on query results.
+
 ---
 
 ## Completed Milestones
@@ -590,3 +604,4 @@
 | 44 | Authority Signal Transparency + Fallback Calibration | Completed |
 | 45 | Feedback-Aware Query Filters | Completed |
 | 46 | Contradiction-Aware Query Filters | Completed |
+| 47 | Query Quality Diagnostics in Results | Completed |

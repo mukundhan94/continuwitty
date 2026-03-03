@@ -7,6 +7,23 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 47: query quality diagnostics in result payloads)
+
+1. Extended engram query result contracts with feedback diagnostics:
+   - added `feedback_count` to `EngramQueryResult`.
+   - added `contradiction_count` to `EngramQueryResult`.
+2. Updated repository query projection/mapping:
+   - query SQL now projects `COALESCE(feedback_count, 0)`.
+   - query-row mapping forwards `feedback_count` and `contradiction_count` to result payloads.
+3. Added parity/regression coverage:
+   - repository query tests now assert quality counters in mapped results.
+   - REST query-route response test now asserts serialized diagnostics.
+   - MCP compatibility parity fixture now includes query diagnostics fields.
+4. Documentation alignment:
+   - API and MCP query docs now describe returned `feedback_count` and `contradiction_count`.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 46: contradiction-aware query filter parity)
 
 1. Added contradiction-aware query contract extension:

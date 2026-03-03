@@ -108,6 +108,7 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 			visibility_scope,
 			retrieval_text,
 			COALESCE(useful_count, 0) AS useful_count,
+			COALESCE(feedback_count, 0) AS feedback_count,
 			COALESCE(contradiction_count, 0) AS contradiction_count,
 			COALESCE(access_count, 0) AS access_count,
 			COALESCE(freshness_score, 1.0) AS freshness_score,
@@ -206,6 +207,7 @@ func scanEngramCandidateRow(row interface {
 		visibilityScope           *string
 		retrievalText             string
 		usefulCount               int
+		feedbackCount             int
 		contradiction             int
 		accessCount               int
 		freshnessScore            float64
@@ -225,6 +227,7 @@ func scanEngramCandidateRow(row interface {
 		&visibilityScope,
 		&retrievalText,
 		&usefulCount,
+		&feedbackCount,
 		&contradiction,
 		&accessCount,
 		&freshnessScore,
@@ -252,6 +255,7 @@ func scanEngramCandidateRow(row interface {
 		"visibility_scope":             visibilityOrDefault(visibilityScope),
 		"retrieval_text":               retrievalText,
 		"useful_count":                 usefulCount,
+		"feedback_count":               feedbackCount,
 		"contradiction_count":          contradiction,
 		"access_count":                 accessCount,
 		"freshness_score":              freshnessScore,
@@ -270,6 +274,8 @@ func mapEngramQueryResult(row map[string]any) models.EngramQueryResult {
 		Tags:                      stringSliceFromAny(row["tags"]),
 		Keywords:                  stringSliceFromAny(row["keywords"]),
 		VisibilityScope:           visibilityFromAny(row["visibility_scope"]),
+		FeedbackCount:             intFromAny(row["feedback_count"]),
+		ContradictionCount:        intFromAny(row["contradiction_count"]),
 		SourceSessionQualityScore: float64FromAny(row["source_session_quality_score"]),
 		Distance:                  float64FromAny(row["distance"]),
 	}

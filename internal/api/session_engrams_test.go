@@ -239,6 +239,8 @@ func TestMountSessionAuthRoutesQueryEngramsReturnsAuthorityScore(t *testing.T) {
 						Abstract:                  "Authority score should be visible",
 						CreatedAt:                 time.Date(2026, 3, 3, 11, 0, 0, 0, time.UTC),
 						VisibilityScope:           "private",
+						FeedbackCount:             6,
+						ContradictionCount:        2,
 						SourceSessionQualityScore: 0.81,
 						Distance:                  0.12,
 					},
@@ -273,6 +275,8 @@ func TestMountSessionAuthRoutesQueryEngramsReturnsAuthorityScore(t *testing.T) {
 		t.Fatalf("decode query response: %v", err)
 	}
 	requireEqual(t, 1, len(payload))
+	requireEqual(t, float64(6), payload[0]["feedback_count"].(float64))
+	requireEqual(t, float64(2), payload[0]["contradiction_count"].(float64))
 	requireEqual(t, 0.81, payload[0]["source_session_quality_score"].(float64))
 }
 

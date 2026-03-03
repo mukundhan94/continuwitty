@@ -56,6 +56,8 @@ func buildEngramQueryParityFixture(t *testing.T) engramQueryParityFixture {
 				CreatedAt:                 time.Unix(1700003950, 0).UTC(),
 				Distance:                  0.1,
 				SourceSessionQualityScore: 0.78,
+				FeedbackCount:             4,
+				ContradictionCount:        1,
 				Keywords:                  []string{"risk"},
 				Tags:                      []string{"ops"},
 				OwnerUserID:               uuidPtr(uuid.MustParse("39500000-0000-0000-0000-000000000397")),
