@@ -312,6 +312,8 @@ Optional temporal/engagement filters:
 - `dense_score_max` (number, bounded `0..1`)
 - `lexical_overlap_score_min` (number, bounded `0..1`)
 - `lexical_overlap_score_max` (number, bounded `0..1`)
+- `feedback_signal_score_min` (number, bounded `0..1`)
+- `feedback_signal_score_max` (number, bounded `0..1`)
 - `composite_rank_score_min` (number, bounded `0..1`)
 - `composite_rank_score_max` (number, bounded `0..1`)
 - `relation_type` (`supports|depends_on|contradicts|related_to|derived_from`)

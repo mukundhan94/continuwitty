@@ -87,6 +87,8 @@ type EngramQueryRequest struct {
 	DenseScoreMax           *float64                `json:"dense_score_max,omitempty"`
 	LexicalOverlapScoreMin  *float64                `json:"lexical_overlap_score_min,omitempty"`
 	LexicalOverlapScoreMax  *float64                `json:"lexical_overlap_score_max,omitempty"`
+	FeedbackSignalScoreMin  *float64                `json:"feedback_signal_score_min,omitempty"`
+	FeedbackSignalScoreMax  *float64                `json:"feedback_signal_score_max,omitempty"`
 	CompositeRankScoreMin   *float64                `json:"composite_rank_score_min,omitempty"`
 	CompositeRankScoreMax   *float64                `json:"composite_rank_score_max,omitempty"`
 	LastAccessedAfter       *time.Time              `json:"last_accessed_after,omitempty"`

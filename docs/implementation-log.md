@@ -7,6 +7,24 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 72: feedback-signal score query band filters)
+
+1. Added feedback-signal query filter contract extensions:
+   - new optional filters: `feedback_signal_score_min` and `feedback_signal_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded feedback-signal filters and rejects inverted feedback-signal windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate feedback-signal filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports feedback-signal score band filtering alongside dense/lexical/composite score filtering.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for feedback-signal filters.
+   - repository query-runtime coverage for feedback-signal filtering behavior.
+   - MCP parity and validation coverage for feedback-signal filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include feedback-signal filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 71: lexical-overlap score query band filters)
 
 1. Added lexical-overlap query filter contract extensions:

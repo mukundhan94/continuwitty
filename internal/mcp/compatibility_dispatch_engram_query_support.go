@@ -76,6 +76,8 @@ type engramQueryPayloadParts struct {
 	denseScoreMax           *float64
 	lexicalOverlapScoreMin  *float64
 	lexicalOverlapScoreMax  *float64
+	feedbackSignalScoreMin  *float64
+	feedbackSignalScoreMax  *float64
 	compositeRankScoreMin   *float64
 	compositeRankScoreMax   *float64
 	lastAccessedAfter       *time.Time
@@ -161,6 +163,8 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		denseScoreMax:           engagementParts.denseScoreMax,
 		lexicalOverlapScoreMin:  engagementParts.lexicalOverlapScoreMin,
 		lexicalOverlapScoreMax:  engagementParts.lexicalOverlapScoreMax,
+		feedbackSignalScoreMin:  engagementParts.feedbackSignalScoreMin,
+		feedbackSignalScoreMax:  engagementParts.feedbackSignalScoreMax,
 		compositeRankScoreMin:   engagementParts.compositeRankScoreMin,
 		compositeRankScoreMax:   engagementParts.compositeRankScoreMax,
 		lastAccessedAfter:       temporalParts.lastAccessedAfter,
@@ -256,6 +260,8 @@ type engramQueryEngagementParts struct {
 	denseScoreMax           *float64
 	lexicalOverlapScoreMin  *float64
 	lexicalOverlapScoreMax  *float64
+	feedbackSignalScoreMin  *float64
+	feedbackSignalScoreMax  *float64
 	compositeRankScoreMin   *float64
 	compositeRankScoreMax   *float64
 }
@@ -292,6 +298,8 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 		denseScoreMax:           scoreParts.denseScoreMax,
 		lexicalOverlapScoreMin:  scoreParts.lexicalOverlapScoreMin,
 		lexicalOverlapScoreMax:  scoreParts.lexicalOverlapScoreMax,
+		feedbackSignalScoreMin:  scoreParts.feedbackSignalScoreMin,
+		feedbackSignalScoreMax:  scoreParts.feedbackSignalScoreMax,
 		compositeRankScoreMin:   scoreParts.compositeRankScoreMin,
 		compositeRankScoreMax:   scoreParts.compositeRankScoreMax,
 	}
@@ -347,6 +355,9 @@ func invalidQueryEngagementWindowError(
 	}
 	if hasInvalidScoreWindow(parts.lexicalOverlapScoreMin, parts.lexicalOverlapScoreMax) {
 		return invalidParamError("lexical_overlap_score_min")
+	}
+	if hasInvalidScoreWindow(parts.feedbackSignalScoreMin, parts.feedbackSignalScoreMax) {
+		return invalidParamError("feedback_signal_score_min")
 	}
 	if hasInvalidScoreWindow(parts.compositeRankScoreMin, parts.compositeRankScoreMax) {
 		return invalidParamError("composite_rank_score_min")
@@ -436,6 +447,8 @@ type engramQueryScoreEngagementParts struct {
 	denseScoreMax           *float64
 	lexicalOverlapScoreMin  *float64
 	lexicalOverlapScoreMax  *float64
+	feedbackSignalScoreMin  *float64
+	feedbackSignalScoreMax  *float64
 	compositeRankScoreMin   *float64
 	compositeRankScoreMax   *float64
 }
@@ -499,6 +512,14 @@ func parseEngramQueryScoreEngagementParts(
 	if dispatchErr != nil {
 		return engramQueryScoreEngagementParts{}, dispatchErr
 	}
+	feedbackSignalScoreMin, dispatchErr := parseEngramQueryFeedbackSignalScoreMin(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
+	feedbackSignalScoreMax, dispatchErr := parseEngramQueryFeedbackSignalScoreMax(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
 	compositeRankScoreMin, dispatchErr := parseEngramQueryCompositeRankScoreMin(params)
 	if dispatchErr != nil {
 		return engramQueryScoreEngagementParts{}, dispatchErr
@@ -522,6 +543,8 @@ func parseEngramQueryScoreEngagementParts(
 		denseScoreMax:           denseScoreMax,
 		lexicalOverlapScoreMin:  lexicalOverlapScoreMin,
 		lexicalOverlapScoreMax:  lexicalOverlapScoreMax,
+		feedbackSignalScoreMin:  feedbackSignalScoreMin,
+		feedbackSignalScoreMax:  feedbackSignalScoreMax,
 		compositeRankScoreMin:   compositeRankScoreMin,
 		compositeRankScoreMax:   compositeRankScoreMax,
 	}, nil
@@ -614,6 +637,8 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		DenseScoreMax:           parts.denseScoreMax,
 		LexicalOverlapScoreMin:  parts.lexicalOverlapScoreMin,
 		LexicalOverlapScoreMax:  parts.lexicalOverlapScoreMax,
+		FeedbackSignalScoreMin:  parts.feedbackSignalScoreMin,
+		FeedbackSignalScoreMax:  parts.feedbackSignalScoreMax,
 		CompositeRankScoreMin:   parts.compositeRankScoreMin,
 		CompositeRankScoreMax:   parts.compositeRankScoreMax,
 		LastAccessedAfter:       parts.lastAccessedAfter,
@@ -812,6 +837,14 @@ func parseEngramQueryLexicalOverlapScoreMin(params map[string]any) (*float64, *t
 
 func parseEngramQueryLexicalOverlapScoreMax(params map[string]any) (*float64, *toolDispatchError) {
 	return parseEngramQueryBoundedScoreMin(params, "lexical_overlap_score_max")
+}
+
+func parseEngramQueryFeedbackSignalScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "feedback_signal_score_min")
+}
+
+func parseEngramQueryFeedbackSignalScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "feedback_signal_score_max")
 }
 
 func parseEngramQueryCompositeRankScoreMin(params map[string]any) (*float64, *toolDispatchError) {

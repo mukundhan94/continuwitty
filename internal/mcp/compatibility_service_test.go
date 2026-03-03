@@ -212,6 +212,12 @@ func TestCompatibilityServiceToolsListIncludesAuthorityFilterForEngramQuery(t *t
 	if _, exists := properties["lexical_overlap_score_max"]; !exists {
 		t.Fatalf("expected lexical_overlap_score_max property in engram_query schema")
 	}
+	if _, exists := properties["feedback_signal_score_min"]; !exists {
+		t.Fatalf("expected feedback_signal_score_min property in engram_query schema")
+	}
+	if _, exists := properties["feedback_signal_score_max"]; !exists {
+		t.Fatalf("expected feedback_signal_score_max property in engram_query schema")
+	}
 }
 
 func TestBuildVisiblePublicToolCatalogClonesInputSchemas(t *testing.T) {

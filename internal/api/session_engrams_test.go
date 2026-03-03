@@ -385,6 +385,31 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid lexical_overlap_score window",
 		},
 		{
+			name: "invalid feedback signal score min",
+			body: map[string]any{
+				"query":                     "durable memory",
+				"feedback_signal_score_min": 1.2,
+			},
+			expectedDetail: "invalid feedback_signal_score_min",
+		},
+		{
+			name: "invalid feedback signal score max",
+			body: map[string]any{
+				"query":                     "durable memory",
+				"feedback_signal_score_max": 1.2,
+			},
+			expectedDetail: "invalid feedback_signal_score_max",
+		},
+		{
+			name: "invalid feedback signal score window",
+			body: map[string]any{
+				"query":                     "durable memory",
+				"feedback_signal_score_min": 0.9,
+				"feedback_signal_score_max": 0.7,
+			},
+			expectedDetail: "invalid feedback_signal_score window",
+		},
+		{
 			name: "invalid composite rank score min",
 			body: map[string]any{
 				"query":                    "durable memory",
@@ -611,6 +636,8 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"dense_score_max":                  0.96,
 					"lexical_overlap_score_min":        0.65,
 					"lexical_overlap_score_max":        0.98,
+					"feedback_signal_score_min":        0.55,
+					"feedback_signal_score_max":        0.94,
 					"composite_rank_score_min":         0.75,
 					"composite_rank_score_max":         0.95,
 					"last_accessed_after":              "2026-02-01T00:00:00Z",
@@ -795,6 +822,16 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 		t,
 		0.98,
 		requireFloat64Pointer(t, request.LexicalOverlapScoreMax, "lexical_overlap_score_max"),
+	)
+	requireEqual(
+		t,
+		0.55,
+		requireFloat64Pointer(t, request.FeedbackSignalScoreMin, "feedback_signal_score_min"),
+	)
+	requireEqual(
+		t,
+		0.94,
+		requireFloat64Pointer(t, request.FeedbackSignalScoreMax, "feedback_signal_score_max"),
 	)
 	requireEqual(
 		t,

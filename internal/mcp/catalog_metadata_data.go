@@ -723,6 +723,16 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"minimum": 0,
 					"maximum": 1,
 				},
+				"feedback_signal_score_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"feedback_signal_score_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
 				"composite_rank_score_min": map[string]any{
 					"type":    "number",
 					"minimum": 0,

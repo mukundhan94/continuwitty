@@ -290,6 +290,39 @@ func TestQueryEngramsAppliesLexicalOverlapScoreFilters(t *testing.T) {
 	}
 }
 
+func TestQueryEngramsAppliesFeedbackSignalScoreFilters(t *testing.T) {
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	projectID := "engram-vault"
+	minFeedbackSignal := 0.6
+	maxFeedbackSignal := 0.8
+	db := buildFeedbackScoreQueryEngramsFixture(projectID)
+
+	results, err := QueryEngrams(
+		context.Background(),
+		db,
+		QueryEngramsInput{
+			Request: models.EngramQueryRequest{
+				Query:                  "durable checkpoint",
+				TopK:                   2,
+				ProjectID:              &projectID,
+				FeedbackSignalScoreMin: &minFeedbackSignal,
+				FeedbackSignalScoreMax: &maxFeedbackSignal,
+			},
+			QueryLiteral: "[0.1,0.2,0.3]",
+			ActorUserID:  &actorUserID,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, 1, len(results))
+	requireEqual(t, "Useful Signal Match", results[0].Title)
+	if results[0].FeedbackSignalScore < minFeedbackSignal {
+		t.Fatalf("expected feedback signal >= %v, got %v", minFeedbackSignal, results[0].FeedbackSignalScore)
+	}
+	if results[0].FeedbackSignalScore > maxFeedbackSignal {
+		t.Fatalf("expected feedback signal <= %v, got %v", maxFeedbackSignal, results[0].FeedbackSignalScore)
+	}
+}
+
 func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
 	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)
@@ -328,6 +361,57 @@ func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 					"private",
 					"durable checkpoint lifecycle",
 					0,
+					1,
+					0.82,
+					0,
+					7,
+					0.88,
+					0.5,
+					0.25,
+				},
+			},
+		},
+	}
+}
+
+func buildFeedbackScoreQueryEngramsFixture(projectID string) *fakeQueryer {
+	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
+	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)
+	return &fakeQueryer{
+		queryRowsResult: &fakeRows{
+			values: [][]any{
+				{
+					uuid.MustParse("00000000-0000-0000-0000-000000000221"),
+					projectID,
+					"Contradiction Signal Match",
+					"",
+					createdDense,
+					[]string{},
+					[]string{},
+					nil,
+					"private",
+					"unrelated text",
+					0,
+					1,
+					0.55,
+					1,
+					1,
+					0.4,
+					0.5,
+					0.2,
+				},
+				{
+					uuid.MustParse("00000000-0000-0000-0000-000000000222"),
+					projectID,
+					"Useful Signal Match",
+					"",
+					createdLexical,
+					[]string{},
+					[]string{"durable", "checkpoint"},
+					nil,
+					"private",
+					"durable checkpoint lifecycle",
+					1,
 					1,
 					0.82,
 					0,

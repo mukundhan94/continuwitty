@@ -2212,6 +2212,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 72 - Feedback-Signal Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `feedback_signal_score_min` and `feedback_signal_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded feedback-signal filters (`0..1`) and rejects inverted feedback-signal windows.
+  - repository query pipeline now supports post-rerank feedback-signal filtering in combination with other score-band filters.
+  - MCP `engram.query` parser/catalog now accept and validate feedback-signal filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain retrieval by calibrated usefulness-vs-contradiction feedback signal.
+2. Keep feedback-signal filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit feedback-signal filters.
+
+### Deliverables
+
+1. Contract extension for `feedback_signal_score_min` and `feedback_signal_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank feedback-signal filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply feedback-signal floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted feedback-signal windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for feedback-signal band filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2305,3 +2337,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 70: `dense_score_min` + `dense_score_max` parity across REST/MCP/repository.
 36. Execute lexical-overlap filter increment:
    - [x] Phase 71: `lexical_overlap_score_min` + `lexical_overlap_score_max` parity across REST/MCP/repository.
+37. Execute feedback-signal filter increment:
+   - [x] Phase 72: `feedback_signal_score_min` + `feedback_signal_score_max` parity across REST/MCP/repository.

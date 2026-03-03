@@ -449,6 +449,14 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 			invalid: invalidLexicalOverlapScoreMax(payload.LexicalOverlapScoreMax),
 		},
 		{
+			detail:  "invalid feedback_signal_score_min",
+			invalid: invalidFeedbackSignalScoreMin(payload.FeedbackSignalScoreMin),
+		},
+		{
+			detail:  "invalid feedback_signal_score_max",
+			invalid: invalidFeedbackSignalScoreMax(payload.FeedbackSignalScoreMax),
+		},
+		{
 			detail:  "invalid composite_rank_score_min",
 			invalid: invalidCompositeRankScoreMin(payload.CompositeRankScoreMin),
 		},
@@ -558,6 +566,14 @@ func invalidLexicalOverlapScoreMin(value *float64) bool {
 }
 
 func invalidLexicalOverlapScoreMax(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidFeedbackSignalScoreMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidFeedbackSignalScoreMax(value *float64) bool {
 	return invalidBoundedUnitInterval(value)
 }
 
@@ -693,6 +709,9 @@ func invalidQueryNumericWindowDetail(payload models.EngramQueryRequest) string {
 	}
 	if hasInvalidScoreWindow(payload.LexicalOverlapScoreMin, payload.LexicalOverlapScoreMax) {
 		return "invalid lexical_overlap_score window"
+	}
+	if hasInvalidScoreWindow(payload.FeedbackSignalScoreMin, payload.FeedbackSignalScoreMax) {
+		return "invalid feedback_signal_score window"
 	}
 	if hasInvalidScoreWindow(payload.CompositeRankScoreMin, payload.CompositeRankScoreMax) {
 		return "invalid composite_rank_score window"
