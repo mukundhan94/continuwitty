@@ -317,9 +317,11 @@
     - applied-status downstream effects:
       - consolidation suggestion status transitions to `merged`.
       - contradiction alert status transitions to `resolved`.
-- [x] Added benchmark coverage for curation suggestion action latency and sync scaling.
+- [x] Added benchmark coverage for curation suggestion action latency, applied-side-effect orchestration, and sync scaling.
   - benchmark suite:
     - `BenchmarkActionMemoryCurationSuggestion`
+    - `BenchmarkActionMemoryCurationSuggestionAppliedConsolidate`
+    - `BenchmarkActionMemoryCurationSuggestionAppliedContradiction`
     - `BenchmarkSyncConsolidationCurationSuggestions50Candidates`
     - `BenchmarkSyncConsolidationCurationSuggestions200Candidates`
   - benchmark artifact: `docs/phase40-curation-benchmark.md`

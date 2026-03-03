@@ -33,7 +33,7 @@ func BenchmarkActionMemoryCurationSuggestion(b *testing.B) {
 
 	request := MemoryCurationSuggestionActionRequest{
 		ProjectID: &projectID,
-		Status:    models.MemoryCurationSuggestionStatusApplied,
+		Status:    models.MemoryCurationSuggestionStatusAccepted,
 	}
 
 	b.ReportAllocs()
@@ -45,6 +45,118 @@ func BenchmarkActionMemoryCurationSuggestion(b *testing.B) {
 			actorUserID,
 			request,
 		); err != nil {
+			b.Fatalf("action failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkActionMemoryCurationSuggestionAppliedConsolidate(b *testing.B) {
+	service := NewService(nil, 256, nil)
+	projectID := "engram-vault"
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000cb11")
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000cb12")
+	consolidationSuggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000cb13")
+	service.deps.getMemoryCurationSuggestion = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ uuid.UUID,
+		_ *string,
+	) (*models.MemoryCurationSuggestion, error) {
+		return &models.MemoryCurationSuggestion{
+			SuggestionID:   suggestionID,
+			ProjectID:      projectID,
+			SuggestionType: models.MemoryCurationSuggestionTypeConsolidate,
+			PayloadJSON: map[string]any{
+				"consolidation_suggestion_id": consolidationSuggestionID.String(),
+			},
+		}, nil
+	}
+	service.deps.applyConsolidationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.ConsolidationSuggestionActionInput,
+	) (*models.EngramConsolidationSuggestion, error) {
+		return &models.EngramConsolidationSuggestion{SuggestionID: consolidationSuggestionID}, nil
+	}
+	service.deps.applyMemoryCurationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.MemoryCurationSuggestionActionInput,
+	) (*models.MemoryCurationSuggestion, error) {
+		return &models.MemoryCurationSuggestion{
+			SuggestionID:  input.SuggestionID,
+			ProjectID:     projectID,
+			Status:        input.Status,
+			ActionedAt:    &input.ActionedAt,
+			ActionTakenBy: &input.ActorUserID,
+		}, nil
+	}
+
+	request := MemoryCurationSuggestionActionRequest{
+		ProjectID: &projectID,
+		Status:    models.MemoryCurationSuggestionStatusApplied,
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := service.ActionMemoryCurationSuggestion(context.Background(), suggestionID, actorUserID, request); err != nil {
+			b.Fatalf("action failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkActionMemoryCurationSuggestionAppliedContradiction(b *testing.B) {
+	service := NewService(nil, 256, nil)
+	projectID := "engram-vault"
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000cb21")
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000cb22")
+	alertID := uuid.MustParse("00000000-0000-0000-0000-00000000cb23")
+	service.deps.getMemoryCurationSuggestion = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ uuid.UUID,
+		_ *string,
+	) (*models.MemoryCurationSuggestion, error) {
+		return &models.MemoryCurationSuggestion{
+			SuggestionID:   suggestionID,
+			ProjectID:      projectID,
+			SuggestionType: models.MemoryCurationSuggestionTypeContradiction,
+			PayloadJSON: map[string]any{
+				"contradiction_alert_id": alertID.String(),
+			},
+		}, nil
+	}
+	service.deps.resolveContradictionAlert = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.ContradictionAlertResolveInput,
+	) (*models.EngramContradictionAlert, error) {
+		return &models.EngramContradictionAlert{AlertID: alertID}, nil
+	}
+	service.deps.applyMemoryCurationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.MemoryCurationSuggestionActionInput,
+	) (*models.MemoryCurationSuggestion, error) {
+		return &models.MemoryCurationSuggestion{
+			SuggestionID:  input.SuggestionID,
+			ProjectID:     projectID,
+			Status:        input.Status,
+			ActionedAt:    &input.ActionedAt,
+			ActionTakenBy: &input.ActorUserID,
+		}, nil
+	}
+
+	request := MemoryCurationSuggestionActionRequest{
+		ProjectID: &projectID,
+		Status:    models.MemoryCurationSuggestionStatusApplied,
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := service.ActionMemoryCurationSuggestion(context.Background(), suggestionID, actorUserID, request); err != nil {
 			b.Fatalf("action failed: %v", err)
 		}
 	}

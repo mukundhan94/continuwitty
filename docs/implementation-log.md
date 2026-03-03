@@ -7,6 +7,16 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: applied-side-effect benchmark expansion)
+
+1. Expanded curation benchmark suite in `internal/admin/service_curation_benchmark_test.go`:
+   - `BenchmarkActionMemoryCurationSuggestionAppliedConsolidate`
+   - `BenchmarkActionMemoryCurationSuggestionAppliedContradiction`
+2. Updated benchmark artifact in `docs/phase40-curation-benchmark.md`:
+   - refreshed command and benchmark table to include applied-side-effect baselines.
+3. Validation:
+   - `go test ./internal/admin -run '^$' -bench 'Benchmark(ActionMemoryCurationSuggestion|ActionMemoryCurationSuggestionAppliedConsolidate|ActionMemoryCurationSuggestionAppliedContradiction|SyncConsolidationCurationSuggestions(50Candidates|200Candidates))$' -benchmem`
+
 ### 2026-03-03 (Phase 40 continuation: applied-cascade acceptance coverage)
 
 1. Extended Phase 40 acceptance feature with downstream-apply scenario:

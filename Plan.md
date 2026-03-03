@@ -1169,7 +1169,7 @@ Build a local-first memory system where agents and humans can:
       - generation + accepted action transitions.
       - `applied` action cascades to downstream consolidation (`merged`) and contradiction (`resolved`) workflows.
   - benchmark coverage baseline:
-    - `internal/admin` benchmark suite for curation action latency and sync-generation scaling.
+    - `internal/admin` benchmark suite for curation action latency, applied-side-effect orchestration, and sync-generation scaling.
     - benchmark artifact: `docs/phase40-curation-benchmark.md`.
 
 ### Goals
