@@ -269,6 +269,14 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid access_count_max",
 		},
 		{
+			name: "invalid freshness score max",
+			body: map[string]any{
+				"query":               "durable memory",
+				"freshness_score_max": 1.2,
+			},
+			expectedDetail: "invalid freshness_score_max",
+		},
+		{
 			name: "invalid useful feedback ratio min",
 			body: map[string]any{
 				"query":                     "durable memory",
@@ -423,6 +431,7 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"contradiction_count_max":          3,
 					"contradiction_feedback_ratio_max": 0.3,
 					"freshness_score_min":              0.4,
+					"freshness_score_max":              0.9,
 					"useful_feedback_ratio_min":        0.8,
 					"avg_relevance_feedback_min":       0.55,
 					"source_session_quality_min":       0.7,
@@ -550,6 +559,7 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 		),
 	)
 	requireEqual(t, 0.4, requireFloat64Pointer(t, request.FreshnessScoreMin, "freshness_score_min"))
+	requireEqual(t, 0.9, requireFloat64Pointer(t, request.FreshnessScoreMax, "freshness_score_max"))
 	requireEqual(
 		t,
 		0.8,

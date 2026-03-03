@@ -297,6 +297,7 @@ Optional temporal/engagement filters:
 - `contradiction_count_max` (int, minimum `0`)
 - `contradiction_feedback_ratio_max` (number, bounded `0..1`)
 - `freshness_score_min` (number, bounded `0..1`)
+- `freshness_score_max` (number, bounded `0..1`)
 - `useful_feedback_ratio_min` (number, bounded `0..1`)
 - `avg_relevance_feedback_min` (number, bounded `0..1`)
 - `source_session_quality_min` (number, bounded `0..1`)

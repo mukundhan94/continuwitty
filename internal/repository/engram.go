@@ -236,6 +236,7 @@ func buildEngramQueryWhere(
 		) <= %s`,
 	)
 	addOptionalPointerClause(builder, request.FreshnessScoreMin, "COALESCE(freshness_score, 1.0) >= %s")
+	addOptionalPointerClause(builder, request.FreshnessScoreMax, "COALESCE(freshness_score, 1.0) <= %s")
 	addOptionalPointerClause(
 		builder,
 		request.UsefulFeedbackRatioMin,

@@ -167,6 +167,9 @@ func TestCompatibilityServiceToolsListIncludesAuthorityFilterForEngramQuery(t *t
 	if _, exists := properties["access_count_max"]; !exists {
 		t.Fatalf("expected access_count_max property in engram_query schema")
 	}
+	if _, exists := properties["freshness_score_max"]; !exists {
+		t.Fatalf("expected freshness_score_max property in engram_query schema")
+	}
 	if _, exists := properties["useful_feedback_ratio_min"]; !exists {
 		t.Fatalf("expected useful_feedback_ratio_min property in engram_query schema")
 	}

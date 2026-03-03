@@ -108,6 +108,7 @@ func buildEngramQueryParityExpectations(
 	contradictionCountMax := 2
 	contradictionFeedbackRatioMax := 0.3
 	freshnessScoreMin := 0.42
+	freshnessScoreMax := 0.91
 	usefulFeedbackRatioMin := 0.8
 	avgRelevanceFeedbackMin := 0.58
 	sourceSessionQualityMin := 0.73
@@ -130,6 +131,7 @@ func buildEngramQueryParityExpectations(
 		"contradiction_count_max":          float64(contradictionCountMax),
 		"contradiction_feedback_ratio_max": contradictionFeedbackRatioMax,
 		"freshness_score_min":              freshnessScoreMin,
+		"freshness_score_max":              freshnessScoreMax,
 		"useful_feedback_ratio_min":        usefulFeedbackRatioMin,
 		"avg_relevance_feedback_min":       avgRelevanceFeedbackMin,
 		"source_session_quality_min":       sourceSessionQualityMin,
@@ -159,6 +161,7 @@ func buildEngramQueryParityExpectations(
 			ContradictionCountMax:   &contradictionCountMax,
 			ContradictionRatioMax:   &contradictionFeedbackRatioMax,
 			FreshnessScoreMin:       &freshnessScoreMin,
+			FreshnessScoreMax:       &freshnessScoreMax,
 			UsefulFeedbackRatioMin:  &usefulFeedbackRatioMin,
 			AvgRelevanceFeedbackMin: &avgRelevanceFeedbackMin,
 			SourceSessionQualityMin: &sourceSessionQualityMin,
@@ -278,6 +281,9 @@ func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
 		{name: "invalid contradiction_feedback_ratio_max high", params: map[string]any{"query": "x", "contradiction_feedback_ratio_max": 1.1}},
 		{name: "invalid freshness_score_min low", params: map[string]any{"query": "x", "freshness_score_min": -0.1}},
 		{name: "invalid freshness_score_min high", params: map[string]any{"query": "x", "freshness_score_min": 1.1}},
+		{name: "invalid freshness_score_max type", params: map[string]any{"query": "x", "freshness_score_max": "bad"}},
+		{name: "invalid freshness_score_max low", params: map[string]any{"query": "x", "freshness_score_max": -0.1}},
+		{name: "invalid freshness_score_max high", params: map[string]any{"query": "x", "freshness_score_max": 1.1}},
 		{name: "invalid useful_feedback_ratio_min type", params: map[string]any{"query": "x", "useful_feedback_ratio_min": "bad"}},
 		{name: "invalid useful_feedback_ratio_min low", params: map[string]any{"query": "x", "useful_feedback_ratio_min": -0.1}},
 		{name: "invalid useful_feedback_ratio_min high", params: map[string]any{"query": "x", "useful_feedback_ratio_min": 1.1}},

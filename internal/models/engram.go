@@ -72,6 +72,7 @@ type EngramQueryRequest struct {
 	ContradictionCountMax   *int                    `json:"contradiction_count_max,omitempty"`
 	ContradictionRatioMax   *float64                `json:"contradiction_feedback_ratio_max,omitempty"`
 	FreshnessScoreMin       *float64                `json:"freshness_score_min,omitempty"`
+	FreshnessScoreMax       *float64                `json:"freshness_score_max,omitempty"`
 	UsefulFeedbackRatioMin  *float64                `json:"useful_feedback_ratio_min,omitempty"`
 	AvgRelevanceFeedbackMin *float64                `json:"avg_relevance_feedback_min,omitempty"`
 	SourceSessionQualityMin *float64                `json:"source_session_quality_min,omitempty"`

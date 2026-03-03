@@ -1757,6 +1757,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 58 - Freshness-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `freshness_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `freshness_score_max` (`0..1`).
+  - repository query builder now supports `COALESCE(freshness_score, 1.0) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `freshness_score_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain recall to memories below a freshness ceiling for decay-driven review workflows.
+2. Keep freshness-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `freshness_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum freshness-score thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for freshness-ceiling filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1822,3 +1854,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 56: `useful_count_max` parity across REST/MCP/repository.
 22. Execute access-ceiling query filter increment:
    - [x] Phase 57: `access_count_max` parity across REST/MCP/repository.
+23. Execute freshness-ceiling query filter increment:
+   - [x] Phase 58: `freshness_score_max` parity across REST/MCP/repository.
