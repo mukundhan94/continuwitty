@@ -7,6 +7,18 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 hardening: MCP catalog/schema parity for scoped curation refresh)
+
+1. Updated MCP tool metadata for `engram.curation_refresh_links`:
+   - `internal/mcp/catalog_metadata_data.go` now exposes optional `project_id` in input schema.
+2. Added compatibility schema regression coverage:
+   - `internal/mcp/compatibility_service_test.go` now asserts `engram_curation_refresh_links` includes `project_id` in `tools/list` metadata.
+3. Updated reference docs to match runtime behavior:
+   - `docs/mcp-guide.md` now documents optional scoped `project_id` behavior.
+   - `docs/api-reference.md` now documents scoped `project_id` matching for admin link-curation refresh route.
+4. Validation:
+   - `go test ./internal/mcp -count=1`
+
 ### 2026-03-03 (Phase 40 hardening: acceptance coverage for scoped link-curation refresh)
 
 1. Extended Phase 40 acceptance feature in `acceptance-tests/features/phase40-curation-mock.feature`:

@@ -252,7 +252,7 @@ curl -s -b "$COOKIE_JAR" \
 - `engram.refresh_contradictions` (admin maintenance)
 - `engram.contradiction_resolve` (admin maintenance)
 - `engram.curation_list` (admin maintenance)
-- `engram.curation_refresh_links` (admin maintenance; refreshes link-hygiene recommendations into curation suggestions for one source engram)
+- `engram.curation_refresh_links` (admin maintenance; refreshes link-hygiene recommendations into curation suggestions for one source engram, optional `project_id` scope must match source engram project)
 - `engram.curation_action` (admin maintenance; `status=applied` triggers linked consolidation/contradiction downstream actions and payload-linked link archival actions (`archive_*`, `review_relation_conflict`))
 - `engram.pin_to_session`
 - `engram.share`

@@ -1470,6 +1470,9 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 				"source_engram_id",
 			},
 			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
 				"source_engram_id": map[string]any{
 					"type":   "string",
 					"format": "uuid",

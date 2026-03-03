@@ -100,6 +100,19 @@ func TestCompatibilityServiceToolsListIncludesCatalogMetadataForConversationSave
 	}
 }
 
+func TestCompatibilityServiceToolsListIncludesProjectScopeForCurationRefresh(t *testing.T) {
+	frame := runCompatibilityRequest(
+		t,
+		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "tools-list", Method: "tools/list"}},
+	)
+	tool := findPublicToolByName(t, frame, "engram_curation_refresh_links")
+	inputSchema := mapFromMap(t, tool, "inputSchema")
+	properties := mapFromMap(t, inputSchema, "properties")
+	if _, exists := properties["project_id"]; !exists {
+		t.Fatalf("expected project_id property in engram_curation_refresh_links schema")
+	}
+}
+
 func TestBuildVisiblePublicToolCatalogClonesInputSchemas(t *testing.T) {
 	tools := buildVisiblePublicToolCatalog(nil)
 	first := findToolByPublicName(tools, "chat_save_as_engram")

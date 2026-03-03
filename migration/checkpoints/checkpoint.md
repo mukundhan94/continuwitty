@@ -302,6 +302,7 @@
     - `engram.curation_list`
     - `engram.curation_action`
   - Added route/service/dispatch/catalog/token-policy regression coverage.
+  - `engram.curation_refresh_links` catalog metadata now exposes optional scoped `project_id` in `tools/list` schema.
 - [x] Added deterministic suggestion-generation workflow hooks.
   - consolidation refresh now rebuilds `consolidate` curation suggestions.
   - contradiction refresh now rebuilds `contradiction` curation suggestions.
