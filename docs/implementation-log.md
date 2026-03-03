@@ -7,6 +7,17 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Code health refactor: acceptance step argument-shape cleanup)
+
+1. Refactored acceptance step helper signatures in:
+   - `acceptance-tests/src/steps/phase38-contradiction-mock.steps.ts`
+   - `acceptance-tests/src/steps/phase40-curation-mock.steps.ts`
+2. Replaced multi-string helper arguments with structured input objects to reduce string-heavy argument density while preserving scenario behavior.
+3. Validation:
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock-docker` -> `23 passed`
+   - CodeScene `analyze_change_set` against `origin/migrate`: `quality_gates=passed`
+
 ### 2026-03-03 (Phase 39 closeout: complex temporal/engagement/trace benchmark coverage)
 
 1. Added Phase 39 repository benchmark coverage in `internal/repository/engram_benchmark_test.go`:

@@ -21,61 +21,81 @@ let seededProjectID: string | null = null
 let listedSuggestions: CurationSuggestion[] = []
 let selectedSuggestionID: string | null = null
 
-async function expectJSON<T>(response: APIResponse, context: string): Promise<T> {
-  const payload = await response.text()
-  if (!response.ok()) {
-    throw new Error(`${context} failed (${response.status()}): ${payload}`)
+type ExpectJSONInput = {
+  response: APIResponse
+  context: string
+}
+
+type CreateProjectInput = {
+  projectID: string
+  request: APIRequestContext
+}
+
+type CreateEngramInput = {
+  request: APIRequestContext
+  projectID: string
+  title: string
+}
+
+type CreateContradictionLinkInput = {
+  request: APIRequestContext
+  sourceEngramID: string
+  targetEngramID: string
+}
+
+async function expectJSON<T>(input: ExpectJSONInput): Promise<T> {
+  const payload = await input.response.text()
+  if (!input.response.ok()) {
+    throw new Error(`${input.context} failed (${input.response.status()}): ${payload}`)
   }
   return JSON.parse(payload) as T
 }
 
-async function createProject(projectID: string, request: APIRequestContext): Promise<void> {
-  const response = await request.post('/api/v1/projects', {
+async function createProject(input: CreateProjectInput): Promise<void> {
+  const response = await input.request.post('/api/v1/projects', {
     data: {
-      project_id: projectID,
-      name: projectID,
+      project_id: input.projectID,
+      name: input.projectID,
       description: 'Phase40 curation acceptance project',
     },
   })
-  await expectJSON<Record<string, unknown>>(response, 'phase40 project create')
+  await expectJSON<Record<string, unknown>>({ response, context: 'phase40 project create' })
 }
 
-async function createEngram(
-  request: APIRequestContext,
-  projectID: string,
-  title: string,
-): Promise<string> {
-  const response = await request.post('/api/v1/engrams', {
+async function createEngram(input: CreateEngramInput): Promise<string> {
+  const response = await input.request.post('/api/v1/engrams', {
     data: {
-      project_id: projectID,
+      project_id: input.projectID,
       thread_id: `phase40-thread-${randomUUID()}`,
-      title,
-      abstract: `Phase40 curation check for ${title}`,
-      detailed_summary_markdown: `Phase40 deterministic entry for ${title}`,
+      title: input.title,
+      abstract: `Phase40 curation check for ${input.title}`,
+      detailed_summary_markdown: `Phase40 deterministic entry for ${input.title}`,
       tags: ['phase40', 'curation'],
       keywords: ['phase40', 'curation'],
       visibility_scope: 'project',
     },
   })
-  const payload = await expectJSON<{ engram_id: string }>(response, 'phase40 engram create')
+  const payload = await expectJSON<{ engram_id: string }>({
+    response,
+    context: 'phase40 engram create',
+  })
   return payload.engram_id
 }
 
-async function createContradictionLink(
-  request: APIRequestContext,
-  sourceEngramID: string,
-  targetEngramID: string,
-): Promise<void> {
-  const response = await request.post(`/api/v1/engrams/${sourceEngramID}/links`, {
+async function createContradictionLink(input: CreateContradictionLinkInput): Promise<void> {
+  const response = await input.request.post(`/api/v1/engrams/${input.sourceEngramID}/links`, {
     data: {
-      target_engram_id: targetEngramID,
+      target_engram_id: input.targetEngramID,
       relation_type: 'contradicts',
       weight: 0.9,
       temporal_weight: 0.8,
       confidence: 0.95,
     },
   })
-  await expectJSON<Record<string, unknown>>(response, 'phase40 contradiction link create')
+  await expectJSON<Record<string, unknown>>({
+    response,
+    context: 'phase40 contradiction link create',
+  })
 }
 
 When('I seed deterministic memory curation prerequisites', async ({ page }) => {
@@ -83,24 +103,36 @@ When('I seed deterministic memory curation prerequisites', async ({ page }) => {
   listedSuggestions = []
   selectedSuggestionID = null
 
-  await createProject(seededProjectID, page.request)
+  await createProject({ projectID: seededProjectID, request: page.request })
 
   // Consolidation prerequisites: duplicate titles in the same project.
-  await createEngram(page.request, seededProjectID, 'Phase40 Duplicate Insight')
-  await createEngram(page.request, seededProjectID, ' phase40 duplicate insight ')
+  await createEngram({
+    request: page.request,
+    projectID: seededProjectID,
+    title: 'Phase40 Duplicate Insight',
+  })
+  await createEngram({
+    request: page.request,
+    projectID: seededProjectID,
+    title: ' phase40 duplicate insight ',
+  })
 
   // Contradiction prerequisites: one contradicts link pair.
-  const sourceID = await createEngram(
-    page.request,
-    seededProjectID,
-    'Always deploy with blue/green strategy.',
-  )
-  const targetID = await createEngram(
-    page.request,
-    seededProjectID,
-    'Never deploy with blue/green strategy.',
-  )
-  await createContradictionLink(page.request, sourceID, targetID)
+  const sourceID = await createEngram({
+    request: page.request,
+    projectID: seededProjectID,
+    title: 'Always deploy with blue/green strategy.',
+  })
+  const targetID = await createEngram({
+    request: page.request,
+    projectID: seededProjectID,
+    title: 'Never deploy with blue/green strategy.',
+  })
+  await createContradictionLink({
+    request: page.request,
+    sourceEngramID: sourceID,
+    targetEngramID: targetID,
+  })
 })
 
 When('I refresh consolidation and contradiction workflows for memory curation', async ({ page }) => {
@@ -117,10 +149,10 @@ When('I refresh consolidation and contradiction workflows for memory curation', 
       },
     },
   )
-  const consolidationPayload = await expectJSON<RefreshResponse>(
-    consolidationRefresh,
-    'phase40 consolidation refresh',
-  )
+  const consolidationPayload = await expectJSON<RefreshResponse>({
+    response: consolidationRefresh,
+    context: 'phase40 consolidation refresh',
+  })
   expect(consolidationPayload.updated_count).toBeGreaterThanOrEqual(1)
 
   const contradictionRefresh = await page.request.post(
@@ -129,16 +161,19 @@ When('I refresh consolidation and contradiction workflows for memory curation', 
       data: { project_id: seededProjectID },
     },
   )
-  const contradictionPayload = await expectJSON<RefreshResponse>(
-    contradictionRefresh,
-    'phase40 contradiction refresh',
-  )
+  const contradictionPayload = await expectJSON<RefreshResponse>({
+    response: contradictionRefresh,
+    context: 'phase40 contradiction refresh',
+  })
   expect(contradictionPayload.updated_count).toBeGreaterThanOrEqual(1)
 
   const listed = await page.request.get(
     `/api/v1/admin/memory/engrams/curation/suggestions?project_id=${seededProjectID}&status=suggested&limit=50&offset=0`,
   )
-  listedSuggestions = await expectJSON<CurationSuggestion[]>(listed, 'phase40 curation list suggested')
+  listedSuggestions = await expectJSON<CurationSuggestion[]>({
+    response: listed,
+    context: 'phase40 curation list suggested',
+  })
   expect(listedSuggestions.length).toBeGreaterThanOrEqual(2)
 })
 
@@ -165,7 +200,10 @@ When('I accept one curation suggestion for the seeded project', async ({ page })
       },
     },
   )
-  const payload = await expectJSON<CurationSuggestion>(response, 'phase40 curation action')
+  const payload = await expectJSON<CurationSuggestion>({
+    response,
+    context: 'phase40 curation action',
+  })
   expect(payload.suggestion_id).toBe(selectedSuggestionID)
   expect(payload.status).toBe('accepted')
 })
@@ -177,7 +215,10 @@ Then('accepted curation suggestions should include the actioned record', async (
   const response = await page.request.get(
     `/api/v1/admin/memory/engrams/curation/suggestions?project_id=${seededProjectID}&status=accepted&limit=50&offset=0`,
   )
-  const accepted = await expectJSON<CurationSuggestion[]>(response, 'phase40 curation list accepted')
+  const accepted = await expectJSON<CurationSuggestion[]>({
+    response,
+    context: 'phase40 curation list accepted',
+  })
   const actioned = accepted.find((entry) => entry.suggestion_id === selectedSuggestionID)
   expect(actioned).toBeTruthy()
   expect(actioned?.status).toBe('accepted')
