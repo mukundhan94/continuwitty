@@ -165,6 +165,15 @@ func TestActionMemoryCurationSuggestionAppliedRejectsInvalidPayload(t *testing.T
 }
 
 func TestActionMemoryCurationSuggestionAppliedDispatchesLinkArchive(t *testing.T) {
+	runAppliedLinkArchiveCase(t, "archive_stale_low_value")
+}
+
+func TestActionMemoryCurationSuggestionAppliedDispatchesLinkConflictArchive(t *testing.T) {
+	runAppliedLinkArchiveCase(t, "review_relation_conflict")
+}
+
+func runAppliedLinkArchiveCase(t *testing.T, suggestedAction string) {
+	t.Helper()
 	service := NewService(nil, 256, nil)
 	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000c081")
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000c082")
@@ -183,7 +192,7 @@ func TestActionMemoryCurationSuggestionAppliedDispatchesLinkArchive(t *testing.T
 			ProjectID:      projectID,
 			SuggestionType: models.MemoryCurationSuggestionTypeLink,
 			PayloadJSON: map[string]any{
-				"suggested_action": "archive_stale_low_value",
+				"suggested_action": suggestedAction,
 				"link_id":          linkID.String(),
 			},
 		}, nil
@@ -236,7 +245,7 @@ func TestActionMemoryCurationSuggestionAppliedRejectsUnsupportedLinkAction(t *te
 		appliedCurationSuggestionRejectCase{
 			suggestionType: models.MemoryCurationSuggestionTypeLink,
 			payload: map[string]any{
-				"suggested_action": "review_relation_conflict",
+				"suggested_action": "flag_for_manual_triage",
 				"link_id":          "00000000-0000-0000-0000-00000000c093",
 			},
 			expectedErr: ErrMemoryCurationSuggestionApplyUnsupported,

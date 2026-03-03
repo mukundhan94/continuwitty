@@ -310,7 +310,7 @@
   - `status=applied` now dispatches downstream operations before curation status update.
   - `consolidate` payloads trigger consolidation `merged` transitions.
   - `contradiction` payloads trigger contradiction-alert `resolved` transitions.
-  - `link` payloads trigger link archival for archive-oriented hygiene actions.
+  - `link` payloads trigger link archival for archive-oriented hygiene actions and `review_relation_conflict`.
   - payload parse failures now return explicit bad-request errors in REST/MCP action flows.
 - [x] Added acceptance coverage for curation generation/action quality.
   - deterministic `@phase40 @mock` scenarios validate:

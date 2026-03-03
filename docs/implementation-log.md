@@ -7,6 +7,17 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: conflict-review link curation apply support)
+
+1. Extended link curation apply-action handling in `internal/admin/service_curation.go`:
+   - `status=applied` for `suggestion_type=link` now treats `review_relation_conflict` as an actionable link-archive workflow.
+   - this aligns generated link curation suggestions with apply behavior so conflict-review suggestions no longer fail as unsupported.
+2. Expanded regression coverage in `internal/admin/service_curation_test.go`:
+   - added apply-path test for `review_relation_conflict`.
+   - retained unsupported-action rejection by asserting unknown link actions still return `ErrMemoryCurationSuggestionApplyUnsupported`.
+3. Validation:
+   - `go test ./internal/admin -count=1`
+
 ### 2026-03-03 (Phase 40 continuation: scheduled link-hygiene curation persistence)
 
 1. Extended scheduled hygiene execution in `cmd/api/chat_link_reinforcement.go`:

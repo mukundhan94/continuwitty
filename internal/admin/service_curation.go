@@ -14,6 +14,7 @@ import (
 var curationLinkArchiveActions = map[string]struct{}{
 	"archive_weaker_duplicate": {},
 	"archive_stale_low_value":  {},
+	"review_relation_conflict": {},
 }
 
 // ListMemoryCurationSuggestions lists persisted memory curation suggestions.
