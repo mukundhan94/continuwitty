@@ -57,6 +57,7 @@ func buildQueryWhereAllFiltersFixture() queryWhereAllFiltersFixture {
 	}
 	scoreValues := queryWhereScoreValues{
 		accessCountMin:          3,
+		feedbackCountMin:        4,
 		contradictionCountMax:   2,
 		freshnessScoreMin:       0.6,
 		avgRelevanceFeedbackMin: 0.55,
@@ -94,6 +95,7 @@ type queryWhereTimeValues struct {
 
 type queryWhereScoreValues struct {
 	accessCountMin          int
+	feedbackCountMin        int
 	contradictionCountMax   int
 	freshnessScoreMin       float64
 	avgRelevanceFeedbackMin float64
@@ -118,6 +120,7 @@ func buildQueryWhereRequest(input queryWhereRequestInput) models.EngramQueryRequ
 		CreatedAfter:            &input.timeValues.createdAfter,
 		CreatedBefore:           &input.timeValues.createdBefore,
 		AccessCountMin:          &input.scoreValues.accessCountMin,
+		FeedbackCountMin:        &input.scoreValues.feedbackCountMin,
 		ContradictionCountMax:   &input.scoreValues.contradictionCountMax,
 		FreshnessScoreMin:       &input.scoreValues.freshnessScoreMin,
 		AvgRelevanceFeedbackMin: &input.scoreValues.avgRelevanceFeedbackMin,
@@ -140,17 +143,18 @@ func queryWhereExpectedFragments() []string {
 		"created_at >= $6",
 		"created_at <= $7",
 		"COALESCE(access_count, 0) >= $8",
-		"COALESCE(contradiction_count, 0) <= $9",
-		"COALESCE(freshness_score, 1.0) >= $10",
-		"COALESCE(avg_relevance_feedback, 0.5) >= $11",
-		"COALESCE(source_session_quality_score, 0.5) >= $12",
-		"COALESCE(last_accessed_at, created_at) >= $13",
-		"COALESCE(last_accessed_at, created_at) <= $14",
-		"COALESCE(freshness_last_computed_at, created_at) >= $15",
-		"COALESCE(freshness_last_computed_at, created_at) <= $16",
+		"COALESCE(feedback_count, 0) >= $9",
+		"COALESCE(contradiction_count, 0) <= $10",
+		"COALESCE(freshness_score, 1.0) >= $11",
+		"COALESCE(avg_relevance_feedback, 0.5) >= $12",
+		"COALESCE(source_session_quality_score, 0.5) >= $13",
+		"COALESCE(last_accessed_at, created_at) >= $14",
+		"COALESCE(last_accessed_at, created_at) <= $15",
+		"COALESCE(freshness_last_computed_at, created_at) >= $16",
+		"COALESCE(freshness_last_computed_at, created_at) <= $17",
 		"EXISTS (",
 		"link.status = 'active'",
-		"link.relation_type = $17",
+		"link.relation_type = $18",
 		"owner_user_id = $3",
 		"actor_user.user_id = $3",
 		"pm.project_id = project_id",
@@ -174,6 +178,7 @@ func queryWhereExpectedParams(input queryWhereExpectedParamsInput) []any {
 		input.request.timeValues.createdAfter,
 		input.request.timeValues.createdBefore,
 		input.request.scoreValues.accessCountMin,
+		input.request.scoreValues.feedbackCountMin,
 		input.request.scoreValues.contradictionCountMax,
 		input.request.scoreValues.freshnessScoreMin,
 		input.request.scoreValues.avgRelevanceFeedbackMin,

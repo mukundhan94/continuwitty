@@ -53,6 +53,7 @@ type engramQueryPayloadParts struct {
 	createdAfter            *time.Time
 	createdBefore           *time.Time
 	accessCountMin          *int
+	feedbackCountMin        *int
 	contradictionCountMax   *int
 	freshnessScoreMin       *float64
 	avgRelevanceFeedbackMin *float64
@@ -106,6 +107,7 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		createdAfter:            temporalParts.createdAfter,
 		createdBefore:           temporalParts.createdBefore,
 		accessCountMin:          engagementParts.accessCountMin,
+		feedbackCountMin:        engagementParts.feedbackCountMin,
 		contradictionCountMax:   engagementParts.contradictionCountMax,
 		freshnessScoreMin:       engagementParts.freshnessScoreMin,
 		avgRelevanceFeedbackMin: engagementParts.avgRelevanceFeedbackMin,
@@ -182,6 +184,7 @@ func temporalWindowSpecs(parts engramQueryTemporalParts) []temporalWindowSpec {
 
 type engramQueryEngagementParts struct {
 	accessCountMin          *int
+	feedbackCountMin        *int
 	contradictionCountMax   *int
 	freshnessScoreMin       *float64
 	avgRelevanceFeedbackMin *float64
@@ -189,11 +192,18 @@ type engramQueryEngagementParts struct {
 }
 
 func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngagementParts, *toolDispatchError) {
-	accessCountMin, dispatchErr := parseEngramQueryAccessCountMin(params)
+	accessCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "access_count_min")
 	if dispatchErr != nil {
 		return engramQueryEngagementParts{}, dispatchErr
 	}
-	contradictionCountMax, dispatchErr := parseEngramQueryContradictionCountMax(params)
+	feedbackCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "feedback_count_min")
+	if dispatchErr != nil {
+		return engramQueryEngagementParts{}, dispatchErr
+	}
+	contradictionCountMax, dispatchErr := parseEngramQueryNonNegativeIntPointer(
+		params,
+		"contradiction_count_max",
+	)
 	if dispatchErr != nil {
 		return engramQueryEngagementParts{}, dispatchErr
 	}
@@ -211,6 +221,7 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 	}
 	return engramQueryEngagementParts{
 		accessCountMin:          accessCountMin,
+		feedbackCountMin:        feedbackCountMin,
 		contradictionCountMax:   contradictionCountMax,
 		freshnessScoreMin:       freshnessScoreMin,
 		avgRelevanceFeedbackMin: avgRelevanceFeedbackMin,
@@ -282,6 +293,7 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		CreatedAfter:            parts.createdAfter,
 		CreatedBefore:           parts.createdBefore,
 		AccessCountMin:          parts.accessCountMin,
+		FeedbackCountMin:        parts.feedbackCountMin,
 		ContradictionCountMax:   parts.contradictionCountMax,
 		FreshnessScoreMin:       parts.freshnessScoreMin,
 		AvgRelevanceFeedbackMin: parts.avgRelevanceFeedbackMin,
@@ -378,24 +390,16 @@ func parseRFC3339Pointer(raw string) (*time.Time, bool) {
 	return &parsed, true
 }
 
-func parseEngramQueryAccessCountMin(params map[string]any) (*int, *toolDispatchError) {
-	value, ok := optionalIntPointerParam(params, "access_count_min")
+func parseEngramQueryNonNegativeIntPointer(
+	params map[string]any,
+	paramName string,
+) (*int, *toolDispatchError) {
+	value, ok := optionalIntPointerParam(params, paramName)
 	if !ok {
-		return nil, invalidParamError("access_count_min")
+		return nil, invalidParamError(paramName)
 	}
 	if value != nil && *value < 0 {
-		return nil, invalidParamError("access_count_min")
-	}
-	return value, nil
-}
-
-func parseEngramQueryContradictionCountMax(params map[string]any) (*int, *toolDispatchError) {
-	value, ok := optionalIntPointerParam(params, "contradiction_count_max")
-	if !ok {
-		return nil, invalidParamError("contradiction_count_max")
-	}
-	if value != nil && *value < 0 {
-		return nil, invalidParamError("contradiction_count_max")
+		return nil, invalidParamError(paramName)
 	}
 	return value, nil
 }

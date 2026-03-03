@@ -218,6 +218,7 @@ func buildEngramQueryWhere(
 	addOptionalPointerClause(builder, request.CreatedAfter, "created_at >= %s")
 	addOptionalPointerClause(builder, request.CreatedBefore, "created_at <= %s")
 	addOptionalPointerClause(builder, request.AccessCountMin, "COALESCE(access_count, 0) >= %s")
+	addOptionalPointerClause(builder, request.FeedbackCountMin, "COALESCE(feedback_count, 0) >= %s")
 	addOptionalPointerClause(builder, request.ContradictionCountMax, "COALESCE(contradiction_count, 0) <= %s")
 	addOptionalPointerClause(builder, request.FreshnessScoreMin, "COALESCE(freshness_score, 1.0) >= %s")
 	addOptionalPointerClause(builder, request.AvgRelevanceFeedbackMin, "COALESCE(avg_relevance_feedback, 0.5) >= %s")

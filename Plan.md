@@ -1464,6 +1464,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 49 - Feedback-Volume Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `feedback_count_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `feedback_count_min`.
+  - repository query builder now supports `COALESCE(feedback_count, 0) >= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `feedback_count_min`.
+  - regression coverage expanded across repository/API/MCP for filter parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to scope recall to memories with minimum explicit feedback volume.
+2. Keep feedback-volume filtering deterministic and consistent across REST and MCP.
+3. Preserve backward-compatible query behavior while extending quality controls.
+
+### Deliverables
+
+1. Contract extension for `feedback_count_min`.
+2. REST/MCP validation + schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply minimum feedback-count thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Docs and tests remain synchronized with parser and repository behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1511,3 +1543,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 47: expose `feedback_count` + `contradiction_count` in query results.
 13. Execute engagement diagnostics increment:
    - [x] Phase 48: expose `access_count` + `freshness_score` in query results.
+14. Execute feedback-volume query filter increment:
+   - [x] Phase 49: `feedback_count_min` parity across REST/MCP/repository.
