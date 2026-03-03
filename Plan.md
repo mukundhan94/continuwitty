@@ -2370,6 +2370,35 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 77 - Score-Band Benchmark Operationalization
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `benchmark-query-score-bands` Makefile target to run repository query/rerank/filter benchmarks as one reproducible command.
+  - published benchmark artifact with environment and baseline numbers in `docs/phase77-query-score-band-benchmark.md`.
+
+### Goals
+
+1. Make score-band benchmark runs consistent and low-friction for operators and contributors.
+2. Capture a committed baseline artifact so future performance regressions are easy to detect.
+3. Keep benchmark execution independent from default CI unit/acceptance gates.
+
+### Deliverables
+
+1. Makefile benchmark target for score-band benchmark suite.
+2. Versioned benchmark artifact documenting command and baseline metrics.
+3. Roadmap/checkpoint/docs alignment for this benchmark-operationalization phase.
+
+### Exit Criteria
+
+1. A single make target can execute the score-band benchmark suite end-to-end.
+2. Baseline benchmark metrics are documented in-repo for future comparisons.
+3. Existing lint/test/acceptance gates remain unaffected.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2473,3 +2502,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 75: `authority_signal_score_min` + `authority_signal_score_max` parity across REST/MCP/repository.
 41. Execute score-band hardening and benchmark increment:
    - [x] Phase 76: repository score-band regression + benchmark baseline for full filter matrices.
+42. Execute score-band benchmark operationalization increment:
+   - [x] Phase 77: Makefile benchmark target + committed benchmark artifact for score-band query/rerank/filter paths.

@@ -7,6 +7,15 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 77: score-band benchmark operationalization)
+
+1. Added benchmark execution target:
+   - new Makefile target `benchmark-query-score-bands` runs repository rerank/query/filter benchmarks in one command.
+2. Added benchmark artifact:
+   - `docs/phase77-query-score-band-benchmark.md` captures command, environment, and baseline measurements for rerank/query/filter matrix benchmarks.
+3. Validation:
+   - `make benchmark-query-score-bands`
+
 ### 2026-03-03 (Phase 76: score-band hardening and benchmark baseline)
 
 1. Added repository score-band filter regression coverage:
