@@ -248,6 +248,17 @@ func buildEngramQueryWhere(
 			END
 		) >= %s`,
 	)
+	addOptionalPointerClause(
+		builder,
+		request.UsefulFeedbackRatioMax,
+		`(
+			CASE
+				WHEN COALESCE(feedback_count, 0) = 0 THEN 0.5
+				ELSE COALESCE(useful_count, 0)::DOUBLE PRECISION /
+					GREATEST(COALESCE(feedback_count, 0), 1)::DOUBLE PRECISION
+			END
+		) <= %s`,
+	)
 	addOptionalPointerClause(builder, request.AvgRelevanceFeedbackMin, "COALESCE(avg_relevance_feedback, 0.5) >= %s")
 	addOptionalPointerClause(builder, request.AvgRelevanceFeedbackMax, "COALESCE(avg_relevance_feedback, 0.5) <= %s")
 	addOptionalPointerClause(builder, request.SourceSessionQualityMin, "COALESCE(source_session_quality_score, 0.5) >= %s")

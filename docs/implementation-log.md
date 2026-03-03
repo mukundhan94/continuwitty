@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 61: useful-ratio ceiling query filter parity)
+
+1. Added useful-ratio ceiling query contract extension:
+   - new optional filter: `useful_feedback_ratio_max` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `useful_feedback_ratio_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `useful_feedback_ratio_max`.
+3. Added repository predicate support:
+   - query builder now supports useful-ratio ceiling predicate with deterministic fallback (`0.5`) when feedback is absent.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `useful_feedback_ratio_max`.
+   - repository where-clause/parameter assertions for useful-ratio ceiling predicate.
+   - MCP parity and validation coverage for useful-ratio ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 60: relevance-ceiling query filter parity)
 
 1. Added relevance-ceiling query contract extension:

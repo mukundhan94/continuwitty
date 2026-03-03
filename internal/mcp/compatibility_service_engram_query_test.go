@@ -110,6 +110,7 @@ func buildEngramQueryParityExpectations(
 	freshnessScoreMin := 0.42
 	freshnessScoreMax := 0.91
 	usefulFeedbackRatioMin := 0.8
+	usefulFeedbackRatioMax := 0.96
 	avgRelevanceFeedbackMin := 0.58
 	avgRelevanceFeedbackMax := 0.92
 	sourceSessionQualityMin := 0.73
@@ -135,6 +136,7 @@ func buildEngramQueryParityExpectations(
 		"freshness_score_min":              freshnessScoreMin,
 		"freshness_score_max":              freshnessScoreMax,
 		"useful_feedback_ratio_min":        usefulFeedbackRatioMin,
+		"useful_feedback_ratio_max":        usefulFeedbackRatioMax,
 		"avg_relevance_feedback_min":       avgRelevanceFeedbackMin,
 		"avg_relevance_feedback_max":       avgRelevanceFeedbackMax,
 		"source_session_quality_min":       sourceSessionQualityMin,
@@ -167,6 +169,7 @@ func buildEngramQueryParityExpectations(
 			FreshnessScoreMin:       &freshnessScoreMin,
 			FreshnessScoreMax:       &freshnessScoreMax,
 			UsefulFeedbackRatioMin:  &usefulFeedbackRatioMin,
+			UsefulFeedbackRatioMax:  &usefulFeedbackRatioMax,
 			AvgRelevanceFeedbackMin: &avgRelevanceFeedbackMin,
 			AvgRelevanceFeedbackMax: &avgRelevanceFeedbackMax,
 			SourceSessionQualityMin: &sourceSessionQualityMin,
@@ -293,6 +296,9 @@ func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
 		{name: "invalid useful_feedback_ratio_min type", params: map[string]any{"query": "x", "useful_feedback_ratio_min": "bad"}},
 		{name: "invalid useful_feedback_ratio_min low", params: map[string]any{"query": "x", "useful_feedback_ratio_min": -0.1}},
 		{name: "invalid useful_feedback_ratio_min high", params: map[string]any{"query": "x", "useful_feedback_ratio_min": 1.1}},
+		{name: "invalid useful_feedback_ratio_max type", params: map[string]any{"query": "x", "useful_feedback_ratio_max": "bad"}},
+		{name: "invalid useful_feedback_ratio_max low", params: map[string]any{"query": "x", "useful_feedback_ratio_max": -0.1}},
+		{name: "invalid useful_feedback_ratio_max high", params: map[string]any{"query": "x", "useful_feedback_ratio_max": 1.1}},
 		{name: "invalid avg_relevance_feedback_min type", params: map[string]any{"query": "x", "avg_relevance_feedback_min": "bad"}},
 		{name: "invalid avg_relevance_feedback_min low", params: map[string]any{"query": "x", "avg_relevance_feedback_min": -0.1}},
 		{name: "invalid avg_relevance_feedback_min high", params: map[string]any{"query": "x", "avg_relevance_feedback_min": 1.1}},

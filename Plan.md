@@ -1853,6 +1853,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 61 - Useful-Ratio Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `useful_feedback_ratio_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `useful_feedback_ratio_max` (`0..1`).
+  - repository query builder now supports useful-ratio ceiling predicate with deterministic fallback (`0.5` when feedback is absent).
+  - MCP `engram.query` parser/catalog now accept and validate `useful_feedback_ratio_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to cap retrieval by useful-feedback ratio to surface low-value memories for review.
+2. Keep useful-ratio ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `useful_feedback_ratio_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum useful-feedback ratio thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for useful-ratio ceiling filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1924,3 +1956,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 59: `source_session_quality_max` parity across REST/MCP/repository.
 25. Execute relevance-ceiling query filter increment:
    - [x] Phase 60: `avg_relevance_feedback_max` parity across REST/MCP/repository.
+26. Execute useful-ratio ceiling query filter increment:
+   - [x] Phase 61: `useful_feedback_ratio_max` parity across REST/MCP/repository.
