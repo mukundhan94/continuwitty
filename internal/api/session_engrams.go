@@ -386,6 +386,7 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 		{detail: "query is required", invalid: payload.Query == ""},
 		{detail: "invalid top_k", invalid: payload.TopK < 1 || payload.TopK > 50},
 		{detail: "invalid useful_count_min", invalid: invalidUsefulCountMin(payload.UsefulCountMin)},
+		{detail: "invalid useful_count_max", invalid: invalidUsefulCountMax(payload.UsefulCountMax)},
 		{detail: "invalid access_count_min", invalid: invalidAccessCountMin(payload.AccessCountMin)},
 		{detail: "invalid feedback_count_min", invalid: invalidFeedbackCountMin(payload.FeedbackCountMin)},
 		{detail: "invalid feedback_count_max", invalid: invalidFeedbackCountMax(payload.FeedbackCountMax)},
@@ -420,6 +421,10 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 }
 
 func invalidUsefulCountMin(value *int) bool {
+	return value != nil && *value < 0
+}
+
+func invalidUsefulCountMax(value *int) bool {
 	return value != nil && *value < 0
 }
 

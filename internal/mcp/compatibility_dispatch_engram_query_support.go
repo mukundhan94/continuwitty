@@ -53,6 +53,7 @@ type engramQueryPayloadParts struct {
 	createdAfter            *time.Time
 	createdBefore           *time.Time
 	usefulCountMin          *int
+	usefulCountMax          *int
 	accessCountMin          *int
 	feedbackCountMin        *int
 	feedbackCountMax        *int
@@ -111,6 +112,7 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		createdAfter:            temporalParts.createdAfter,
 		createdBefore:           temporalParts.createdBefore,
 		usefulCountMin:          engagementParts.usefulCountMin,
+		usefulCountMax:          engagementParts.usefulCountMax,
 		accessCountMin:          engagementParts.accessCountMin,
 		feedbackCountMin:        engagementParts.feedbackCountMin,
 		feedbackCountMax:        engagementParts.feedbackCountMax,
@@ -192,6 +194,7 @@ func temporalWindowSpecs(parts engramQueryTemporalParts) []temporalWindowSpec {
 
 type engramQueryEngagementParts struct {
 	usefulCountMin          *int
+	usefulCountMax          *int
 	accessCountMin          *int
 	feedbackCountMin        *int
 	feedbackCountMax        *int
@@ -214,6 +217,7 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 	}
 	return engramQueryEngagementParts{
 		usefulCountMin:          integerParts.usefulCountMin,
+		usefulCountMax:          integerParts.usefulCountMax,
 		accessCountMin:          integerParts.accessCountMin,
 		feedbackCountMin:        integerParts.feedbackCountMin,
 		feedbackCountMax:        integerParts.feedbackCountMax,
@@ -228,6 +232,7 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 
 type engramQueryIntegerEngagementParts struct {
 	usefulCountMin        *int
+	usefulCountMax        *int
 	accessCountMin        *int
 	feedbackCountMin      *int
 	feedbackCountMax      *int
@@ -238,6 +243,10 @@ func parseEngramQueryIntegerEngagementParts(
 	params map[string]any,
 ) (engramQueryIntegerEngagementParts, *toolDispatchError) {
 	usefulCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "useful_count_min")
+	if dispatchErr != nil {
+		return engramQueryIntegerEngagementParts{}, dispatchErr
+	}
+	usefulCountMax, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "useful_count_max")
 	if dispatchErr != nil {
 		return engramQueryIntegerEngagementParts{}, dispatchErr
 	}
@@ -262,6 +271,7 @@ func parseEngramQueryIntegerEngagementParts(
 	}
 	return engramQueryIntegerEngagementParts{
 		usefulCountMin:        usefulCountMin,
+		usefulCountMax:        usefulCountMax,
 		accessCountMin:        accessCountMin,
 		feedbackCountMin:      feedbackCountMin,
 		feedbackCountMax:      feedbackCountMax,
@@ -373,6 +383,7 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		CreatedAfter:            parts.createdAfter,
 		CreatedBefore:           parts.createdBefore,
 		UsefulCountMin:          parts.usefulCountMin,
+		UsefulCountMax:          parts.usefulCountMax,
 		AccessCountMin:          parts.accessCountMin,
 		FeedbackCountMin:        parts.feedbackCountMin,
 		FeedbackCountMax:        parts.feedbackCountMax,

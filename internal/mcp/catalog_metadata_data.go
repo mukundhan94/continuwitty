@@ -621,6 +621,10 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":    "integer",
 					"minimum": 0,
 				},
+				"useful_count_max": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
 				"feedback_count_min": map[string]any{
 					"type":    "integer",
 					"minimum": 0,

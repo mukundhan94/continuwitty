@@ -64,6 +64,7 @@ type EngramQueryRequest struct {
 	CreatedAfter            *time.Time              `json:"created_after,omitempty"`
 	CreatedBefore           *time.Time              `json:"created_before,omitempty"`
 	UsefulCountMin          *int                    `json:"useful_count_min,omitempty"`
+	UsefulCountMax          *int                    `json:"useful_count_max,omitempty"`
 	AccessCountMin          *int                    `json:"access_count_min,omitempty"`
 	FeedbackCountMin        *int                    `json:"feedback_count_min,omitempty"`
 	FeedbackCountMax        *int                    `json:"feedback_count_max,omitempty"`
