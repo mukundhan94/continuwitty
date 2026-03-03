@@ -1155,6 +1155,11 @@ Build a local-first memory system where agents and humans can:
       - `engram.curation_list`
       - `engram.curation_action`
     - compatibility catalog + token project-policy support + route/dispatch regression tests.
+  - apply-action orchestration for curation suggestions:
+    - `status=applied` now executes deterministic downstream actions before persisting curation status.
+    - `consolidate` suggestions dispatch `merged` action on referenced consolidation suggestions.
+    - `contradiction` suggestions dispatch `resolved` action on referenced contradiction alerts.
+    - invalid/missing curation payload identifiers fail with explicit bad-request semantics.
   - suggestion generation workflow hooks:
     - consolidation refresh now regenerates type `consolidate` curation suggestions.
     - contradiction refresh now regenerates type `contradiction` curation suggestions.

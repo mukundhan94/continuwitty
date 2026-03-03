@@ -387,7 +387,8 @@ func writeServiceError(writer http.ResponseWriter, err error) {
 		detail = err.Error()
 	case errors.Is(err, admin.ErrConsolidationSuggestionActionInvalid),
 		errors.Is(err, admin.ErrContradictionAlertResolveStatusInvalid),
-		errors.Is(err, admin.ErrMemoryCurationSuggestionActionInvalid):
+		errors.Is(err, admin.ErrMemoryCurationSuggestionActionInvalid),
+		errors.Is(err, admin.ErrMemoryCurationSuggestionPayloadInvalid):
 		statusCode = http.StatusBadRequest
 		detail = err.Error()
 	case errors.Is(err, admin.ErrEngramStale),

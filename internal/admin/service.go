@@ -41,6 +41,8 @@ var (
 	ErrMemoryCurationSuggestionNotFound = errors.New("memory curation suggestion not found")
 	// ErrMemoryCurationSuggestionActionInvalid indicates invalid memory curation suggestion action status.
 	ErrMemoryCurationSuggestionActionInvalid = errors.New("status must be accepted, rejected, or applied")
+	// ErrMemoryCurationSuggestionPayloadInvalid indicates apply action cannot parse required payload fields.
+	ErrMemoryCurationSuggestionPayloadInvalid = errors.New("memory curation payload is invalid for apply action")
 )
 
 // MemoryAdminListRequest captures shared admin list filters.
@@ -319,6 +321,12 @@ type serviceDeps struct {
 		db repository.Queryer,
 		input repository.MemoryCurationSuggestionResetInput,
 	) (int, error)
+	getMemoryCurationSuggestion func(
+		ctx context.Context,
+		db repository.Queryer,
+		suggestionID uuid.UUID,
+		projectID *string,
+	) (*models.MemoryCurationSuggestion, error)
 	listMemoryCurationSuggestions func(
 		ctx context.Context,
 		db repository.Queryer,
@@ -362,6 +370,7 @@ func defaultServiceDeps() serviceDeps {
 		resolveContradictionAlert:           repository.ResolveContradictionAlert,
 		createMemoryCurationSuggestion:      repository.CreateMemoryCurationSuggestion,
 		resetMemoryCurationSuggestions:      repository.ResetSuggestedMemoryCurationSuggestions,
+		getMemoryCurationSuggestion:         repository.GetMemoryCurationSuggestion,
 		listMemoryCurationSuggestions:       repository.ListMemoryCurationSuggestions,
 		applyMemoryCurationSuggestionAction: repository.ApplyMemoryCurationSuggestionAction,
 

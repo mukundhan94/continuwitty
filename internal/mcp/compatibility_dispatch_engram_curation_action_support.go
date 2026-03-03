@@ -1,6 +1,11 @@
 package mcp
 
-import "context"
+import (
+	"context"
+	"errors"
+
+	"engram/internal/admin"
+)
 
 func (service *CompatibilityService) dispatchEngramCurationActionTool(
 	ctx context.Context,
@@ -16,6 +21,15 @@ func (service *CompatibilityService) dispatchEngramCurationActionTool(
 	}
 	updated, err := service.engramCurationAction.ActionMemoryCurationSuggestion(ctx, request)
 	if err != nil {
+		switch {
+		case errors.Is(err, admin.ErrMemoryCurationSuggestionNotFound),
+			errors.Is(err, admin.ErrConsolidationSuggestionNotFound),
+			errors.Is(err, admin.ErrContradictionAlertNotFound):
+			return nil, true, invalidParamsWithStatus(404, err.Error())
+		case errors.Is(err, admin.ErrMemoryCurationSuggestionActionInvalid),
+			errors.Is(err, admin.ErrMemoryCurationSuggestionPayloadInvalid):
+			return nil, true, invalidParamsWithStatus(400, err.Error())
+		}
 		return nil, true, internalToolDispatchError()
 	}
 	if updated == nil {

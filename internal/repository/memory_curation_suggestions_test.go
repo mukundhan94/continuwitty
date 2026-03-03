@@ -129,6 +129,60 @@ func TestListMemoryCurationSuggestionsUsesFilters(t *testing.T) {
 	}
 }
 
+func TestGetMemoryCurationSuggestionUsesIDAndProjectScope(t *testing.T) {
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000d251")
+	projectID := "engram-vault"
+	suggestedAt := time.Date(2026, 3, 3, 16, 15, 0, 0, time.UTC)
+	updatedAt := suggestedAt.Add(1 * time.Minute)
+	db := &fakeQueryer{
+		queryRowResult: &fakeRow{
+			values: []any{
+				suggestionID,
+				projectID,
+				nil,
+				"consolidate",
+				"Duplicate memories detected",
+				"merge duplicate records",
+				[]byte(`{"consolidation_suggestion_id":"00000000-0000-0000-0000-00000000d299"}`),
+				0.88,
+				"suggested",
+				suggestedAt,
+				updatedAt,
+				nil,
+				nil,
+			},
+		},
+	}
+
+	result, err := GetMemoryCurationSuggestion(context.Background(), db, suggestionID, &projectID)
+	requireNoError(t, err)
+	requireNotNil(t, result)
+	requireEqual(t, suggestionID, result.SuggestionID)
+	requireEqual(t, projectID, result.ProjectID)
+	requireEqual(t, 1, len(db.queryRowArgs))
+	expectedArgs := []any{suggestionID, projectID}
+	if !reflect.DeepEqual(expectedArgs, db.queryRowArgs[0]) {
+		t.Fatalf("expected args %#v, got %#v", expectedArgs, db.queryRowArgs[0])
+	}
+}
+
+func TestGetMemoryCurationSuggestionReturnsNilWhenMissing(t *testing.T) {
+	db := &fakeQueryer{
+		queryRowResult: &fakeRow{err: pgx.ErrNoRows},
+	}
+
+	result, err := GetMemoryCurationSuggestion(
+		context.Background(),
+		db,
+		uuid.MustParse("00000000-0000-0000-0000-00000000d252"),
+		nil,
+	)
+	requireNoError(t, err)
+	if result != nil {
+		t.Fatalf("expected nil result for missing memory curation suggestion")
+	}
+}
+
 func TestApplyMemoryCurationSuggestionActionUsesRequestObject(t *testing.T) {
 	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000d301")
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000d302")

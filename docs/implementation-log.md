@@ -7,6 +7,26 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: curation applied-status orchestration)
+
+1. Extended curation action behavior in `internal/admin/service_curation.go`:
+   - `status=applied` now loads the targeted curation suggestion and executes deterministic downstream actions before status transition.
+   - `consolidate` suggestions dispatch consolidation action as `merged`.
+   - `contradiction` suggestions dispatch contradiction-alert resolve as `resolved`.
+2. Added repository read primitive:
+   - `GetMemoryCurationSuggestion` in `internal/repository/memory_curation_suggestions.go`.
+   - regression coverage for get-by-id + project scope in `internal/repository/memory_curation_suggestions_test.go`.
+3. Expanded regression coverage:
+   - admin service curation tests for apply-side-effect dispatch and invalid payload rejection.
+   - REST route test for bad-request mapping of invalid curation payload actions.
+   - MCP compatibility test for payload-invalid error mapping.
+4. Validation:
+   - `go test ./internal/admin ./internal/repository ./internal/api ./internal/mcp -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker` -> `23 passed`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
 ### 2026-03-03 (Code health refactor: acceptance step argument-shape cleanup)
 
 1. Refactored acceptance step helper signatures in:

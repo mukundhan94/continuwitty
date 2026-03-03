@@ -132,3 +132,189 @@ func TestActionMemoryCurationSuggestionReturnsNotFound(t *testing.T) {
 		t.Fatalf("expected ErrMemoryCurationSuggestionNotFound, got %v", err)
 	}
 }
+
+func TestActionMemoryCurationSuggestionAppliedDispatchesConsolidationMerge(t *testing.T) {
+	runAppliedCurationSuggestionSideEffectCase(
+		t,
+		appliedCurationSuggestionSideEffectCase{
+			suggestionType: models.MemoryCurationSuggestionTypeConsolidate,
+			payloadKey:     "consolidation_suggestion_id",
+		},
+	)
+}
+
+func TestActionMemoryCurationSuggestionAppliedDispatchesContradictionResolve(t *testing.T) {
+	runAppliedCurationSuggestionSideEffectCase(
+		t,
+		appliedCurationSuggestionSideEffectCase{
+			suggestionType: models.MemoryCurationSuggestionTypeContradiction,
+			payloadKey:     "contradiction_alert_id",
+		},
+	)
+}
+
+func TestActionMemoryCurationSuggestionAppliedRejectsInvalidPayload(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000c071")
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000c072")
+	actionCalled := false
+	service.deps.getMemoryCurationSuggestion = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ uuid.UUID,
+		_ *string,
+	) (*models.MemoryCurationSuggestion, error) {
+		return &models.MemoryCurationSuggestion{
+			SuggestionID:   suggestionID,
+			ProjectID:      "engram-vault",
+			SuggestionType: models.MemoryCurationSuggestionTypeConsolidate,
+			PayloadJSON:    map[string]any{},
+		}, nil
+	}
+	service.deps.applyMemoryCurationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.MemoryCurationSuggestionActionInput,
+	) (*models.MemoryCurationSuggestion, error) {
+		actionCalled = true
+		return nil, nil
+	}
+
+	_, err := service.ActionMemoryCurationSuggestion(
+		context.Background(),
+		suggestionID,
+		actorUserID,
+		MemoryCurationSuggestionActionRequest{
+			Status: models.MemoryCurationSuggestionStatusApplied,
+		},
+	)
+	if !errors.Is(err, ErrMemoryCurationSuggestionPayloadInvalid) {
+		t.Fatalf("expected ErrMemoryCurationSuggestionPayloadInvalid, got %v", err)
+	}
+	if actionCalled {
+		t.Fatalf("expected curation status update to be skipped when payload is invalid")
+	}
+}
+
+type appliedCurationSuggestionSideEffectCase struct {
+	suggestionType models.MemoryCurationSuggestionType
+	payloadKey     string
+}
+
+type appliedCurationSuggestionSetupInput struct {
+	suggestionID   uuid.UUID
+	projectID      string
+	suggestionType models.MemoryCurationSuggestionType
+	payloadKey     string
+	relatedID      uuid.UUID
+	actionCalled   *bool
+}
+
+func runAppliedCurationSuggestionSideEffectCase(
+	t *testing.T,
+	testCase appliedCurationSuggestionSideEffectCase,
+) {
+	t.Helper()
+	service := NewService(nil, 256, nil)
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000c051")
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000c052")
+	projectID := "engram-vault"
+	relatedID := uuid.MustParse("00000000-0000-0000-0000-00000000c053")
+	sideEffectCalled := false
+	actionCalled := false
+	configureAppliedCurationSuggestion(
+		service,
+		appliedCurationSuggestionSetupInput{
+			suggestionID:   suggestionID,
+			projectID:      projectID,
+			suggestionType: testCase.suggestionType,
+			payloadKey:     testCase.payloadKey,
+			relatedID:      relatedID,
+			actionCalled:   &actionCalled,
+		},
+	)
+	service.deps.applyConsolidationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.ConsolidationSuggestionActionInput,
+	) (*models.EngramConsolidationSuggestion, error) {
+		sideEffectCalled = true
+		requireEqual(t, relatedID, input.SuggestionID)
+		requireEqual(t, models.ConsolidationSuggestionStatusMerged, input.Status)
+		requireEqual(t, actorUserID, input.ActorUserID)
+		return &models.EngramConsolidationSuggestion{SuggestionID: input.SuggestionID}, nil
+	}
+	service.deps.resolveContradictionAlert = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.ContradictionAlertResolveInput,
+	) (*models.EngramContradictionAlert, error) {
+		sideEffectCalled = true
+		requireEqual(t, relatedID, input.AlertID)
+		requireEqual(t, models.ContradictionAlertStatusResolved, input.Status)
+		requireEqual(t, actorUserID, input.ResolvedBy)
+		return &models.EngramContradictionAlert{AlertID: input.AlertID}, nil
+	}
+
+	updated, err := service.ActionMemoryCurationSuggestion(
+		context.Background(),
+		suggestionID,
+		actorUserID,
+		MemoryCurationSuggestionActionRequest{
+			ProjectID: &projectID,
+			Status:    models.MemoryCurationSuggestionStatusApplied,
+		},
+	)
+	requireNoError(t, err)
+	if !sideEffectCalled {
+		t.Fatalf("expected side effect to run")
+	}
+	if !actionCalled {
+		t.Fatalf("expected curation suggestion action to run")
+	}
+	assertAppliedCurationSuggestionStatus(t, updated)
+}
+
+func configureAppliedCurationSuggestion(
+	service *Service,
+	input appliedCurationSuggestionSetupInput,
+) {
+	service.deps.getMemoryCurationSuggestion = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ uuid.UUID,
+		_ *string,
+	) (*models.MemoryCurationSuggestion, error) {
+		return &models.MemoryCurationSuggestion{
+			SuggestionID:   input.suggestionID,
+			ProjectID:      input.projectID,
+			SuggestionType: input.suggestionType,
+			PayloadJSON: map[string]any{
+				input.payloadKey: input.relatedID.String(),
+			},
+		}, nil
+	}
+	service.deps.applyMemoryCurationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.MemoryCurationSuggestionActionInput,
+	) (*models.MemoryCurationSuggestion, error) {
+		*input.actionCalled = true
+		return &models.MemoryCurationSuggestion{
+			SuggestionID: input.suggestionID,
+			ProjectID:    input.projectID,
+			Status:       models.MemoryCurationSuggestionStatusApplied,
+		}, nil
+	}
+}
+
+func assertAppliedCurationSuggestionStatus(
+	t *testing.T,
+	updated *models.MemoryCurationSuggestion,
+) {
+	t.Helper()
+	if updated == nil {
+		t.Fatalf("expected updated memory curation suggestion")
+	}
+	requireEqual(t, models.MemoryCurationSuggestionStatusApplied, updated.Status)
+}

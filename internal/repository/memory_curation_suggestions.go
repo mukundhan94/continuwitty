@@ -138,6 +138,47 @@ func ListMemoryCurationSuggestions(
 	return scanMemoryCurationSuggestionRows(rows)
 }
 
+// GetMemoryCurationSuggestion gets one suggestion by id with optional project scoping.
+func GetMemoryCurationSuggestion(
+	ctx context.Context,
+	db Queryer,
+	suggestionID uuid.UUID,
+	projectID *string,
+) (*models.MemoryCurationSuggestion, error) {
+	row := db.QueryRow(
+		ctx,
+		`
+		SELECT
+			suggestion_id,
+			project_id,
+			session_id,
+			suggestion_type,
+			reason,
+			recommendation,
+			payload_json,
+			confidence_score,
+			status,
+			suggested_at,
+			updated_at,
+			actioned_at,
+			action_taken_by
+		FROM memory_curation_suggestions
+		WHERE suggestion_id = $1
+			AND ($2::text IS NULL OR project_id = $2)
+		`,
+		suggestionID,
+		optionalStringValue(normalizeOptionalConsolidationProjectID(projectID)),
+	)
+	record, err := scanMemoryCurationSuggestion(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
 // ApplyMemoryCurationSuggestionAction updates one suggestion to an actioned state.
 func ApplyMemoryCurationSuggestionAction(
 	ctx context.Context,

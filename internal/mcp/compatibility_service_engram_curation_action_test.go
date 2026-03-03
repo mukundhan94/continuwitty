@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"engram/internal/admin"
 	"engram/internal/models"
 
 	"github.com/google/uuid"
@@ -74,9 +75,8 @@ func TestCompatibilityServiceEngramCurationActionParity(t *testing.T) {
 	}
 }
 
-func TestCompatibilityServiceEngramCurationActionValidationAndErrors(t *testing.T) {
+func TestCompatibilityServiceEngramCurationActionValidation(t *testing.T) {
 	actorUserID := uuid.MustParse("74460000-0000-0000-0000-000000000001")
-	service := newEngramCurationActionCompatibilityService(&fakeEngramCurationActionService{})
 	testCases := []struct {
 		name    string
 		params  map[string]any
@@ -110,54 +110,88 @@ func TestCompatibilityServiceEngramCurationActionValidationAndErrors(t *testing.
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
-			request := toolsCallRequest(actorUserID.String(), "engram_curation_action", testCase.params)
-			if testCase.asAdmin {
-				request = asAdminActor(request)
-			}
-			frame := runCompatibilityRequestWithService(t, service, request)
+			frame := runCurationActionFrame(
+				t,
+				curationActionFrameInput{
+					actorUserID:   actorUserID,
+					actionService: &fakeEngramCurationActionService{},
+					params:        testCase.params,
+					asAdmin:       testCase.asAdmin,
+				},
+			)
 			requireErrorCode(t, errorPayloadFromFrame(t, frame), -32602)
 		})
 	}
 
-	notFoundFrame := runCompatibilityRequestWithService(
+	notFoundFrame := runCurationActionFrame(
 		t,
-		newEngramCurationActionCompatibilityService(&fakeEngramCurationActionService{}),
-		asAdminActor(
-			toolsCallRequest(
-				actorUserID.String(),
-				"engram_curation_action",
-				map[string]any{
-					"suggestion_id": "74460000-0000-0000-0000-000000000002",
-					"status":        "applied",
-				},
-			),
-		),
+		curationActionFrameInput{
+			actorUserID:   actorUserID,
+			actionService: &fakeEngramCurationActionService{},
+			params: map[string]any{
+				"suggestion_id": "74460000-0000-0000-0000-000000000002",
+				"status":        "applied",
+			},
+			asAdmin: true,
+		},
 	)
 	requireErrorCode(t, errorPayloadFromFrame(t, notFoundFrame), -32602)
+}
 
-	internalFrame := runCompatibilityRequestWithService(
+func TestCompatibilityServiceEngramCurationActionServiceErrors(t *testing.T) {
+	actorUserID := uuid.MustParse("74460000-0000-0000-0000-000000000001")
+	params := map[string]any{
+		"suggestion_id": "74460000-0000-0000-0000-000000000002",
+		"status":        "applied",
+	}
+
+	internalFrame := runCurationActionFrame(
 		t,
-		newEngramCurationActionCompatibilityService(
-			&fakeEngramCurationActionService{err: errors.New("boom")},
-		),
-		asAdminActor(
-			toolsCallRequest(
-				actorUserID.String(),
-				"engram_curation_action",
-				map[string]any{
-					"suggestion_id": "74460000-0000-0000-0000-000000000002",
-					"status":        "applied",
-				},
-			),
-		),
+		curationActionFrameInput{
+			actorUserID:   actorUserID,
+			actionService: &fakeEngramCurationActionService{err: errors.New("boom")},
+			params:        params,
+			asAdmin:       true,
+		},
 	)
 	requireErrorCode(t, errorPayloadFromFrame(t, internalFrame), -32603)
+
+	invalidPayloadFrame := runCurationActionFrame(
+		t,
+		curationActionFrameInput{
+			actorUserID:   actorUserID,
+			actionService: &fakeEngramCurationActionService{err: admin.ErrMemoryCurationSuggestionPayloadInvalid},
+			params:        params,
+			asAdmin:       true,
+		},
+	)
+	requireErrorCode(t, errorPayloadFromFrame(t, invalidPayloadFrame), -32602)
 }
 
 func newEngramCurationActionCompatibilityService(service EngramCurationActionService) Service {
 	return NewCompatibilityServiceWithDependencies(
 		"1.2.3",
 		CompatibilityServiceDependencies{EngramCurationAction: service},
+	)
+}
+
+type curationActionFrameInput struct {
+	actorUserID   uuid.UUID
+	actionService EngramCurationActionService
+	params        map[string]any
+	asAdmin       bool
+}
+
+func runCurationActionFrame(t *testing.T, input curationActionFrameInput) Frame {
+	t.Helper()
+	request := toolsCallRequest(input.actorUserID.String(), "engram_curation_action", input.params)
+	if input.asAdmin {
+		request = asAdminActor(request)
+	}
+	return runCompatibilityRequestWithService(
+		t,
+		newEngramCurationActionCompatibilityService(input.actionService),
+		request,
 	)
 }
 
