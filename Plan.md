@@ -1106,8 +1106,11 @@ Build a local-first memory system where agents and humans can:
     - context-budget normalization and truncation behavior.
     - context-budget audit metadata for empty/non-empty context assembly.
     - REST/MCP forwarding of `context_token_budget` overrides.
-- Follow-up carried to future phases:
-  - broader benchmark coverage for complex temporal/engagement/trace filter combinations.
+  - benchmark coverage expanded for complex temporal/engagement/trace query filters:
+    - repository microbenchmarks:
+      - `BenchmarkBuildEngramQueryWhereComplexTemporalEngagementTrace`
+      - `BenchmarkBuildEngramQueryWhereComplexFilterMatrix`
+    - benchmark artifact: `docs/phase39-query-benchmark.md`.
 
 ### Goals
 

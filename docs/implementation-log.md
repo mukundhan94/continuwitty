@@ -7,6 +7,16 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 39 closeout: complex temporal/engagement/trace benchmark coverage)
+
+1. Added Phase 39 repository benchmark coverage in `internal/repository/engram_benchmark_test.go`:
+   - `BenchmarkBuildEngramQueryWhereComplexTemporalEngagementTrace`
+   - `BenchmarkBuildEngramQueryWhereComplexFilterMatrix`
+2. Added benchmark artifact in `docs/phase39-query-benchmark.md`:
+   - command, environment, `ns/op`, memory, and allocation profiles.
+3. Validation:
+   - `go test ./internal/repository -run '^$' -bench 'Benchmark(BuildEngramQueryWhereComplexTemporalEngagementTrace|BuildEngramQueryWhereComplexFilterMatrix)$' -benchmem`
+
 ### 2026-03-03 (Phase 40 closeout: curation benchmark baseline)
 
 1. Added Phase 40 benchmark suite in `internal/admin/service_curation_benchmark_test.go`:

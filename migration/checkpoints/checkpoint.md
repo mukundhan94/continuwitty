@@ -273,7 +273,11 @@
   - `context_token_truncated`
 - [x] Added regression coverage for context-budget normalization/truncation and REST/MCP forwarding.
 - [x] Add trace-aware temporal filters and expanded contract coverage.
-- [ ] Expand benchmark coverage for complex temporal/engagement/trace filter combinations.
+- [x] Expand benchmark coverage for complex temporal/engagement/trace filter combinations.
+  - repository benchmark suite now includes:
+    - `BenchmarkBuildEngramQueryWhereComplexTemporalEngagementTrace`
+    - `BenchmarkBuildEngramQueryWhereComplexFilterMatrix`
+  - benchmark artifact: `docs/phase39-query-benchmark.md`.
 
 ### Phase 40 Progress Tracker
 
