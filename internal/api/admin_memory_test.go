@@ -31,6 +31,7 @@ type fakeMemoryAdminService struct {
 	refreshEngramFreshness func(ctx context.Context, request admin.EngramFreshnessRefreshRequest) (admin.EngramFreshnessRefreshResponse, error)
 	refreshConsolidationFn func(ctx context.Context, request admin.EngramConsolidationSuggestionRefreshRequest) (admin.EngramConsolidationSuggestionRefreshResponse, error)
 	listConsolidationFn    func(ctx context.Context, request admin.EngramConsolidationSuggestionListRequest) ([]models.EngramConsolidationSuggestion, error)
+	actionConsolidationFn  func(ctx context.Context, suggestionID uuid.UUID, actorUserID uuid.UUID, request admin.EngramConsolidationSuggestionActionRequest) (*models.EngramConsolidationSuggestion, error)
 	listCollectionsFn      func(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error)
 	createCollectionFn     func(ctx context.Context, actorUserID uuid.UUID, actorRole string, payload admin.CollectionCreateRequest) (*models.EngramCollectionRecord, error)
 	updateCollectionFn     func(ctx context.Context, collectionID uuid.UUID, payload admin.CollectionUpdateRequest) (*models.EngramCollectionRecord, error)
@@ -107,6 +108,20 @@ func (f *fakeMemoryAdminService) ListEngramConsolidationSuggestions(
 	request admin.EngramConsolidationSuggestionListRequest,
 ) ([]models.EngramConsolidationSuggestion, error) {
 	return requireFakeAdminHandler("ListEngramConsolidationSuggestions", f.listConsolidationFn)(ctx, request)
+}
+
+func (f *fakeMemoryAdminService) ActionEngramConsolidationSuggestion(
+	ctx context.Context,
+	suggestionID uuid.UUID,
+	actorUserID uuid.UUID,
+	request admin.EngramConsolidationSuggestionActionRequest,
+) (*models.EngramConsolidationSuggestion, error) {
+	return requireFakeAdminHandler("ActionEngramConsolidationSuggestion", f.actionConsolidationFn)(
+		ctx,
+		suggestionID,
+		actorUserID,
+		request,
+	)
 }
 
 func (f *fakeMemoryAdminService) ListCollections(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error) {
@@ -381,6 +396,70 @@ func TestMountMemoryAdminRoutesListEngramConsolidationSuggestionsRejectsInvalidS
 		http.MethodGet,
 		"/api/v1/admin/memory/engrams/consolidation/suggestions?status=invalid",
 		nil,
+	)
+	requireEqual(t, http.StatusBadRequest, response.Code)
+}
+
+func TestMountMemoryAdminRoutesActionConsolidationSuggestionUsesActorAndPayload(t *testing.T) {
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-000000000171")
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000172")
+	capturedSuggestionID := uuid.Nil
+	capturedActorUserID := uuid.Nil
+	capturedRequest := admin.EngramConsolidationSuggestionActionRequest{}
+	service := &fakeMemoryAdminService{
+		actionConsolidationFn: func(
+			_ context.Context,
+			receivedSuggestionID uuid.UUID,
+			receivedActorUserID uuid.UUID,
+			request admin.EngramConsolidationSuggestionActionRequest,
+		) (*models.EngramConsolidationSuggestion, error) {
+			capturedSuggestionID = receivedSuggestionID
+			capturedActorUserID = receivedActorUserID
+			capturedRequest = request
+			return &models.EngramConsolidationSuggestion{
+				SuggestionID: suggestionID,
+				Status:       models.ConsolidationSuggestionStatusMerged,
+			}, nil
+		},
+	}
+	router := chi.NewRouter()
+	MountMemoryAdminRoutes(router, service, func(_ *http.Request) (AdminActor, error) {
+		return AdminActor{UserID: actorUserID, Role: "admin"}, nil
+	})
+
+	response := executeRequest(
+		router,
+		http.MethodPost,
+		"/api/v1/admin/memory/engrams/consolidation/suggestions/"+suggestionID.String()+"/action",
+		[]byte(`{"status":"merged"}`),
+	)
+	requireEqual(t, http.StatusOK, response.Code)
+	requireEqual(t, suggestionID, capturedSuggestionID)
+	requireEqual(t, actorUserID, capturedActorUserID)
+	requireEqual(t, models.ConsolidationSuggestionStatusMerged, capturedRequest.Status)
+}
+
+func TestMountMemoryAdminRoutesActionConsolidationSuggestionRejectsInvalidStatus(t *testing.T) {
+	service := &fakeMemoryAdminService{
+		actionConsolidationFn: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ uuid.UUID,
+			_ admin.EngramConsolidationSuggestionActionRequest,
+		) (*models.EngramConsolidationSuggestion, error) {
+			return nil, errors.New("unexpected")
+		},
+	}
+	router := chi.NewRouter()
+	MountMemoryAdminRoutes(router, service, func(_ *http.Request) (AdminActor, error) {
+		return AdminActor{UserID: uuid.MustParse("00000000-0000-0000-0000-000000000173"), Role: "admin"}, nil
+	})
+
+	response := executeRequest(
+		router,
+		http.MethodPost,
+		"/api/v1/admin/memory/engrams/consolidation/suggestions/00000000-0000-0000-0000-000000000174/action",
+		[]byte(`{"status":"invalid"}`),
 	)
 	requireEqual(t, http.StatusBadRequest, response.Code)
 }

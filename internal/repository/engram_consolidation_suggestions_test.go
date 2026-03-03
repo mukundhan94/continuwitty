@@ -11,6 +11,7 @@ import (
 	"engram/internal/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 func TestRefreshExactDuplicateConsolidationSuggestionsUsesDefaults(t *testing.T) {
@@ -128,5 +129,93 @@ func TestListEngramConsolidationSuggestionsUsesFilters(t *testing.T) {
 	requireEqual(t, 1, len(db.queryArgs))
 	if !reflect.DeepEqual([]any{"engram-vault", "suggested", 20, 5}, db.queryArgs[0]) {
 		t.Fatalf("expected list query args to match")
+	}
+}
+
+func TestApplyEngramConsolidationSuggestionActionUsesRequestObject(t *testing.T) {
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000c301")
+	sourceEngramID := uuid.MustParse("00000000-0000-0000-0000-00000000c302")
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000c303")
+	suggestedAt := time.Date(2026, 3, 3, 14, 20, 0, 0, time.UTC)
+	actionedAt := time.Date(2026, 3, 3, 14, 25, 0, 0, time.UTC)
+	db := &fakeQueryer{
+		queryRowResult: &fakeRow{
+			values: []any{
+				suggestionID,
+				"engram-vault",
+				[]uuid.UUID{sourceEngramID},
+				"exact_duplicate",
+				"Possible duplicate title cluster",
+				"hash-value",
+				0.9,
+				"merged",
+				suggestedAt,
+				actionedAt,
+				actionedAt,
+				actorUserID,
+			},
+		},
+	}
+	result, err := ApplyEngramConsolidationSuggestionAction(
+		context.Background(),
+		db,
+		ConsolidationSuggestionActionInput{
+			SuggestionID: suggestionID,
+			Status:       models.ConsolidationSuggestionStatusMerged,
+			ActorUserID:  actorUserID,
+			ActionedAt:   actionedAt,
+		},
+	)
+	requireNoError(t, err)
+	if result == nil {
+		t.Fatalf("expected action result")
+	}
+	requireEqual(t, models.ConsolidationSuggestionStatusMerged, result.Status)
+	if result.ActionedAt == nil || !result.ActionedAt.Equal(actionedAt) {
+		t.Fatalf("expected actioned_at to be set")
+	}
+	if result.ActionTakenBy == nil || *result.ActionTakenBy != actorUserID {
+		t.Fatalf("expected action_taken_by to be set")
+	}
+	requireEqual(t, 1, len(db.queryRowArgs))
+	if !reflect.DeepEqual(
+		[]any{suggestionID, "merged", actionedAt, actorUserID},
+		db.queryRowArgs[0],
+	) {
+		t.Fatalf("expected action query args to match")
+	}
+}
+
+func TestApplyEngramConsolidationSuggestionActionRejectsInvalidStatus(t *testing.T) {
+	_, err := ApplyEngramConsolidationSuggestionAction(
+		context.Background(),
+		&fakeQueryer{},
+		ConsolidationSuggestionActionInput{
+			SuggestionID: uuid.MustParse("00000000-0000-0000-0000-00000000c311"),
+			Status:       models.ConsolidationSuggestionStatusSuggested,
+			ActorUserID:  uuid.MustParse("00000000-0000-0000-0000-00000000c312"),
+		},
+	)
+	if !errors.Is(err, errConsolidationActionStatusInvalid) {
+		t.Fatalf("expected errConsolidationActionStatusInvalid, got %v", err)
+	}
+}
+
+func TestApplyEngramConsolidationSuggestionActionReturnsNilWhenSuggestionMissing(t *testing.T) {
+	db := &fakeQueryer{
+		queryRowResult: &fakeRow{err: pgx.ErrNoRows},
+	}
+	result, err := ApplyEngramConsolidationSuggestionAction(
+		context.Background(),
+		db,
+		ConsolidationSuggestionActionInput{
+			SuggestionID: uuid.MustParse("00000000-0000-0000-0000-00000000c321"),
+			Status:       models.ConsolidationSuggestionStatusRejected,
+			ActorUserID:  uuid.MustParse("00000000-0000-0000-0000-00000000c322"),
+		},
+	)
+	requireNoError(t, err)
+	if result != nil {
+		t.Fatalf("expected nil result for missing suggestion")
 	}
 }

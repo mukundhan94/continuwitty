@@ -12,12 +12,14 @@ import (
 	"engram/internal/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 const defaultConsolidationMinGroupSize = 2
 
 var (
 	errConsolidationMinGroupSizeInvalid = errors.New("min_group_size must be at least 2")
+	errConsolidationActionStatusInvalid = errors.New("status must be merged or rejected")
 	newConsolidationSuggestionUUID      = uuid.New
 	nowConsolidationSuggestionUTC       = func() time.Time { return time.Now().UTC() }
 )
@@ -36,6 +38,14 @@ type ConsolidationSuggestionListInput struct {
 	Status    *models.ConsolidationSuggestionStatus
 	Limit     int
 	Offset    int
+}
+
+// ConsolidationSuggestionActionInput captures status-action inputs for consolidation suggestions.
+type ConsolidationSuggestionActionInput struct {
+	SuggestionID uuid.UUID
+	Status       models.ConsolidationSuggestionStatus
+	ActorUserID  uuid.UUID
+	ActionedAt   time.Time
 }
 
 type consolidationDuplicateGroup struct {
@@ -95,6 +105,55 @@ func ListEngramConsolidationSuggestions(
 	}
 	defer rows.Close()
 	return scanConsolidationSuggestionRows(rows)
+}
+
+// ApplyEngramConsolidationSuggestionAction records a merged/rejected action for a suggestion.
+func ApplyEngramConsolidationSuggestionAction(
+	ctx context.Context,
+	db Queryer,
+	input ConsolidationSuggestionActionInput,
+) (*models.EngramConsolidationSuggestion, error) {
+	normalized, err := normalizeConsolidationSuggestionActionInput(input)
+	if err != nil {
+		return nil, err
+	}
+	row := db.QueryRow(
+		ctx,
+		`
+		UPDATE engram_consolidation_suggestions
+		SET
+			status = $2,
+			actioned_at = $3,
+			action_taken_by = $4,
+			updated_at = $3
+		WHERE suggestion_id = $1
+		RETURNING
+			suggestion_id,
+			project_id,
+			source_engram_ids,
+			consolidation_type,
+			reason,
+			consolidation_hash,
+			confidence_score,
+			status,
+			suggested_at,
+			updated_at,
+			actioned_at,
+			action_taken_by
+		`,
+		normalized.SuggestionID,
+		string(normalized.Status),
+		normalized.ActionedAt,
+		normalized.ActorUserID,
+	)
+	record, err := scanConsolidationSuggestion(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
 }
 
 func buildConsolidationSuggestionListQuery(input ConsolidationSuggestionListInput) (string, []any) {
@@ -255,6 +314,20 @@ func normalizeConsolidationSuggestionRefreshInput(
 	}
 	if input.SuggestedAt.IsZero() {
 		input.SuggestedAt = nowConsolidationSuggestionUTC()
+	}
+	return input, nil
+}
+
+func normalizeConsolidationSuggestionActionInput(
+	input ConsolidationSuggestionActionInput,
+) (ConsolidationSuggestionActionInput, error) {
+	switch input.Status {
+	case models.ConsolidationSuggestionStatusMerged, models.ConsolidationSuggestionStatusRejected:
+	default:
+		return ConsolidationSuggestionActionInput{}, errConsolidationActionStatusInvalid
+	}
+	if input.ActionedAt.IsZero() {
+		input.ActionedAt = nowConsolidationSuggestionUTC()
 	}
 	return input, nil
 }

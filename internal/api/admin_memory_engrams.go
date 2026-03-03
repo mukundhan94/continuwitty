@@ -18,6 +18,10 @@ func mountMemoryAdminEngramRoutes(memory chi.Router, service MemoryAdminService,
 		"/engrams/consolidation/suggestions",
 		listMemoryAdminEngramConsolidationRoute(service, requireAdminActor),
 	)
+	memory.Post(
+		"/engrams/consolidation/suggestions/{suggestion_id}/action",
+		actionMemoryAdminEngramConsolidationRoute(service, requireAdminActor),
+	)
 	memory.Get("/engrams", listMemoryAdminEngramsRoute(service, requireAdminActor))
 	memory.Get("/engrams/{engram_id}", getMemoryAdminEngramRoute(service, requireAdminActor))
 	memory.Patch("/engrams/{engram_id}", updateMemoryAdminEngramRoute(service, requireAdminActor))

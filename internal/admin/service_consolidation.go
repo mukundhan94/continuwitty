@@ -5,6 +5,8 @@ import (
 
 	"engram/internal/models"
 	"engram/internal/repository"
+
+	"github.com/google/uuid"
 )
 
 const minimumConsolidationSuggestionGroupSize = 2
@@ -50,4 +52,37 @@ func (s *Service) ListEngramConsolidationSuggestions(
 			Offset:    request.Offset,
 		},
 	)
+}
+
+// ActionEngramConsolidationSuggestion marks a suggestion as merged/rejected.
+func (s *Service) ActionEngramConsolidationSuggestion(
+	ctx context.Context,
+	suggestionID uuid.UUID,
+	actorUserID uuid.UUID,
+	request EngramConsolidationSuggestionActionRequest,
+) (*models.EngramConsolidationSuggestion, error) {
+	if !isConsolidationActionStatus(request.Status) {
+		return nil, ErrConsolidationSuggestionActionInvalid
+	}
+	updated, err := s.deps.applyConsolidationSuggestionAction(
+		ctx,
+		s.db,
+		repository.ConsolidationSuggestionActionInput{
+			SuggestionID: suggestionID,
+			Status:       request.Status,
+			ActorUserID:  actorUserID,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if updated == nil {
+		return nil, ErrConsolidationSuggestionNotFound
+	}
+	return updated, nil
+}
+
+func isConsolidationActionStatus(status models.ConsolidationSuggestionStatus) bool {
+	return status == models.ConsolidationSuggestionStatusMerged ||
+		status == models.ConsolidationSuggestionStatusRejected
 }

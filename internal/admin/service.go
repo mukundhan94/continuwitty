@@ -29,6 +29,10 @@ var (
 	ErrProjectIDRequired = errors.New("project_id is required")
 	// ErrConsolidationMinGroupSizeInvalid indicates invalid consolidation minimum group-size input.
 	ErrConsolidationMinGroupSizeInvalid = errors.New("min_group_size must be at least 2")
+	// ErrConsolidationSuggestionNotFound indicates a requested consolidation suggestion does not exist.
+	ErrConsolidationSuggestionNotFound = errors.New("consolidation suggestion not found")
+	// ErrConsolidationSuggestionActionInvalid indicates invalid consolidation action status.
+	ErrConsolidationSuggestionActionInvalid = errors.New("status must be merged or rejected")
 )
 
 // MemoryAdminListRequest captures shared admin list filters.
@@ -138,6 +142,11 @@ type EngramConsolidationSuggestionListRequest struct {
 	Offset    int                                   `json:"offset"`
 }
 
+// EngramConsolidationSuggestionActionRequest captures action payload for a suggestion.
+type EngramConsolidationSuggestionActionRequest struct {
+	Status models.ConsolidationSuggestionStatus `json:"status"`
+}
+
 // CollectionCreateRequest captures collection create payload values.
 type CollectionCreateRequest struct {
 	ProjectID   string `json:"project_id"`
@@ -229,6 +238,11 @@ type serviceDeps struct {
 		db repository.Queryer,
 		input repository.ConsolidationSuggestionListInput,
 	) ([]models.EngramConsolidationSuggestion, error)
+	applyConsolidationSuggestionAction func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.ConsolidationSuggestionActionInput,
+	) (*models.EngramConsolidationSuggestion, error)
 
 	listCollections      func(ctx context.Context, db repository.Queryer, input repository.CollectionListInput) ([]models.EngramCollectionRecord, error)
 	getCollection        func(ctx context.Context, db repository.Queryer, collectionID uuid.UUID, includeDeleted bool) (*models.EngramCollectionRecord, error)
@@ -247,15 +261,16 @@ func defaultServiceDeps() serviceDeps {
 		restoreSession:          repository.RestoreSession,
 		softDeleteLinkedEngrams: repository.SoftDeleteLinkedEngrams,
 
-		listAdminEngrams:                repository.ListAdminEngrams,
-		getAdminEngram:                  repository.GetAdminEngram,
-		updateAdminEngram:               repository.UpdateAdminEngram,
-		moveAdminEngramProject:          repository.MoveAdminEngramProject,
-		softDeleteEngram:                repository.SoftDeleteEngram,
-		restoreEngram:                   repository.RestoreEngram,
-		refreshEngramFreshness:          repository.RefreshEngramFreshnessScores,
-		refreshConsolidationSuggestions: repository.RefreshExactDuplicateConsolidationSuggestions,
-		listConsolidationSuggestions:    repository.ListEngramConsolidationSuggestions,
+		listAdminEngrams:                   repository.ListAdminEngrams,
+		getAdminEngram:                     repository.GetAdminEngram,
+		updateAdminEngram:                  repository.UpdateAdminEngram,
+		moveAdminEngramProject:             repository.MoveAdminEngramProject,
+		softDeleteEngram:                   repository.SoftDeleteEngram,
+		restoreEngram:                      repository.RestoreEngram,
+		refreshEngramFreshness:             repository.RefreshEngramFreshnessScores,
+		refreshConsolidationSuggestions:    repository.RefreshExactDuplicateConsolidationSuggestions,
+		listConsolidationSuggestions:       repository.ListEngramConsolidationSuggestions,
+		applyConsolidationSuggestionAction: repository.ApplyEngramConsolidationSuggestionAction,
 
 		listCollections:      repository.ListCollections,
 		getCollection:        repository.GetCollection,

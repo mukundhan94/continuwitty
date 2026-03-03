@@ -139,6 +139,31 @@
    - `make test-unit`
    - CodeScene scores on touched Go files: `10.0`.
 
+### 2026-03-03 (Phase 37 extension: consolidation action workflow baseline in repository/admin REST)
+
+1. Added repository action path in `internal/repository/engram_consolidation_suggestions.go`:
+   - `ApplyEngramConsolidationSuggestionAction` updates suggestion status to `merged`/`rejected`.
+   - records `actioned_at`, `action_taken_by`, and `updated_at` atomically.
+   - validates actionable status (`merged`/`rejected`) and returns `nil` on missing suggestion IDs.
+2. Added admin service action workflow:
+   - `ActionEngramConsolidationSuggestion` in `internal/admin/service_consolidation.go`.
+   - added service-level not-found and invalid-action errors with explicit status validation.
+3. Added admin memory REST route:
+   - `POST /api/v1/admin/memory/engrams/consolidation/suggestions/{suggestion_id}/action`.
+   - actor attribution forwarded from authenticated admin actor to service/repository.
+4. Added regression coverage:
+   - repository tests for action success, invalid status, and missing suggestion behavior.
+   - admin service tests for repository forwarding, invalid status rejection, and not-found mapping.
+   - API tests for actor/payload forwarding and invalid-status rejection.
+5. Documentation/state alignment:
+   - `docs/api-reference.md` now documents consolidation action endpoint.
+   - `plan.md` and `migration/checkpoints/checkpoint.md` updated for Phase 37 action-baseline progress.
+6. Validation:
+   - `go test ./internal/repository ./internal/admin ./internal/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
 ### 2026-03-01 (Security follow-up closeout: OIDC rollout validation + centralized audit sink regression)
 
 1. Added explicit OIDC-to-sink integration coverage in `internal/api/session_ui_oidc_test.go`:

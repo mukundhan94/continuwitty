@@ -991,12 +991,13 @@ Build a local-first memory system where agents and humans can:
   - admin service + REST routes for consolidation maintenance/listing:
     - `POST /api/v1/admin/memory/engrams/consolidation/refresh`
     - `GET /api/v1/admin/memory/engrams/consolidation/suggestions`
+    - `POST /api/v1/admin/memory/engrams/consolidation/suggestions/{suggestion_id}/action`
   - MCP consolidation parity tooling:
     - `engram.refresh_consolidation` / `engram_refresh_consolidation` (admin-only)
     - `engram.consolidation_list` / `engram_consolidation_list` (admin-only)
   - repository/model tests for consolidation refresh/list defaulting, filtering, and status parsing.
 - Remaining in this phase:
-  - API/MCP consolidation action workflows (`merged`/`rejected`) with audit-friendly actor attribution.
+  - MCP consolidation action workflow parity (`merged`/`rejected`) with actor attribution.
   - acceptance + precision/recall benchmark coverage for grouping criteria.
 
 ### Goals

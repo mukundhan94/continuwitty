@@ -47,6 +47,12 @@ type MemoryAdminService interface {
 		ctx context.Context,
 		request admin.EngramConsolidationSuggestionListRequest,
 	) ([]models.EngramConsolidationSuggestion, error)
+	ActionEngramConsolidationSuggestion(
+		ctx context.Context,
+		suggestionID uuid.UUID,
+		actorUserID uuid.UUID,
+		request admin.EngramConsolidationSuggestionActionRequest,
+	) (*models.EngramConsolidationSuggestion, error)
 
 	ListCollections(ctx context.Context, request admin.MemoryAdminListRequest) ([]models.EngramCollectionRecord, error)
 	CreateCollection(ctx context.Context, actorUserID uuid.UUID, actorRole string, payload admin.CollectionCreateRequest) (*models.EngramCollectionRecord, error)
@@ -277,13 +283,17 @@ func writeServiceError(writer http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, admin.ErrSessionNotFound),
 		errors.Is(err, admin.ErrEngramNotFound),
-		errors.Is(err, admin.ErrCollectionNotFound):
+		errors.Is(err, admin.ErrCollectionNotFound),
+		errors.Is(err, admin.ErrConsolidationSuggestionNotFound):
 		statusCode = http.StatusNotFound
 		detail = err.Error()
 	case errors.Is(err, admin.ErrProjectIDRequired):
 		statusCode = http.StatusBadRequest
 		detail = err.Error()
 	case errors.Is(err, admin.ErrConsolidationMinGroupSizeInvalid):
+		statusCode = http.StatusBadRequest
+		detail = err.Error()
+	case errors.Is(err, admin.ErrConsolidationSuggestionActionInvalid):
 		statusCode = http.StatusBadRequest
 		detail = err.Error()
 	case errors.Is(err, admin.ErrEngramStale),

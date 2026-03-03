@@ -410,6 +410,79 @@ func TestListEngramConsolidationSuggestionsUsesRepositoryRequestObject(t *testin
 	requireEqual(t, suggestionID, listed[0].SuggestionID)
 }
 
+func TestActionEngramConsolidationSuggestionUsesRepositoryRequestObject(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000d011")
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000d012")
+	captured := repository.ConsolidationSuggestionActionInput{}
+	service.deps.applyConsolidationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.ConsolidationSuggestionActionInput,
+	) (*models.EngramConsolidationSuggestion, error) {
+		captured = input
+		return &models.EngramConsolidationSuggestion{
+			SuggestionID: suggestionID,
+			Status:       models.ConsolidationSuggestionStatusMerged,
+		}, nil
+	}
+
+	updated, err := service.ActionEngramConsolidationSuggestion(
+		context.Background(),
+		suggestionID,
+		actorUserID,
+		EngramConsolidationSuggestionActionRequest{
+			Status: models.ConsolidationSuggestionStatusMerged,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, suggestionID, captured.SuggestionID)
+	requireEqual(t, actorUserID, captured.ActorUserID)
+	requireEqual(t, models.ConsolidationSuggestionStatusMerged, captured.Status)
+	if updated == nil {
+		t.Fatalf("expected updated consolidation suggestion")
+	}
+	requireEqual(t, suggestionID, updated.SuggestionID)
+}
+
+func TestActionEngramConsolidationSuggestionRejectsInvalidStatus(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	_, err := service.ActionEngramConsolidationSuggestion(
+		context.Background(),
+		uuid.MustParse("00000000-0000-0000-0000-00000000d021"),
+		uuid.MustParse("00000000-0000-0000-0000-00000000d022"),
+		EngramConsolidationSuggestionActionRequest{
+			Status: models.ConsolidationSuggestionStatusSuggested,
+		},
+	)
+	if !errors.Is(err, ErrConsolidationSuggestionActionInvalid) {
+		t.Fatalf("expected ErrConsolidationSuggestionActionInvalid, got %v", err)
+	}
+}
+
+func TestActionEngramConsolidationSuggestionReturnsNotFound(t *testing.T) {
+	service := NewService(nil, 256, nil)
+	service.deps.applyConsolidationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.ConsolidationSuggestionActionInput,
+	) (*models.EngramConsolidationSuggestion, error) {
+		return nil, nil
+	}
+
+	_, err := service.ActionEngramConsolidationSuggestion(
+		context.Background(),
+		uuid.MustParse("00000000-0000-0000-0000-00000000d031"),
+		uuid.MustParse("00000000-0000-0000-0000-00000000d032"),
+		EngramConsolidationSuggestionActionRequest{
+			Status: models.ConsolidationSuggestionStatusRejected,
+		},
+	)
+	if !errors.Is(err, ErrConsolidationSuggestionNotFound) {
+		t.Fatalf("expected ErrConsolidationSuggestionNotFound, got %v", err)
+	}
+}
+
 func derefString(value *string) string {
 	if value == nil {
 		return ""
