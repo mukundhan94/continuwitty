@@ -27,7 +27,8 @@ func (service *CompatibilityService) dispatchEngramCurationActionTool(
 			errors.Is(err, admin.ErrContradictionAlertNotFound):
 			return nil, true, invalidParamsWithStatus(404, err.Error())
 		case errors.Is(err, admin.ErrMemoryCurationSuggestionActionInvalid),
-			errors.Is(err, admin.ErrMemoryCurationSuggestionPayloadInvalid):
+			errors.Is(err, admin.ErrMemoryCurationSuggestionPayloadInvalid),
+			errors.Is(err, admin.ErrMemoryCurationSuggestionApplyUnsupported):
 			return nil, true, invalidParamsWithStatus(400, err.Error())
 		}
 		return nil, true, internalToolDispatchError()

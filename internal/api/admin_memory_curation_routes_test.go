@@ -154,6 +154,28 @@ func TestMountMemoryAdminRoutesActionMemoryCurationSuggestionReturnsBadRequestFo
 	requireEqual(t, http.StatusBadRequest, response.Code)
 }
 
+func TestMountMemoryAdminRoutesActionMemoryCurationSuggestionReturnsBadRequestForUnsupportedApply(t *testing.T) {
+	service := &fakeMemoryAdminService{
+		actionCurationFn: func(
+			_ context.Context,
+			_ uuid.UUID,
+			_ uuid.UUID,
+			_ admin.MemoryCurationSuggestionActionRequest,
+		) (*models.MemoryCurationSuggestion, error) {
+			return nil, admin.ErrMemoryCurationSuggestionApplyUnsupported
+		},
+	}
+	router := curationAdminRouter(service, uuid.MustParse("00000000-0000-0000-0000-000000000199"))
+
+	response := executeRequest(
+		router,
+		http.MethodPost,
+		"/api/v1/admin/memory/engrams/curation/suggestions/00000000-0000-0000-0000-000000000200/action",
+		[]byte(`{"status":"applied"}`),
+	)
+	requireEqual(t, http.StatusBadRequest, response.Code)
+}
+
 func curationAdminRouter(service MemoryAdminService, actorUserID uuid.UUID) http.Handler {
 	router := chi.NewRouter()
 	MountMemoryAdminRoutes(router, service, func(_ *http.Request) (AdminActor, error) {

@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: link-applied curation orchestration)
+
+1. Extended curation apply behavior for link suggestions in `internal/admin/service_curation.go`:
+   - `status=applied` now supports `suggestion_type=link` payloads with archive-oriented hygiene actions.
+   - archive actions dispatch through link archive workflow using payload `link_id`.
+   - unsupported/non-archive link actions return `ErrMemoryCurationSuggestionApplyUnsupported`.
+2. Expanded regression coverage:
+   - admin service tests for link-archive apply success and unsupported-link-action rejection.
+   - REST route test for bad-request mapping of unsupported apply workflow.
+   - MCP compatibility test for unsupported apply error mapping.
+3. Validation:
+   - `go test ./internal/admin ./internal/api ./internal/mcp -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
 ### 2026-03-03 (Phase 40 continuation: applied-side-effect benchmark expansion)
 
 1. Expanded curation benchmark suite in `internal/admin/service_curation_benchmark_test.go`:

@@ -11,6 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
+var curationLinkArchiveActions = map[string]struct{}{
+	"archive_weaker_duplicate": {},
+	"archive_stale_low_value":  {},
+}
+
 // ListMemoryCurationSuggestions lists persisted memory curation suggestions.
 func (s *Service) ListMemoryCurationSuggestions(
 	ctx context.Context,
@@ -148,9 +153,49 @@ func (s *Service) applyTypedCurationSideEffect(
 				return nil
 			},
 		)
+	case models.MemoryCurationSuggestionTypeLink:
+		return s.applyLinkCurationSuggestion(ctx, suggestion.PayloadJSON, actorUserID)
 	default:
 		return nil
 	}
+}
+
+func (s *Service) applyLinkCurationSuggestion(
+	ctx context.Context,
+	payload map[string]any,
+	actorUserID uuid.UUID,
+) error {
+	action, err := curationSuggestionPayloadString(payload, "suggested_action")
+	if err != nil {
+		return err
+	}
+	if !isLinkCurationArchiveAction(action) {
+		return ErrMemoryCurationSuggestionApplyUnsupported
+	}
+	linkID, err := curationSuggestionPayloadUUID(payload, "link_id")
+	if err != nil {
+		return err
+	}
+	archived, err := s.deps.archiveEngramLink(
+		ctx,
+		s.db,
+		repository.EngramLinkArchiveInput{
+			LinkID:      linkID,
+			ActorUserID: actorUserID,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	if archived == nil {
+		return ErrMemoryCurationSuggestionApplyUnsupported
+	}
+	return nil
+}
+
+func isLinkCurationArchiveAction(action string) bool {
+	_, ok := curationLinkArchiveActions[strings.TrimSpace(strings.ToLower(action))]
+	return ok
 }
 
 func curationProjectIDScope(suggestionProjectID string, requestProjectID *string) *string {
@@ -178,22 +223,34 @@ func applyCurationPayloadAction(
 }
 
 func curationSuggestionPayloadUUID(payload map[string]any, key string) (uuid.UUID, error) {
-	if payload == nil {
-		return uuid.Nil, ErrMemoryCurationSuggestionPayloadInvalid
+	value, err := curationSuggestionPayloadString(payload, key)
+	if err != nil {
+		return uuid.Nil, err
 	}
-	rawValue, exists := payload[key]
-	if !exists {
-		return uuid.Nil, ErrMemoryCurationSuggestionPayloadInvalid
-	}
-	value, ok := rawValue.(string)
-	if !ok {
-		return uuid.Nil, ErrMemoryCurationSuggestionPayloadInvalid
-	}
-	parsed, err := uuid.Parse(strings.TrimSpace(value))
+	parsed, err := uuid.Parse(value)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("%w: %s", ErrMemoryCurationSuggestionPayloadInvalid, key)
 	}
 	return parsed, nil
+}
+
+func curationSuggestionPayloadString(payload map[string]any, key string) (string, error) {
+	if payload == nil {
+		return "", ErrMemoryCurationSuggestionPayloadInvalid
+	}
+	rawValue, exists := payload[key]
+	if !exists {
+		return "", ErrMemoryCurationSuggestionPayloadInvalid
+	}
+	value, ok := rawValue.(string)
+	if !ok {
+		return "", ErrMemoryCurationSuggestionPayloadInvalid
+	}
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", ErrMemoryCurationSuggestionPayloadInvalid
+	}
+	return trimmed, nil
 }
 
 func isMemoryCurationActionStatus(status models.MemoryCurationSuggestionStatus) bool {

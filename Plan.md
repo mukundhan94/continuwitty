@@ -1159,6 +1159,7 @@ Build a local-first memory system where agents and humans can:
     - `status=applied` now executes deterministic downstream actions before persisting curation status.
     - `consolidate` suggestions dispatch `merged` action on referenced consolidation suggestions.
     - `contradiction` suggestions dispatch `resolved` action on referenced contradiction alerts.
+    - `link` suggestions dispatch link archival for archive-oriented hygiene actions.
     - invalid/missing curation payload identifiers fail with explicit bad-request semantics.
   - suggestion generation workflow hooks:
     - consolidation refresh now regenerates type `consolidate` curation suggestions.

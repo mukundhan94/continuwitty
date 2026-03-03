@@ -43,6 +43,8 @@ var (
 	ErrMemoryCurationSuggestionActionInvalid = errors.New("status must be accepted, rejected, or applied")
 	// ErrMemoryCurationSuggestionPayloadInvalid indicates apply action cannot parse required payload fields.
 	ErrMemoryCurationSuggestionPayloadInvalid = errors.New("memory curation payload is invalid for apply action")
+	// ErrMemoryCurationSuggestionApplyUnsupported indicates apply action cannot execute payload-specific workflow.
+	ErrMemoryCurationSuggestionApplyUnsupported = errors.New("memory curation apply action is unsupported for suggestion payload")
 )
 
 // MemoryAdminListRequest captures shared admin list filters.
@@ -337,6 +339,11 @@ type serviceDeps struct {
 		db repository.Queryer,
 		input repository.MemoryCurationSuggestionActionInput,
 	) (*models.MemoryCurationSuggestion, error)
+	archiveEngramLink func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.EngramLinkArchiveInput,
+	) (*models.EngramLinkRecord, error)
 
 	listCollections      func(ctx context.Context, db repository.Queryer, input repository.CollectionListInput) ([]models.EngramCollectionRecord, error)
 	getCollection        func(ctx context.Context, db repository.Queryer, collectionID uuid.UUID, includeDeleted bool) (*models.EngramCollectionRecord, error)
@@ -373,6 +380,7 @@ func defaultServiceDeps() serviceDeps {
 		getMemoryCurationSuggestion:         repository.GetMemoryCurationSuggestion,
 		listMemoryCurationSuggestions:       repository.ListMemoryCurationSuggestions,
 		applyMemoryCurationSuggestionAction: repository.ApplyMemoryCurationSuggestionAction,
+		archiveEngramLink:                   repository.ArchiveEngramLink,
 
 		listCollections:      repository.ListCollections,
 		getCollection:        repository.GetCollection,

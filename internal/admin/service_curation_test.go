@@ -154,9 +154,23 @@ func TestActionMemoryCurationSuggestionAppliedDispatchesContradictionResolve(t *
 }
 
 func TestActionMemoryCurationSuggestionAppliedRejectsInvalidPayload(t *testing.T) {
+	runAppliedCurationSuggestionRejectCase(
+		t,
+		appliedCurationSuggestionRejectCase{
+			suggestionType: models.MemoryCurationSuggestionTypeConsolidate,
+			payload:        map[string]any{},
+			expectedErr:    ErrMemoryCurationSuggestionPayloadInvalid,
+		},
+	)
+}
+
+func TestActionMemoryCurationSuggestionAppliedDispatchesLinkArchive(t *testing.T) {
 	service := NewService(nil, 256, nil)
-	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000c071")
-	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000c072")
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000c081")
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000c082")
+	projectID := "engram-vault"
+	linkID := uuid.MustParse("00000000-0000-0000-0000-00000000c083")
+	archiveCalled := false
 	actionCalled := false
 	service.deps.getMemoryCurationSuggestion = func(
 		_ context.Context,
@@ -166,10 +180,23 @@ func TestActionMemoryCurationSuggestionAppliedRejectsInvalidPayload(t *testing.T
 	) (*models.MemoryCurationSuggestion, error) {
 		return &models.MemoryCurationSuggestion{
 			SuggestionID:   suggestionID,
-			ProjectID:      "engram-vault",
-			SuggestionType: models.MemoryCurationSuggestionTypeConsolidate,
-			PayloadJSON:    map[string]any{},
+			ProjectID:      projectID,
+			SuggestionType: models.MemoryCurationSuggestionTypeLink,
+			PayloadJSON: map[string]any{
+				"suggested_action": "archive_stale_low_value",
+				"link_id":          linkID.String(),
+			},
 		}, nil
+	}
+	service.deps.archiveEngramLink = func(
+		_ context.Context,
+		_ repository.Queryer,
+		input repository.EngramLinkArchiveInput,
+	) (*models.EngramLinkRecord, error) {
+		archiveCalled = true
+		requireEqual(t, linkID, input.LinkID)
+		requireEqual(t, actorUserID, input.ActorUserID)
+		return &models.EngramLinkRecord{LinkID: linkID}, nil
 	}
 	service.deps.applyMemoryCurationSuggestionAction = func(
 		_ context.Context,
@@ -177,23 +204,44 @@ func TestActionMemoryCurationSuggestionAppliedRejectsInvalidPayload(t *testing.T
 		_ repository.MemoryCurationSuggestionActionInput,
 	) (*models.MemoryCurationSuggestion, error) {
 		actionCalled = true
-		return nil, nil
+		return &models.MemoryCurationSuggestion{
+			SuggestionID: suggestionID,
+			ProjectID:    projectID,
+			Status:       models.MemoryCurationSuggestionStatusApplied,
+		}, nil
 	}
 
-	_, err := service.ActionMemoryCurationSuggestion(
+	updated, err := service.ActionMemoryCurationSuggestion(
 		context.Background(),
 		suggestionID,
 		actorUserID,
 		MemoryCurationSuggestionActionRequest{
-			Status: models.MemoryCurationSuggestionStatusApplied,
+			ProjectID: &projectID,
+			Status:    models.MemoryCurationSuggestionStatusApplied,
 		},
 	)
-	if !errors.Is(err, ErrMemoryCurationSuggestionPayloadInvalid) {
-		t.Fatalf("expected ErrMemoryCurationSuggestionPayloadInvalid, got %v", err)
+	requireNoError(t, err)
+	if !archiveCalled {
+		t.Fatalf("expected link archive side effect to run")
 	}
-	if actionCalled {
-		t.Fatalf("expected curation status update to be skipped when payload is invalid")
+	if !actionCalled {
+		t.Fatalf("expected curation status update after link archive side effect")
 	}
+	assertAppliedCurationSuggestionStatus(t, updated)
+}
+
+func TestActionMemoryCurationSuggestionAppliedRejectsUnsupportedLinkAction(t *testing.T) {
+	runAppliedCurationSuggestionRejectCase(
+		t,
+		appliedCurationSuggestionRejectCase{
+			suggestionType: models.MemoryCurationSuggestionTypeLink,
+			payload: map[string]any{
+				"suggested_action": "review_relation_conflict",
+				"link_id":          "00000000-0000-0000-0000-00000000c093",
+			},
+			expectedErr: ErrMemoryCurationSuggestionApplyUnsupported,
+		},
+	)
 }
 
 type appliedCurationSuggestionSideEffectCase struct {
@@ -208,6 +256,12 @@ type appliedCurationSuggestionSetupInput struct {
 	payloadKey     string
 	relatedID      uuid.UUID
 	actionCalled   *bool
+}
+
+type appliedCurationSuggestionRejectCase struct {
+	suggestionType models.MemoryCurationSuggestionType
+	payload        map[string]any
+	expectedErr    error
 }
 
 func runAppliedCurationSuggestionSideEffectCase(
@@ -273,6 +327,53 @@ func runAppliedCurationSuggestionSideEffectCase(
 		t.Fatalf("expected curation suggestion action to run")
 	}
 	assertAppliedCurationSuggestionStatus(t, updated)
+}
+
+func runAppliedCurationSuggestionRejectCase(
+	t *testing.T,
+	testCase appliedCurationSuggestionRejectCase,
+) {
+	t.Helper()
+	service := NewService(nil, 256, nil)
+	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000c071")
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000c072")
+	actionCalled := false
+	service.deps.getMemoryCurationSuggestion = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ uuid.UUID,
+		_ *string,
+	) (*models.MemoryCurationSuggestion, error) {
+		return &models.MemoryCurationSuggestion{
+			SuggestionID:   suggestionID,
+			ProjectID:      "engram-vault",
+			SuggestionType: testCase.suggestionType,
+			PayloadJSON:    testCase.payload,
+		}, nil
+	}
+	service.deps.applyMemoryCurationSuggestionAction = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.MemoryCurationSuggestionActionInput,
+	) (*models.MemoryCurationSuggestion, error) {
+		actionCalled = true
+		return nil, nil
+	}
+
+	_, err := service.ActionMemoryCurationSuggestion(
+		context.Background(),
+		suggestionID,
+		actorUserID,
+		MemoryCurationSuggestionActionRequest{
+			Status: models.MemoryCurationSuggestionStatusApplied,
+		},
+	)
+	if !errors.Is(err, testCase.expectedErr) {
+		t.Fatalf("expected %v, got %v", testCase.expectedErr, err)
+	}
+	if actionCalled {
+		t.Fatalf("expected curation status update to be skipped for rejected apply side effect")
+	}
 }
 
 func configureAppliedCurationSuggestion(

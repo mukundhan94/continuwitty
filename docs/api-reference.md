@@ -143,7 +143,7 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 | `GET` | `/api/v1/admin/memory/engrams/contradictions/alerts` | List contradiction alerts (admin) |
 | `POST` | `/api/v1/admin/memory/engrams/contradictions/alerts/{alert_id}/resolve` | Mark contradiction alert as resolved/dismissed (admin) |
 | `GET` | `/api/v1/admin/memory/engrams/curation/suggestions` | List autonomous memory curation suggestions (admin) |
-| `POST` | `/api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action` | Mark memory curation suggestion as accepted/rejected/applied (admin); `applied` dispatches downstream consolidation/contradiction actions when payload-linked |
+| `POST` | `/api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action` | Mark memory curation suggestion as accepted/rejected/applied (admin); `applied` dispatches downstream consolidation/contradiction actions and archive-oriented link actions when payload-linked |
 | `GET` | `/api/v1/admin/memory/engrams/{engram_id}` | Get engram (admin) |
 | `PATCH` | `/api/v1/admin/memory/engrams/{engram_id}` | Update engram |
 | `POST` | `/api/v1/admin/memory/engrams/{engram_id}/move` | Move engram to project |

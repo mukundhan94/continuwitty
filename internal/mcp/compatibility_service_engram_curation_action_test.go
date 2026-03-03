@@ -166,6 +166,17 @@ func TestCompatibilityServiceEngramCurationActionServiceErrors(t *testing.T) {
 		},
 	)
 	requireErrorCode(t, errorPayloadFromFrame(t, invalidPayloadFrame), -32602)
+
+	unsupportedApplyFrame := runCurationActionFrame(
+		t,
+		curationActionFrameInput{
+			actorUserID:   actorUserID,
+			actionService: &fakeEngramCurationActionService{err: admin.ErrMemoryCurationSuggestionApplyUnsupported},
+			params:        params,
+			asAdmin:       true,
+		},
+	)
+	requireErrorCode(t, errorPayloadFromFrame(t, unsupportedApplyFrame), -32602)
 }
 
 func newEngramCurationActionCompatibilityService(service EngramCurationActionService) Service {
