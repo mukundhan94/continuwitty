@@ -7,6 +7,25 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 42: source-session authority scoring baseline)
+
+1. Added schema baseline for authority scoring on engrams:
+   - `engrams.source_session_quality_score` (`0.0-1.0`, default `0.5`).
+   - idempotent check constraint `engrams_source_session_quality_score_check`.
+   - index added: `engrams_source_session_quality_idx`.
+2. Integrated authority into retrieval reranking:
+   - engram query candidate SQL now selects `COALESCE(source_session_quality_score, 0.5)`.
+   - composite rerank scoring now includes `authorityScore` as a bounded signal.
+3. Added deterministic authority calibration from feedback:
+   - feedback persistence update now adjusts `source_session_quality_score` when `relevance_score` is supplied.
+4. Added regression coverage:
+   - rerank ordering test for authority signal influence.
+   - query-shape assertions for authority column projection.
+   - feedback SQL assertions for authority update path.
+5. Validation:
+   - `go test ./internal/repository ./cmd/api ./internal/api ./internal/mcp -count=1`
+   - `make lint`
+
 ### 2026-03-03 (Phase 41 closeout: integration-depth feedback signal)
 
 1. Extended explicit feedback contracts with optional `integration_depth` across REST + MCP:

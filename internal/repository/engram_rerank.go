@@ -21,6 +21,7 @@ type rankScoreInput struct {
 	feedbackScore   float64
 	engagementScore float64
 	freshnessScore  float64
+	authorityScore  float64
 }
 
 type rerankRowsInput struct {
@@ -30,11 +31,12 @@ type rerankRowsInput struct {
 }
 
 const (
-	denseRankWeight      = 0.55
+	denseRankWeight      = 0.50
 	lexicalRankWeight    = 0.20
 	feedbackRankWeight   = 0.10
 	engagementRankWeight = 0.10
 	freshnessRankWeight  = 0.05
+	authorityRankWeight  = 0.05
 )
 
 func tokenize(text string) map[string]struct{} {
@@ -84,7 +86,8 @@ func combinedRankScore(input rankScoreInput) float64 {
 		(input.lexicalOverlap * lexicalRankWeight) +
 		(input.feedbackScore * feedbackRankWeight) +
 		(input.engagementScore * engagementRankWeight) +
-		(input.freshnessScore * freshnessRankWeight)
+		(input.freshnessScore * freshnessRankWeight) +
+		(input.authorityScore * authorityRankWeight)
 }
 
 func normalizeFeedbackScore(usefulCount int, contradictionCount int) float64 {
@@ -113,12 +116,27 @@ func normalizeFreshnessScore(value float64) float64 {
 	return clamp01(value)
 }
 
+func normalizeAuthorityScore(value float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0.5
+	}
+	return clamp01(value)
+}
+
 func candidateFreshnessScore(row map[string]any) float64 {
 	raw, found := row["freshness_score"]
 	if !found {
 		return 1.0
 	}
 	return normalizeFreshnessScore(float64FromAny(raw))
+}
+
+func candidateAuthorityScore(row map[string]any) float64 {
+	raw, found := row["source_session_quality_score"]
+	if !found {
+		return 0.5
+	}
+	return normalizeAuthorityScore(float64FromAny(raw))
 }
 
 func clamp01(value float64) float64 {
@@ -161,6 +179,7 @@ func rerankByCombinedScore(input rerankRowsInput) []map[string]any {
 							intFromAny(row["access_count"]),
 						),
 						freshnessScore: candidateFreshnessScore(row),
+						authorityScore: candidateAuthorityScore(row),
 					},
 				),
 				createdAt: timeFromAny(row["created_at"]),

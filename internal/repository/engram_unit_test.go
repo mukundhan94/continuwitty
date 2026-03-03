@@ -222,6 +222,51 @@ func TestRerankByCombinedScoreIncorporatesEngagementAndFreshnessSignals(t *testi
 	}
 }
 
+func TestRerankByCombinedScoreIncorporatesAuthoritySignal(t *testing.T) {
+	rows := []map[string]any{
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:                     uuid.MustParse("00000000-0000-0000-0000-000000000331"),
+				title:                        "High Authority Memory",
+				usefulCount:                  2,
+				contradictionCount:           0,
+				accessCount:                  8,
+				freshnessScore:               0.7,
+				sourceSessionQualityScore:    0.95,
+				hasSourceSessionQualityScore: true,
+				distance:                     0.35,
+			},
+		),
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:                     uuid.MustParse("00000000-0000-0000-0000-000000000332"),
+				title:                        "Low Authority Memory",
+				usefulCount:                  2,
+				contradictionCount:           0,
+				accessCount:                  8,
+				freshnessScore:               0.7,
+				sourceSessionQualityScore:    0.1,
+				hasSourceSessionQualityScore: true,
+				distance:                     0.35,
+			},
+		),
+	}
+
+	reranked := rerankByCombinedScore(
+		rerankRowsInput{
+			rows:  rows,
+			query: "checkpoint details",
+			topK:  1,
+		},
+	)
+	if len(reranked) != 1 {
+		t.Fatalf("expected one reranked result, got %d", len(reranked))
+	}
+	if title, _ := reranked[0]["title"].(string); title != "High Authority Memory" {
+		t.Fatalf("expected high-authority memory to rank first, got %q", title)
+	}
+}
+
 func TestFormatCitationsTruncatesAndStripsNewlines(t *testing.T) {
 	title := "Primary source"
 	citationText := formatCitations(
@@ -397,16 +442,18 @@ func ptr(value string) *string {
 }
 
 type rerankSignalRowInput struct {
-	engramID           uuid.UUID
-	title              string
-	abstract           string
-	keywords           []string
-	retrievalText      string
-	usefulCount        int
-	contradictionCount int
-	accessCount        int
-	freshnessScore     float64
-	distance           float64
+	engramID                     uuid.UUID
+	title                        string
+	abstract                     string
+	keywords                     []string
+	retrievalText                string
+	usefulCount                  int
+	contradictionCount           int
+	accessCount                  int
+	freshnessScore               float64
+	sourceSessionQualityScore    float64
+	hasSourceSessionQualityScore bool
+	distance                     float64
 }
 
 func newRerankSignalRow(input rerankSignalRowInput) map[string]any {
@@ -419,19 +466,23 @@ func newRerankSignalRow(input rerankSignalRowInput) map[string]any {
 	if input.keywords == nil {
 		input.keywords = []string{"checkpoint"}
 	}
+	if !input.hasSourceSessionQualityScore {
+		input.sourceSessionQualityScore = 0.5
+	}
 	return map[string]any{
-		"engram_id":           input.engramID,
-		"project_id":          "engram-vault",
-		"title":               input.title,
-		"abstract":            input.abstract,
-		"created_at":          time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
-		"tags":                []string{},
-		"keywords":            input.keywords,
-		"retrieval_text":      input.retrievalText,
-		"useful_count":        input.usefulCount,
-		"contradiction_count": input.contradictionCount,
-		"access_count":        input.accessCount,
-		"freshness_score":     input.freshnessScore,
-		"distance":            input.distance,
+		"engram_id":                    input.engramID,
+		"project_id":                   "engram-vault",
+		"title":                        input.title,
+		"abstract":                     input.abstract,
+		"created_at":                   time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
+		"tags":                         []string{},
+		"keywords":                     input.keywords,
+		"retrieval_text":               input.retrievalText,
+		"useful_count":                 input.usefulCount,
+		"contradiction_count":          input.contradictionCount,
+		"access_count":                 input.accessCount,
+		"freshness_score":              input.freshnessScore,
+		"source_session_quality_score": input.sourceSessionQualityScore,
+		"distance":                     input.distance,
 	}
 }

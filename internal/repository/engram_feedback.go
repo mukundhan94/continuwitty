@@ -285,6 +285,13 @@ const recordEngramFeedbackSQLTemplate = `
 						$8::DOUBLE PRECISION
 					) / (COALESCE(feedback_count, 0)::DOUBLE PRECISION + 1.0)
 				END,
+				source_session_quality_score = CASE
+					WHEN $8 IS NULL THEN source_session_quality_score
+					ELSE (
+						(COALESCE(source_session_quality_score, 0.5) * COALESCE(feedback_count, 0)::DOUBLE PRECISION) +
+						(($8::DOUBLE PRECISION - 1.0) / 4.0)
+					) / (COALESCE(feedback_count, 0)::DOUBLE PRECISION + 1.0)
+				END,
 				updated_at = GREATEST(updated_at, $9)
 			FROM inserted i
 			WHERE e.engram_id = i.engram_id

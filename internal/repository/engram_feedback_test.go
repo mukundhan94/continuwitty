@@ -257,6 +257,9 @@ func assertRecordEngramFeedbackQuery(
 	if !strings.Contains(query, "UPDATE engrams") {
 		t.Fatalf("expected aggregate update statement, got %q", query)
 	}
+	if !strings.Contains(query, "source_session_quality_score") {
+		t.Fatalf("expected source_session_quality_score update in query, got %q", query)
+	}
 	if !strings.Contains(query, "visibility_scope = 'project'") {
 		t.Fatalf("expected visibility enforcement in query, got %q", query)
 	}

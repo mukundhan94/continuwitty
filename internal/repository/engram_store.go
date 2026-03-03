@@ -111,6 +111,7 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 			COALESCE(contradiction_count, 0) AS contradiction_count,
 			COALESCE(access_count, 0) AS access_count,
 			COALESCE(freshness_score, 1.0) AS freshness_score,
+			COALESCE(source_session_quality_score, 0.5) AS source_session_quality_score,
 			embed <=> $1::vector AS distance
 		FROM engrams
 		%s
@@ -194,21 +195,22 @@ func scanEngramCandidateRow(row interface {
 	Scan(dest ...any) error
 }) (map[string]any, error) {
 	var (
-		engramID        uuid.UUID
-		projectID       string
-		title           string
-		abstract        string
-		createdAt       time.Time
-		tags            []string
-		keywords        []string
-		ownerUserID     *uuid.UUID
-		visibilityScope *string
-		retrievalText   string
-		usefulCount     int
-		contradiction   int
-		accessCount     int
-		freshnessScore  float64
-		distance        float64
+		engramID                  uuid.UUID
+		projectID                 string
+		title                     string
+		abstract                  string
+		createdAt                 time.Time
+		tags                      []string
+		keywords                  []string
+		ownerUserID               *uuid.UUID
+		visibilityScope           *string
+		retrievalText             string
+		usefulCount               int
+		contradiction             int
+		accessCount               int
+		freshnessScore            float64
+		sourceSessionQualityScore float64
+		distance                  float64
 	)
 
 	err := row.Scan(
@@ -226,6 +228,7 @@ func scanEngramCandidateRow(row interface {
 		&contradiction,
 		&accessCount,
 		&freshnessScore,
+		&sourceSessionQualityScore,
 		&distance,
 	)
 	if err != nil {
@@ -238,21 +241,22 @@ func scanEngramCandidateRow(row interface {
 		keywords = []string{}
 	}
 	return map[string]any{
-		"engram_id":           engramID,
-		"project_id":          projectID,
-		"title":               title,
-		"abstract":            abstract,
-		"created_at":          createdAt,
-		"tags":                tags,
-		"keywords":            keywords,
-		"owner_user_id":       ownerUserID,
-		"visibility_scope":    visibilityOrDefault(visibilityScope),
-		"retrieval_text":      retrievalText,
-		"useful_count":        usefulCount,
-		"contradiction_count": contradiction,
-		"access_count":        accessCount,
-		"freshness_score":     freshnessScore,
-		"distance":            distance,
+		"engram_id":                    engramID,
+		"project_id":                   projectID,
+		"title":                        title,
+		"abstract":                     abstract,
+		"created_at":                   createdAt,
+		"tags":                         tags,
+		"keywords":                     keywords,
+		"owner_user_id":                ownerUserID,
+		"visibility_scope":             visibilityOrDefault(visibilityScope),
+		"retrieval_text":               retrievalText,
+		"useful_count":                 usefulCount,
+		"contradiction_count":          contradiction,
+		"access_count":                 accessCount,
+		"freshness_score":              freshnessScore,
+		"source_session_quality_score": sourceSessionQualityScore,
+		"distance":                     distance,
 	}, nil
 }
 

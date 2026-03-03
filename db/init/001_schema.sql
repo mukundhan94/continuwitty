@@ -22,6 +22,7 @@ ALTER TABLE engrams
   ADD COLUMN IF NOT EXISTS owner_user_id UUID,
   ADD COLUMN IF NOT EXISTS visibility_scope TEXT NOT NULL DEFAULT 'private',
   ADD COLUMN IF NOT EXISTS source_session_id UUID,
+  ADD COLUMN IF NOT EXISTS source_session_quality_score DOUBLE PRECISION NOT NULL DEFAULT 0.5,
   ADD COLUMN IF NOT EXISTS access_count INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS freshness_score DOUBLE PRECISION NOT NULL DEFAULT 1.0,
@@ -44,6 +45,21 @@ BEGIN
     ALTER TABLE engrams
       ADD CONSTRAINT engrams_visibility_scope_check
       CHECK (visibility_scope IN ('private', 'project'));
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'engrams_source_session_quality_score_check'
+  ) THEN
+    ALTER TABLE engrams
+      ADD CONSTRAINT engrams_source_session_quality_score_check
+      CHECK (
+        source_session_quality_score >= 0.0
+        AND source_session_quality_score <= 1.0
+      );
   END IF;
 END $$;
 
@@ -77,6 +93,9 @@ CREATE INDEX IF NOT EXISTS engrams_access_last_accessed_idx
 
 CREATE INDEX IF NOT EXISTS engrams_freshness_idx
   ON engrams (freshness_score DESC, freshness_last_computed_at DESC);
+
+CREATE INDEX IF NOT EXISTS engrams_source_session_quality_idx
+  ON engrams (source_session_quality_score DESC, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS engrams_embed_hnsw_idx
   ON engrams USING hnsw (embed vector_cosine_ops);

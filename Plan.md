@@ -1237,6 +1237,42 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 42 - Session Authority Scoring Baseline
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - schema baseline for session-authority quality signal:
+    - `engrams.source_session_quality_score` (`0.0-1.0`, default `0.5`) with idempotent check constraint.
+    - index added: `engrams_source_session_quality_idx`.
+  - retrieval query pipeline now selects `source_session_quality_score` into rerank candidates.
+  - composite rerank scoring now incorporates authority weighting via `source_session_quality_score`.
+  - feedback aggregation now updates `source_session_quality_score` deterministically when `relevance_score` is provided.
+  - regression coverage added for:
+    - authority-aware rerank ordering behavior.
+    - query-shape parity for authority column selection.
+
+### Goals
+
+1. Introduce an authority-quality signal tied to source-session trust.
+2. Improve retrieval ranking quality with a bounded authority factor.
+3. Keep scoring behavior deterministic, test-covered, and backward-compatible.
+
+### Deliverables
+
+1. Schema + indexing support for bounded `source_session_quality_score`.
+2. Rerank integration of authority signal in repository query path.
+3. Feedback-write calibration path for authority updates plus tests.
+
+### Exit Criteria
+
+1. Authority score exists in schema with deterministic defaults and guardrails.
+2. Rerank favors higher-authority memories when competing signals are otherwise equal.
+3. Feedback-driven updates and rerank behavior are protected by regression tests.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1270,3 +1306,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 40: autonomous memory suggestions and action workflows.
 6. Execute feedback-signal enrichment increment:
    - [x] Phase 41: richer explicit feedback payloads + aggregate relevance counters.
+7. Execute authority-scoring baseline increment:
+   - [x] Phase 42: source-session authority scoring baseline in schema/retrieval/feedback loops.
