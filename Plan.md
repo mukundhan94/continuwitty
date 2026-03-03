@@ -1528,6 +1528,40 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 51 - Useful-Ratio Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `useful_feedback_ratio_min` (`0..1`) to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `useful_feedback_ratio_min`.
+  - repository query builder now supports ratio predicate:
+    - `useful_count / feedback_count` when feedback exists.
+    - deterministic neutral fallback (`0.5`) when feedback is absent.
+  - MCP `engram.query` parser/catalog now accept and validate `useful_feedback_ratio_min`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Let operators and agents filter recall by explicit useful-feedback ratio quality.
+2. Keep ratio filtering deterministic and aligned across REST and MCP surfaces.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `useful_feedback_ratio_min`.
+2. REST/MCP validation and metadata parity.
+3. Repository ratio predicate support with regression coverage.
+
+### Exit Criteria
+
+1. Query clients can apply minimum useful-feedback ratio thresholds in REST and MCP.
+2. Out-of-range values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for ratio filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1579,3 +1613,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 49: `feedback_count_min` parity across REST/MCP/repository.
 15. Execute useful-signal query filter increment:
    - [x] Phase 50: `useful_count_min` parity across REST/MCP/repository.
+16. Execute useful-ratio query filter increment:
+   - [x] Phase 51: `useful_feedback_ratio_min` parity across REST/MCP/repository.

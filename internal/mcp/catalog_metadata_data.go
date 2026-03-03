@@ -634,6 +634,11 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"minimum": 0,
 					"maximum": 1,
 				},
+				"useful_feedback_ratio_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
 				"avg_relevance_feedback_min": map[string]any{
 					"type":    "number",
 					"minimum": 0,

@@ -7,6 +7,23 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 51: useful-ratio query filter parity)
+
+1. Added useful-ratio query contract extension:
+   - new optional filter: `useful_feedback_ratio_min` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `useful_feedback_ratio_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `useful_feedback_ratio_min`.
+3. Added repository ratio predicate support:
+   - query builder now supports ratio filter using `useful_count / feedback_count` when feedback exists.
+   - deterministic neutral fallback `0.5` is applied when feedback_count is zero.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `useful_feedback_ratio_min`.
+   - repository where-clause/parameter assertions for ratio predicate shape.
+   - MCP parity and validation coverage for useful-ratio filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 50: useful-signal query filter parity)
 
 1. Added useful-signal query contract extension:

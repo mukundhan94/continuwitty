@@ -496,6 +496,23 @@
   - repository where-clause/params assertions for useful-count predicate.
   - MCP parity and validation tests for useful-signal filter behavior.
 
+### Phase 51 Progress Tracker
+
+- [x] Added useful-ratio query filter contract:
+  - `useful_feedback_ratio_min` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `useful_feedback_ratio_min` now validates as bounded `0..1`.
+- [x] Added repository ratio-predicate support:
+  - query filter now applies `useful_count / feedback_count` threshold when feedback exists.
+  - deterministic fallback `0.5` is used when feedback_count is zero.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `useful_feedback_ratio_min`.
+  - tool schema now documents `useful_feedback_ratio_min`.
+- [x] Added regression coverage:
+  - REST invalid-filter and parsed-request assertions for `useful_feedback_ratio_min`.
+  - repository where-clause/params assertions for ratio predicate.
+  - MCP parity and validation tests for useful-ratio filter behavior.
+
 ---
 
 ## Completed Milestones
@@ -653,3 +670,4 @@
 | 48 | Query Engagement Diagnostics in Results | Completed |
 | 49 | Feedback-Volume Query Filters | Completed |
 | 50 | Useful-Signal Query Filters | Completed |
+| 51 | Useful-Ratio Query Filters | Completed |

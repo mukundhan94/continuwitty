@@ -293,6 +293,7 @@ Optional temporal/engagement filters:
 - `feedback_count_min` (int, minimum `0`)
 - `contradiction_count_max` (int, minimum `0`)
 - `freshness_score_min` (number, bounded `0..1`)
+- `useful_feedback_ratio_min` (number, bounded `0..1`)
 - `avg_relevance_feedback_min` (number, bounded `0..1`)
 - `source_session_quality_min` (number, bounded `0..1`)
 - `relation_type` (`supports|depends_on|contradicts|related_to|derived_from`)
