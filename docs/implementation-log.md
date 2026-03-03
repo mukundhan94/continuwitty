@@ -7,6 +7,33 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 kickoff: memory curation suggestion schema/model/repository baseline)
+
+1. Added schema baseline in `db/init/001_schema.sql`:
+   - new table `memory_curation_suggestions`.
+   - type/status checks:
+     - `suggestion_type`: `auto_save`, `consolidate`, `contradiction`, `link`
+     - `status`: `suggested`, `accepted`, `rejected`, `applied`
+   - indexes:
+     - `memory_curation_suggestions_project_status_idx`
+     - `memory_curation_suggestions_session_type_idx`
+2. Added model contracts in `internal/models/memory_curation_suggestion.go`:
+   - `MemoryCurationSuggestionType` + parse helper.
+   - `MemoryCurationSuggestionStatus` + parse helper.
+   - `MemoryCurationSuggestion` persisted record shape.
+3. Added repository baseline in `internal/repository/memory_curation_suggestions.go`:
+   - `CreateMemoryCurationSuggestion`
+   - `ListMemoryCurationSuggestions`
+   - `ApplyMemoryCurationSuggestionAction`
+   - normalized validation for project/reason/confidence/status inputs.
+4. Added repository regression coverage in `internal/repository/memory_curation_suggestions_test.go`:
+   - create defaults.
+   - list filters + argument wiring.
+   - action transition success, invalid status, and missing suggestion handling.
+5. Validation:
+   - `go test ./internal/models ./internal/repository -count=1`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+
 ### 2026-03-03 (Phase 39 extension: trace-aware relation/depth query constraints)
 
 1. Extended engram query contracts with trace-aware filters:

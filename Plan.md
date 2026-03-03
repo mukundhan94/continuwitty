@@ -1129,6 +1129,46 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 40 - Autonomous Memory Suggestions + Action Workflows
+
+### Status
+
+- In Progress (2026-03-03).
+- Delivered in this checkpoint:
+  - schema baseline for `memory_curation_suggestions` in `db/init/001_schema.sql`.
+  - model contracts in `internal/models/memory_curation_suggestion.go`:
+    - suggestion types (`auto_save`, `consolidate`, `contradiction`, `link`)
+    - suggestion statuses (`suggested`, `accepted`, `rejected`, `applied`)
+  - repository baseline in `internal/repository/memory_curation_suggestions.go`:
+    - `CreateMemoryCurationSuggestion`
+    - `ListMemoryCurationSuggestions`
+    - `ApplyMemoryCurationSuggestionAction`
+  - repository regression coverage in `internal/repository/memory_curation_suggestions_test.go`.
+- Remaining in this phase:
+  - API + MCP routes/tools for listing and actioning memory curation suggestions.
+  - suggestion generation workflow hooks and acceptance coverage.
+  - benchmark coverage for suggestion precision/recall and action latency.
+
+### Goals
+
+1. Provide a deterministic persistence layer for autonomous memory recommendations.
+2. Enable safe action workflows with explicit accepted/rejected/applied states.
+3. Prepare API/MCP and UI integration on top of stable repository contracts.
+
+### Deliverables
+
+1. Memory curation suggestion schema + model contracts.
+2. Repository create/list/action workflows with validation.
+3. API/MCP workflow parity and acceptance/benchmark coverage.
+
+### Exit Criteria
+
+1. Suggestions can be created, listed, and actioned consistently through REST + MCP.
+2. Action transitions are validated and audit-friendly.
+3. Deterministic test and benchmark coverage protects suggestion quality and latency.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.

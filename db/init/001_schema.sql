@@ -594,6 +594,34 @@ CREATE INDEX IF NOT EXISTS engram_contradiction_alerts_source_target_idx
 CREATE INDEX IF NOT EXISTS engram_contradiction_alerts_link_ids_gin_idx
   ON engram_contradiction_alerts USING GIN (contradiction_link_ids);
 
+CREATE TABLE IF NOT EXISTS memory_curation_suggestions (
+  suggestion_id UUID PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  session_id UUID REFERENCES chat_sessions(session_id) ON DELETE SET NULL,
+  suggestion_type TEXT NOT NULL CHECK (
+    suggestion_type IN ('auto_save', 'consolidate', 'contradiction', 'link')
+  ),
+  reason TEXT NOT NULL,
+  recommendation TEXT NOT NULL DEFAULT '',
+  payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  confidence_score DOUBLE PRECISION NOT NULL DEFAULT 0.0 CHECK (
+    confidence_score >= 0.0 AND confidence_score <= 1.0
+  ),
+  status TEXT NOT NULL DEFAULT 'suggested' CHECK (
+    status IN ('suggested', 'accepted', 'rejected', 'applied')
+  ),
+  suggested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actioned_at TIMESTAMPTZ,
+  action_taken_by UUID REFERENCES users(user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS memory_curation_suggestions_project_status_idx
+  ON memory_curation_suggestions (project_id, status, suggested_at DESC);
+
+CREATE INDEX IF NOT EXISTS memory_curation_suggestions_session_type_idx
+  ON memory_curation_suggestions (session_id, suggestion_type, suggested_at DESC);
+
 CREATE TABLE IF NOT EXISTS session_pinned_engrams (
   session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
   engram_id UUID NOT NULL REFERENCES engrams(engram_id) ON DELETE CASCADE,
