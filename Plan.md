@@ -1164,6 +1164,8 @@ Build a local-first memory system where agents and humans can:
   - suggestion generation workflow hooks:
     - consolidation refresh now regenerates type `consolidate` curation suggestions.
     - contradiction refresh now regenerates type `contradiction` curation suggestions.
+    - scheduled link-hygiene execution now generates type `link` curation suggestions for non-auto-archived recommendations.
+    - scheduled link-hygiene generation dedupes against existing pending link curation payload keys (`link_id`, `target_engram_id`, `suggested_action`).
     - generation pass resets stale `suggested` curation rows per type/project before rebuilding deterministic candidates.
   - acceptance coverage for curation generation/action quality:
     - deterministic `@phase40 @mock` acceptance scenarios validate:

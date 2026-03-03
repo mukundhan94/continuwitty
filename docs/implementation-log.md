@@ -7,6 +7,23 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: scheduled link-hygiene curation persistence)
+
+1. Extended scheduled hygiene execution in `cmd/api/chat_link_reinforcement.go`:
+   - successful reinforcement hygiene runs now persist `suggestion_type=link` curation records for non-auto-archived recommendations.
+   - link curation payloads include source/target/link identifiers, suggested action, hygiene category/severity/score, and detail metadata.
+   - pending-suggestion dedupe now reuses payload identity (`link_id`, `target_engram_id`, `suggested_action`) to avoid duplicate suggestions across repeated scheduler runs.
+2. Added targeted regression coverage in `cmd/api/chat_link_reinforcement_test.go`:
+   - validates mixed auto-archive + manual-review recommendation handling.
+   - validates dedupe behavior when matching pending link curation suggestions already exist.
+3. Code health refactor:
+   - decomposed curation persistence workflow into focused helpers to keep complexity and argument count within CodeScene gates.
+4. Validation:
+   - `go test ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene `pre_commit_code_health_safeguard`: `quality_gates=passed`
+
 ### 2026-03-03 (Phase 40 continuation: link-applied curation orchestration)
 
 1. Extended curation apply behavior for link suggestions in `internal/admin/service_curation.go`:

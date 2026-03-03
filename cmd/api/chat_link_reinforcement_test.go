@@ -137,3 +137,185 @@ func TestScheduledLinkHygieneExecutorRunsByDueInterval(t *testing.T) {
 		t.Fatalf("expected 2 archive calls, got %d", archiveCalls)
 	}
 }
+
+func TestScheduledLinkHygieneExecutorPersistsLinkCurationSuggestions(t *testing.T) {
+	source := uuid.MustParse("00000000-0000-0000-0000-000000008401")
+	target := uuid.MustParse("00000000-0000-0000-0000-000000008402")
+	actor := uuid.MustParse("00000000-0000-0000-0000-000000008403")
+	autoArchivedLink := uuid.MustParse("00000000-0000-0000-0000-000000008404")
+	manualReviewLink := uuid.MustParse("00000000-0000-0000-0000-000000008405")
+	now := time.Date(2026, time.March, 2, 9, 0, 0, 0, time.UTC)
+	projectID := "engram-vault"
+
+	archiveCalls := 0
+	createCalls := 0
+	created := []repository.MemoryCurationSuggestionCreateInput{}
+	executor := &scheduledLinkHygieneExecutor{
+		interval:       24 * time.Hour,
+		maxAutoArchive: 5,
+		tracker:        newLinkHygieneRunTracker(),
+		recommend: func(
+			context.Context,
+			graph.LinkHygieneInput,
+		) ([]models.EngramLinkHygieneRecommendation, error) {
+			return []models.EngramLinkHygieneRecommendation{
+				{
+					SourceEngramID:  source,
+					TargetEngramID:  target,
+					SuggestedAction: "archive_stale_low_value",
+					LinkIDs:         []uuid.UUID{autoArchivedLink},
+					Detail:          "stale low value",
+					Severity:        "low",
+					Category:        models.EngramLinkHygieneCategoryStaleLowValue,
+					Score:           0.1,
+				},
+				{
+					SourceEngramID:  source,
+					TargetEngramID:  target,
+					SuggestedAction: "review_relation_conflict",
+					LinkIDs:         []uuid.UUID{manualReviewLink},
+					Detail:          "conflict relation",
+					Severity:        "high",
+					Category:        models.EngramLinkHygieneCategoryConflictRelation,
+					Score:           0.4,
+				},
+			}, nil
+		},
+		archive: func(
+			context.Context,
+			repository.EngramLinkArchiveInput,
+		) (*models.EngramLinkRecord, error) {
+			archiveCalls++
+			return &models.EngramLinkRecord{}, nil
+		},
+		resolveSourceProjectID: func(context.Context, uuid.UUID) (*string, error) {
+			return &projectID, nil
+		},
+		listLinkCurationSuggestions: func(
+			context.Context,
+			string,
+		) ([]models.MemoryCurationSuggestion, error) {
+			return []models.MemoryCurationSuggestion{}, nil
+		},
+		createMemoryCurationSuggestion: func(
+			_ context.Context,
+			input repository.MemoryCurationSuggestionCreateInput,
+		) (*models.MemoryCurationSuggestion, error) {
+			createCalls++
+			created = append(created, input)
+			return &models.MemoryCurationSuggestion{}, nil
+		},
+	}
+
+	if err := executor.executeForSource(context.Background(), actor, source, now); err != nil {
+		t.Fatalf("executeForSource: %v", err)
+	}
+
+	assertLinkCurationSuggestionCounts(t, archiveCalls, createCalls)
+	assertLinkCurationSuggestionPayload(
+		t,
+		created,
+		projectID,
+		manualReviewLink,
+	)
+}
+
+func TestPersistLinkCurationSuggestionsSkipsExistingDedupedEntry(t *testing.T) {
+	source := uuid.MustParse("00000000-0000-0000-0000-000000008501")
+	target := uuid.MustParse("00000000-0000-0000-0000-000000008502")
+	linkID := uuid.MustParse("00000000-0000-0000-0000-000000008503")
+	projectID := "engram-vault"
+	createCalls := 0
+	executor := &scheduledLinkHygieneExecutor{
+		resolveSourceProjectID: func(context.Context, uuid.UUID) (*string, error) {
+			return &projectID, nil
+		},
+		listLinkCurationSuggestions: func(
+			context.Context,
+			string,
+		) ([]models.MemoryCurationSuggestion, error) {
+			return []models.MemoryCurationSuggestion{
+				{
+					PayloadJSON: map[string]any{
+						"link_id":          linkID.String(),
+						"target_engram_id": target.String(),
+						"suggested_action": "review_relation_conflict",
+					},
+				},
+			}, nil
+		},
+		createMemoryCurationSuggestion: func(
+			context.Context,
+			repository.MemoryCurationSuggestionCreateInput,
+		) (*models.MemoryCurationSuggestion, error) {
+			createCalls++
+			return &models.MemoryCurationSuggestion{}, nil
+		},
+	}
+
+	err := executor.persistLinkCurationSuggestions(
+		context.Background(),
+		source,
+		[]models.EngramLinkHygieneRecommendation{
+			{
+				SourceEngramID:  source,
+				TargetEngramID:  target,
+				SuggestedAction: "review_relation_conflict",
+				LinkIDs:         []uuid.UUID{linkID},
+				Detail:          "conflict relation",
+				Severity:        "high",
+				Category:        models.EngramLinkHygieneCategoryConflictRelation,
+				Score:           0.4,
+			},
+		},
+		time.Date(2026, time.March, 2, 11, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("persistLinkCurationSuggestions: %v", err)
+	}
+	if createCalls != 0 {
+		t.Fatalf("expected no created link curation suggestion for deduped recommendation")
+	}
+}
+
+func assertLinkCurationSuggestionCounts(t *testing.T, archiveCalls int, createCalls int) {
+	t.Helper()
+	if archiveCalls != 1 {
+		t.Fatalf("expected 1 auto archive call, got %d", archiveCalls)
+	}
+	if createCalls != 1 {
+		t.Fatalf("expected 1 created link curation suggestion, got %d", createCalls)
+	}
+}
+
+func assertLinkCurationSuggestionPayload(
+	t *testing.T,
+	created []repository.MemoryCurationSuggestionCreateInput,
+	projectID string,
+	linkID uuid.UUID,
+) {
+	t.Helper()
+	if len(created) != 1 {
+		t.Fatalf("expected exactly one created suggestion, got %d", len(created))
+	}
+	input := created[0]
+	if input.SuggestionType != models.MemoryCurationSuggestionTypeLink {
+		t.Fatalf("expected link suggestion type, got %s", input.SuggestionType)
+	}
+	if input.ProjectID != projectID {
+		t.Fatalf("expected project id %q, got %q", projectID, input.ProjectID)
+	}
+	payload := input.PayloadJSON
+	if payload == nil {
+		t.Fatalf("expected link payload")
+	}
+	if payload["link_id"] != linkID.String() {
+		t.Fatalf("expected payload link_id %s, got %v", linkID, payload["link_id"])
+	}
+	if payload["suggested_action"] != "review_relation_conflict" {
+		t.Fatalf(
+			"expected payload suggested_action review_relation_conflict, got %v",
+			payload["suggested_action"],
+		)
+	}
+}
