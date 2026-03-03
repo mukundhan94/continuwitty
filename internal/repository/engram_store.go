@@ -157,7 +157,8 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 	)
 	trimmedRows := trimRowsTopK(filteredRows, topK)
 	results := make([]models.EngramQueryResult, 0, len(trimmedRows))
-	for _, row := range trimmedRows {
+	for index, row := range trimmedRows {
+		row["rank_position"] = index + 1
 		results = append(results, mapEngramQueryResult(row))
 	}
 	return results, nil
@@ -329,6 +330,7 @@ func mapEngramQueryResult(row map[string]any) models.EngramQueryResult {
 		EngagementSignalScore:      engagementSignalScoreFromRow(row),
 		FreshnessSignalScore:       freshnessSignalScoreFromRow(row),
 		AuthoritySignalScore:       authoritySignalScoreFromRow(row),
+		RankPosition:               intFromAny(row["rank_position"]),
 		Distance:                   float64FromAny(row["distance"]),
 	}
 	if ownerUserID, ok := row["owner_user_id"].(*uuid.UUID); ok {

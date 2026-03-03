@@ -142,6 +142,7 @@ type EngramQueryResult struct {
 	EngagementSignalScore      float64    `json:"engagement_signal_score"`
 	FreshnessSignalScore       float64    `json:"freshness_signal_score"`
 	AuthoritySignalScore       float64    `json:"authority_signal_score"`
+	RankPosition               int        `json:"rank_position"`
 	Distance                   float64    `json:"distance"`
 }
 

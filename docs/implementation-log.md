@@ -7,6 +7,20 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 69: rank-position diagnostics in query results)
+
+1. Extended engram query-result contracts with `rank_position`.
+2. Updated repository query pipeline ranking annotation:
+   - final query rows are now tagged with deterministic 1-based rank position after rerank + filtering + top-k trim.
+3. Added regression coverage:
+   - repository query runtime assertions now verify `rank_position`.
+   - REST query-route response assertions now verify serialized `rank_position`.
+   - MCP compatibility parity fixture now includes `rank_position`.
+4. Documentation alignment:
+   - API and MCP query docs now describe returned `rank_position`.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 68: composite-rank score query band filters)
 
 1. Added composite-rank query filter contract extensions:

@@ -33,6 +33,7 @@ func TestMapEngramQueryResultIncludesFeedbackQualityDiagnostics(t *testing.T) {
 		"engagement_signal_score":      0.55,
 		"freshness_signal_score":       0.91,
 		"authority_signal_score":       0.76,
+		"rank_position":                2,
 		"distance":                     0.22,
 	}
 
@@ -49,6 +50,7 @@ func TestMapEngramQueryResultIncludesFeedbackQualityDiagnostics(t *testing.T) {
 	requireEqual(t, 0.55, result.EngagementSignalScore)
 	requireEqual(t, 0.91, result.FreshnessSignalScore)
 	requireEqual(t, 0.76, result.AuthoritySignalScore)
+	requireEqual(t, 2, result.RankPosition)
 }
 
 func TestMapEngramQueryResultComputesRerankDiagnosticsFallbacks(t *testing.T) {

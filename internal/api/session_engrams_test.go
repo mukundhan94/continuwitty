@@ -422,6 +422,7 @@ func TestMountSessionAuthRoutesQueryEngramsReturnsRerankDiagnostics(t *testing.T
 						EngagementSignalScore:      0.63,
 						FreshnessSignalScore:       0.74,
 						AuthoritySignalScore:       0.81,
+						RankPosition:               1,
 						Distance:                   0.12,
 					},
 				}, nil
@@ -471,6 +472,7 @@ func TestMountSessionAuthRoutesQueryEngramsReturnsRerankDiagnostics(t *testing.T
 	requireEqual(t, 0.63, payload[0]["engagement_signal_score"].(float64))
 	requireEqual(t, 0.74, payload[0]["freshness_signal_score"].(float64))
 	requireEqual(t, 0.81, payload[0]["authority_signal_score"].(float64))
+	requireEqual(t, float64(1), payload[0]["rank_position"].(float64))
 }
 
 func buildInvalidQueryFilterTestRequestHarness(t *testing.T) (http.Handler, *http.Cookie) {

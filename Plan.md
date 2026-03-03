@@ -2116,6 +2116,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 69 - Query Rank Position Diagnostics
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - extended `models.EngramQueryResult` with `rank_position`.
+  - repository query pipeline now annotates each final query row with 1-based rank position after filtering and top-k trimming.
+  - query-result mapping now forwards `rank_position` to REST and MCP clients.
+  - regression coverage expanded across repository/API/MCP parity tests for rank-position diagnostics.
+  - API and MCP docs now describe `rank_position` in query-result diagnostics.
+
+### Goals
+
+1. Expose final rank ordering as an explicit diagnostic instead of forcing clients to infer position from array index.
+2. Keep rank-position semantics deterministic after score-band filters and top-k trimming.
+3. Preserve backward compatibility while extending query-result diagnostics.
+
+### Deliverables
+
+1. Query-result contract extension for `rank_position`.
+2. Repository ranking annotation and result mapping parity.
+3. REST/MCP regression and doc updates.
+
+### Exit Criteria
+
+1. Query result rows include stable 1-based `rank_position`.
+2. Rank-position values remain deterministic under rerank and filter flows.
+3. API/MCP docs and tests are aligned with rank-position behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2203,3 +2235,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 67: expose composite/component rerank scores in query result payloads across repository/REST/MCP.
 33. Execute composite-rank score filter increment:
    - [x] Phase 68: `composite_rank_score_min` + `composite_rank_score_max` parity across REST/MCP/repository.
+34. Execute rank-position diagnostics increment:
+   - [x] Phase 69: expose final `rank_position` in query result payloads across repository/REST/MCP.

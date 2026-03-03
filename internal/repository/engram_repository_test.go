@@ -164,6 +164,7 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	requireEqual(t, normalizeEngagementScore(7), results[0].EngagementSignalScore)
 	requireEqual(t, 0.88, results[0].FreshnessSignalScore)
 	requireEqual(t, 0.5, results[0].AuthoritySignalScore)
+	requireEqual(t, 1, results[0].RankPosition)
 	requireEqual(
 		t,
 		combinedRankScore(
@@ -214,6 +215,7 @@ func TestQueryEngramsAppliesCompositeRankScoreFilters(t *testing.T) {
 	requireNoError(t, err)
 	requireEqual(t, 1, len(results))
 	requireEqual(t, "Lexical Match", results[0].Title)
+	requireEqual(t, 1, results[0].RankPosition)
 	if results[0].CompositeRankScore < minScore {
 		t.Fatalf("expected composite score >= %v, got %v", minScore, results[0].CompositeRankScore)
 	}

@@ -74,6 +74,7 @@ func buildEngramQueryParityFixture(t *testing.T) engramQueryParityFixture {
 				EngagementSignalScore:      0.61,
 				FreshnessSignalScore:       0.67,
 				AuthoritySignalScore:       0.78,
+				RankPosition:               1,
 			},
 		},
 	}
