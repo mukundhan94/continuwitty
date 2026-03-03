@@ -7,6 +7,28 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 44: authority transparency + fallback calibration)
+
+1. Expanded feedback-driven authority calibration:
+   - feedback authority updates now resolve from prioritized signals:
+     - normalized `relevance_score` when present.
+     - `integration_depth` mapping when relevance is omitted.
+     - `feedback_type` fallback when both are absent.
+   - authority updates remain bounded in `0..1` and continue to use deterministic running-average aggregation.
+2. Exposed authority signal in query response payloads:
+   - `models.EngramQueryResult` now includes `source_session_quality_score`.
+   - repository query result mapping now forwards `source_session_quality_score` to REST and MCP consumers.
+3. Added regression coverage:
+   - repository authority-signal normalization coverage for precedence/fallback behavior.
+   - REST query-route response coverage for serialized `source_session_quality_score`.
+   - MCP compatibility parity coverage for authority-score response payloads.
+4. Updated roadmap/checkpoint alignment:
+   - added Phase 44 section in `Plan.md`.
+   - added Phase 44 tracker and completion timeline updates in `migration/checkpoints/checkpoint.md`.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+   - `make lint`
+
 ### 2026-03-03 (Phase 43: authority-threshold query filter parity)
 
 1. Added authority-aware query contract extension:

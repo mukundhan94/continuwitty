@@ -262,15 +262,16 @@ func scanEngramCandidateRow(row interface {
 
 func mapEngramQueryResult(row map[string]any) models.EngramQueryResult {
 	result := models.EngramQueryResult{
-		EngramID:        uuidFromAny(row["engram_id"]),
-		ProjectID:       stringFromAny(row["project_id"]),
-		Title:           stringFromAny(row["title"]),
-		Abstract:        stringFromAny(row["abstract"]),
-		CreatedAt:       timeFromAny(row["created_at"]),
-		Tags:            stringSliceFromAny(row["tags"]),
-		Keywords:        stringSliceFromAny(row["keywords"]),
-		VisibilityScope: visibilityFromAny(row["visibility_scope"]),
-		Distance:        float64FromAny(row["distance"]),
+		EngramID:                  uuidFromAny(row["engram_id"]),
+		ProjectID:                 stringFromAny(row["project_id"]),
+		Title:                     stringFromAny(row["title"]),
+		Abstract:                  stringFromAny(row["abstract"]),
+		CreatedAt:                 timeFromAny(row["created_at"]),
+		Tags:                      stringSliceFromAny(row["tags"]),
+		Keywords:                  stringSliceFromAny(row["keywords"]),
+		VisibilityScope:           visibilityFromAny(row["visibility_scope"]),
+		SourceSessionQualityScore: float64FromAny(row["source_session_quality_score"]),
+		Distance:                  float64FromAny(row["distance"]),
 	}
 	if ownerUserID, ok := row["owner_user_id"].(*uuid.UUID); ok {
 		result.OwnerUserID = ownerUserID

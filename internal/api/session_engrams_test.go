@@ -203,6 +203,63 @@ func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidFilters(t *testing.T) {
 	}
 }
 
+func TestMountSessionAuthRoutesQueryEngramsReturnsAuthorityScore(t *testing.T) {
+	actor := newSessionRoutesTestActor(t, models.UserRoleAdmin)
+	handler, manager := buildSessionEngramRoutesTestHandler(
+		t,
+		sessionEngramRoutesHandlerOptions{
+			actor: actor,
+			queryEngrams: func(
+				_ context.Context,
+				_ models.EngramQueryRequest,
+				actorUserID uuid.UUID,
+			) ([]models.EngramQueryResult, error) {
+				requireEqual(t, actor.UserID, actorUserID)
+				return []models.EngramQueryResult{
+					{
+						EngramID:                  uuid.MustParse("00000000-0000-0000-0000-000000000a81"),
+						ProjectID:                 "proj-1",
+						Title:                     "Authority scoped memory",
+						Abstract:                  "Authority score should be visible",
+						CreatedAt:                 time.Date(2026, 3, 3, 11, 0, 0, 0, time.UTC),
+						VisibilityScope:           "private",
+						SourceSessionQualityScore: 0.81,
+						Distance:                  0.12,
+					},
+				}, nil
+			},
+		},
+	)
+	loginCookie := loginSessionEngramActor(
+		t,
+		handler,
+		manager,
+		sessionEngramLoginCredentials{
+			username: actor.Username,
+			password: "StrongPassword-12345",
+		},
+	)
+	response := executeEngramRequest(
+		t,
+		handler,
+		loginCookie,
+		engramRequestSpec{
+			method: http.MethodPost,
+			path:   "/api/v1/engrams/query",
+			body: map[string]any{
+				"query": "authority scoped recall",
+			},
+		},
+	)
+	requireEqual(t, http.StatusOK, response.Code)
+	var payload []map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode query response: %v", err)
+	}
+	requireEqual(t, 1, len(payload))
+	requireEqual(t, 0.81, payload[0]["source_session_quality_score"].(float64))
+}
+
 func buildInvalidQueryFilterTestRequestHarness(t *testing.T) (http.Handler, *http.Cookie) {
 	actor := newSessionRoutesTestActor(t, models.UserRoleAdmin)
 	handler, manager := buildSessionEngramRoutesTestHandler(

@@ -391,6 +391,20 @@
   - repository where-clause/params assertions for authority predicate.
   - MCP parity + validation tests for authority filter handling.
 
+### Phase 44 Progress Tracker
+
+- [x] Added fallback authority calibration for feedback writes:
+  - `source_session_quality_score` updates now use normalized `relevance_score` when present.
+  - fallback authority mapping now applies from `integration_depth` when `relevance_score` is omitted.
+  - feedback-type fallback now applies when both relevance and integration depth are absent.
+- [x] Added authority-score visibility in query response contracts:
+  - `models.EngramQueryResult` now includes `source_session_quality_score`.
+  - repository query result mapping now forwards `source_session_quality_score` to API/MCP callers.
+- [x] Added regression coverage:
+  - repository authority-signal normalization tests for fallback precedence and bounded mappings.
+  - API query route response test asserting serialized `source_session_quality_score`.
+  - MCP compatibility parity test including `source_session_quality_score` in returned payloads.
+
 ---
 
 ## Completed Milestones
@@ -532,4 +546,13 @@
 | 32 | ContinuWitty Query Protocol | Completed |
 | 33 | Portable Export/Import Stash | Completed |
 | 34 | Security Audit Remediation Program | Completed |
-| 35 | Memory Engagement Tracking Baseline | In Progress |
+| 35 | Memory Engagement Tracking Baseline | Completed |
+| 36 | Feedback Loop + Relevance Scoring | Completed |
+| 37 | Time-Decay + Consolidation Suggestions | Completed |
+| 38 | Contradiction Detection + Warning Flows | Completed |
+| 39 | Temporal Query Extensions + Cost-Aware Context Assembly | Completed |
+| 40 | Autonomous Memory Suggestions + Action Workflows | Completed |
+| 41 | Feedback Signal Enrichment | Completed |
+| 42 | Session Authority Scoring Baseline | Completed |
+| 43 | Authority-Aware Query Filters | Completed |
+| 44 | Authority Signal Transparency + Fallback Calibration | Completed |

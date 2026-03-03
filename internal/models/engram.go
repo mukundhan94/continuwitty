@@ -98,16 +98,17 @@ type EngramSummary struct {
 
 // EngramQueryResult models query-engrams response rows.
 type EngramQueryResult struct {
-	EngramID        uuid.UUID  `json:"engram_id"`
-	ProjectID       string     `json:"project_id"`
-	Title           string     `json:"title"`
-	Abstract        string     `json:"abstract"`
-	CreatedAt       time.Time  `json:"created_at"`
-	Tags            []string   `json:"tags,omitempty"`
-	Keywords        []string   `json:"keywords,omitempty"`
-	OwnerUserID     *uuid.UUID `json:"owner_user_id,omitempty"`
-	VisibilityScope string     `json:"visibility_scope"`
-	Distance        float64    `json:"distance"`
+	EngramID                  uuid.UUID  `json:"engram_id"`
+	ProjectID                 string     `json:"project_id"`
+	Title                     string     `json:"title"`
+	Abstract                  string     `json:"abstract"`
+	CreatedAt                 time.Time  `json:"created_at"`
+	Tags                      []string   `json:"tags,omitempty"`
+	Keywords                  []string   `json:"keywords,omitempty"`
+	OwnerUserID               *uuid.UUID `json:"owner_user_id,omitempty"`
+	VisibilityScope           string     `json:"visibility_scope"`
+	SourceSessionQualityScore float64    `json:"source_session_quality_score"`
+	Distance                  float64    `json:"distance"`
 }
 
 // EngramFeedbackType identifies explicit feedback semantics for one engram.

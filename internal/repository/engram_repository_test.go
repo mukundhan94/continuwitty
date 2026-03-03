@@ -149,6 +149,7 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	requireNoError(t, err)
 	requireEqual(t, 1, len(results))
 	requireEqual(t, "Lexical Match", results[0].Title)
+	requireEqual(t, 0.5, results[0].SourceSessionQualityScore)
 	assertQueryEngramsRuntimeQuery(
 		t,
 		queryRuntimeAssertionInput{

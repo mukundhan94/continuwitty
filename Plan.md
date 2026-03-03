@@ -1305,6 +1305,39 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 44 - Authority Signal Transparency and Fallback Calibration
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - feedback authority calibration no longer depends solely on `relevance_score`; fallback mappings now apply when score is omitted:
+    - `integration_depth` fallback (`elaborated`/`mentioned`/`ignored`/`contradicted`) mapped to bounded authority signal.
+    - `feedback_type` fallback (`useful`/`contradiction`) used when integration depth is absent.
+  - feedback write path now updates `source_session_quality_score` deterministically from the resolved authority signal, while preserving existing average-relevance aggregation semantics.
+  - engram query results now expose `source_session_quality_score` in returned rows for REST + MCP clients.
+  - regression coverage expanded for authority fallback normalization and query-response authority-field parity.
+
+### Goals
+
+1. Keep authority scoring adaptive even when explicit relevance scores are missing.
+2. Expose authority diagnostics directly to clients to improve retrieval transparency.
+3. Preserve deterministic scoring behavior and backward-compatible query contracts.
+
+### Deliverables
+
+1. Fallback authority calibration logic in feedback repository write path.
+2. `source_session_quality_score` response-field parity in engram query model/repository mapping.
+3. REST/MCP/repository regression coverage plus docs synchronization.
+
+### Exit Criteria
+
+1. Feedback events without `relevance_score` still contribute bounded authority updates.
+2. Query responses include `source_session_quality_score` consistently in REST and MCP tool paths.
+3. Tests and docs protect the fallback-calibration and response-contract behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1342,3 +1375,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 42: source-session authority scoring baseline in schema/retrieval/feedback loops.
 8. Execute authority-aware query contract increment:
    - [x] Phase 43: authority-threshold query filter parity across REST/MCP/repository.
+9. Execute authority signal transparency increment:
+   - [x] Phase 44: fallback authority calibration + query-response authority signal exposure.
