@@ -313,7 +313,7 @@ Optional temporal/engagement filters:
 
 When both `*_min` and `*_max` are provided for the same metric, `min` must be less than or equal to `max`.
 
-Query results include `source_session_quality_score` (`0..1`), `access_count`, `freshness_score`, `feedback_count`, `useful_count`, `avg_relevance_feedback` (`0..1`), `useful_feedback_ratio` (`0..1`), `contradiction_count`, and `contradiction_feedback_ratio` (`0..1`) for recall-quality diagnostics.
+Query results include `source_session_quality_score` (`0..1`), `access_count`, `freshness_score`, `feedback_count`, `useful_count`, `avg_relevance_feedback` (`0..1`), `useful_feedback_ratio` (`0..1`), `contradiction_count`, and `contradiction_feedback_ratio` (`0..1`) for recall-quality diagnostics, plus rerank explainability fields: `composite_rank_score`, `dense_score`, `lexical_overlap_score`, `feedback_signal_score`, `engagement_signal_score`, `freshness_signal_score`, and `authority_signal_score`.
 
 ### Agent Run (With Snapshots)
 

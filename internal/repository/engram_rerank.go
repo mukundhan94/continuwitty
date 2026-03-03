@@ -81,13 +81,17 @@ func overlapCount(source map[string]struct{}, target map[string]struct{}) int {
 }
 
 func combinedRankScore(input rankScoreInput) float64 {
-	denseScore := 1.0 / (1.0 + math.Max(input.distance, 0))
+	denseScore := denseDistanceScore(input.distance)
 	return (denseScore * denseRankWeight) +
 		(input.lexicalOverlap * lexicalRankWeight) +
 		(input.feedbackScore * feedbackRankWeight) +
 		(input.engagementScore * engagementRankWeight) +
 		(input.freshnessScore * freshnessRankWeight) +
 		(input.authorityScore * authorityRankWeight)
+}
+
+func denseDistanceScore(distance float64) float64 {
+	return 1.0 / (1.0 + math.Max(distance, 0))
 }
 
 func normalizeFeedbackScore(usefulCount int, contradictionCount int) float64 {
@@ -164,24 +168,37 @@ func rerankByCombinedScore(input rerankRowsInput) []map[string]any {
 				},
 			},
 		)
+		distance := float64FromAny(row["distance"])
+		feedbackSignal := normalizeFeedbackScore(
+			intFromAny(row["useful_count"]),
+			intFromAny(row["contradiction_count"]),
+		)
+		engagementSignal := normalizeEngagementScore(
+			intFromAny(row["access_count"]),
+		)
+		freshnessSignal := candidateFreshnessScore(row)
+		authoritySignal := candidateAuthorityScore(row)
+		score := combinedRankScore(
+			rankScoreInput{
+				distance:        distance,
+				lexicalOverlap:  lexicalScore,
+				feedbackScore:   feedbackSignal,
+				engagementScore: engagementSignal,
+				freshnessScore:  freshnessSignal,
+				authorityScore:  authoritySignal,
+			},
+		)
+		row["dense_score"] = denseDistanceScore(distance)
+		row["lexical_overlap_score"] = lexicalScore
+		row["feedback_signal_score"] = feedbackSignal
+		row["engagement_signal_score"] = engagementSignal
+		row["freshness_signal_score"] = freshnessSignal
+		row["authority_signal_score"] = authoritySignal
+		row["composite_rank_score"] = score
 		ranked = append(
 			ranked,
 			rankedRow{
-				score: combinedRankScore(
-					rankScoreInput{
-						distance:       float64FromAny(row["distance"]),
-						lexicalOverlap: lexicalScore,
-						feedbackScore: normalizeFeedbackScore(
-							intFromAny(row["useful_count"]),
-							intFromAny(row["contradiction_count"]),
-						),
-						engagementScore: normalizeEngagementScore(
-							intFromAny(row["access_count"]),
-						),
-						freshnessScore: candidateFreshnessScore(row),
-						authorityScore: candidateAuthorityScore(row),
-					},
-				),
+				score:     score,
 				createdAt: timeFromAny(row["created_at"]),
 				row:       row,
 			},

@@ -7,6 +7,23 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 67: rerank diagnostics transparency in query results)
+
+1. Extended engram query-result contracts with rerank diagnostics:
+   - added `composite_rank_score`, `dense_score`, `lexical_overlap_score`, `feedback_signal_score`, `engagement_signal_score`, `freshness_signal_score`, and `authority_signal_score`.
+2. Updated repository rerank pipeline diagnostics:
+   - rerank step now computes and stores component signals plus final composite rank score on candidate rows before sorting.
+3. Added mapping fallback behavior:
+   - query-result mapping now computes deterministic fallback diagnostics when score fields are absent in row payloads.
+4. Added parity/regression coverage:
+   - repository diagnostics and query-runtime tests now assert rerank explainability fields.
+   - REST query-route response assertions now validate serialized rerank diagnostics.
+   - MCP compatibility parity fixture now includes rerank diagnostics fields.
+5. Documentation alignment:
+   - API and MCP query docs now describe returned rerank explainability fields.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 66: semantic-distance floor query filter parity)
 
 1. Added semantic-distance floor query contract extension:

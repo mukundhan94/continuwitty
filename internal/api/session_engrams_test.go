@@ -361,7 +361,7 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 	}
 }
 
-func TestMountSessionAuthRoutesQueryEngramsReturnsAuthorityScore(t *testing.T) {
+func TestMountSessionAuthRoutesQueryEngramsReturnsRerankDiagnostics(t *testing.T) {
 	actor := newSessionRoutesTestActor(t, models.UserRoleAdmin)
 	handler, manager := buildSessionEngramRoutesTestHandler(
 		t,
@@ -390,6 +390,13 @@ func TestMountSessionAuthRoutesQueryEngramsReturnsAuthorityScore(t *testing.T) {
 						ContradictionCount:         2,
 						ContradictionFeedbackRatio: 0.33,
 						SourceSessionQualityScore:  0.81,
+						CompositeRankScore:         0.79,
+						DenseScore:                 0.89,
+						LexicalOverlapScore:        0.66,
+						FeedbackSignalScore:        0.72,
+						EngagementSignalScore:      0.63,
+						FreshnessSignalScore:       0.74,
+						AuthoritySignalScore:       0.81,
 						Distance:                   0.12,
 					},
 				}, nil
@@ -432,6 +439,13 @@ func TestMountSessionAuthRoutesQueryEngramsReturnsAuthorityScore(t *testing.T) {
 	requireEqual(t, float64(2), payload[0]["contradiction_count"].(float64))
 	requireEqual(t, 0.33, payload[0]["contradiction_feedback_ratio"].(float64))
 	requireEqual(t, 0.81, payload[0]["source_session_quality_score"].(float64))
+	requireEqual(t, 0.79, payload[0]["composite_rank_score"].(float64))
+	requireEqual(t, 0.89, payload[0]["dense_score"].(float64))
+	requireEqual(t, 0.66, payload[0]["lexical_overlap_score"].(float64))
+	requireEqual(t, 0.72, payload[0]["feedback_signal_score"].(float64))
+	requireEqual(t, 0.63, payload[0]["engagement_signal_score"].(float64))
+	requireEqual(t, 0.74, payload[0]["freshness_signal_score"].(float64))
+	requireEqual(t, 0.81, payload[0]["authority_signal_score"].(float64))
 }
 
 func buildInvalidQueryFilterTestRequestHarness(t *testing.T) (http.Handler, *http.Cookie) {

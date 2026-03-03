@@ -2045,6 +2045,45 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 67 - Query Rerank Diagnostics Transparency
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - extended `models.EngramQueryResult` with rerank explainability diagnostics:
+    - `composite_rank_score`
+    - `dense_score`
+    - `lexical_overlap_score`
+    - `feedback_signal_score`
+    - `engagement_signal_score`
+    - `freshness_signal_score`
+    - `authority_signal_score`
+  - repository rerank pipeline now records component signals and final composite rank score per candidate row.
+  - query-result mapping now forwards rerank diagnostics with deterministic fallback computation when score fields are absent.
+  - REST and MCP query parity tests now assert rerank diagnostics are preserved in response payloads.
+  - API and MCP docs now describe rerank explainability fields returned in query rows.
+
+### Goals
+
+1. Expose ranking internals so operators and agents can explain retrieval ordering without reverse-engineering repository logic.
+2. Keep rerank diagnostics deterministic across repository, REST, and MCP surfaces.
+3. Preserve backward compatibility while extending query-result diagnostics.
+
+### Deliverables
+
+1. Query-result contract extension for rerank diagnostics.
+2. Repository rerank instrumentation and result mapping parity.
+3. REST/MCP test and documentation updates.
+
+### Exit Criteria
+
+1. Query responses include composite and component rerank scores for every row.
+2. Diagnostics remain deterministic and stable in regression tests.
+3. API/MCP docs reflect the expanded query-result diagnostics contract.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2128,3 +2167,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 65: `distance_max` parity across REST/MCP/repository.
 31. Execute semantic distance floor query filter increment:
    - [x] Phase 66: `distance_min` parity across REST/MCP/repository.
+32. Execute rerank diagnostics transparency increment:
+   - [x] Phase 67: expose composite/component rerank scores in query result payloads across repository/REST/MCP.

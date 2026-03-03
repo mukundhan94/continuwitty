@@ -287,6 +287,13 @@ func mapEngramQueryResult(row map[string]any) models.EngramQueryResult {
 		ContradictionCount:         intFromAny(row["contradiction_count"]),
 		ContradictionFeedbackRatio: contradictionFeedbackRatioFromRow(row),
 		SourceSessionQualityScore:  float64FromAny(row["source_session_quality_score"]),
+		CompositeRankScore:         compositeRankScoreFromRow(row),
+		DenseScore:                 denseScoreFromRow(row),
+		LexicalOverlapScore:        lexicalOverlapScoreFromRow(row),
+		FeedbackSignalScore:        feedbackSignalScoreFromRow(row),
+		EngagementSignalScore:      engagementSignalScoreFromRow(row),
+		FreshnessSignalScore:       freshnessSignalScoreFromRow(row),
+		AuthoritySignalScore:       authoritySignalScoreFromRow(row),
 		Distance:                   float64FromAny(row["distance"]),
 	}
 	if ownerUserID, ok := row["owner_user_id"].(*uuid.UUID); ok {
@@ -325,6 +332,75 @@ func contradictionFeedbackRatioFromRow(row map[string]any) float64 {
 	}
 	contradictionCount := intFromAny(row["contradiction_count"])
 	return float64(contradictionCount) / float64(feedbackCount)
+}
+
+func compositeRankScoreFromRow(row map[string]any) float64 {
+	if score, ok := optionalFloatFromRow(row, "composite_rank_score"); ok {
+		return score
+	}
+	return combinedRankScore(
+		rankScoreInput{
+			distance:        float64FromAny(row["distance"]),
+			lexicalOverlap:  lexicalOverlapScoreFromRow(row),
+			feedbackScore:   feedbackSignalScoreFromRow(row),
+			engagementScore: engagementSignalScoreFromRow(row),
+			freshnessScore:  freshnessSignalScoreFromRow(row),
+			authorityScore:  authoritySignalScoreFromRow(row),
+		},
+	)
+}
+
+func denseScoreFromRow(row map[string]any) float64 {
+	if score, ok := optionalFloatFromRow(row, "dense_score"); ok {
+		return clamp01(score)
+	}
+	return denseDistanceScore(float64FromAny(row["distance"]))
+}
+
+func lexicalOverlapScoreFromRow(row map[string]any) float64 {
+	if score, ok := optionalFloatFromRow(row, "lexical_overlap_score"); ok {
+		return clamp01(score)
+	}
+	return 0
+}
+
+func feedbackSignalScoreFromRow(row map[string]any) float64 {
+	if score, ok := optionalFloatFromRow(row, "feedback_signal_score"); ok {
+		return clamp01(score)
+	}
+	return normalizeFeedbackScore(
+		intFromAny(row["useful_count"]),
+		intFromAny(row["contradiction_count"]),
+	)
+}
+
+func engagementSignalScoreFromRow(row map[string]any) float64 {
+	if score, ok := optionalFloatFromRow(row, "engagement_signal_score"); ok {
+		return clamp01(score)
+	}
+	return normalizeEngagementScore(intFromAny(row["access_count"]))
+}
+
+func freshnessSignalScoreFromRow(row map[string]any) float64 {
+	if score, ok := optionalFloatFromRow(row, "freshness_signal_score"); ok {
+		return clamp01(score)
+	}
+	return candidateFreshnessScore(row)
+}
+
+func authoritySignalScoreFromRow(row map[string]any) float64 {
+	if score, ok := optionalFloatFromRow(row, "authority_signal_score"); ok {
+		return clamp01(score)
+	}
+	return candidateAuthorityScore(row)
+}
+
+func optionalFloatFromRow(row map[string]any, key string) (float64, bool) {
+	raw, found := row[key]
+	if !found {
+		return 0, false
+	}
+	return float64FromAny(raw), true
 }
 
 func pgxPlaceholder(index int) string {

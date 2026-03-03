@@ -67,6 +67,13 @@ func buildEngramQueryParityFixture(t *testing.T) engramQueryParityFixture {
 				Keywords:                   []string{"risk"},
 				Tags:                       []string{"ops"},
 				OwnerUserID:                uuidPtr(uuid.MustParse("39500000-0000-0000-0000-000000000397")),
+				CompositeRankScore:         0.82,
+				DenseScore:                 0.91,
+				LexicalOverlapScore:        0.68,
+				FeedbackSignalScore:        0.73,
+				EngagementSignalScore:      0.61,
+				FreshnessSignalScore:       0.67,
+				AuthoritySignalScore:       0.78,
 			},
 		},
 	}

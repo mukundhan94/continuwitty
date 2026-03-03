@@ -133,6 +133,13 @@ type EngramQueryResult struct {
 	ContradictionCount         int        `json:"contradiction_count"`
 	ContradictionFeedbackRatio float64    `json:"contradiction_feedback_ratio"`
 	SourceSessionQualityScore  float64    `json:"source_session_quality_score"`
+	CompositeRankScore         float64    `json:"composite_rank_score"`
+	DenseScore                 float64    `json:"dense_score"`
+	LexicalOverlapScore        float64    `json:"lexical_overlap_score"`
+	FeedbackSignalScore        float64    `json:"feedback_signal_score"`
+	EngagementSignalScore      float64    `json:"engagement_signal_score"`
+	FreshnessSignalScore       float64    `json:"freshness_signal_score"`
+	AuthoritySignalScore       float64    `json:"authority_signal_score"`
 	Distance                   float64    `json:"distance"`
 }
 

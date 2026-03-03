@@ -158,6 +158,26 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	requireEqual(t, 0, results[0].ContradictionCount)
 	requireEqual(t, 0.0, results[0].ContradictionFeedbackRatio)
 	requireEqual(t, 0.5, results[0].SourceSessionQualityScore)
+	requireEqual(t, denseDistanceScore(0.25), results[0].DenseScore)
+	requireEqual(t, 1.0, results[0].LexicalOverlapScore)
+	requireEqual(t, normalizeFeedbackScore(0, 0), results[0].FeedbackSignalScore)
+	requireEqual(t, normalizeEngagementScore(7), results[0].EngagementSignalScore)
+	requireEqual(t, 0.88, results[0].FreshnessSignalScore)
+	requireEqual(t, 0.5, results[0].AuthoritySignalScore)
+	requireEqual(
+		t,
+		combinedRankScore(
+			rankScoreInput{
+				distance:        0.25,
+				lexicalOverlap:  1.0,
+				feedbackScore:   normalizeFeedbackScore(0, 0),
+				engagementScore: normalizeEngagementScore(7),
+				freshnessScore:  0.88,
+				authorityScore:  0.5,
+			},
+		),
+		results[0].CompositeRankScore,
+	)
 	assertQueryEngramsRuntimeQuery(
 		t,
 		queryRuntimeAssertionInput{
