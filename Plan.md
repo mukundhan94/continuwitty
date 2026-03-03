@@ -995,9 +995,9 @@ Build a local-first memory system where agents and humans can:
   - MCP consolidation parity tooling:
     - `engram.refresh_consolidation` / `engram_refresh_consolidation` (admin-only)
     - `engram.consolidation_list` / `engram_consolidation_list` (admin-only)
+    - `engram.consolidation_action` / `engram_consolidation_action` (admin-only)
   - repository/model tests for consolidation refresh/list defaulting, filtering, and status parsing.
 - Remaining in this phase:
-  - MCP consolidation action workflow parity (`merged`/`rejected`) with actor attribution.
   - acceptance + precision/recall benchmark coverage for grouping criteria.
 
 ### Goals

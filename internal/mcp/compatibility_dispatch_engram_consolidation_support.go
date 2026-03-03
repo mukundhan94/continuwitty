@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -11,45 +10,8 @@ import (
 const (
 	engramRefreshConsolidationAdminError = "engram.refresh_consolidation requires admin role"
 	engramConsolidationListAdminError    = "engram.consolidation_list requires admin role"
+	engramConsolidationActionAdminError  = "engram.consolidation_action requires admin role"
 )
-
-func (service *CompatibilityService) dispatchEngramRefreshConsolidationTool(
-	ctx context.Context,
-	actor Actor,
-	params map[string]any,
-) (map[string]any, bool, *toolDispatchError) {
-	if service.engramConsolidationRefresh == nil {
-		return nil, false, nil
-	}
-	request, dispatchErr := parseEngramConsolidationRefreshRequest(actor, params)
-	if dispatchErr != nil {
-		return nil, true, dispatchErr
-	}
-	refreshed, err := service.engramConsolidationRefresh.RefreshEngramConsolidationSuggestions(ctx, request)
-	if err != nil || refreshed == nil {
-		return nil, true, internalToolDispatchError()
-	}
-	return map[string]any{"consolidation_refresh": *refreshed}, true, nil
-}
-
-func (service *CompatibilityService) dispatchEngramConsolidationListTool(
-	ctx context.Context,
-	actor Actor,
-	params map[string]any,
-) (map[string]any, bool, *toolDispatchError) {
-	if service.engramConsolidationList == nil {
-		return nil, false, nil
-	}
-	request, dispatchErr := parseEngramConsolidationListRequest(actor, params)
-	if dispatchErr != nil {
-		return nil, true, dispatchErr
-	}
-	suggestions, err := service.engramConsolidationList.ListEngramConsolidationSuggestions(ctx, request)
-	if err != nil {
-		return nil, true, internalToolDispatchError()
-	}
-	return map[string]any{"consolidation_suggestions": suggestions}, true, nil
-}
 
 func parseEngramConsolidationRefreshRequest(
 	actor Actor,
@@ -107,6 +69,34 @@ func parseEngramConsolidationListRequest(
 	}, nil
 }
 
+func parseEngramConsolidationActionRequest(
+	actor Actor,
+	params map[string]any,
+) (EngramConsolidationActionRequest, *toolDispatchError) {
+	actorRole := normalizedActorRole(actor)
+	if actorRole != models.UserRoleAdmin {
+		return EngramConsolidationActionRequest{}, invalidParamsWithStatus(
+			403,
+			engramConsolidationActionAdminError,
+		)
+	}
+	suggestionID, ok := requiredUUIDParam(params, "suggestion_id")
+	if !ok {
+		return EngramConsolidationActionRequest{}, invalidParamError("suggestion_id")
+	}
+	status, ok := requiredConsolidationActionStatusParam(params, "status")
+	if !ok {
+		return EngramConsolidationActionRequest{}, invalidParamError("status")
+	}
+	return EngramConsolidationActionRequest{
+		ActorUserID:  actor.UserID,
+		ActorRole:    actorRole,
+		SuggestionID: suggestionID,
+		ProjectID:    optionalProjectIDParam(params, "project_id"),
+		Status:       status,
+	}, nil
+}
+
 func optionalMinGroupSizeParam(params map[string]any, key string) (*int, bool) {
 	raw, found := optionalParamValue(params, key)
 	if !found {
@@ -136,4 +126,18 @@ func optionalConsolidationStatusParam(
 		return nil, false
 	}
 	return &parsed, true
+}
+
+func requiredConsolidationActionStatusParam(
+	params map[string]any,
+	key string,
+) (models.ConsolidationSuggestionStatus, bool) {
+	parsed, ok := optionalConsolidationStatusParam(params, key)
+	if !ok || parsed == nil {
+		return "", false
+	}
+	if *parsed == models.ConsolidationSuggestionStatusSuggested {
+		return "", false
+	}
+	return *parsed, true
 }

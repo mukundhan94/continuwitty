@@ -136,6 +136,7 @@ func TestApplyEngramConsolidationSuggestionActionUsesRequestObject(t *testing.T)
 	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000c301")
 	sourceEngramID := uuid.MustParse("00000000-0000-0000-0000-00000000c302")
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000c303")
+	projectID := "engram-vault"
 	suggestedAt := time.Date(2026, 3, 3, 14, 20, 0, 0, time.UTC)
 	actionedAt := time.Date(2026, 3, 3, 14, 25, 0, 0, time.UTC)
 	db := &fakeQueryer{
@@ -161,6 +162,7 @@ func TestApplyEngramConsolidationSuggestionActionUsesRequestObject(t *testing.T)
 		db,
 		ConsolidationSuggestionActionInput{
 			SuggestionID: suggestionID,
+			ProjectID:    &projectID,
 			Status:       models.ConsolidationSuggestionStatusMerged,
 			ActorUserID:  actorUserID,
 			ActionedAt:   actionedAt,
@@ -179,7 +181,7 @@ func TestApplyEngramConsolidationSuggestionActionUsesRequestObject(t *testing.T)
 	}
 	requireEqual(t, 1, len(db.queryRowArgs))
 	if !reflect.DeepEqual(
-		[]any{suggestionID, "merged", actionedAt, actorUserID},
+		[]any{suggestionID, "merged", actionedAt, actorUserID, "engram-vault"},
 		db.queryRowArgs[0],
 	) {
 		t.Fatalf("expected action query args to match")

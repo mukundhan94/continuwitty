@@ -43,6 +43,7 @@ type ConsolidationSuggestionListInput struct {
 // ConsolidationSuggestionActionInput captures status-action inputs for consolidation suggestions.
 type ConsolidationSuggestionActionInput struct {
 	SuggestionID uuid.UUID
+	ProjectID    *string
 	Status       models.ConsolidationSuggestionStatus
 	ActorUserID  uuid.UUID
 	ActionedAt   time.Time
@@ -127,6 +128,7 @@ func ApplyEngramConsolidationSuggestionAction(
 			action_taken_by = $4,
 			updated_at = $3
 		WHERE suggestion_id = $1
+			AND ($5::text IS NULL OR project_id = $5)
 		RETURNING
 			suggestion_id,
 			project_id,
@@ -145,6 +147,7 @@ func ApplyEngramConsolidationSuggestionAction(
 		string(normalized.Status),
 		normalized.ActionedAt,
 		normalized.ActorUserID,
+		optionalStringValue(normalized.ProjectID),
 	)
 	record, err := scanConsolidationSuggestion(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -326,6 +329,7 @@ func normalizeConsolidationSuggestionActionInput(
 	default:
 		return ConsolidationSuggestionActionInput{}, errConsolidationActionStatusInvalid
 	}
+	input.ProjectID = normalizeOptionalConsolidationProjectID(input.ProjectID)
 	if input.ActionedAt.IsZero() {
 		input.ActionedAt = nowConsolidationSuggestionUTC()
 	}

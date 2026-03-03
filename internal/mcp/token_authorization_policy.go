@@ -16,6 +16,7 @@ var optionalProjectTools = map[string]struct{}{
 	"engram.collection_list":       {},
 	"engram.refresh_freshness":     {},
 	"engram.refresh_consolidation": {},
+	"engram.consolidation_action":  {},
 }
 
 var projectFallbackTools = map[string]struct{}{

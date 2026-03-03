@@ -22,6 +22,13 @@ func newMCPEngramConsolidationListAdapter(service *admin.Service) mcp.EngramCons
 	return mcpEngramAdminAdapter{service: service}
 }
 
+func newMCPEngramConsolidationActionAdapter(service *admin.Service) mcp.EngramConsolidationActionService {
+	if service == nil {
+		return nil
+	}
+	return mcpEngramAdminAdapter{service: service}
+}
+
 func (adapter mcpEngramAdminAdapter) RefreshEngramConsolidationSuggestions(
 	ctx context.Context,
 	request mcp.EngramConsolidationRefreshRequest,
@@ -55,6 +62,21 @@ func (adapter mcpEngramAdminAdapter) ListEngramConsolidationSuggestions(
 			Status:    request.Status,
 			Limit:     request.Limit,
 			Offset:    request.Offset,
+		},
+	)
+}
+
+func (adapter mcpEngramAdminAdapter) ActionEngramConsolidationSuggestion(
+	ctx context.Context,
+	request mcp.EngramConsolidationActionRequest,
+) (*models.EngramConsolidationSuggestion, error) {
+	return adapter.service.ActionEngramConsolidationSuggestion(
+		ctx,
+		request.SuggestionID,
+		request.ActorUserID,
+		admin.EngramConsolidationSuggestionActionRequest{
+			ProjectID: request.ProjectID,
+			Status:    request.Status,
 		},
 	)
 }

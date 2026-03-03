@@ -144,7 +144,8 @@ type EngramConsolidationSuggestionListRequest struct {
 
 // EngramConsolidationSuggestionActionRequest captures action payload for a suggestion.
 type EngramConsolidationSuggestionActionRequest struct {
-	Status models.ConsolidationSuggestionStatus `json:"status"`
+	ProjectID *string                              `json:"project_id,omitempty"`
+	Status    models.ConsolidationSuggestionStatus `json:"status"`
 }
 
 // CollectionCreateRequest captures collection create payload values.

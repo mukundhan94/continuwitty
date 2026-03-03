@@ -414,6 +414,7 @@ func TestActionEngramConsolidationSuggestionUsesRepositoryRequestObject(t *testi
 	service := NewService(nil, 256, nil)
 	suggestionID := uuid.MustParse("00000000-0000-0000-0000-00000000d011")
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-00000000d012")
+	projectID := "engram-vault"
 	captured := repository.ConsolidationSuggestionActionInput{}
 	service.deps.applyConsolidationSuggestionAction = func(
 		_ context.Context,
@@ -432,11 +433,13 @@ func TestActionEngramConsolidationSuggestionUsesRepositoryRequestObject(t *testi
 		suggestionID,
 		actorUserID,
 		EngramConsolidationSuggestionActionRequest{
-			Status: models.ConsolidationSuggestionStatusMerged,
+			ProjectID: &projectID,
+			Status:    models.ConsolidationSuggestionStatusMerged,
 		},
 	)
 	requireNoError(t, err)
 	requireEqual(t, suggestionID, captured.SuggestionID)
+	requireEqual(t, "engram-vault", derefString(captured.ProjectID))
 	requireEqual(t, actorUserID, captured.ActorUserID)
 	requireEqual(t, models.ConsolidationSuggestionStatusMerged, captured.Status)
 	if updated == nil {

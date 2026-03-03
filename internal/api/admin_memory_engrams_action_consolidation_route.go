@@ -12,7 +12,8 @@ func actionMemoryAdminEngramConsolidationRoute(
 	requireAdminActor RequireAdminActor,
 ) http.HandlerFunc {
 	type payload struct {
-		Status string `json:"status"`
+		ProjectID *string `json:"project_id,omitempty"`
+		Status    string  `json:"status"`
 	}
 	return adminActorRoute(requireAdminActor, func(writer http.ResponseWriter, request *http.Request, actor AdminActor) {
 		suggestionID, ok := parsePathUUID(writer, request, "suggestion_id")
@@ -33,7 +34,10 @@ func actionMemoryAdminEngramConsolidationRoute(
 				request.Context(),
 				suggestionID,
 				actor.UserID,
-				admin.EngramConsolidationSuggestionActionRequest{Status: status},
+				admin.EngramConsolidationSuggestionActionRequest{
+					ProjectID: decoded.ProjectID,
+					Status:    status,
+				},
 			)
 		})
 	})

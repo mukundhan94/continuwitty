@@ -1312,6 +1312,32 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"engram.consolidation_action": {
+		description: "Mark one consolidation suggestion as merged or rejected (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"suggestion_id",
+				"status",
+			},
+			"properties": map[string]any{
+				"suggestion_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"status": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"merged",
+						"rejected",
+					},
+				},
+			},
+		},
+	},
 	"engram.share": {
 		description: "Set an engram visibility scope to project.",
 		inputSchema: map[string]any{

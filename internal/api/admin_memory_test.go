@@ -431,11 +431,12 @@ func TestMountMemoryAdminRoutesActionConsolidationSuggestionUsesActorAndPayload(
 		router,
 		http.MethodPost,
 		"/api/v1/admin/memory/engrams/consolidation/suggestions/"+suggestionID.String()+"/action",
-		[]byte(`{"status":"merged"}`),
+		[]byte(`{"project_id":"engram-vault","status":"merged"}`),
 	)
 	requireEqual(t, http.StatusOK, response.Code)
 	requireEqual(t, suggestionID, capturedSuggestionID)
 	requireEqual(t, actorUserID, capturedActorUserID)
+	requireEqual(t, "engram-vault", derefString(capturedRequest.ProjectID))
 	requireEqual(t, models.ConsolidationSuggestionStatusMerged, capturedRequest.Status)
 }
 

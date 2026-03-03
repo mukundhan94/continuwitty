@@ -164,6 +164,35 @@
    - `make test-unit`
    - CodeScene scores on touched Go files: `10.0`.
 
+### 2026-03-03 (Phase 37 extension: MCP consolidation action parity + project-scoped action guard)
+
+1. Added MCP consolidation action parity tooling:
+   - new admin-only tool `engram.consolidation_action` (alias `engram_consolidation_action`) to mark one suggestion as `merged` or `rejected`.
+   - dispatch routing/wiring added across:
+     - `internal/mcp/compatibility_dispatch_engram_mutation_handlers.go`
+     - `internal/mcp/compatibility_dispatch_engram_consolidation_action_support.go`
+     - `internal/mcp/compatibility_service.go`
+     - `cmd/api/mcp_engram_admin_consolidation_adapter.go`
+     - `cmd/api/main.go`
+2. Added MCP tool catalog and token-policy alignment:
+   - tool classification/order updates in `internal/mcp/catalog.go`.
+   - input schema metadata in `internal/mcp/catalog_metadata_data.go`.
+   - optional project-token normalization support in `internal/mcp/token_authorization_policy.go`.
+3. Hardened consolidation action scoping across repository/admin/API:
+   - `ApplyEngramConsolidationSuggestionAction` now supports optional project guard (`project_id`) for status updates.
+   - admin action request object and REST payload now accept `project_id` and forward it to repository writes.
+4. Added/updated regression coverage:
+   - `internal/mcp/compatibility_service_engram_consolidation_action_test.go` for direct/tools parity, admin guard, validation, and internal/not-found mappings.
+   - updated repository/admin/API tests for optional `project_id` forwarding and action-path behavior.
+5. Documentation/state alignment:
+   - `docs/mcp-guide.md` tool catalog updated with consolidation action tooling.
+   - `Plan.md` and `migration/checkpoints/checkpoint.md` updated for narrowed remaining Phase 37 scope.
+6. Validation:
+   - `go test ./internal/repository ./internal/admin ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0` (with `internal/mcp/catalog_metadata_data.go` reported as non-scorable/null by CodeScene).
+
 ### 2026-03-01 (Security follow-up closeout: OIDC rollout validation + centralized audit sink regression)
 
 1. Added explicit OIDC-to-sink integration coverage in `internal/api/session_ui_oidc_test.go`:

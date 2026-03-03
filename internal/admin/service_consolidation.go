@@ -69,6 +69,7 @@ func (s *Service) ActionEngramConsolidationSuggestion(
 		s.db,
 		repository.ConsolidationSuggestionActionInput{
 			SuggestionID: suggestionID,
+			ProjectID:    request.ProjectID,
 			Status:       request.Status,
 			ActorUserID:  actorUserID,
 		},

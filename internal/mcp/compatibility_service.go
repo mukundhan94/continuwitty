@@ -354,6 +354,14 @@ type EngramConsolidationListService interface {
 	) ([]models.EngramConsolidationSuggestion, error)
 }
 
+// EngramConsolidationActionService captures consolidation action behavior used by MCP compatibility engram dispatch.
+type EngramConsolidationActionService interface {
+	ActionEngramConsolidationSuggestion(
+		ctx context.Context,
+		request EngramConsolidationActionRequest,
+	) (*models.EngramConsolidationSuggestion, error)
+}
+
 // EngramMoveService captures engram move-project behavior used by MCP compatibility engram dispatch.
 type EngramMoveService interface {
 	MoveEngram(
@@ -844,6 +852,15 @@ type EngramConsolidationListRequest struct {
 	Offset      int
 }
 
+// EngramConsolidationActionRequest captures compatibility-level consolidation-action inputs.
+type EngramConsolidationActionRequest struct {
+	ActorUserID  uuid.UUID
+	ActorRole    models.UserRole
+	SuggestionID uuid.UUID
+	ProjectID    *string
+	Status       models.ConsolidationSuggestionStatus
+}
+
 // EngramMoveRequest captures compatibility-level engram move inputs.
 type EngramMoveRequest struct {
 	ActorUserID       uuid.UUID
@@ -1004,6 +1021,7 @@ type CompatibilityServiceDependencies struct {
 	EngramFreshnessRefresh     EngramFreshnessRefreshService
 	EngramConsolidationRefresh EngramConsolidationRefreshService
 	EngramConsolidationList    EngramConsolidationListService
+	EngramConsolidationAction  EngramConsolidationActionService
 	EngramMove                 EngramMoveService
 	EngramDelete               EngramDeleteService
 	EngramRestore              EngramRestoreService
@@ -1061,6 +1079,7 @@ type CompatibilityService struct {
 	engramFreshnessRefresh     EngramFreshnessRefreshService
 	engramConsolidationRefresh EngramConsolidationRefreshService
 	engramConsolidationList    EngramConsolidationListService
+	engramConsolidationAction  EngramConsolidationActionService
 	engramMove                 EngramMoveService
 	engramDelete               EngramDeleteService
 	engramRestore              EngramRestoreService
@@ -1142,6 +1161,7 @@ func NewCompatibilityServiceWithDependencies(
 		engramFreshnessRefresh:     dependencies.EngramFreshnessRefresh,
 		engramConsolidationRefresh: dependencies.EngramConsolidationRefresh,
 		engramConsolidationList:    dependencies.EngramConsolidationList,
+		engramConsolidationAction:  dependencies.EngramConsolidationAction,
 		engramMove:                 dependencies.EngramMove,
 		engramDelete:               dependencies.EngramDelete,
 		engramRestore:              dependencies.EngramRestore,

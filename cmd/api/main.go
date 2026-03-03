@@ -348,6 +348,9 @@ func applyMCPEngramCompatibilityDependencies(
 	compatibilityDeps.EngramConsolidationList = newMCPEngramConsolidationListAdapter(
 		dependencies.memoryAdminService,
 	)
+	compatibilityDeps.EngramConsolidationAction = newMCPEngramConsolidationActionAdapter(
+		dependencies.memoryAdminService,
+	)
 	compatibilityDeps.EngramMove = newMCPEngramMoveAdapter(dependencies.memoryAdminService)
 	compatibilityDeps.EngramDelete = newMCPEngramDeleteAdapter(dependencies.memoryAdminService)
 	compatibilityDeps.EngramRestore = newMCPEngramRestoreAdapter(dependencies.memoryAdminService)
