@@ -314,32 +314,80 @@ func decodeQueryEngramsRequest(
 
 func normalizeQueryEngramsPayload(payload *models.EngramQueryRequest) {
 	payload.Query = strings.TrimSpace(payload.Query)
-	if payload.TopK == 0 {
-		payload.TopK = defaultEngramQueryTopK
+	normalizeQueryTopK(payload)
+	normalizeQueryRelationType(payload)
+	normalizeQueryTraceDepth(payload)
+	normalizeQueryScope(payload)
+}
+
+func normalizeQueryTopK(payload *models.EngramQueryRequest) {
+	if payload.TopK != 0 {
+		return
 	}
+	payload.TopK = defaultEngramQueryTopK
+}
+
+func normalizeQueryRelationType(payload *models.EngramQueryRequest) {
+	if payload.RelationType == nil {
+		return
+	}
+	relation := strings.TrimSpace(string(*payload.RelationType))
+	if relation == "" {
+		payload.RelationType = nil
+		return
+	}
+	typed := models.EngramLinkRelationType(relation)
+	payload.RelationType = &typed
+}
+
+func normalizeQueryTraceDepth(payload *models.EngramQueryRequest) {
+	if payload.RelationType == nil || payload.TraceDepth != nil {
+		return
+	}
+	defaultDepth := 1
+	payload.TraceDepth = &defaultDepth
+}
+
+func normalizeQueryScope(payload *models.EngramQueryRequest) {
 	payload.ProjectID = normalizeOptionalProjectID(payload.ProjectID)
-	if payload.Tags == nil {
-		payload.Tags = []string{}
+	payload.Tags = normalizeStringSlice(payload.Tags)
+	payload.Keywords = normalizeStringSlice(payload.Keywords)
+}
+
+func normalizeStringSlice(values []string) []string {
+	if values == nil {
+		return []string{}
 	}
-	if payload.Keywords == nil {
-		payload.Keywords = []string{}
-	}
+	return values
 }
 
 func validateQueryEngramsPayload(payload models.EngramQueryRequest) string {
-	if payload.Query == "" {
-		return "query is required"
-	}
-	if payload.TopK < 1 || payload.TopK > 50 {
-		return "invalid top_k"
-	}
-	if invalidAccessCountMin(payload.AccessCountMin) {
-		return "invalid access_count_min"
-	}
-	if invalidFreshnessScoreMin(payload.FreshnessScoreMin) {
-		return "invalid freshness_score_min"
+	for _, rule := range queryEngramValidationRules(payload) {
+		if rule.invalid {
+			return rule.detail
+		}
 	}
 	return invalidQueryTemporalWindowDetail(payload)
+}
+
+type queryEngramValidationRule struct {
+	detail  string
+	invalid bool
+}
+
+func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngramValidationRule {
+	return []queryEngramValidationRule{
+		{detail: "query is required", invalid: payload.Query == ""},
+		{detail: "invalid top_k", invalid: payload.TopK < 1 || payload.TopK > 50},
+		{detail: "invalid access_count_min", invalid: invalidAccessCountMin(payload.AccessCountMin)},
+		{detail: "invalid freshness_score_min", invalid: invalidFreshnessScoreMin(payload.FreshnessScoreMin)},
+		{detail: "invalid relation_type", invalid: invalidRelationType(payload.RelationType)},
+		{detail: "invalid trace_depth", invalid: invalidTraceDepth(payload.TraceDepth)},
+		{
+			detail:  "invalid trace_depth",
+			invalid: relationTypeTraceDepthConflict(payload.RelationType, payload.TraceDepth),
+		},
+	}
 }
 
 func invalidAccessCountMin(value *int) bool {
@@ -361,6 +409,31 @@ func hasInvalidTemporalWindow(after *time.Time, before *time.Time) bool {
 		return false
 	}
 	return after.After(*before)
+}
+
+func invalidRelationType(value *models.EngramLinkRelationType) bool {
+	if value == nil {
+		return false
+	}
+	_, err := models.ParseEngramLinkRelationType(strings.TrimSpace(string(*value)))
+	return err != nil
+}
+
+func invalidTraceDepth(value *int) bool {
+	if value == nil {
+		return false
+	}
+	if *value < 0 {
+		return true
+	}
+	return *value > 1
+}
+
+func relationTypeTraceDepthConflict(
+	relationType *models.EngramLinkRelationType,
+	traceDepth *int,
+) bool {
+	return relationType != nil && traceDepth != nil && *traceDepth == 0
 }
 
 type queryTemporalWindowSpec struct {

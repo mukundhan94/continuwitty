@@ -56,19 +56,21 @@ type MemoryEngramCreate struct {
 
 // EngramQueryRequest models vector/lexical query constraints.
 type EngramQueryRequest struct {
-	Query                   string     `json:"query"`
-	TopK                    int        `json:"top_k"`
-	ProjectID               *string    `json:"project_id,omitempty"`
-	Tags                    []string   `json:"tags,omitempty"`
-	Keywords                []string   `json:"keywords,omitempty"`
-	CreatedAfter            *time.Time `json:"created_after,omitempty"`
-	CreatedBefore           *time.Time `json:"created_before,omitempty"`
-	AccessCountMin          *int       `json:"access_count_min,omitempty"`
-	FreshnessScoreMin       *float64   `json:"freshness_score_min,omitempty"`
-	LastAccessedAfter       *time.Time `json:"last_accessed_after,omitempty"`
-	LastAccessedBefore      *time.Time `json:"last_accessed_before,omitempty"`
-	FreshnessComputedAfter  *time.Time `json:"freshness_computed_after,omitempty"`
-	FreshnessComputedBefore *time.Time `json:"freshness_computed_before,omitempty"`
+	Query                   string                  `json:"query"`
+	TopK                    int                     `json:"top_k"`
+	ProjectID               *string                 `json:"project_id,omitempty"`
+	Tags                    []string                `json:"tags,omitempty"`
+	Keywords                []string                `json:"keywords,omitempty"`
+	CreatedAfter            *time.Time              `json:"created_after,omitempty"`
+	CreatedBefore           *time.Time              `json:"created_before,omitempty"`
+	AccessCountMin          *int                    `json:"access_count_min,omitempty"`
+	FreshnessScoreMin       *float64                `json:"freshness_score_min,omitempty"`
+	LastAccessedAfter       *time.Time              `json:"last_accessed_after,omitempty"`
+	LastAccessedBefore      *time.Time              `json:"last_accessed_before,omitempty"`
+	FreshnessComputedAfter  *time.Time              `json:"freshness_computed_after,omitempty"`
+	FreshnessComputedBefore *time.Time              `json:"freshness_computed_before,omitempty"`
+	RelationType            *EngramLinkRelationType `json:"relation_type,omitempty"`
+	TraceDepth              *int                    `json:"trace_depth,omitempty"`
 }
 
 // RehydrationCitation models a source snippet used in rehydration output.

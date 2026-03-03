@@ -223,6 +223,7 @@ func buildEngramQueryWhere(
 	addOptionalPointerClause(builder, request.LastAccessedBefore, "COALESCE(last_accessed_at, created_at) <= %s")
 	addOptionalPointerClause(builder, request.FreshnessComputedAfter, "COALESCE(freshness_last_computed_at, created_at) >= %s")
 	addOptionalPointerClause(builder, request.FreshnessComputedBefore, "COALESCE(freshness_last_computed_at, created_at) <= %s")
+	builder.addTraceFilter(request.RelationType, request.TraceDepth)
 	return builder.whereClause(), builder.params
 }
 
@@ -279,6 +280,58 @@ func (builder *engramQueryWhereBuilder) addStringSliceOverlapFilter(column strin
 		return
 	}
 	builder.addClauseWithParam(fmt.Sprintf("%s && %%s", column), values)
+}
+
+func (builder *engramQueryWhereBuilder) addTraceFilter(
+	relationType *models.EngramLinkRelationType,
+	traceDepth *int,
+) {
+	resolvedDepth := resolveTraceDepth(traceDepth, relationType)
+	if resolvedDepth <= 0 {
+		return
+	}
+	if resolvedDepth > 1 {
+		return
+	}
+	builder.addDepthOneTraceFilter(relationType)
+}
+
+func resolveTraceDepth(
+	traceDepth *int,
+	relationType *models.EngramLinkRelationType,
+) int {
+	if traceDepth != nil {
+		return *traceDepth
+	}
+	if relationType != nil {
+		return 1
+	}
+	return 0
+}
+
+func (builder *engramQueryWhereBuilder) addDepthOneTraceFilter(
+	relationType *models.EngramLinkRelationType,
+) {
+	relationFilter := ""
+	if relationType != nil {
+		relationFilter = fmt.Sprintf(
+			"\n\t\tAND link.relation_type = %s",
+			builder.nextPlaceholder(),
+		)
+		builder.params = append(builder.params, string(*relationType))
+	}
+	builder.whereClauses = append(
+		builder.whereClauses,
+		fmt.Sprintf(
+			`EXISTS (
+		SELECT 1
+		FROM engram_links link
+		WHERE link.status = 'active'
+			AND (link.source_engram_id = engram_id OR link.target_engram_id = engram_id)%s
+	)`,
+			relationFilter,
+		),
+	)
 }
 
 func (builder *engramQueryWhereBuilder) whereClause() string {

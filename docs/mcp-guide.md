@@ -530,12 +530,14 @@ Document pin/list helpers:
     "access_count_min": 2,
     "freshness_score_min": 0.4,
     "last_accessed_after": "2026-02-01T00:00:00Z",
-    "last_accessed_before": "2026-03-01T00:00:00Z"
+    "last_accessed_before": "2026-03-01T00:00:00Z",
+    "relation_type": "supports",
+    "trace_depth": 1
   }
 }
 ```
 
-`engram.query` also supports optional `created_after` / `created_before` and `freshness_computed_after` / `freshness_computed_before` (RFC3339), plus `access_count_min` and `freshness_score_min` filters.
+`engram.query` also supports optional `created_after` / `created_before` and `freshness_computed_after` / `freshness_computed_before` (RFC3339), plus `access_count_min`, `freshness_score_min`, and trace constraints (`relation_type`, `trace_depth`).
 
 Collection add-items flow (resolve collection UUID first):
 

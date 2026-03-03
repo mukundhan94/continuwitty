@@ -21,6 +21,8 @@ func TestBuildEngramQueryWhereIncludesAllFilters(t *testing.T) {
 	lastAccessedBefore := time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC)
 	freshnessComputedAfter := time.Date(2026, 2, 8, 0, 0, 0, 0, time.UTC)
 	freshnessComputedBefore := time.Date(2026, 2, 21, 0, 0, 0, 0, time.UTC)
+	relationType := models.EngramLinkRelationSupports
+	traceDepth := 1
 	projectID := "engram-vault"
 	request := models.EngramQueryRequest{
 		Query:                   "durable memory",
@@ -36,6 +38,8 @@ func TestBuildEngramQueryWhereIncludesAllFilters(t *testing.T) {
 		LastAccessedBefore:      &lastAccessedBefore,
 		FreshnessComputedAfter:  &freshnessComputedAfter,
 		FreshnessComputedBefore: &freshnessComputedBefore,
+		RelationType:            &relationType,
+		TraceDepth:              &traceDepth,
 	}
 
 	whereSQL, params := buildEngramQueryWhere(request, &actorUserID, "[0.1,0.2,0.3]")
@@ -53,6 +57,9 @@ func TestBuildEngramQueryWhereIncludesAllFilters(t *testing.T) {
 		"COALESCE(last_accessed_at, created_at) <= $11",
 		"COALESCE(freshness_last_computed_at, created_at) >= $12",
 		"COALESCE(freshness_last_computed_at, created_at) <= $13",
+		"EXISTS (",
+		"link.status = 'active'",
+		"link.relation_type = $14",
 		"owner_user_id = $3",
 		"actor_user.user_id = $3",
 		"pm.project_id = project_id",
@@ -79,6 +86,7 @@ func TestBuildEngramQueryWhereIncludesAllFilters(t *testing.T) {
 		lastAccessedBefore,
 		freshnessComputedAfter,
 		freshnessComputedBefore,
+		string(relationType),
 	}
 	if !reflect.DeepEqual(params, expectedParams) {
 		t.Fatalf("expected params %#v, got %#v", expectedParams, params)

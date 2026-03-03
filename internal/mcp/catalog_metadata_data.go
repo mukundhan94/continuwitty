@@ -598,6 +598,21 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":   "string",
 					"format": "date-time",
 				},
+				"relation_type": map[string]any{
+					"type": "string",
+					"enum": []string{
+						"supports",
+						"depends_on",
+						"contradicts",
+						"related_to",
+						"derived_from",
+					},
+				},
+				"trace_depth": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+					"maximum": 1,
+				},
 				"access_count_min": map[string]any{
 					"type":    "integer",
 					"minimum": 0,

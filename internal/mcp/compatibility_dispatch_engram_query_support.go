@@ -58,6 +58,8 @@ type engramQueryPayloadParts struct {
 	lastAccessedBefore      *time.Time
 	freshnessComputedAfter  *time.Time
 	freshnessComputedBefore *time.Time
+	relationType            *models.EngramLinkRelationType
+	traceDepth              *int
 }
 
 func parseRequiredQueryParam(params map[string]any) (string, *toolDispatchError) {
@@ -89,6 +91,10 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
 	}
+	traceParts, dispatchErr := parseEngramQueryTraceParts(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
 	return engramQueryPayloadParts{
 		topK:                    topK,
 		projectID:               optionalProjectIDParam(params, "project_id"),
@@ -102,6 +108,8 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		lastAccessedBefore:      temporalParts.lastAccessedBefore,
 		freshnessComputedAfter:  temporalParts.freshnessComputedAfter,
 		freshnessComputedBefore: temporalParts.freshnessComputedBefore,
+		relationType:            traceParts.relationType,
+		traceDepth:              traceParts.traceDepth,
 	}, nil
 }
 
@@ -186,6 +194,47 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 	}, nil
 }
 
+type engramQueryTraceParts struct {
+	relationType *models.EngramLinkRelationType
+	traceDepth   *int
+}
+
+func parseEngramQueryTraceParts(params map[string]any) (engramQueryTraceParts, *toolDispatchError) {
+	relationType, ok := optionalEngramLinkRelationTypePointer(params, engramLinkParamKey("relation_type"))
+	if !ok {
+		return engramQueryTraceParts{}, invalidParamError("relation_type")
+	}
+	traceDepth, dispatchErr := parseTraceDepthParam(params, relationType)
+	if dispatchErr != nil {
+		return engramQueryTraceParts{}, dispatchErr
+	}
+	return engramQueryTraceParts{relationType: relationType, traceDepth: traceDepth}, nil
+}
+
+func parseTraceDepthParam(
+	params map[string]any,
+	relationType *models.EngramLinkRelationType,
+) (*int, *toolDispatchError) {
+	value, ok := optionalIntPointerParam(params, "trace_depth")
+	if !ok {
+		return nil, invalidParamError("trace_depth")
+	}
+	if value == nil {
+		if relationType == nil {
+			return nil, nil
+		}
+		defaultDepth := 1
+		return &defaultDepth, nil
+	}
+	if *value < 0 || *value > 1 {
+		return nil, invalidParamError("trace_depth")
+	}
+	if relationType != nil && *value == 0 {
+		return nil, invalidParamError("trace_depth")
+	}
+	return value, nil
+}
+
 func parseOptionalParam[T any](
 	params map[string]any,
 	key string,
@@ -214,6 +263,8 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		LastAccessedBefore:      parts.lastAccessedBefore,
 		FreshnessComputedAfter:  parts.freshnessComputedAfter,
 		FreshnessComputedBefore: parts.freshnessComputedBefore,
+		RelationType:            parts.relationType,
+		TraceDepth:              parts.traceDepth,
 	}
 }
 

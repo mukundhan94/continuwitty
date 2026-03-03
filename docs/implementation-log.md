@@ -7,6 +7,26 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 39 extension: trace-aware relation/depth query constraints)
+
+1. Extended engram query contracts with trace-aware filters:
+   - `relation_type`
+   - `trace_depth`
+2. Added repository trace filter support:
+   - `internal/repository/engram.go` now applies depth-1 `EXISTS` filtering over active `engram_links`.
+   - optional `relation_type` filtering is applied within trace constraints.
+3. Added REST + MCP parity:
+   - `internal/api/session_engrams.go` validates relation/trace filter contracts and defaults `trace_depth` to `1` when `relation_type` is provided.
+   - `internal/mcp/compatibility_dispatch_engram_query_support.go` parses/validates `relation_type` + `trace_depth` and applies the same default.
+   - `internal/mcp/catalog_metadata_data.go` exposes the new `engram.query` schema fields.
+4. Added regression coverage:
+   - repository SQL/parameter coverage in `internal/repository/engram_unit_test.go`.
+   - MCP parity/validation coverage in `internal/mcp/compatibility_service_engram_query_test.go`.
+   - session route request parsing/validation coverage in `internal/api/session_engrams_test.go`.
+5. Validation:
+   - `go test ./internal/models ./internal/repository ./internal/mcp ./internal/api -count=1`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+
 ### 2026-03-03 (Phase 39 extension: recall/timeline temporal windows)
 
 1. Extended engram query contracts with recall/timeline window filters:

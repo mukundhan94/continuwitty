@@ -286,6 +286,8 @@ Optional temporal/engagement filters:
 - `freshness_computed_after` / `freshness_computed_before` (RFC3339 timestamp)
 - `access_count_min` (int, minimum `0`)
 - `freshness_score_min` (number, bounded `0..1`)
+- `relation_type` (`supports|depends_on|contradicts|related_to|derived_from`)
+- `trace_depth` (`0` or `1`; defaults to `1` when `relation_type` is set)
 
 ### Agent Run (With Snapshots)
 

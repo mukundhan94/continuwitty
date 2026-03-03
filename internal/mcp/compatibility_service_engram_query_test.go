@@ -92,6 +92,8 @@ func buildEngramQueryParityExpectations(
 	projectID := "proj-alpha"
 	accessCountMin := 3
 	freshnessScoreMin := 0.42
+	relationType := models.EngramLinkRelationSupports
+	traceDepth := 1
 	params := map[string]any{
 		"query":                     "roadmap",
 		"top_k":                     7.0,
@@ -106,6 +108,8 @@ func buildEngramQueryParityExpectations(
 		"last_accessed_before":      lastAccessedBefore.Format(time.RFC3339),
 		"freshness_computed_after":  freshnessComputedAfter.Format(time.RFC3339),
 		"freshness_computed_before": freshnessComputedBefore.Format(time.RFC3339),
+		"relation_type":             string(relationType),
+		"trace_depth":               float64(traceDepth),
 	}
 	expected := EngramQueryDispatchRequest{
 		ActorUserID: actorUserID,
@@ -123,6 +127,8 @@ func buildEngramQueryParityExpectations(
 			LastAccessedBefore:      &lastAccessedBefore,
 			FreshnessComputedAfter:  &freshnessComputedAfter,
 			FreshnessComputedBefore: &freshnessComputedBefore,
+			RelationType:            &relationType,
+			TraceDepth:              &traceDepth,
 		},
 	}
 	return params, expected
@@ -183,6 +189,13 @@ func TestCompatibilityServiceEngramQueryValidationAndErrors(t *testing.T) {
 		{name: "invalid access_count_min negative", params: map[string]any{"query": "x", "access_count_min": -1.0}},
 		{name: "invalid freshness_score_min low", params: map[string]any{"query": "x", "freshness_score_min": -0.1}},
 		{name: "invalid freshness_score_min high", params: map[string]any{"query": "x", "freshness_score_min": 1.1}},
+		{name: "invalid relation_type", params: map[string]any{"query": "x", "relation_type": "invalid"}},
+		{name: "invalid trace_depth type", params: map[string]any{"query": "x", "trace_depth": "bad"}},
+		{name: "invalid trace_depth range", params: map[string]any{"query": "x", "trace_depth": 2.0}},
+		{
+			name:   "invalid trace_depth relation conflict",
+			params: map[string]any{"query": "x", "relation_type": "supports", "trace_depth": 0.0},
+		},
 	}
 
 	for _, testCase := range testCases {

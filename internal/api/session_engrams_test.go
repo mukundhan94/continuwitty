@@ -149,7 +149,53 @@ func TestMountSessionAuthRoutesEngramCollectionRoutesUseRepository(t *testing.T)
 	}
 }
 
-func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidTemporalWindow(t *testing.T) {
+func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidFilters(t *testing.T) {
+	testCases := []struct {
+		name           string
+		body           map[string]any
+		expectedDetail string
+	}{
+		{
+			name: "invalid temporal window",
+			body: map[string]any{
+				"query":          "durable memory",
+				"created_after":  "2026-03-01T00:00:00Z",
+				"created_before": "2026-02-01T00:00:00Z",
+			},
+			expectedDetail: "invalid created_at window",
+		},
+		{
+			name: "invalid trace depth",
+			body: map[string]any{
+				"query":         "durable memory",
+				"relation_type": "supports",
+				"trace_depth":   0,
+			},
+			expectedDetail: "invalid trace_depth",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			handler, loginCookie := buildInvalidQueryFilterTestRequestHarness(t)
+			response := executeEngramRequest(
+				t,
+				handler,
+				loginCookie,
+				engramRequestSpec{
+					method: http.MethodPost,
+					path:   "/api/v1/engrams/query",
+					body:   testCase.body,
+				},
+			)
+			requireEqual(t, http.StatusBadRequest, response.Code)
+			requireErrorDetail(t, response, testCase.expectedDetail)
+		})
+	}
+}
+
+func buildInvalidQueryFilterTestRequestHarness(t *testing.T) (http.Handler, *http.Cookie) {
 	actor := newSessionRoutesTestActor(t, models.UserRoleAdmin)
 	handler, manager := buildSessionEngramRoutesTestHandler(
 		t,
@@ -160,7 +206,7 @@ func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidTemporalWindow(t *testi
 				_ models.EngramQueryRequest,
 				_ uuid.UUID,
 			) ([]models.EngramQueryResult, error) {
-				t.Fatalf("query engrams should not be called when temporal window is invalid")
+				t.Fatalf("query engrams should not be called when request validation fails")
 				return nil, nil
 			},
 		},
@@ -174,28 +220,20 @@ func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidTemporalWindow(t *testi
 			password: "StrongPassword-12345",
 		},
 	)
+	return handler, loginCookie
+}
 
-	response := executeEngramRequest(
-		t,
-		handler,
-		loginCookie,
-		engramRequestSpec{
-			method: http.MethodPost,
-			path:   "/api/v1/engrams/query",
-			body: map[string]any{
-				"query":          "durable memory",
-				"created_after":  "2026-03-01T00:00:00Z",
-				"created_before": "2026-02-01T00:00:00Z",
-			},
-		},
-	)
-
-	requireEqual(t, http.StatusBadRequest, response.Code)
+func requireErrorDetail(
+	t *testing.T,
+	response *httptest.ResponseRecorder,
+	expectedDetail string,
+) {
+	t.Helper()
 	var payload map[string]any
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode invalid query response: %v", err)
 	}
-	requireEqual(t, "invalid created_at window", payload["detail"].(string))
+	requireEqual(t, expectedDetail, payload["detail"].(string))
 }
 
 func engramCollectionRouteCases() []engramCollectionRouteCase {
@@ -225,6 +263,7 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"last_accessed_before":      "2026-02-20T00:00:00Z",
 					"freshness_computed_after":  "2026-02-02T00:00:00Z",
 					"freshness_computed_before": "2026-02-21T00:00:00Z",
+					"relation_type":             "supports",
 				},
 			},
 		},
@@ -323,19 +362,60 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 	t.Helper()
 	requireEqual(t, "durable memory", request.Query)
 	requireEqual(t, 5, request.TopK)
-	if request.AccessCountMin == nil {
-		t.Fatalf("expected access_count_min to be parsed")
+	requireEqual(t, 2, requireIntPointer(t, request.AccessCountMin, "access_count_min"))
+	requireEqual(t, 0.4, requireFloat64Pointer(t, request.FreshnessScoreMin, "freshness_score_min"))
+	requireTimeWindowPresent(t, request.LastAccessedAfter, request.LastAccessedBefore, "last_accessed")
+	requireTimeWindowPresent(
+		t,
+		request.FreshnessComputedAfter,
+		request.FreshnessComputedBefore,
+		"freshness_computed",
+	)
+	requireEqual(
+		t,
+		models.EngramLinkRelationSupports,
+		requireRelationTypePointer(t, request.RelationType, "relation_type"),
+	)
+	requireEqual(t, 1, requireIntPointer(t, request.TraceDepth, "trace_depth"))
+}
+
+func requireIntPointer(t *testing.T, value *int, fieldName string) int {
+	t.Helper()
+	if value == nil {
+		t.Fatalf("expected %s to be parsed", fieldName)
 	}
-	if request.FreshnessScoreMin == nil {
-		t.Fatalf("expected freshness_score_min to be parsed")
+	return *value
+}
+
+func requireFloat64Pointer(t *testing.T, value *float64, fieldName string) float64 {
+	t.Helper()
+	if value == nil {
+		t.Fatalf("expected %s to be parsed", fieldName)
 	}
-	requireEqual(t, 2, *request.AccessCountMin)
-	requireEqual(t, 0.4, *request.FreshnessScoreMin)
-	if request.LastAccessedAfter == nil || request.LastAccessedBefore == nil {
-		t.Fatalf("expected last_accessed window to be parsed")
+	return *value
+}
+
+func requireRelationTypePointer(
+	t *testing.T,
+	value *models.EngramLinkRelationType,
+	fieldName string,
+) models.EngramLinkRelationType {
+	t.Helper()
+	if value == nil {
+		t.Fatalf("expected %s to be parsed", fieldName)
 	}
-	if request.FreshnessComputedAfter == nil || request.FreshnessComputedBefore == nil {
-		t.Fatalf("expected freshness_computed window to be parsed")
+	return *value
+}
+
+func requireTimeWindowPresent(
+	t *testing.T,
+	after *time.Time,
+	before *time.Time,
+	fieldName string,
+) {
+	t.Helper()
+	if after == nil || before == nil {
+		t.Fatalf("expected %s window to be parsed", fieldName)
 	}
 }
 

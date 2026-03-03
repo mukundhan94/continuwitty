@@ -1076,8 +1076,13 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In Progress (2026-03-03).
+- Completed (2026-03-03).
 - Delivered in this checkpoint:
+  - trace-aware query constraints added for engram query paths:
+    - `relation_type` and `trace_depth` filters in `models.EngramQueryRequest`.
+    - repository trace filter support (`EXISTS` on active `engram_links`) with optional relation-type filtering.
+    - REST decode validation/defaulting for relation + trace depth (`trace_depth` defaults to `1` when relation is set).
+    - MCP parser/validation + catalog metadata parity for trace filters.
   - temporal recall-window extensions added for engram query paths:
     - `last_accessed_after` / `last_accessed_before`
     - `freshness_computed_after` / `freshness_computed_before`
@@ -1101,9 +1106,8 @@ Build a local-first memory system where agents and humans can:
     - context-budget normalization and truncation behavior.
     - context-budget audit metadata for empty/non-empty context assembly.
     - REST/MCP forwarding of `context_token_budget` overrides.
-- Remaining in this phase:
-  - trace-aware query constraints (relation/trace-depth windows) beyond current engram row filters.
-  - broader contract and benchmark coverage for complex temporal/engagement filter combinations.
+- Follow-up carried to future phases:
+  - broader benchmark coverage for complex temporal/engagement/trace filter combinations.
 
 ### Goals
 
@@ -1154,5 +1158,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 36: feedback loop + relevance/freshness scoring.
    - [x] Phase 37: time-decay + consolidation suggestions.
    - [x] Phase 38: contradiction detection + warning flows.
-   - [ ] Phase 39: temporal query extensions + cost-aware context assembly.
+   - [x] Phase 39: temporal query extensions + cost-aware context assembly.
    - [ ] Phase 40: autonomous memory suggestions and action workflows.
