@@ -181,6 +181,14 @@ func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidFilters(t *testing.T) {
 			},
 			expectedDetail: "invalid source_session_quality_min",
 		},
+		{
+			name: "invalid average relevance feedback min",
+			body: map[string]any{
+				"query":                      "durable memory",
+				"avg_relevance_feedback_min": -0.1,
+			},
+			expectedDetail: "invalid avg_relevance_feedback_min",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -324,6 +332,7 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"top_k":                      5,
 					"access_count_min":           2,
 					"freshness_score_min":        0.4,
+					"avg_relevance_feedback_min": 0.55,
 					"source_session_quality_min": 0.7,
 					"last_accessed_after":        "2026-02-01T00:00:00Z",
 					"last_accessed_before":       "2026-02-20T00:00:00Z",
@@ -430,6 +439,11 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 	requireEqual(t, 5, request.TopK)
 	requireEqual(t, 2, requireIntPointer(t, request.AccessCountMin, "access_count_min"))
 	requireEqual(t, 0.4, requireFloat64Pointer(t, request.FreshnessScoreMin, "freshness_score_min"))
+	requireEqual(
+		t,
+		0.55,
+		requireFloat64Pointer(t, request.AvgRelevanceFeedbackMin, "avg_relevance_feedback_min"),
+	)
 	requireEqual(
 		t,
 		0.7,

@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 45: feedback-aware query filter parity)
+
+1. Added feedback-quality query contract extension:
+   - new optional filter: `avg_relevance_feedback_min` (`0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates `avg_relevance_feedback_min` bounds.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `avg_relevance_feedback_min`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(avg_relevance_feedback, 0.5) >= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `avg_relevance_feedback_min`.
+   - repository where-clause/parameter assertions for the new predicate.
+   - MCP parity and validation coverage for the new filter.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 44: authority transparency + fallback calibration)
 
 1. Expanded feedback-driven authority calibration:

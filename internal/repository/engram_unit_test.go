@@ -38,78 +38,146 @@ type queryWhereAllFiltersFixture struct {
 
 func buildQueryWhereAllFiltersFixture() queryWhereAllFiltersFixture {
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	createdAfter := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-	createdBefore := time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC)
-	accessCountMin := 3
-	freshnessScoreMin := 0.6
-	sourceSessionQualityMin := 0.7
-	lastAccessedAfter := time.Date(2026, 2, 7, 0, 0, 0, 0, time.UTC)
-	lastAccessedBefore := time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC)
-	freshnessComputedAfter := time.Date(2026, 2, 8, 0, 0, 0, 0, time.UTC)
-	freshnessComputedBefore := time.Date(2026, 2, 21, 0, 0, 0, 0, time.UTC)
+	timeValues := queryWhereTimeValues{
+		createdAfter:           time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+		createdBefore:          time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC),
+		lastAccessedAfter:      time.Date(2026, 2, 7, 0, 0, 0, 0, time.UTC),
+		lastAccessedBefore:     time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC),
+		freshnessComputedAfter: time.Date(2026, 2, 8, 0, 0, 0, 0, time.UTC),
+		freshnessComputedBefore: time.Date(
+			2026,
+			2,
+			21,
+			0,
+			0,
+			0,
+			0,
+			time.UTC,
+		),
+	}
+	scoreValues := queryWhereScoreValues{
+		accessCountMin:          3,
+		freshnessScoreMin:       0.6,
+		avgRelevanceFeedbackMin: 0.55,
+		sourceSessionQualityMin: 0.7,
+	}
 	relationType := models.EngramLinkRelationSupports
 	traceDepth := 1
 	projectID := "engram-vault"
+	requestInput := queryWhereRequestInput{
+		projectID:    projectID,
+		timeValues:   timeValues,
+		scoreValues:  scoreValues,
+		relationType: relationType,
+		traceDepth:   traceDepth,
+	}
 	return queryWhereAllFiltersFixture{
-		actorUserID: actorUserID,
-		request: models.EngramQueryRequest{
-			Query:                   "durable memory",
-			TopK:                    5,
-			ProjectID:               &projectID,
-			Tags:                    []string{"memory"},
-			Keywords:                []string{"checkpoint"},
-			CreatedAfter:            &createdAfter,
-			CreatedBefore:           &createdBefore,
-			AccessCountMin:          &accessCountMin,
-			FreshnessScoreMin:       &freshnessScoreMin,
-			SourceSessionQualityMin: &sourceSessionQualityMin,
-			LastAccessedAfter:       &lastAccessedAfter,
-			LastAccessedBefore:      &lastAccessedBefore,
-			FreshnessComputedAfter:  &freshnessComputedAfter,
-			FreshnessComputedBefore: &freshnessComputedBefore,
-			RelationType:            &relationType,
-			TraceDepth:              &traceDepth,
-		},
-		expectedFragments: []string{
-			"WHERE deleted_at IS NULL",
-			"project_id = $2",
-			"tags && $4",
-			"keywords && $5",
-			"created_at >= $6",
-			"created_at <= $7",
-			"COALESCE(access_count, 0) >= $8",
-			"COALESCE(freshness_score, 1.0) >= $9",
-			"COALESCE(source_session_quality_score, 0.5) >= $10",
-			"COALESCE(last_accessed_at, created_at) >= $11",
-			"COALESCE(last_accessed_at, created_at) <= $12",
-			"COALESCE(freshness_last_computed_at, created_at) >= $13",
-			"COALESCE(freshness_last_computed_at, created_at) <= $14",
-			"EXISTS (",
-			"link.status = 'active'",
-			"link.relation_type = $15",
-			"owner_user_id = $3",
-			"actor_user.user_id = $3",
-			"pm.project_id = project_id",
-			"pm.user_id = $3",
-			"visibility_scope = 'project'",
-		},
-		expectedParams: []any{
-			"[0.1,0.2,0.3]",
-			"engram-vault",
-			actorUserID,
-			[]string{"memory"},
-			[]string{"checkpoint"},
-			createdAfter,
-			createdBefore,
-			accessCountMin,
-			freshnessScoreMin,
-			sourceSessionQualityMin,
-			lastAccessedAfter,
-			lastAccessedBefore,
-			freshnessComputedAfter,
-			freshnessComputedBefore,
-			string(relationType),
-		},
+		actorUserID:       actorUserID,
+		request:           buildQueryWhereRequest(requestInput),
+		expectedFragments: queryWhereExpectedFragments(),
+		expectedParams: queryWhereExpectedParams(queryWhereExpectedParamsInput{
+			actorUserID: actorUserID,
+			request:     requestInput,
+		}),
+	}
+}
+
+type queryWhereTimeValues struct {
+	createdAfter            time.Time
+	createdBefore           time.Time
+	lastAccessedAfter       time.Time
+	lastAccessedBefore      time.Time
+	freshnessComputedAfter  time.Time
+	freshnessComputedBefore time.Time
+}
+
+type queryWhereScoreValues struct {
+	accessCountMin          int
+	freshnessScoreMin       float64
+	avgRelevanceFeedbackMin float64
+	sourceSessionQualityMin float64
+}
+
+type queryWhereRequestInput struct {
+	projectID    string
+	timeValues   queryWhereTimeValues
+	scoreValues  queryWhereScoreValues
+	relationType models.EngramLinkRelationType
+	traceDepth   int
+}
+
+func buildQueryWhereRequest(input queryWhereRequestInput) models.EngramQueryRequest {
+	return models.EngramQueryRequest{
+		Query:                   "durable memory",
+		TopK:                    5,
+		ProjectID:               &input.projectID,
+		Tags:                    []string{"memory"},
+		Keywords:                []string{"checkpoint"},
+		CreatedAfter:            &input.timeValues.createdAfter,
+		CreatedBefore:           &input.timeValues.createdBefore,
+		AccessCountMin:          &input.scoreValues.accessCountMin,
+		FreshnessScoreMin:       &input.scoreValues.freshnessScoreMin,
+		AvgRelevanceFeedbackMin: &input.scoreValues.avgRelevanceFeedbackMin,
+		SourceSessionQualityMin: &input.scoreValues.sourceSessionQualityMin,
+		LastAccessedAfter:       &input.timeValues.lastAccessedAfter,
+		LastAccessedBefore:      &input.timeValues.lastAccessedBefore,
+		FreshnessComputedAfter:  &input.timeValues.freshnessComputedAfter,
+		FreshnessComputedBefore: &input.timeValues.freshnessComputedBefore,
+		RelationType:            &input.relationType,
+		TraceDepth:              &input.traceDepth,
+	}
+}
+
+func queryWhereExpectedFragments() []string {
+	return []string{
+		"WHERE deleted_at IS NULL",
+		"project_id = $2",
+		"tags && $4",
+		"keywords && $5",
+		"created_at >= $6",
+		"created_at <= $7",
+		"COALESCE(access_count, 0) >= $8",
+		"COALESCE(freshness_score, 1.0) >= $9",
+		"COALESCE(avg_relevance_feedback, 0.5) >= $10",
+		"COALESCE(source_session_quality_score, 0.5) >= $11",
+		"COALESCE(last_accessed_at, created_at) >= $12",
+		"COALESCE(last_accessed_at, created_at) <= $13",
+		"COALESCE(freshness_last_computed_at, created_at) >= $14",
+		"COALESCE(freshness_last_computed_at, created_at) <= $15",
+		"EXISTS (",
+		"link.status = 'active'",
+		"link.relation_type = $16",
+		"owner_user_id = $3",
+		"actor_user.user_id = $3",
+		"pm.project_id = project_id",
+		"pm.user_id = $3",
+		"visibility_scope = 'project'",
+	}
+}
+
+type queryWhereExpectedParamsInput struct {
+	actorUserID uuid.UUID
+	request     queryWhereRequestInput
+}
+
+func queryWhereExpectedParams(input queryWhereExpectedParamsInput) []any {
+	return []any{
+		"[0.1,0.2,0.3]",
+		input.request.projectID,
+		input.actorUserID,
+		[]string{"memory"},
+		[]string{"checkpoint"},
+		input.request.timeValues.createdAfter,
+		input.request.timeValues.createdBefore,
+		input.request.scoreValues.accessCountMin,
+		input.request.scoreValues.freshnessScoreMin,
+		input.request.scoreValues.avgRelevanceFeedbackMin,
+		input.request.scoreValues.sourceSessionQualityMin,
+		input.request.timeValues.lastAccessedAfter,
+		input.request.timeValues.lastAccessedBefore,
+		input.request.timeValues.freshnessComputedAfter,
+		input.request.timeValues.freshnessComputedBefore,
+		string(input.request.relationType),
 	}
 }
 

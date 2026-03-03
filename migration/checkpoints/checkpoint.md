@@ -405,6 +405,22 @@
   - API query route response test asserting serialized `source_session_quality_score`.
   - MCP compatibility parity test including `source_session_quality_score` in returned payloads.
 
+### Phase 45 Progress Tracker
+
+- [x] Added feedback-quality query filter contract:
+  - `avg_relevance_feedback_min` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `avg_relevance_feedback_min` now validates as bounded `0..1`.
+- [x] Added repository predicate support:
+  - `COALESCE(avg_relevance_feedback, 0.5) >= ...` filter path.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `avg_relevance_feedback_min`.
+  - tool schema now documents `avg_relevance_feedback_min`.
+- [x] Added regression coverage:
+  - REST invalid-filter and parsed-request assertions for `avg_relevance_feedback_min`.
+  - repository where-clause/params assertions for feedback-quality predicate.
+  - MCP parity and validation tests for filter handling.
+
 ---
 
 ## Completed Milestones
@@ -556,3 +572,4 @@
 | 42 | Session Authority Scoring Baseline | Completed |
 | 43 | Authority-Aware Query Filters | Completed |
 | 44 | Authority Signal Transparency + Fallback Calibration | Completed |
+| 45 | Feedback-Aware Query Filters | Completed |

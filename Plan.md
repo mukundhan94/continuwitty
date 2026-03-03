@@ -1338,6 +1338,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 45 - Feedback-Aware Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `avg_relevance_feedback_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces `avg_relevance_feedback_min` bounds (`0..1`).
+  - repository query builder now supports `COALESCE(avg_relevance_feedback, 0.5) >= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `avg_relevance_feedback_min`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape parity.
+
+### Goals
+
+1. Let operators and agents filter recalled memory by explicit feedback quality.
+2. Keep query semantics deterministic and aligned across REST and MCP surfaces.
+3. Preserve backward compatibility for existing clients while expanding filter controls.
+
+### Deliverables
+
+1. Contract extension for `avg_relevance_feedback_min`.
+2. REST/MCP validation + schema metadata parity.
+3. Repository predicate support with regression coverage.
+
+### Exit Criteria
+
+1. Query clients can request minimum average relevance feedback thresholds across REST and MCP.
+2. Out-of-range values are rejected with explicit validation errors.
+3. Query contract, parser metadata, docs, and tests remain synchronized.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1377,3 +1409,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 43: authority-threshold query filter parity across REST/MCP/repository.
 9. Execute authority signal transparency increment:
    - [x] Phase 44: fallback authority calibration + query-response authority signal exposure.
+10. Execute feedback-quality query filter increment:
+   - [x] Phase 45: `avg_relevance_feedback_min` parity across REST/MCP/repository.

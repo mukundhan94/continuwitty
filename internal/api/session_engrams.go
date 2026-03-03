@@ -388,6 +388,10 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 		{detail: "invalid access_count_min", invalid: invalidAccessCountMin(payload.AccessCountMin)},
 		{detail: "invalid freshness_score_min", invalid: invalidFreshnessScoreMin(payload.FreshnessScoreMin)},
 		{
+			detail:  "invalid avg_relevance_feedback_min",
+			invalid: invalidAvgRelevanceFeedbackMin(payload.AvgRelevanceFeedbackMin),
+		},
+		{
 			detail:  "invalid source_session_quality_min",
 			invalid: invalidSourceSessionQualityMin(payload.SourceSessionQualityMin),
 		},
@@ -405,16 +409,18 @@ func invalidAccessCountMin(value *int) bool {
 }
 
 func invalidFreshnessScoreMin(value *float64) bool {
-	if value == nil {
-		return false
-	}
-	if *value < 0 {
-		return true
-	}
-	return *value > 1
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidAvgRelevanceFeedbackMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
 }
 
 func invalidSourceSessionQualityMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidBoundedUnitInterval(value *float64) bool {
 	if value == nil {
 		return false
 	}

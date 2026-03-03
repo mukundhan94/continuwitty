@@ -143,6 +143,9 @@ func TestCompatibilityServiceToolsListIncludesAuthorityFilterForEngramQuery(t *t
 	if _, exists := properties["source_session_quality_min"]; !exists {
 		t.Fatalf("expected source_session_quality_min property in engram_query schema")
 	}
+	if _, exists := properties["avg_relevance_feedback_min"]; !exists {
+		t.Fatalf("expected avg_relevance_feedback_min property in engram_query schema")
+	}
 }
 
 func TestBuildVisiblePublicToolCatalogClonesInputSchemas(t *testing.T) {
