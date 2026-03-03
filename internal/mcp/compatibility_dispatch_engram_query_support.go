@@ -31,42 +31,105 @@ func buildEngramQueryDispatchRequest(
 	actor Actor,
 	params map[string]any,
 ) (EngramQueryDispatchRequest, *toolDispatchError) {
-	query, ok := requiredStringParam(params, "query")
-	if !ok {
-		return EngramQueryDispatchRequest{}, invalidParamError("query")
-	}
-	topK, dispatchErr := parseEngramQueryTopKParam(params)
+	query, dispatchErr := parseRequiredQueryParam(params)
 	if dispatchErr != nil {
 		return EngramQueryDispatchRequest{}, dispatchErr
 	}
-	tags, ok := optionalStringArrayParam(params, "tags")
-	if !ok {
-		return EngramQueryDispatchRequest{}, invalidParamError("tags")
-	}
-	keywords, ok := optionalStringArrayParam(params, "keywords")
-	if !ok {
-		return EngramQueryDispatchRequest{}, invalidParamError("keywords")
-	}
-	createdAfter, ok := optionalRFC3339TimeParam(params, "created_after")
-	if !ok {
-		return EngramQueryDispatchRequest{}, invalidParamError("created_after")
-	}
-	createdBefore, ok := optionalRFC3339TimeParam(params, "created_before")
-	if !ok {
-		return EngramQueryDispatchRequest{}, invalidParamError("created_before")
+	payload, dispatchErr := parseEngramQueryPayload(params)
+	if dispatchErr != nil {
+		return EngramQueryDispatchRequest{}, dispatchErr
 	}
 	return EngramQueryDispatchRequest{
 		ActorUserID: actor.UserID,
-		Payload: models.EngramQueryRequest{
-			Query:         query,
-			TopK:          topK,
-			ProjectID:     optionalProjectIDParam(params, "project_id"),
-			Tags:          tags,
-			Keywords:      keywords,
-			CreatedAfter:  createdAfter,
-			CreatedBefore: createdBefore,
-		},
+		Payload:     payload.withQuery(query),
 	}, nil
+}
+
+type engramQueryPayloadParts struct {
+	topK              int
+	projectID         *string
+	tags              []string
+	keywords          []string
+	createdAfter      *time.Time
+	createdBefore     *time.Time
+	accessCountMin    *int
+	freshnessScoreMin *float64
+}
+
+func parseRequiredQueryParam(params map[string]any) (string, *toolDispatchError) {
+	query, ok := requiredStringParam(params, "query")
+	if !ok {
+		return "", invalidParamError("query")
+	}
+	return query, nil
+}
+
+func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *toolDispatchError) {
+	topK, dispatchErr := parseEngramQueryTopKParam(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	tags, dispatchErr := parseOptionalParam(params, "tags", optionalStringArrayParam)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	keywords, dispatchErr := parseOptionalParam(params, "keywords", optionalStringArrayParam)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	createdAfter, dispatchErr := parseOptionalParam(params, "created_after", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	createdBefore, dispatchErr := parseOptionalParam(params, "created_before", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	accessCountMin, dispatchErr := parseEngramQueryAccessCountMin(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	freshnessScoreMin, dispatchErr := parseEngramQueryFreshnessScoreMin(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	return engramQueryPayloadParts{
+		topK:              topK,
+		projectID:         optionalProjectIDParam(params, "project_id"),
+		tags:              tags,
+		keywords:          keywords,
+		createdAfter:      createdAfter,
+		createdBefore:     createdBefore,
+		accessCountMin:    accessCountMin,
+		freshnessScoreMin: freshnessScoreMin,
+	}, nil
+}
+
+func parseOptionalParam[T any](
+	params map[string]any,
+	key string,
+	parser func(map[string]any, string) (T, bool),
+) (T, *toolDispatchError) {
+	parsed, ok := parser(params, key)
+	if !ok {
+		var zero T
+		return zero, invalidParamError(key)
+	}
+	return parsed, nil
+}
+
+func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryRequest {
+	return models.EngramQueryRequest{
+		Query:             query,
+		TopK:              parts.topK,
+		ProjectID:         parts.projectID,
+		Tags:              parts.tags,
+		Keywords:          parts.keywords,
+		CreatedAfter:      parts.createdAfter,
+		CreatedBefore:     parts.createdBefore,
+		AccessCountMin:    parts.accessCountMin,
+		FreshnessScoreMin: parts.freshnessScoreMin,
+	}
 }
 
 func parseEngramQueryTopKParam(params map[string]any) (int, *toolDispatchError) {
@@ -132,4 +195,42 @@ func parseRFC3339Pointer(raw string) (*time.Time, bool) {
 		return nil, false
 	}
 	return &parsed, true
+}
+
+func parseEngramQueryAccessCountMin(params map[string]any) (*int, *toolDispatchError) {
+	value, ok := optionalIntPointerParam(params, "access_count_min")
+	if !ok {
+		return nil, invalidParamError("access_count_min")
+	}
+	if value != nil && *value < 0 {
+		return nil, invalidParamError("access_count_min")
+	}
+	return value, nil
+}
+
+func parseEngramQueryFreshnessScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	rawValue, found := optionalParamValue(params, "freshness_score_min")
+	if !found {
+		return nil, nil
+	}
+	parsed, dispatchErr := parseFreshnessScore(rawValue)
+	if dispatchErr != nil {
+		return nil, dispatchErr
+	}
+	copy := parsed
+	return &copy, nil
+}
+
+func parseFreshnessScore(value any) (float64, *toolDispatchError) {
+	parsed, ok := parseFloatValue(value)
+	if !ok {
+		return 0, invalidParamError("freshness_score_min")
+	}
+	if parsed < 0 {
+		return 0, invalidParamError("freshness_score_min")
+	}
+	if parsed > 1 {
+		return 0, invalidParamError("freshness_score_min")
+	}
+	return parsed, nil
 }

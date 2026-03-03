@@ -7,6 +7,30 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 39 extension: temporal query filters for engagement + freshness)
+
+1. Extended engram query contracts with temporal/engagement filters:
+   - `internal/models/engram.go` now includes:
+     - `access_count_min`
+     - `freshness_score_min`
+2. Added repository query support:
+   - `internal/repository/engram.go` now applies optional predicates:
+     - `COALESCE(access_count, 0) >= access_count_min`
+     - `COALESCE(freshness_score, 1.0) >= freshness_score_min`
+3. Added MCP `engram.query` parser + catalog support:
+   - `internal/mcp/compatibility_dispatch_engram_query_support.go` parses and validates the new filters.
+   - `internal/mcp/catalog_metadata_data.go` exposes schema metadata for both arguments.
+4. Added regression coverage:
+   - repository SQL/placeholder/arg coverage in `internal/repository/engram_unit_test.go`.
+   - MCP parity/validation coverage in `internal/mcp/compatibility_service_engram_query_test.go`.
+5. Validation:
+   - `go test ./internal/models ./internal/repository ./internal/mcp -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+   - CodeScene scores on touched Go files: `10.0`
+
 ### 2026-03-03 (Phase 39 kickoff: cost-aware context token budget baseline)
 
 1. Added bounded context-budget controls to chat send workflows:

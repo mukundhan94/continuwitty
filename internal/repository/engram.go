@@ -210,43 +210,86 @@ func buildEngramQueryWhere(
 	actorUserID *uuid.UUID,
 	queryLiteral string,
 ) (string, []any) {
-	whereClauses := []string{"deleted_at IS NULL"}
-	params := []any{queryLiteral}
+	builder := newEngramQueryWhereBuilder(queryLiteral)
+	builder.addProjectFilter(request.ProjectID)
+	builder.addActorVisibilityFilter(actorUserID)
+	builder.addStringSliceOverlapFilter("tags", request.Tags)
+	builder.addStringSliceOverlapFilter("keywords", request.Keywords)
+	addOptionalPointerClause(builder, request.CreatedAfter, "created_at >= %s")
+	addOptionalPointerClause(builder, request.CreatedBefore, "created_at <= %s")
+	addOptionalPointerClause(builder, request.AccessCountMin, "COALESCE(access_count, 0) >= %s")
+	addOptionalPointerClause(builder, request.FreshnessScoreMin, "COALESCE(freshness_score, 1.0) >= %s")
+	return builder.whereClause(), builder.params
+}
 
-	nextPlaceholder := func() string {
-		return pgxPlaceholder(len(params) + 1)
-	}
+type engramQueryWhereBuilder struct {
+	whereClauses []string
+	params       []any
+}
 
-	if request.ProjectID != nil && *request.ProjectID != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("project_id = %s", nextPlaceholder()))
-		params = append(params, *request.ProjectID)
+func newEngramQueryWhereBuilder(queryLiteral string) *engramQueryWhereBuilder {
+	return &engramQueryWhereBuilder{
+		whereClauses: []string{"deleted_at IS NULL"},
+		params:       []any{queryLiteral},
 	}
-	if actorUserID != nil {
-		actorPlaceholder := nextPlaceholder()
-		whereClauses = append(
-			whereClauses,
-			buildMembershipReadClause(membershipReadClauseInput{ownerColumn: "owner_user_id", visibilityColumn: "visibility_scope", projectColumn: "project_id", actorPlaceholder: actorPlaceholder, includeOwnerless: true}),
-		)
-		params = append(params, *actorUserID)
-	}
-	if len(request.Tags) > 0 {
-		whereClauses = append(whereClauses, fmt.Sprintf("tags && %s", nextPlaceholder()))
-		params = append(params, request.Tags)
-	}
-	if len(request.Keywords) > 0 {
-		whereClauses = append(whereClauses, fmt.Sprintf("keywords && %s", nextPlaceholder()))
-		params = append(params, request.Keywords)
-	}
-	if request.CreatedAfter != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("created_at >= %s", nextPlaceholder()))
-		params = append(params, *request.CreatedAfter)
-	}
-	if request.CreatedBefore != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("created_at <= %s", nextPlaceholder()))
-		params = append(params, *request.CreatedBefore)
-	}
+}
 
-	return "WHERE " + strings.Join(whereClauses, " AND "), params
+func (builder *engramQueryWhereBuilder) nextPlaceholder() string {
+	return pgxPlaceholder(len(builder.params) + 1)
+}
+
+func (builder *engramQueryWhereBuilder) addClauseWithParam(clauseFormat string, param any) {
+	builder.whereClauses = append(builder.whereClauses, fmt.Sprintf(clauseFormat, builder.nextPlaceholder()))
+	builder.params = append(builder.params, param)
+}
+
+func (builder *engramQueryWhereBuilder) addProjectFilter(projectID *string) {
+	if projectID == nil || *projectID == "" {
+		return
+	}
+	builder.addClauseWithParam("project_id = %s", *projectID)
+}
+
+func (builder *engramQueryWhereBuilder) addActorVisibilityFilter(actorUserID *uuid.UUID) {
+	if actorUserID == nil {
+		return
+	}
+	actorPlaceholder := builder.nextPlaceholder()
+	builder.whereClauses = append(
+		builder.whereClauses,
+		buildMembershipReadClause(
+			membershipReadClauseInput{
+				ownerColumn:      "owner_user_id",
+				visibilityColumn: "visibility_scope",
+				projectColumn:    "project_id",
+				actorPlaceholder: actorPlaceholder,
+				includeOwnerless: true,
+			},
+		),
+	)
+	builder.params = append(builder.params, *actorUserID)
+}
+
+func (builder *engramQueryWhereBuilder) addStringSliceOverlapFilter(column string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+	builder.addClauseWithParam(fmt.Sprintf("%s && %%s", column), values)
+}
+
+func (builder *engramQueryWhereBuilder) whereClause() string {
+	return "WHERE " + strings.Join(builder.whereClauses, " AND ")
+}
+
+func addOptionalPointerClause[T any](
+	builder *engramQueryWhereBuilder,
+	value *T,
+	clauseFormat string,
+) {
+	if value == nil {
+		return
+	}
+	builder.addClauseWithParam(clauseFormat, *value)
 }
 
 func formatCitations(citations []models.RehydrationCitation) string {
@@ -452,32 +495,35 @@ func stringSliceFromAny(value any) []string {
 }
 
 func float64FromAny(value any) float64 {
-	switch typed := value.(type) {
-	case float64:
-		return typed
-	case float32:
-		return float64(typed)
-	case int:
-		return float64(typed)
-	case int64:
-		return float64(typed)
-	default:
+	number, ok := numberFromAny(value)
+	if !ok {
 		return 0
 	}
+	return number
 }
 
 func intFromAny(value any) int {
+	number, ok := numberFromAny(value)
+	if !ok {
+		return 0
+	}
+	return int(number)
+}
+
+func numberFromAny(value any) (float64, bool) {
 	switch typed := value.(type) {
 	case int:
-		return typed
+		return float64(typed), true
 	case int32:
-		return int(typed)
+		return float64(typed), true
 	case int64:
-		return int(typed)
+		return float64(typed), true
+	case float32:
+		return float64(typed), true
 	case float64:
-		return int(typed)
+		return typed, true
 	default:
-		return 0
+		return 0, false
 	}
 }
 

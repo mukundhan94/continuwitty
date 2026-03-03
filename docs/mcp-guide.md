@@ -526,10 +526,14 @@ Document pin/list helpers:
   "params": {
     "query": "incident mitigation",
     "project_id": "engram-vault",
-    "top_k": 5
+    "top_k": 5,
+    "access_count_min": 2,
+    "freshness_score_min": 0.4
   }
 }
 ```
+
+`engram.query` also supports optional `created_after` / `created_before` (RFC3339), `access_count_min`, and `freshness_score_min` filters.
 
 Collection add-items flow (resolve collection UUID first):
 

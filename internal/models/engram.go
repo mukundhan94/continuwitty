@@ -56,13 +56,15 @@ type MemoryEngramCreate struct {
 
 // EngramQueryRequest models vector/lexical query constraints.
 type EngramQueryRequest struct {
-	Query         string     `json:"query"`
-	TopK          int        `json:"top_k"`
-	ProjectID     *string    `json:"project_id,omitempty"`
-	Tags          []string   `json:"tags,omitempty"`
-	Keywords      []string   `json:"keywords,omitempty"`
-	CreatedAfter  *time.Time `json:"created_after,omitempty"`
-	CreatedBefore *time.Time `json:"created_before,omitempty"`
+	Query             string     `json:"query"`
+	TopK              int        `json:"top_k"`
+	ProjectID         *string    `json:"project_id,omitempty"`
+	Tags              []string   `json:"tags,omitempty"`
+	Keywords          []string   `json:"keywords,omitempty"`
+	CreatedAfter      *time.Time `json:"created_after,omitempty"`
+	CreatedBefore     *time.Time `json:"created_before,omitempty"`
+	AccessCountMin    *int       `json:"access_count_min,omitempty"`
+	FreshnessScoreMin *float64   `json:"freshness_score_min,omitempty"`
 }
 
 // RehydrationCitation models a source snippet used in rehydration output.

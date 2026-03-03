@@ -1078,6 +1078,10 @@ Build a local-first memory system where agents and humans can:
 
 - In Progress (2026-03-03).
 - Delivered in this checkpoint:
+  - temporal query extensions added for engram query paths:
+    - `access_count_min` and `freshness_score_min` filters in `models.EngramQueryRequest`.
+    - repository query builder support via `COALESCE(access_count, 0)` and `COALESCE(freshness_score, 1.0)` predicates.
+    - MCP `engram.query` parser/validation + catalog metadata support for the new filters.
   - bounded context-budget controls added for chat send paths:
     - REST/MCP send-message payloads now accept `context_token_budget`.
     - context assembly now enforces bounded estimated-token budgets with deterministic section truncation.
@@ -1090,7 +1094,7 @@ Build a local-first memory system where agents and humans can:
     - context-budget audit metadata for empty/non-empty context assembly.
     - REST/MCP forwarding of `context_token_budget` overrides.
 - Remaining in this phase:
-  - temporal query filters beyond created-at range (`freshness_score`, engagement thresholds, recall/trace windows).
+  - temporal query filters for recall/trace windows and advanced timeline constraints.
   - extended query/tool contract coverage for temporal/engagement filter combinations.
 
 ### Goals

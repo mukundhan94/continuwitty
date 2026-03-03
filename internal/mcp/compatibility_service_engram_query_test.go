@@ -17,14 +17,18 @@ func TestCompatibilityServiceEngramQueryParity(t *testing.T) {
 	createdAfter := mustParseRFC3339(t, "2026-01-01T00:00:00Z")
 	createdBefore := mustParseRFC3339(t, "2026-02-01T00:00:00Z")
 	projectID := "proj-alpha"
+	accessCountMin := 3
+	freshnessScoreMin := 0.42
 	params := map[string]any{
-		"query":          "roadmap",
-		"top_k":          7.0,
-		"project_id":     projectID,
-		"tags":           []any{"ops", "planning"},
-		"keywords":       []any{"risk"},
-		"created_after":  createdAfter.Format(time.RFC3339),
-		"created_before": createdBefore.Format(time.RFC3339),
+		"query":               "roadmap",
+		"top_k":               7.0,
+		"project_id":          projectID,
+		"tags":                []any{"ops", "planning"},
+		"keywords":            []any{"risk"},
+		"created_after":       createdAfter.Format(time.RFC3339),
+		"created_before":      createdBefore.Format(time.RFC3339),
+		"access_count_min":    float64(accessCountMin),
+		"freshness_score_min": freshnessScoreMin,
 	}
 	service := &fakeEngramQueryService{
 		results: []models.EngramQueryResult{
@@ -44,13 +48,15 @@ func TestCompatibilityServiceEngramQueryParity(t *testing.T) {
 	expected := EngramQueryDispatchRequest{
 		ActorUserID: actorUserID,
 		Payload: models.EngramQueryRequest{
-			Query:         "roadmap",
-			TopK:          7,
-			ProjectID:     &projectID,
-			Tags:          []string{"ops", "planning"},
-			Keywords:      []string{"risk"},
-			CreatedAfter:  &createdAfter,
-			CreatedBefore: &createdBefore,
+			Query:             "roadmap",
+			TopK:              7,
+			ProjectID:         &projectID,
+			Tags:              []string{"ops", "planning"},
+			Keywords:          []string{"risk"},
+			CreatedAfter:      &createdAfter,
+			CreatedBefore:     &createdBefore,
+			AccessCountMin:    &accessCountMin,
+			FreshnessScoreMin: &freshnessScoreMin,
 		},
 	}
 
@@ -132,6 +138,10 @@ func TestCompatibilityServiceEngramQueryValidationAndErrors(t *testing.T) {
 		{name: "invalid keywords type", params: map[string]any{"query": "x", "keywords": "bad"}},
 		{name: "invalid created_after", params: map[string]any{"query": "x", "created_after": "bad"}},
 		{name: "invalid created_before", params: map[string]any{"query": "x", "created_before": "bad"}},
+		{name: "invalid access_count_min type", params: map[string]any{"query": "x", "access_count_min": "bad"}},
+		{name: "invalid access_count_min negative", params: map[string]any{"query": "x", "access_count_min": -1.0}},
+		{name: "invalid freshness_score_min low", params: map[string]any{"query": "x", "freshness_score_min": -0.1}},
+		{name: "invalid freshness_score_min high", params: map[string]any{"query": "x", "freshness_score_min": 1.1}},
 	}
 
 	for _, testCase := range testCases {
