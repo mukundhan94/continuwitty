@@ -363,6 +363,9 @@ func applyMCPEngramCompatibilityDependencies(
 	compatibilityDeps.EngramCurationList = newMCPEngramCurationListAdapter(
 		dependencies.memoryAdminService,
 	)
+	compatibilityDeps.EngramCurationRefresh = newMCPEngramCurationRefreshAdapter(
+		dependencies.memoryAdminService,
+	)
 	compatibilityDeps.EngramCurationAction = newMCPEngramCurationActionAdapter(
 		dependencies.memoryAdminService,
 	)

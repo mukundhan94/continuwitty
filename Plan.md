@@ -1153,6 +1153,7 @@ Build a local-first memory system where agents and humans can:
       - `GET /api/v1/admin/memory/engrams/curation/suggestions`
       - `POST /api/v1/admin/memory/engrams/curation/suggestions/{suggestion_id}/action`
     - MCP tools:
+      - `engram.curation_refresh_links`
       - `engram.curation_list`
       - `engram.curation_action`
     - compatibility catalog + token project-policy support + route/dispatch regression tests.

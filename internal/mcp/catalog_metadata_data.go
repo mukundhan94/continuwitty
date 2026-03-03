@@ -1462,6 +1462,33 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"engram.curation_refresh_links": {
+		description: "Refresh link hygiene recommendations into link curation suggestions for one source engram (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"required": []any{
+				"source_engram_id",
+			},
+			"properties": map[string]any{
+				"source_engram_id": map[string]any{
+					"type":   "string",
+					"format": "uuid",
+				},
+				"include_archived": map[string]any{
+					"type": "boolean",
+				},
+				"limit": map[string]any{
+					"type": "integer",
+				},
+				"stale_after_days": map[string]any{
+					"type": "integer",
+				},
+				"low_value_threshold": map[string]any{
+					"type": "number",
+				},
+			},
+		},
+	},
 	"engram.contradiction_resolve": {
 		description: "Mark one contradiction alert as resolved or dismissed (admin-only maintenance).",
 		inputSchema: map[string]any{

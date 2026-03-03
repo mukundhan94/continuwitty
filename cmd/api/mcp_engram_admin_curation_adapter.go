@@ -22,6 +22,13 @@ func newMCPEngramCurationActionAdapter(service *admin.Service) mcp.EngramCuratio
 	return mcpEngramAdminAdapter{service: service}
 }
 
+func newMCPEngramCurationRefreshAdapter(service *admin.Service) mcp.EngramCurationRefreshService {
+	if service == nil {
+		return nil
+	}
+	return mcpEngramAdminAdapter{service: service}
+}
+
 func (adapter mcpEngramAdminAdapter) ListMemoryCurationSuggestions(
 	ctx context.Context,
 	request mcp.EngramCurationListRequest,
@@ -52,4 +59,30 @@ func (adapter mcpEngramAdminAdapter) ActionMemoryCurationSuggestion(
 			Status:    request.Status,
 		},
 	)
+}
+
+func (adapter mcpEngramAdminAdapter) RefreshEngramLinkCurationSuggestions(
+	ctx context.Context,
+	request mcp.EngramCurationRefreshRequest,
+) (*mcp.EngramCurationRefreshResponse, error) {
+	refreshed, err := adapter.service.RefreshEngramLinkCurationSuggestions(
+		ctx,
+		request.ActorUserID,
+		admin.EngramLinkCurationSuggestionRefreshRequest{
+			SourceEngramID:    request.SourceEngramID,
+			IncludeArchived:   request.IncludeArchived,
+			Limit:             request.Limit,
+			StaleAfterDays:    request.StaleAfterDays,
+			LowValueThreshold: request.LowValueThreshold,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &mcp.EngramCurationRefreshResponse{
+		ProjectID:      refreshed.ProjectID,
+		SourceEngramID: refreshed.SourceEngramID,
+		SuggestedAt:    refreshed.SuggestedAt,
+		UpdatedCount:   refreshed.UpdatedCount,
+	}, nil
 }

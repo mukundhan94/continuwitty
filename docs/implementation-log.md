@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: MCP parity for link-curation refresh)
+
+1. Added MCP tool support for on-demand link curation refresh:
+   - new tool: `engram.curation_refresh_links`
+   - dispatch parses admin-only inputs (`source_engram_id`, optional hygiene controls) and returns `curation_refresh` payload.
+2. Extended MCP compatibility contracts:
+   - added `EngramCurationRefreshService` plus request/response types in `internal/mcp/compatibility_service.go`.
+   - wired dispatch handler registration, tool catalog visibility, and metadata schema entries.
+3. Added runtime adapter wiring:
+   - `cmd/api/mcp_engram_admin_curation_adapter.go` now bridges MCP refresh requests to `admin.Service.RefreshEngramLinkCurationSuggestions`.
+   - `cmd/api/main.go` now injects `EngramCurationRefresh` dependency into compatibility service construction.
+4. Added MCP regression coverage:
+   - `internal/mcp/compatibility_service_engram_curation_refresh_test.go` validates direct/tools-call parity, request mapping, admin-only enforcement, input validation, and service error mapping.
+5. Validation:
+   - `go test ./internal/mcp ./cmd/api -count=1`
+
 ### 2026-03-03 (Phase 40 continuation: on-demand admin link-curation refresh route)
 
 1. Added on-demand link curation refresh workflow in `internal/admin/service_link_curation.go`:
