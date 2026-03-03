@@ -24,6 +24,9 @@ func (s *Service) RefreshEngramContradictionAlerts(
 	if err != nil {
 		return EngramContradictionAlertRefreshResponse{}, err
 	}
+	if err := s.syncContradictionCurationSuggestions(ctx, refreshed.ProjectID, refreshed.DetectedAt); err != nil {
+		return EngramContradictionAlertRefreshResponse{}, err
+	}
 	return EngramContradictionAlertRefreshResponse{
 		ProjectID:    refreshed.ProjectID,
 		DetectedAt:   refreshed.DetectedAt,

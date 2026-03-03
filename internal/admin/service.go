@@ -309,6 +309,16 @@ type serviceDeps struct {
 		db repository.Queryer,
 		input repository.ContradictionAlertResolveInput,
 	) (*models.EngramContradictionAlert, error)
+	createMemoryCurationSuggestion func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.MemoryCurationSuggestionCreateInput,
+	) (*models.MemoryCurationSuggestion, error)
+	resetMemoryCurationSuggestions func(
+		ctx context.Context,
+		db repository.Queryer,
+		input repository.MemoryCurationSuggestionResetInput,
+	) (int, error)
 	listMemoryCurationSuggestions func(
 		ctx context.Context,
 		db repository.Queryer,
@@ -350,6 +360,8 @@ func defaultServiceDeps() serviceDeps {
 		refreshContradictionAlerts:          repository.RefreshContradictionAlerts,
 		listContradictionAlerts:             repository.ListContradictionAlerts,
 		resolveContradictionAlert:           repository.ResolveContradictionAlert,
+		createMemoryCurationSuggestion:      repository.CreateMemoryCurationSuggestion,
+		resetMemoryCurationSuggestions:      repository.ResetSuggestedMemoryCurationSuggestions,
 		listMemoryCurationSuggestions:       repository.ListMemoryCurationSuggestions,
 		applyMemoryCurationSuggestionAction: repository.ApplyMemoryCurationSuggestionAction,
 

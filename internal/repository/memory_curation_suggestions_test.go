@@ -212,3 +212,31 @@ func TestApplyMemoryCurationSuggestionActionReturnsNilWhenSuggestionMissing(t *t
 		t.Fatalf("expected nil result for missing suggestion")
 	}
 }
+
+func TestResetSuggestedMemoryCurationSuggestionsUsesTypeAndProjectFilters(t *testing.T) {
+	projectID := "engram-vault"
+	db := &fakeQueryer{
+		queryRowsResult: &fakeRows{
+			values: [][]any{
+				{uuid.MustParse("00000000-0000-0000-0000-00000000d401")},
+				{uuid.MustParse("00000000-0000-0000-0000-00000000d402")},
+			},
+		},
+	}
+
+	removed, err := ResetSuggestedMemoryCurationSuggestions(
+		context.Background(),
+		db,
+		MemoryCurationSuggestionResetInput{
+			ProjectID:      &projectID,
+			SuggestionType: models.MemoryCurationSuggestionTypeConsolidate,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, 2, removed)
+	requireEqual(t, 1, len(db.queryArgs))
+	expectedArgs := []any{"consolidate", "engram-vault"}
+	if !reflect.DeepEqual(expectedArgs, db.queryArgs[0]) {
+		t.Fatalf("expected args %#v, got %#v", expectedArgs, db.queryArgs[0])
+	}
+}

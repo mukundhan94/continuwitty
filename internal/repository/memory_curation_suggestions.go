@@ -57,6 +57,12 @@ type MemoryCurationSuggestionActionInput struct {
 	ActionedAt   time.Time
 }
 
+// MemoryCurationSuggestionResetInput captures reset filters for suggested curation records.
+type MemoryCurationSuggestionResetInput struct {
+	ProjectID      *string
+	SuggestionType models.MemoryCurationSuggestionType
+}
+
 // CreateMemoryCurationSuggestion creates one persisted memory curation recommendation.
 func CreateMemoryCurationSuggestion(
 	ctx context.Context,
@@ -182,6 +188,47 @@ func ApplyMemoryCurationSuggestionAction(
 		return nil, err
 	}
 	return &record, nil
+}
+
+// ResetSuggestedMemoryCurationSuggestions deletes suggested records for one curation type and optional project scope.
+func ResetSuggestedMemoryCurationSuggestions(
+	ctx context.Context,
+	db Queryer,
+	input MemoryCurationSuggestionResetInput,
+) (int, error) {
+	suggestionType, err := models.ParseMemoryCurationSuggestionType(string(input.SuggestionType))
+	if err != nil {
+		return 0, err
+	}
+	projectID := normalizeOptionalConsolidationProjectID(input.ProjectID)
+	rows, err := db.Query(
+		ctx,
+		`
+		DELETE FROM memory_curation_suggestions
+		WHERE status = 'suggested'
+			AND suggestion_type = $1
+			AND ($2::text IS NULL OR project_id = $2)
+		RETURNING suggestion_id
+		`,
+		string(suggestionType),
+		optionalStringValue(projectID),
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	removed := 0
+	for rows.Next() {
+		var suggestionID uuid.UUID
+		if err := rows.Scan(&suggestionID); err != nil {
+			return 0, err
+		}
+		removed++
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	return removed, nil
 }
 
 func buildMemoryCurationSuggestionListQuery(input MemoryCurationSuggestionListInput) (string, []any) {

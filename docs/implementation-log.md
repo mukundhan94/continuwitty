@@ -7,6 +7,24 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: deterministic curation-generation hooks)
+
+1. Added deterministic curation-generation sync in admin service:
+   - new generation helpers in `internal/admin/service_curation_generation.go`.
+   - `RefreshEngramConsolidationSuggestions` now rebuilds type `consolidate` curation suggestions from current `suggested` consolidation candidates.
+   - `RefreshEngramContradictionAlerts` now rebuilds type `contradiction` curation suggestions from current `open` contradiction alerts.
+2. Added repository reset primitive for deterministic rebuild:
+   - `ResetSuggestedMemoryCurationSuggestions` with optional project scope and per-type filtering.
+   - regression coverage added in `internal/repository/memory_curation_suggestions_test.go`.
+3. Added generation-focused admin tests:
+   - `internal/admin/service_curation_generation_test.go`.
+   - updated refresh tests to assert/allow curation hook behavior.
+4. Validation:
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+
 ### 2026-03-03 (Phase 40 continuation: memory curation suggestion API + MCP list/action parity)
 
 1. Added admin memory service workflows for curation suggestion review/action:

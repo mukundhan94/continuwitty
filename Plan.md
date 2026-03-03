@@ -1152,8 +1152,12 @@ Build a local-first memory system where agents and humans can:
       - `engram.curation_list`
       - `engram.curation_action`
     - compatibility catalog + token project-policy support + route/dispatch regression tests.
+  - suggestion generation workflow hooks:
+    - consolidation refresh now regenerates type `consolidate` curation suggestions.
+    - contradiction refresh now regenerates type `contradiction` curation suggestions.
+    - generation pass resets stale `suggested` curation rows per type/project before rebuilding deterministic candidates.
 - Remaining in this phase:
-  - suggestion generation workflow hooks and acceptance coverage.
+  - acceptance coverage for curation-generation flows.
   - benchmark coverage for suggestion precision/recall and action latency.
 
 ### Goals

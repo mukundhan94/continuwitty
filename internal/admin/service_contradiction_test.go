@@ -17,6 +17,27 @@ func TestRefreshEngramContradictionAlertsUsesRepositoryRequestObject(t *testing.
 	projectID := "engram-vault"
 	detectedAt := time.Date(2026, 3, 3, 20, 0, 0, 0, time.UTC)
 	captured := repository.ContradictionAlertRefreshInput{}
+	service.deps.resetMemoryCurationSuggestions = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.MemoryCurationSuggestionResetInput,
+	) (int, error) {
+		return 0, nil
+	}
+	service.deps.listContradictionAlerts = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.ContradictionAlertListInput,
+	) ([]models.EngramContradictionAlert, error) {
+		return nil, nil
+	}
+	service.deps.createMemoryCurationSuggestion = func(
+		_ context.Context,
+		_ repository.Queryer,
+		_ repository.MemoryCurationSuggestionCreateInput,
+	) (*models.MemoryCurationSuggestion, error) {
+		return &models.MemoryCurationSuggestion{}, nil
+	}
 	service.deps.refreshContradictionAlerts = func(
 		_ context.Context,
 		_ repository.Queryer,
