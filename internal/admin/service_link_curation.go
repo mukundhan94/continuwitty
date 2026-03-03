@@ -14,6 +14,13 @@ import (
 
 const curationLinkAutoArchiveAction = "archive_stale_low_value"
 
+type linkCurationPersistInput struct {
+	projectID       string
+	sourceEngramID  uuid.UUID
+	recommendations []models.EngramLinkHygieneRecommendation
+	suggestedAt     time.Time
+}
+
 // RefreshEngramLinkCurationSuggestions rebuilds link curation suggestions for one source engram.
 func (s *Service) RefreshEngramLinkCurationSuggestions(
 	ctx context.Context,
@@ -52,10 +59,12 @@ func (s *Service) RefreshEngramLinkCurationSuggestions(
 	suggestedAt := time.Now().UTC()
 	createdCount, err := s.persistRecommendedLinkCurationSuggestions(
 		ctx,
-		projectID,
-		request.SourceEngramID,
-		recommendations,
-		suggestedAt,
+		linkCurationPersistInput{
+			projectID:       projectID,
+			sourceEngramID:  request.SourceEngramID,
+			recommendations: recommendations,
+			suggestedAt:     suggestedAt,
+		},
 	)
 	if err != nil {
 		return EngramLinkCurationSuggestionRefreshResponse{}, err
@@ -70,22 +79,19 @@ func (s *Service) RefreshEngramLinkCurationSuggestions(
 
 func (s *Service) persistRecommendedLinkCurationSuggestions(
 	ctx context.Context,
-	projectID string,
-	sourceEngramID uuid.UUID,
-	recommendations []models.EngramLinkHygieneRecommendation,
-	suggestedAt time.Time,
+	input linkCurationPersistInput,
 ) (int, error) {
-	dedupedKeys, err := s.listSuggestedLinkCurationDedupKeys(ctx, projectID)
+	dedupedKeys, err := s.listSuggestedLinkCurationDedupKeys(ctx, input.projectID)
 	if err != nil {
 		return 0, err
 	}
 	createdCount := 0
-	for _, recommendation := range recommendations {
+	for _, recommendation := range input.recommendations {
 		createInput, dedupKey, shouldCreate := linkCurationSuggestionCreateInput(
-			projectID,
-			sourceEngramID,
+			input.projectID,
+			input.sourceEngramID,
 			recommendation,
-			suggestedAt,
+			input.suggestedAt,
 		)
 		if !shouldCreate {
 			continue
