@@ -7,6 +7,21 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 38 closeout: contradiction quality acceptance enabled in default mock gate)
+
+1. Fixed contradiction-link create SQL defect in `internal/repository/engram_links.go`:
+   - `source_engram` and `target_engram` CTE membership filters referenced aliased columns without aliasing the `FROM engrams` relation.
+   - updated CTEs to `FROM engrams source_engram` / `FROM engrams target_engram`, removing PostgreSQL missing-from-clause failures that surfaced as `500` in contradiction seed workflows.
+2. Added regression guard in `internal/repository/engram_links_test.go`:
+   - create-link SQL assertions now require explicit source/target CTE aliases.
+3. Enabled contradiction warning quality scenario in default deterministic acceptance suite:
+   - `acceptance-tests/features/phase38-contradiction-mock.feature` now includes `@mock` tag.
+4. Validation:
+   - targeted repo tests: `go test ./internal/repository -run 'TestCreateEngramLinkReturnsRecord|TestCreateEngramLinkReturnsDuplicateError' -count=1`
+   - contradiction quality scenario: `ACCEPTANCE_BDD_TAGS='@phase38' docker compose --profile acceptance up --build --force-recreate --abort-on-container-exit acceptance-tests`
+   - deterministic acceptance gate: `make acceptance-test-mock-docker`
+   - backend quality gates: `make lint`, `make test-unit`
+
 ### 2026-03-03 (Phase 38 benchmark pass: contradiction warning synthesis latency baseline)
 
 1. Added contradiction warning microbenchmarks in `internal/chat/context_contradictions_benchmark_test.go`:

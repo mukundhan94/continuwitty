@@ -54,6 +54,12 @@ func TestCreateEngramLinkReturnsRecord(t *testing.T) {
 	if strings.Contains(db.queryRowSQL[0], "target_engram.project_id = source_engram.project_id") {
 		t.Fatalf("expected create SQL to allow cross-project targets")
 	}
+	if !strings.Contains(db.queryRowSQL[0], "FROM engrams source_engram") {
+		t.Fatalf("expected create SQL to alias source engram relation")
+	}
+	if !strings.Contains(db.queryRowSQL[0], "FROM engrams target_engram") {
+		t.Fatalf("expected create SQL to alias target engram relation")
+	}
 }
 
 func TestCreateEngramLinkReturnsDuplicateError(t *testing.T) {

@@ -1,4 +1,4 @@
-@phase38 @memory-admin
+@mock @phase38 @memory-admin
 Feature: Phase 38 contradiction alert quality
   As an operator
   I want deterministic coverage for contradiction alert refresh/list/resolve workflows

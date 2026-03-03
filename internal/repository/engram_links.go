@@ -349,7 +349,7 @@ func buildCreateEngramLinkSQL() string {
 		`
 		WITH source_engram AS (
 			SELECT engram_id, project_id, owner_user_id, visibility_scope
-			FROM engrams
+			FROM engrams source_engram
 			WHERE
 				engram_id = $2
 				AND deleted_at IS NULL
@@ -357,7 +357,7 @@ func buildCreateEngramLinkSQL() string {
 		),
 		target_engram AS (
 			SELECT engram_id, project_id, owner_user_id, visibility_scope
-			FROM engrams
+			FROM engrams target_engram
 			WHERE
 				engram_id = $3
 				AND deleted_at IS NULL

@@ -1023,7 +1023,7 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In Progress (2026-03-03).
+- Completed (2026-03-03).
 - Delivered in this checkpoint:
   - contradiction-trace metadata (`has_contradiction`, `contradicting_link_ids`) propagated on recalled trace paths when relation type is `contradicts`.
   - chat context now emits `contradiction_warnings` for contradiction-bearing trace paths with severity guidance.
@@ -1047,8 +1047,11 @@ Build a local-first memory system where agents and humans can:
   - contradiction warning synthesis benchmark baseline documented:
     - microbenchmarks for `buildContradictionWarnings` at 50/200 trace-path workloads.
     - benchmark artifact captured in `docs/phase38-contradiction-benchmark.md`.
-- Remaining in this phase:
-  - precision/recall benchmark coverage for contradiction warning quality.
+  - contradiction warning quality benchmark coverage delivered:
+    - deterministic acceptance precision/recall scenario:
+      - `acceptance-tests/features/phase38-contradiction-mock.feature`
+      - `acceptance-tests/src/steps/phase38-contradiction-mock.steps.ts`
+    - scenario now included in default `@mock` suite after fixing contradiction-link create SQL CTE aliasing in `internal/repository/engram_links.go`.
 
 ### Goals
 
@@ -1097,6 +1100,6 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 35: memory engagement tracking baseline.
    - [x] Phase 36: feedback loop + relevance/freshness scoring.
    - [x] Phase 37: time-decay + consolidation suggestions.
-   - [ ] Phase 38: contradiction detection + warning flows.
+   - [x] Phase 38: contradiction detection + warning flows.
    - [ ] Phase 39: temporal query extensions + cost-aware context assembly.
    - [ ] Phase 40: autonomous memory suggestions and action workflows.
