@@ -261,6 +261,14 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid useful_count_max",
 		},
 		{
+			name: "invalid access count max",
+			body: map[string]any{
+				"query":            "durable memory",
+				"access_count_max": -1,
+			},
+			expectedDetail: "invalid access_count_max",
+		},
+		{
 			name: "invalid useful feedback ratio min",
 			body: map[string]any{
 				"query":                     "durable memory",
@@ -409,6 +417,7 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"useful_count_min":                 1,
 					"useful_count_max":                 8,
 					"access_count_min":                 2,
+					"access_count_max":                 20,
 					"feedback_count_min":               4,
 					"feedback_count_max":               10,
 					"contradiction_count_max":          3,
@@ -523,6 +532,7 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 	requireEqual(t, 1, requireIntPointer(t, request.UsefulCountMin, "useful_count_min"))
 	requireEqual(t, 8, requireIntPointer(t, request.UsefulCountMax, "useful_count_max"))
 	requireEqual(t, 2, requireIntPointer(t, request.AccessCountMin, "access_count_min"))
+	requireEqual(t, 20, requireIntPointer(t, request.AccessCountMax, "access_count_max"))
 	requireEqual(t, 4, requireIntPointer(t, request.FeedbackCountMin, "feedback_count_min"))
 	requireEqual(t, 10, requireIntPointer(t, request.FeedbackCountMax, "feedback_count_max"))
 	requireEqual(

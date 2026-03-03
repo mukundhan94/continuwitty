@@ -388,6 +388,7 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 		{detail: "invalid useful_count_min", invalid: invalidUsefulCountMin(payload.UsefulCountMin)},
 		{detail: "invalid useful_count_max", invalid: invalidUsefulCountMax(payload.UsefulCountMax)},
 		{detail: "invalid access_count_min", invalid: invalidAccessCountMin(payload.AccessCountMin)},
+		{detail: "invalid access_count_max", invalid: invalidAccessCountMax(payload.AccessCountMax)},
 		{detail: "invalid feedback_count_min", invalid: invalidFeedbackCountMin(payload.FeedbackCountMin)},
 		{detail: "invalid feedback_count_max", invalid: invalidFeedbackCountMax(payload.FeedbackCountMax)},
 		{
@@ -429,6 +430,10 @@ func invalidUsefulCountMax(value *int) bool {
 }
 
 func invalidAccessCountMin(value *int) bool {
+	return value != nil && *value < 0
+}
+
+func invalidAccessCountMax(value *int) bool {
 	return value != nil && *value < 0
 }
 

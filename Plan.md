@@ -1725,6 +1725,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 57 - Access-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `access_count_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `access_count_max`.
+  - repository query builder now supports `COALESCE(access_count, 0) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `access_count_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to cap recall by engagement volume so low-touch memories can be reviewed.
+2. Keep access-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `access_count_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum access-count thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for access-ceiling filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1788,3 +1820,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 55: `feedback_count_max` parity across REST/MCP/repository.
 21. Execute useful-ceiling query filter increment:
    - [x] Phase 56: `useful_count_max` parity across REST/MCP/repository.
+22. Execute access-ceiling query filter increment:
+   - [x] Phase 57: `access_count_max` parity across REST/MCP/repository.

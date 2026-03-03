@@ -55,6 +55,7 @@ type engramQueryPayloadParts struct {
 	usefulCountMin          *int
 	usefulCountMax          *int
 	accessCountMin          *int
+	accessCountMax          *int
 	feedbackCountMin        *int
 	feedbackCountMax        *int
 	contradictionCountMax   *int
@@ -114,6 +115,7 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		usefulCountMin:          engagementParts.usefulCountMin,
 		usefulCountMax:          engagementParts.usefulCountMax,
 		accessCountMin:          engagementParts.accessCountMin,
+		accessCountMax:          engagementParts.accessCountMax,
 		feedbackCountMin:        engagementParts.feedbackCountMin,
 		feedbackCountMax:        engagementParts.feedbackCountMax,
 		contradictionCountMax:   engagementParts.contradictionCountMax,
@@ -196,6 +198,7 @@ type engramQueryEngagementParts struct {
 	usefulCountMin          *int
 	usefulCountMax          *int
 	accessCountMin          *int
+	accessCountMax          *int
 	feedbackCountMin        *int
 	feedbackCountMax        *int
 	contradictionCountMax   *int
@@ -219,6 +222,7 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 		usefulCountMin:          integerParts.usefulCountMin,
 		usefulCountMax:          integerParts.usefulCountMax,
 		accessCountMin:          integerParts.accessCountMin,
+		accessCountMax:          integerParts.accessCountMax,
 		feedbackCountMin:        integerParts.feedbackCountMin,
 		feedbackCountMax:        integerParts.feedbackCountMax,
 		contradictionCountMax:   integerParts.contradictionCountMax,
@@ -234,6 +238,7 @@ type engramQueryIntegerEngagementParts struct {
 	usefulCountMin        *int
 	usefulCountMax        *int
 	accessCountMin        *int
+	accessCountMax        *int
 	feedbackCountMin      *int
 	feedbackCountMax      *int
 	contradictionCountMax *int
@@ -251,6 +256,10 @@ func parseEngramQueryIntegerEngagementParts(
 		return engramQueryIntegerEngagementParts{}, dispatchErr
 	}
 	accessCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "access_count_min")
+	if dispatchErr != nil {
+		return engramQueryIntegerEngagementParts{}, dispatchErr
+	}
+	accessCountMax, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "access_count_max")
 	if dispatchErr != nil {
 		return engramQueryIntegerEngagementParts{}, dispatchErr
 	}
@@ -273,6 +282,7 @@ func parseEngramQueryIntegerEngagementParts(
 		usefulCountMin:        usefulCountMin,
 		usefulCountMax:        usefulCountMax,
 		accessCountMin:        accessCountMin,
+		accessCountMax:        accessCountMax,
 		feedbackCountMin:      feedbackCountMin,
 		feedbackCountMax:      feedbackCountMax,
 		contradictionCountMax: contradictionCountMax,
@@ -385,6 +395,7 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		UsefulCountMin:          parts.usefulCountMin,
 		UsefulCountMax:          parts.usefulCountMax,
 		AccessCountMin:          parts.accessCountMin,
+		AccessCountMax:          parts.accessCountMax,
 		FeedbackCountMin:        parts.feedbackCountMin,
 		FeedbackCountMax:        parts.feedbackCountMax,
 		ContradictionCountMax:   parts.contradictionCountMax,
