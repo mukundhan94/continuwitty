@@ -1949,6 +1949,37 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 64 - Query Range Coherence Validation
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - REST query validation now rejects inconsistent numeric ranges when both bounds are present (`*_min` must be `<= *_max`).
+  - MCP `engram.query` parser now enforces the same range-coherence guardrails and returns `-32602` invalid-parameter errors for inverted ranges.
+  - API/MCP docs now explicitly describe `min <= max` requirement for paired numeric filters.
+  - regression coverage expanded for REST and MCP invalid-range scenarios.
+
+### Goals
+
+1. Prevent ambiguous or self-contradicting query payloads that can cause surprising retrieval behavior.
+2. Keep numeric-range semantics deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for all valid query payloads.
+
+### Deliverables
+
+1. REST range-coherence validation for numeric min/max filter pairs.
+2. MCP parity validation for numeric min/max filter pairs.
+3. Documentation and regression test updates.
+
+### Exit Criteria
+
+1. Inverted numeric ranges are rejected consistently across REST and MCP.
+2. Validation error behavior is covered by regression tests.
+3. Docs clearly communicate min/max ordering expectations.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2026,3 +2057,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 62: `contradiction_feedback_ratio_min` parity across REST/MCP/repository.
 28. Execute contradiction-count floor query filter increment:
    - [x] Phase 63: `contradiction_count_min` parity across REST/MCP/repository.
+29. Execute query range coherence validation increment:
+   - [x] Phase 64: reject numeric `*_min > *_max` payloads across REST/MCP.

@@ -373,7 +373,10 @@ func validateQueryEngramsPayload(payload models.EngramQueryRequest) string {
 			return rule.detail
 		}
 	}
-	return invalidQueryTemporalWindowDetail(payload)
+	if detail := invalidQueryTemporalWindowDetail(payload); detail != "" {
+		return detail
+	}
+	return invalidQueryNumericWindowDetail(payload)
 }
 
 type queryEngramValidationRule struct {
@@ -531,6 +534,20 @@ func hasInvalidTemporalWindow(after *time.Time, before *time.Time) bool {
 	return after.After(*before)
 }
 
+func hasInvalidIntWindow(minValue *int, maxValue *int) bool {
+	if minValue == nil || maxValue == nil {
+		return false
+	}
+	return *minValue > *maxValue
+}
+
+func hasInvalidScoreWindow(minValue *float64, maxValue *float64) bool {
+	if minValue == nil || maxValue == nil {
+		return false
+	}
+	return *minValue > *maxValue
+}
+
 func invalidRelationType(value *models.EngramLinkRelationType) bool {
 	if value == nil {
 		return false
@@ -584,6 +601,37 @@ func invalidQueryTemporalWindowDetail(payload models.EngramQueryRequest) string 
 		if hasInvalidTemporalWindow(spec.after, spec.before) {
 			return spec.invalidDetail
 		}
+	}
+	return ""
+}
+
+func invalidQueryNumericWindowDetail(payload models.EngramQueryRequest) string {
+	if hasInvalidIntWindow(payload.UsefulCountMin, payload.UsefulCountMax) {
+		return "invalid useful_count window"
+	}
+	if hasInvalidIntWindow(payload.AccessCountMin, payload.AccessCountMax) {
+		return "invalid access_count window"
+	}
+	if hasInvalidIntWindow(payload.FeedbackCountMin, payload.FeedbackCountMax) {
+		return "invalid feedback_count window"
+	}
+	if hasInvalidIntWindow(payload.ContradictionCountMin, payload.ContradictionCountMax) {
+		return "invalid contradiction_count window"
+	}
+	if hasInvalidScoreWindow(payload.ContradictionRatioMin, payload.ContradictionRatioMax) {
+		return "invalid contradiction_feedback_ratio window"
+	}
+	if hasInvalidScoreWindow(payload.FreshnessScoreMin, payload.FreshnessScoreMax) {
+		return "invalid freshness_score window"
+	}
+	if hasInvalidScoreWindow(payload.UsefulFeedbackRatioMin, payload.UsefulFeedbackRatioMax) {
+		return "invalid useful_feedback_ratio window"
+	}
+	if hasInvalidScoreWindow(payload.AvgRelevanceFeedbackMin, payload.AvgRelevanceFeedbackMax) {
+		return "invalid avg_relevance_feedback window"
+	}
+	if hasInvalidScoreWindow(payload.SourceSessionQualityMin, payload.SourceSessionQualityMax) {
+		return "invalid source_session_quality window"
 	}
 	return ""
 }

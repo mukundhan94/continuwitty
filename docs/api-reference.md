@@ -309,6 +309,8 @@ Optional temporal/engagement filters:
 - `relation_type` (`supports|depends_on|contradicts|related_to|derived_from`)
 - `trace_depth` (`0` or `1`; defaults to `1` when `relation_type` is set)
 
+When both `*_min` and `*_max` are provided for the same metric, `min` must be less than or equal to `max`.
+
 Query results include `source_session_quality_score` (`0..1`), `access_count`, `freshness_score`, `feedback_count`, `useful_count`, `avg_relevance_feedback` (`0..1`), `useful_feedback_ratio` (`0..1`), `contradiction_count`, and `contradiction_feedback_ratio` (`0..1`) for recall-quality diagnostics.
 
 ### Agent Run (With Snapshots)

@@ -7,6 +7,20 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 64: query numeric-range coherence validation)
+
+1. Added REST range-coherence validation:
+   - engram query payloads now reject inverted numeric windows (`*_min > *_max`) across count and score filter pairs.
+2. Added MCP range-coherence validation:
+   - `engram.query` parser now rejects inverted numeric windows with invalid-parameter (`-32602`) responses.
+3. Added regression coverage:
+   - REST invalid request coverage for inverted numeric windows.
+   - MCP validation coverage for inverted numeric windows.
+4. Documentation alignment:
+   - API and MCP query docs now explicitly require `min <= max` when both bounds are provided.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 63: contradiction-count floor query filter parity)
 
 1. Added contradiction-count floor query contract extension:

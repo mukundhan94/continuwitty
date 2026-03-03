@@ -236,7 +236,7 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 	if dispatchErr != nil {
 		return engramQueryEngagementParts{}, dispatchErr
 	}
-	return engramQueryEngagementParts{
+	parts := engramQueryEngagementParts{
 		usefulCountMin:          integerParts.usefulCountMin,
 		usefulCountMax:          integerParts.usefulCountMax,
 		accessCountMin:          integerParts.accessCountMin,
@@ -255,7 +255,11 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 		avgRelevanceFeedbackMax: scoreParts.avgRelevanceFeedbackMax,
 		sourceSessionQualityMin: scoreParts.sourceSessionQualityMin,
 		sourceSessionQualityMax: scoreParts.sourceSessionQualityMax,
-	}, nil
+	}
+	if dispatchErr := invalidQueryEngagementWindowError(parts); dispatchErr != nil {
+		return engramQueryEngagementParts{}, dispatchErr
+	}
+	return parts, nil
 }
 
 type engramQueryIntegerEngagementParts struct {
@@ -267,6 +271,53 @@ type engramQueryIntegerEngagementParts struct {
 	feedbackCountMax      *int
 	contradictionCountMin *int
 	contradictionCountMax *int
+}
+
+func invalidQueryEngagementWindowError(
+	parts engramQueryEngagementParts,
+) *toolDispatchError {
+	if hasInvalidIntWindow(parts.usefulCountMin, parts.usefulCountMax) {
+		return invalidParamError("useful_count_min")
+	}
+	if hasInvalidIntWindow(parts.accessCountMin, parts.accessCountMax) {
+		return invalidParamError("access_count_min")
+	}
+	if hasInvalidIntWindow(parts.feedbackCountMin, parts.feedbackCountMax) {
+		return invalidParamError("feedback_count_min")
+	}
+	if hasInvalidIntWindow(parts.contradictionCountMin, parts.contradictionCountMax) {
+		return invalidParamError("contradiction_count_min")
+	}
+	if hasInvalidScoreWindow(parts.contradictionRatioMin, parts.contradictionRatioMax) {
+		return invalidParamError("contradiction_feedback_ratio_min")
+	}
+	if hasInvalidScoreWindow(parts.freshnessScoreMin, parts.freshnessScoreMax) {
+		return invalidParamError("freshness_score_min")
+	}
+	if hasInvalidScoreWindow(parts.usefulFeedbackRatioMin, parts.usefulFeedbackRatioMax) {
+		return invalidParamError("useful_feedback_ratio_min")
+	}
+	if hasInvalidScoreWindow(parts.avgRelevanceFeedbackMin, parts.avgRelevanceFeedbackMax) {
+		return invalidParamError("avg_relevance_feedback_min")
+	}
+	if hasInvalidScoreWindow(parts.sourceSessionQualityMin, parts.sourceSessionQualityMax) {
+		return invalidParamError("source_session_quality_min")
+	}
+	return nil
+}
+
+func hasInvalidIntWindow(minValue *int, maxValue *int) bool {
+	if minValue == nil || maxValue == nil {
+		return false
+	}
+	return *minValue > *maxValue
+}
+
+func hasInvalidScoreWindow(minValue *float64, maxValue *float64) bool {
+	if minValue == nil || maxValue == nil {
+		return false
+	}
+	return *minValue > *maxValue
 }
 
 func parseEngramQueryIntegerEngagementParts(

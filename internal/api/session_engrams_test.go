@@ -277,6 +277,15 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid useful_count_max",
 		},
 		{
+			name: "invalid useful count window",
+			body: map[string]any{
+				"query":            "durable memory",
+				"useful_count_min": 5,
+				"useful_count_max": 2,
+			},
+			expectedDetail: "invalid useful_count window",
+		},
+		{
 			name: "invalid access count max",
 			body: map[string]any{
 				"query":            "durable memory",

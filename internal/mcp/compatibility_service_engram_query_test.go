@@ -281,6 +281,7 @@ func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
 		{name: "invalid useful_count_min negative", params: map[string]any{"query": "x", "useful_count_min": -1.0}},
 		{name: "invalid useful_count_max type", params: map[string]any{"query": "x", "useful_count_max": "bad"}},
 		{name: "invalid useful_count_max negative", params: map[string]any{"query": "x", "useful_count_max": -1.0}},
+		{name: "invalid useful_count window", params: map[string]any{"query": "x", "useful_count_min": 5.0, "useful_count_max": 2.0}},
 		{name: "invalid access_count_min type", params: map[string]any{"query": "x", "access_count_min": "bad"}},
 		{name: "invalid access_count_min negative", params: map[string]any{"query": "x", "access_count_min": -1.0}},
 		{name: "invalid access_count_max type", params: map[string]any{"query": "x", "access_count_max": "bad"}},
