@@ -218,6 +218,11 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 				"stream": map[string]any{
 					"type": "boolean",
 				},
+				"context_token_budget": map[string]any{
+					"type":    "integer",
+					"minimum": 200,
+					"maximum": 8000,
+				},
 				"link_recall_enabled": map[string]any{
 					"type": "boolean",
 				},

@@ -111,6 +111,7 @@ func TestCompatibilityServiceChatSendMessageForwardsLinkRecallOptions(t *testing
 			map[string]any{
 				"session_id":                     "39061000-0000-0000-0000-000000000394",
 				"content_text":                   "use linked recall",
+				"context_token_budget":           640,
 				"link_recall_enabled":            false,
 				"link_recall_depth":              2,
 				"link_recall_max_neighbors":      7,
@@ -120,6 +121,7 @@ func TestCompatibilityServiceChatSendMessageForwardsLinkRecallOptions(t *testing
 		),
 	)
 	_ = messageSendFromFrame(t, frame, false)
+	requireIntPointerField(t, sendService.call.ContextTokenBudget, 640, "context_token_budget")
 	requireBoolPointerField(t, sendService.call.LinkRecallEnabled, false, "link_recall_enabled")
 	requireIntPointerField(t, sendService.call.LinkRecallDepth, 2, "link_recall_depth")
 	requireIntPointerField(t, sendService.call.LinkRecallMaxNeighbors, 7, "link_recall_max_neighbors")
@@ -135,6 +137,14 @@ func TestCompatibilityServiceChatSendMessageValidationErrors(t *testing.T) {
 	}{
 		{name: "missing session id", params: map[string]any{"content_text": "x"}},
 		{name: "invalid session id", params: map[string]any{"session_id": "bad", "content_text": "x"}},
+		{
+			name: "invalid context token budget",
+			params: map[string]any{
+				"session_id":           "39070000-0000-0000-0000-000000000391",
+				"content_text":         "x",
+				"context_token_budget": "bad",
+			},
+		},
 	}
 
 	for _, testCase := range testCases {

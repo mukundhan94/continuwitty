@@ -218,6 +218,7 @@ Sign in via `POST /api/v1/session/login` (JSON) or `/login` (UI form) to obtain 
 
 `POST /api/v1/chat/sessions/{session_id}/messages` and `/messages/stream` support optional graph recall controls:
 
+- `context_token_budget` (int, bounded `200..8000`)
 - `link_recall_enabled` (bool)
 - `link_recall_depth` (int, bounded)
 - `link_recall_max_neighbors` (int, bounded)

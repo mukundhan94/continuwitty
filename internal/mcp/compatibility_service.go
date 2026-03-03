@@ -614,6 +614,7 @@ type SessionMessageSendRequest struct {
 	ActorUserID                 uuid.UUID
 	SessionID                   uuid.UUID
 	ContentText                 string
+	ContextTokenBudget          *int
 	LinkRecallEnabled           *bool
 	LinkRecallDepth             *int
 	LinkRecallMaxNeighbors      *int

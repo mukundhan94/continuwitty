@@ -79,6 +79,9 @@ type ChatRetrievalAudit struct {
 	CrossProjectEngramCount     int      `json:"cross_project_engram_count"`
 	CrossProjectTracePathCount  int      `json:"cross_project_trace_path_count"`
 	CrossProjectProjectIDs      []string `json:"cross_project_project_ids,omitempty"`
+	ContextTokenBudget          int      `json:"context_token_budget"`
+	ContextTokenEstimate        int      `json:"context_token_estimate"`
+	ContextTokenTruncated       bool     `json:"context_token_truncated"`
 }
 
 // EngramTracePath captures one compact root->target trace chain used in context recall.
@@ -99,6 +102,7 @@ type ChatContextRequest struct {
 	ActorUserID                 uuid.UUID
 	UserQuery                   string
 	EmbeddingDim                int
+	ContextTokenBudget          *int
 	MaxEngrams                  int
 	RetrievalTopK               int
 	DocumentTopK                int
@@ -200,6 +204,10 @@ func AssembleChatContext(
 		return AssembledChatContext{}, err
 	}
 	if len(engramContext.bundles) == 0 && len(documentContext.selectedChunks) == 0 {
+		retrievalAudit := engramContext.retrievalAudit
+		retrievalAudit.ContextTokenBudget = *normalizedRequest.ContextTokenBudget
+		retrievalAudit.ContextTokenEstimate = 0
+		retrievalAudit.ContextTokenTruncated = false
 		return AssembledChatContext{
 			ContextMarkdown:       "",
 			UsedEngramIDs:         engramContext.usedEngramID,
@@ -208,7 +216,7 @@ func AssembleChatContext(
 			ContradictionWarnings: engramContext.contradictionWarnings,
 			UsedDocumentChunkIDs:  documentContext.usedDocumentChunkIDs,
 			SourceReferences:      []ChatSourceReference{},
-			RetrievalAudit:        &engramContext.retrievalAudit,
+			RetrievalAudit:        &retrievalAudit,
 		}, nil
 	}
 
@@ -217,6 +225,10 @@ func AssembleChatContext(
 		documentContext.selectedChunks,
 		documentContext.pinnedChunks,
 	)
+	budgetedContext := buildBudgetedContextMarkdown(
+		contextSections,
+		*normalizedRequest.ContextTokenBudget,
+	)
 	sourceReferences := dedupeSourceReferences(
 		append(
 			collectBundleSourceReferences(engramContext.bundles),
@@ -224,15 +236,19 @@ func AssembleChatContext(
 		),
 		16,
 	)
+	retrievalAudit := engramContext.retrievalAudit
+	retrievalAudit.ContextTokenBudget = *normalizedRequest.ContextTokenBudget
+	retrievalAudit.ContextTokenEstimate = budgetedContext.tokenEstimate
+	retrievalAudit.ContextTokenTruncated = budgetedContext.truncated
 	return AssembledChatContext{
-		ContextMarkdown:       strings.Join(contextSections, "\n\n"),
+		ContextMarkdown:       budgetedContext.markdown,
 		UsedEngramIDs:         engramContext.usedEngramID,
 		UsedEngramLinkIDs:     engramContext.usedEngramLinkIDs,
 		EngramTracePaths:      engramContext.tracePaths,
 		ContradictionWarnings: engramContext.contradictionWarnings,
 		UsedDocumentChunkIDs:  documentContext.usedDocumentChunkIDs,
 		SourceReferences:      sourceReferences,
-		RetrievalAudit:        &engramContext.retrievalAudit,
+		RetrievalAudit:        &retrievalAudit,
 	}, nil
 }
 
@@ -414,6 +430,7 @@ func normalizeChatContextRequest(request ChatContextRequest) ChatContextRequest 
 	if request.DocumentTopK <= 0 {
 		request.DocumentTopK = defaultChatContextDocumentTop
 	}
+	request = normalizeContextTokenBudgetOption(request)
 	request = normalizeLinkRecallOptions(request)
 	request = normalizeLinkNoiseOptions(request)
 	return request

@@ -7,6 +7,36 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 39 kickoff: cost-aware context token budget baseline)
+
+1. Added bounded context-budget controls to chat send workflows:
+   - new optional `context_token_budget` in `chat.ChatMessageCreateRequest`.
+   - forwarded from MCP `chat.send_message` params via `SessionMessageSendRequest` and message-send adapters.
+2. Added cost-aware context assembly enforcement:
+   - `internal/chat/context_token_budget.go` introduces deterministic token estimation and section-budget truncation helpers.
+   - `AssembleChatContext` now applies bounded markdown assembly using normalized token budgets.
+3. Added retrieval-audit budget diagnostics in chat context metadata:
+   - `context_token_budget`
+   - `context_token_estimate`
+   - `context_token_truncated`
+4. Updated tool schema metadata:
+   - `internal/mcp/catalog_metadata_data.go` now advertises `context_token_budget` for `chat.send_message`.
+5. Added regression tests:
+   - context-budget unit coverage in `internal/chat/context_token_budget_test.go`.
+   - context-budget assembly audit coverage in `internal/chat/context_budget_assembly_test.go`.
+   - message runtime forwarding coverage in `internal/chat/message_runtime_test.go`.
+   - REST forwarding coverage in `internal/api/chat_api_messages_test.go`.
+   - MCP forwarding/validation coverage in:
+     - `internal/mcp/compatibility_service_chat_send_message_test.go`
+     - `internal/mcp/compatibility_service_chat_send_message_stream_test.go`
+6. Validation:
+   - `go test ./internal/chat ./internal/mcp ./internal/api ./cmd/api -count=1`
+   - `make lint`
+   - `make test-unit`
+   - `make acceptance-test-mock-docker`
+   - CodeScene `pre_commit_code_health_safeguard`: `passed`
+   - CodeScene scores on touched Go files: `10.0`
+
 ### 2026-03-03 (Phase 38 closeout: contradiction quality acceptance enabled in default mock gate)
 
 1. Fixed contradiction-link create SQL defect in `internal/repository/engram_links.go`:

@@ -107,6 +107,7 @@ func TestPrepareGenerationForwardsLinkRecallOverrides(t *testing.T) {
 	maxNeighbors := 9
 	noiseSuppressionEnabled := false
 	noiseThreshold := 0.72
+	contextTokenBudget := 640
 
 	_, err := runtime.PrepareGeneration(
 		context.Background(),
@@ -114,6 +115,7 @@ func TestPrepareGenerationForwardsLinkRecallOverrides(t *testing.T) {
 		base.Session.SessionID,
 		ChatMessageCreateRequest{
 			ContentText:                 "How should we proceed?",
+			ContextTokenBudget:          &contextTokenBudget,
 			LinkRecallEnabled:           &enabled,
 			LinkRecallDepth:             &depth,
 			LinkRecallMaxNeighbors:      &maxNeighbors,
@@ -127,6 +129,7 @@ func TestPrepareGenerationForwardsLinkRecallOverrides(t *testing.T) {
 	if len(requests) != 1 {
 		t.Fatalf("expected one context assembly request, got %d", len(requests))
 	}
+	requireOptionalIntRuntime(t, requests[0].ContextTokenBudget, 640, "context_token_budget")
 	requireOptionalBoolRuntime(t, requests[0].LinkRecallEnabled, false, "link_recall_enabled")
 	requireOptionalIntRuntime(t, requests[0].LinkRecallDepth, 2, "link_recall_depth")
 	requireOptionalIntRuntime(t, requests[0].LinkRecallMaxNeighbors, 9, "link_recall_max_neighbors")

@@ -40,6 +40,7 @@ func (adapter *mcpMessageSendAdapter) SendMessage(
 		request.SessionID,
 		chat.ChatMessageCreateRequest{
 			ContentText:                 request.ContentText,
+			ContextTokenBudget:          request.ContextTokenBudget,
 			LinkRecallEnabled:           request.LinkRecallEnabled,
 			LinkRecallDepth:             request.LinkRecallDepth,
 			LinkRecallMaxNeighbors:      request.LinkRecallMaxNeighbors,
@@ -81,6 +82,7 @@ func (adapter *mcpMessageSendAdapter) StreamMessageEvents(
 		request.SessionID,
 		chat.ChatMessageCreateRequest{
 			ContentText:                 request.ContentText,
+			ContextTokenBudget:          request.ContextTokenBudget,
 			LinkRecallEnabled:           request.LinkRecallEnabled,
 			LinkRecallDepth:             request.LinkRecallDepth,
 			LinkRecallMaxNeighbors:      request.LinkRecallMaxNeighbors,

@@ -204,7 +204,7 @@ func TestSendMessageHandlerForwardsLinkRecallOverrides(t *testing.T) {
 		http.MethodPost,
 		"/api/v1/chat/sessions/"+sessionID.String()+"/messages",
 		strings.NewReader(
-			`{"content_text":"Hello world","link_recall_enabled":false,"link_recall_depth":2,"link_recall_max_neighbors":9,"link_noise_suppression_enabled":false,"link_noise_score_threshold":0.66}`,
+			`{"content_text":"Hello world","context_token_budget":640,"link_recall_enabled":false,"link_recall_depth":2,"link_recall_max_neighbors":9,"link_noise_suppression_enabled":false,"link_noise_score_threshold":0.66}`,
 		),
 	)
 	request.Header.Set("Content-Type", "application/json")
@@ -244,6 +244,7 @@ func TestListMessagesHandlerRejectsInvalidLimit(t *testing.T) {
 
 func assertForwardedChatLinkControls(t *testing.T, payload chat.ChatMessageCreateRequest) {
 	t.Helper()
+	requireIntPointerChat(t, payload.ContextTokenBudget, 640, "context_token_budget")
 	requireBoolPointerChat(t, payload.LinkRecallEnabled, false, "link_recall_enabled")
 	requireIntPointerChat(t, payload.LinkRecallDepth, 2, "link_recall_depth")
 	requireIntPointerChat(t, payload.LinkRecallMaxNeighbors, 9, "link_recall_max_neighbors")

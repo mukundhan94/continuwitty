@@ -28,10 +28,15 @@ func parseSessionMessageSendRequest(
 	if !ok {
 		return SessionMessageSendRequest{}, invalidParamError("link_noise_score_threshold")
 	}
+	contextTokenBudget, ok := optionalIntPointerParam(params, "context_token_budget")
+	if !ok {
+		return SessionMessageSendRequest{}, invalidParamError("context_token_budget")
+	}
 	return SessionMessageSendRequest{
 		ActorUserID:                 actor.UserID,
 		SessionID:                   sessionID,
 		ContentText:                 stringParamWithDefault(params, "content_text", ""),
+		ContextTokenBudget:          contextTokenBudget,
 		LinkRecallEnabled:           linkRecallEnabled,
 		LinkRecallDepth:             linkRecallDepth,
 		LinkRecallMaxNeighbors:      linkRecallMaxNeighbors,

@@ -28,6 +28,7 @@ func TestCompatibilityServiceChatSendMessageDirectStreamFrames(t *testing.T) {
 				map[string]any{
 					"session_id":                     sessionID.String(),
 					"content_text":                   "hi",
+					"context_token_budget":           512,
 					"link_recall_enabled":            true,
 					"link_recall_depth":              2,
 					"link_recall_max_neighbors":      6,
@@ -58,6 +59,7 @@ func TestCompatibilityServiceChatSendMessageDirectStreamFrames(t *testing.T) {
 		t,
 		streamService.call,
 		expectedLinkRecallOptions{
+			contextTokenBudget:      512,
 			enabled:                 true,
 			depth:                   2,
 			maxNeighbors:            6,
@@ -249,6 +251,7 @@ func terminalFrame(t *testing.T, frames []Frame) Frame {
 }
 
 type expectedLinkRecallOptions struct {
+	contextTokenBudget      int
 	enabled                 bool
 	depth                   int
 	maxNeighbors            int
@@ -262,6 +265,7 @@ func assertForwardedLinkRecallOptions(
 	expected expectedLinkRecallOptions,
 ) {
 	t.Helper()
+	requireIntOption(t, request.ContextTokenBudget, expected.contextTokenBudget, "context_token_budget")
 	requireBoolOption(t, request.LinkRecallEnabled, expected.enabled, "link_recall_enabled")
 	requireIntOption(t, request.LinkRecallDepth, expected.depth, "link_recall_depth")
 	requireIntOption(t, request.LinkRecallMaxNeighbors, expected.maxNeighbors, "link_recall_max_neighbors")

@@ -22,6 +22,7 @@ var errMessageRuntimeDependenciesIncomplete = errors.New("chat message runtime d
 // ChatMessageCreateRequest captures inbound chat message payloads for runtime preparation.
 type ChatMessageCreateRequest struct {
 	ContentText                 string   `json:"content_text"`
+	ContextTokenBudget          *int     `json:"context_token_budget,omitempty"`
 	LinkRecallEnabled           *bool    `json:"link_recall_enabled,omitempty"`
 	LinkRecallDepth             *int     `json:"link_recall_depth,omitempty"`
 	LinkRecallMaxNeighbors      *int     `json:"link_recall_max_neighbors,omitempty"`
@@ -356,6 +357,7 @@ func (runtime *ChatMessageRuntime) prepareChatContext(
 			ActorUserID:                 actorUserID,
 			UserQuery:                   payload.ContentText,
 			EmbeddingDim:                runtime.embeddingDim,
+			ContextTokenBudget:          payload.ContextTokenBudget,
 			LinkRecallEnabled:           payload.LinkRecallEnabled,
 			LinkRecallDepth:             payload.LinkRecallDepth,
 			LinkRecallMaxNeighbors:      payload.LinkRecallMaxNeighbors,

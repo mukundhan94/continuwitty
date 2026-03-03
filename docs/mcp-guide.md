@@ -306,6 +306,7 @@ Note: project audit-event listing is currently REST-only (`GET /api/v1/projects/
       "arguments": {
         "session_id": "00000000-0000-0000-0000-000000000000",
         "content_text": "Summarize the pinned engrams",
+        "context_token_budget": 1200,
         "link_recall_enabled": true,
         "link_recall_depth": 1,
         "link_recall_max_neighbors": 8,
@@ -422,6 +423,7 @@ curl -sN -b "$COOKIE_JAR" \
       "arguments": {
         "session_id": "00000000-0000-0000-0000-000000000000",
         "content_text": "Summarize pinned engrams and list action items.",
+        "context_token_budget": 1200,
         "link_recall_enabled": true,
         "link_recall_depth": 1,
         "link_recall_max_neighbors": 8,
@@ -476,6 +478,7 @@ curl -sN -b "$COOKIE_JAR" \
 
 `chat.send_message` request arguments can also include optional bounded recall controls:
 
+- `context_token_budget`
 - `link_recall_enabled`
 - `link_recall_depth`
 - `link_recall_max_neighbors`

@@ -1072,6 +1072,47 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 39 - Temporal Query Extensions + Cost-Aware Context Assembly
+
+### Status
+
+- In Progress (2026-03-03).
+- Delivered in this checkpoint:
+  - bounded context-budget controls added for chat send paths:
+    - REST/MCP send-message payloads now accept `context_token_budget`.
+    - context assembly now enforces bounded estimated-token budgets with deterministic section truncation.
+    - retrieval audit now includes context-budget diagnostics:
+      - `context_token_budget`
+      - `context_token_estimate`
+      - `context_token_truncated`
+  - regression coverage added for:
+    - context-budget normalization and truncation behavior.
+    - context-budget audit metadata for empty/non-empty context assembly.
+    - REST/MCP forwarding of `context_token_budget` overrides.
+- Remaining in this phase:
+  - temporal query filters beyond created-at range (`freshness_score`, engagement thresholds, recall/trace windows).
+  - extended query/tool contract coverage for temporal/engagement filter combinations.
+
+### Goals
+
+1. Add explicit temporal controls so recall can prioritize the right time horizon.
+2. Keep chat context assembly budget-aware to reduce token waste.
+3. Preserve deterministic, traceable retrieval behavior across REST and MCP.
+
+### Deliverables
+
+1. Temporal query/filter extensions in engram query contracts.
+2. Cost-aware context assembly controls with retrieval audit metadata.
+3. Test and benchmark coverage for budget adherence and temporal filter correctness.
+
+### Exit Criteria
+
+1. Temporal filters can be applied consistently in REST and MCP query paths.
+2. Context assembly honors bounded budgets with deterministic audit metadata.
+3. Deterministic acceptance and unit coverage protects temporal + budget behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
