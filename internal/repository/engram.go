@@ -219,6 +219,10 @@ func buildEngramQueryWhere(
 	addOptionalPointerClause(builder, request.CreatedBefore, "created_at <= %s")
 	addOptionalPointerClause(builder, request.AccessCountMin, "COALESCE(access_count, 0) >= %s")
 	addOptionalPointerClause(builder, request.FreshnessScoreMin, "COALESCE(freshness_score, 1.0) >= %s")
+	addOptionalPointerClause(builder, request.LastAccessedAfter, "COALESCE(last_accessed_at, created_at) >= %s")
+	addOptionalPointerClause(builder, request.LastAccessedBefore, "COALESCE(last_accessed_at, created_at) <= %s")
+	addOptionalPointerClause(builder, request.FreshnessComputedAfter, "COALESCE(freshness_last_computed_at, created_at) >= %s")
+	addOptionalPointerClause(builder, request.FreshnessComputedBefore, "COALESCE(freshness_last_computed_at, created_at) <= %s")
 	return builder.whereClause(), builder.params
 }
 

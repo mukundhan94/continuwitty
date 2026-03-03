@@ -46,14 +46,18 @@ func buildEngramQueryDispatchRequest(
 }
 
 type engramQueryPayloadParts struct {
-	topK              int
-	projectID         *string
-	tags              []string
-	keywords          []string
-	createdAfter      *time.Time
-	createdBefore     *time.Time
-	accessCountMin    *int
-	freshnessScoreMin *float64
+	topK                    int
+	projectID               *string
+	tags                    []string
+	keywords                []string
+	createdAfter            *time.Time
+	createdBefore           *time.Time
+	accessCountMin          *int
+	freshnessScoreMin       *float64
+	lastAccessedAfter       *time.Time
+	lastAccessedBefore      *time.Time
+	freshnessComputedAfter  *time.Time
+	freshnessComputedBefore *time.Time
 }
 
 func parseRequiredQueryParam(params map[string]any) (string, *toolDispatchError) {
@@ -77,29 +81,106 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
 	}
-	createdAfter, dispatchErr := parseOptionalParam(params, "created_after", optionalRFC3339TimeParam)
+	temporalParts, dispatchErr := parseEngramQueryTemporalParts(params)
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
 	}
-	createdBefore, dispatchErr := parseOptionalParam(params, "created_before", optionalRFC3339TimeParam)
-	if dispatchErr != nil {
-		return engramQueryPayloadParts{}, dispatchErr
-	}
-	accessCountMin, dispatchErr := parseEngramQueryAccessCountMin(params)
-	if dispatchErr != nil {
-		return engramQueryPayloadParts{}, dispatchErr
-	}
-	freshnessScoreMin, dispatchErr := parseEngramQueryFreshnessScoreMin(params)
+	engagementParts, dispatchErr := parseEngramQueryEngagementParts(params)
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
 	}
 	return engramQueryPayloadParts{
-		topK:              topK,
-		projectID:         optionalProjectIDParam(params, "project_id"),
-		tags:              tags,
-		keywords:          keywords,
-		createdAfter:      createdAfter,
-		createdBefore:     createdBefore,
+		topK:                    topK,
+		projectID:               optionalProjectIDParam(params, "project_id"),
+		tags:                    tags,
+		keywords:                keywords,
+		createdAfter:            temporalParts.createdAfter,
+		createdBefore:           temporalParts.createdBefore,
+		accessCountMin:          engagementParts.accessCountMin,
+		freshnessScoreMin:       engagementParts.freshnessScoreMin,
+		lastAccessedAfter:       temporalParts.lastAccessedAfter,
+		lastAccessedBefore:      temporalParts.lastAccessedBefore,
+		freshnessComputedAfter:  temporalParts.freshnessComputedAfter,
+		freshnessComputedBefore: temporalParts.freshnessComputedBefore,
+	}, nil
+}
+
+type engramQueryTemporalParts struct {
+	createdAfter            *time.Time
+	createdBefore           *time.Time
+	lastAccessedAfter       *time.Time
+	lastAccessedBefore      *time.Time
+	freshnessComputedAfter  *time.Time
+	freshnessComputedBefore *time.Time
+}
+
+func parseEngramQueryTemporalParts(params map[string]any) (engramQueryTemporalParts, *toolDispatchError) {
+	createdAfter, dispatchErr := parseOptionalParam(params, "created_after", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	createdBefore, dispatchErr := parseOptionalParam(params, "created_before", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	lastAccessedAfter, dispatchErr := parseOptionalParam(params, "last_accessed_after", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	lastAccessedBefore, dispatchErr := parseOptionalParam(params, "last_accessed_before", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	freshnessComputedAfter, dispatchErr := parseOptionalParam(params, "freshness_computed_after", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	freshnessComputedBefore, dispatchErr := parseOptionalParam(params, "freshness_computed_before", optionalRFC3339TimeParam)
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	parts := engramQueryTemporalParts{
+		createdAfter:            createdAfter,
+		createdBefore:           createdBefore,
+		lastAccessedAfter:       lastAccessedAfter,
+		lastAccessedBefore:      lastAccessedBefore,
+		freshnessComputedAfter:  freshnessComputedAfter,
+		freshnessComputedBefore: freshnessComputedBefore,
+	}
+	dispatchErr = validateTemporalWindows(temporalWindowSpecs(parts))
+	if dispatchErr != nil {
+		return engramQueryTemporalParts{}, dispatchErr
+	}
+	return parts, nil
+}
+
+func temporalWindowSpecs(parts engramQueryTemporalParts) []temporalWindowSpec {
+	return []temporalWindowSpec{
+		{after: parts.createdAfter, before: parts.createdBefore, afterParam: "created_after"},
+		{after: parts.lastAccessedAfter, before: parts.lastAccessedBefore, afterParam: "last_accessed_after"},
+		{
+			after:      parts.freshnessComputedAfter,
+			before:     parts.freshnessComputedBefore,
+			afterParam: "freshness_computed_after",
+		},
+	}
+}
+
+type engramQueryEngagementParts struct {
+	accessCountMin    *int
+	freshnessScoreMin *float64
+}
+
+func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngagementParts, *toolDispatchError) {
+	accessCountMin, dispatchErr := parseEngramQueryAccessCountMin(params)
+	if dispatchErr != nil {
+		return engramQueryEngagementParts{}, dispatchErr
+	}
+	freshnessScoreMin, dispatchErr := parseEngramQueryFreshnessScoreMin(params)
+	if dispatchErr != nil {
+		return engramQueryEngagementParts{}, dispatchErr
+	}
+	return engramQueryEngagementParts{
 		accessCountMin:    accessCountMin,
 		freshnessScoreMin: freshnessScoreMin,
 	}, nil
@@ -120,16 +201,38 @@ func parseOptionalParam[T any](
 
 func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryRequest {
 	return models.EngramQueryRequest{
-		Query:             query,
-		TopK:              parts.topK,
-		ProjectID:         parts.projectID,
-		Tags:              parts.tags,
-		Keywords:          parts.keywords,
-		CreatedAfter:      parts.createdAfter,
-		CreatedBefore:     parts.createdBefore,
-		AccessCountMin:    parts.accessCountMin,
-		FreshnessScoreMin: parts.freshnessScoreMin,
+		Query:                   query,
+		TopK:                    parts.topK,
+		ProjectID:               parts.projectID,
+		Tags:                    parts.tags,
+		Keywords:                parts.keywords,
+		CreatedAfter:            parts.createdAfter,
+		CreatedBefore:           parts.createdBefore,
+		AccessCountMin:          parts.accessCountMin,
+		FreshnessScoreMin:       parts.freshnessScoreMin,
+		LastAccessedAfter:       parts.lastAccessedAfter,
+		LastAccessedBefore:      parts.lastAccessedBefore,
+		FreshnessComputedAfter:  parts.freshnessComputedAfter,
+		FreshnessComputedBefore: parts.freshnessComputedBefore,
 	}
+}
+
+type temporalWindowSpec struct {
+	after      *time.Time
+	before     *time.Time
+	afterParam string
+}
+
+func validateTemporalWindows(specs []temporalWindowSpec) *toolDispatchError {
+	for _, spec := range specs {
+		if spec.after == nil || spec.before == nil {
+			continue
+		}
+		if spec.after.After(*spec.before) {
+			return invalidParamError(spec.afterParam)
+		}
+	}
+	return nil
 }
 
 func parseEngramQueryTopKParam(params map[string]any) (int, *toolDispatchError) {

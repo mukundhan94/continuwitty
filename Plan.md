@@ -1078,6 +1078,14 @@ Build a local-first memory system where agents and humans can:
 
 - In Progress (2026-03-03).
 - Delivered in this checkpoint:
+  - temporal recall-window extensions added for engram query paths:
+    - `last_accessed_after` / `last_accessed_before`
+    - `freshness_computed_after` / `freshness_computed_before`
+    - repository query support using:
+      - `COALESCE(last_accessed_at, created_at)` window predicates.
+      - `COALESCE(freshness_last_computed_at, created_at)` window predicates.
+    - REST decode validation for temporal windows + range ordering.
+    - MCP parser/validation + catalog metadata parity for temporal windows.
   - temporal query extensions added for engram query paths:
     - `access_count_min` and `freshness_score_min` filters in `models.EngramQueryRequest`.
     - repository query builder support via `COALESCE(access_count, 0)` and `COALESCE(freshness_score, 1.0)` predicates.
@@ -1094,8 +1102,8 @@ Build a local-first memory system where agents and humans can:
     - context-budget audit metadata for empty/non-empty context assembly.
     - REST/MCP forwarding of `context_token_budget` overrides.
 - Remaining in this phase:
-  - temporal query filters for recall/trace windows and advanced timeline constraints.
-  - extended query/tool contract coverage for temporal/engagement filter combinations.
+  - trace-aware query constraints (relation/trace-depth windows) beyond current engram row filters.
+  - broader contract and benchmark coverage for complex temporal/engagement filter combinations.
 
 ### Goals
 

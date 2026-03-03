@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"engram/internal/models"
 
@@ -303,17 +304,18 @@ func decodeQueryEngramsRequest(
 	if !decodeJSONAllowEmpty(writer, request, &payload) {
 		return models.EngramQueryRequest{}, false
 	}
-	payload.Query = strings.TrimSpace(payload.Query)
-	if payload.Query == "" {
-		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "query is required"})
+	normalizeQueryEngramsPayload(&payload)
+	if detail := validateQueryEngramsPayload(payload); detail != "" {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": detail})
 		return models.EngramQueryRequest{}, false
 	}
+	return payload, true
+}
+
+func normalizeQueryEngramsPayload(payload *models.EngramQueryRequest) {
+	payload.Query = strings.TrimSpace(payload.Query)
 	if payload.TopK == 0 {
 		payload.TopK = defaultEngramQueryTopK
-	}
-	if payload.TopK < 1 || payload.TopK > 50 {
-		writeJSON(writer, http.StatusBadRequest, map[string]string{"detail": "invalid top_k"})
-		return models.EngramQueryRequest{}, false
 	}
 	payload.ProjectID = normalizeOptionalProjectID(payload.ProjectID)
 	if payload.Tags == nil {
@@ -322,7 +324,75 @@ func decodeQueryEngramsRequest(
 	if payload.Keywords == nil {
 		payload.Keywords = []string{}
 	}
-	return payload, true
+}
+
+func validateQueryEngramsPayload(payload models.EngramQueryRequest) string {
+	if payload.Query == "" {
+		return "query is required"
+	}
+	if payload.TopK < 1 || payload.TopK > 50 {
+		return "invalid top_k"
+	}
+	if invalidAccessCountMin(payload.AccessCountMin) {
+		return "invalid access_count_min"
+	}
+	if invalidFreshnessScoreMin(payload.FreshnessScoreMin) {
+		return "invalid freshness_score_min"
+	}
+	return invalidQueryTemporalWindowDetail(payload)
+}
+
+func invalidAccessCountMin(value *int) bool {
+	return value != nil && *value < 0
+}
+
+func invalidFreshnessScoreMin(value *float64) bool {
+	if value == nil {
+		return false
+	}
+	if *value < 0 {
+		return true
+	}
+	return *value > 1
+}
+
+func hasInvalidTemporalWindow(after *time.Time, before *time.Time) bool {
+	if after == nil || before == nil {
+		return false
+	}
+	return after.After(*before)
+}
+
+type queryTemporalWindowSpec struct {
+	after         *time.Time
+	before        *time.Time
+	invalidDetail string
+}
+
+func invalidQueryTemporalWindowDetail(payload models.EngramQueryRequest) string {
+	specs := []queryTemporalWindowSpec{
+		{
+			after:         payload.CreatedAfter,
+			before:        payload.CreatedBefore,
+			invalidDetail: "invalid created_at window",
+		},
+		{
+			after:         payload.LastAccessedAfter,
+			before:        payload.LastAccessedBefore,
+			invalidDetail: "invalid last_accessed window",
+		},
+		{
+			after:         payload.FreshnessComputedAfter,
+			before:        payload.FreshnessComputedBefore,
+			invalidDetail: "invalid freshness_computed window",
+		},
+	}
+	for _, spec := range specs {
+		if hasInvalidTemporalWindow(spec.after, spec.before) {
+			return spec.invalidDetail
+		}
+	}
+	return ""
 }
 
 func decodeEngramFeedbackRequest(

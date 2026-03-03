@@ -13,28 +13,44 @@ import (
 )
 
 func TestCompatibilityServiceEngramQueryParity(t *testing.T) {
-	actorUserID := uuid.MustParse("39500000-0000-0000-0000-000000000395")
-	createdAfter := mustParseRFC3339(t, "2026-01-01T00:00:00Z")
-	createdBefore := mustParseRFC3339(t, "2026-02-01T00:00:00Z")
-	projectID := "proj-alpha"
-	accessCountMin := 3
-	freshnessScoreMin := 0.42
-	params := map[string]any{
-		"query":               "roadmap",
-		"top_k":               7.0,
-		"project_id":          projectID,
-		"tags":                []any{"ops", "planning"},
-		"keywords":            []any{"risk"},
-		"created_after":       createdAfter.Format(time.RFC3339),
-		"created_before":      createdBefore.Format(time.RFC3339),
-		"access_count_min":    float64(accessCountMin),
-		"freshness_score_min": freshnessScoreMin,
+	fixture := buildEngramQueryParityFixture(t)
+	for _, testCase := range fixture.testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			frame := runCompatibilityRequestWithService(
+				t,
+				newEngramQueryCompatibilityService(fixture.service),
+				testCase.request,
+			)
+			results := engramQueryResultsFromFrame(t, frame, testCase.asToolsCallPath)
+			if !reflect.DeepEqual(fixture.service.results, results) {
+				t.Fatalf("expected query results payload to match service output")
+			}
+			assertEngramQueryCall(t, fixture.service.call, fixture.expected)
+		})
 	}
+}
+
+type engramQueryParityFixture struct {
+	service   *fakeEngramQueryService
+	expected  EngramQueryDispatchRequest
+	testCases []engramQueryParityTestCase
+}
+
+type engramQueryParityTestCase struct {
+	name            string
+	request         StreamCallRequest
+	asToolsCallPath bool
+}
+
+func buildEngramQueryParityFixture(t *testing.T) engramQueryParityFixture {
+	actorUserID := uuid.MustParse("39500000-0000-0000-0000-000000000395")
+	params, expected := buildEngramQueryParityExpectations(t, actorUserID)
 	service := &fakeEngramQueryService{
 		results: []models.EngramQueryResult{
 			{
 				EngramID:    uuid.MustParse("39500000-0000-0000-0000-000000000396"),
-				ProjectID:   projectID,
+				ProjectID:   "proj-alpha",
 				Title:       "Roadmap",
 				Abstract:    "Quarterly plan",
 				CreatedAt:   time.Unix(1700003950, 0).UTC(),
@@ -45,53 +61,71 @@ func TestCompatibilityServiceEngramQueryParity(t *testing.T) {
 			},
 		},
 	}
+	return engramQueryParityFixture{
+		service:  service,
+		expected: expected,
+		testCases: []engramQueryParityTestCase{
+			{
+				name:            "direct",
+				request:         directToolRequest(actorUserID.String(), "engram.query", params),
+				asToolsCallPath: false,
+			},
+			{
+				name:            "tools call",
+				request:         toolsCallRequest(actorUserID.String(), "engram_query", params),
+				asToolsCallPath: true,
+			},
+		},
+	}
+}
+
+func buildEngramQueryParityExpectations(
+	t *testing.T,
+	actorUserID uuid.UUID,
+) (map[string]any, EngramQueryDispatchRequest) {
+	createdAfter := mustParseRFC3339(t, "2026-01-01T00:00:00Z")
+	createdBefore := mustParseRFC3339(t, "2026-02-01T00:00:00Z")
+	lastAccessedAfter := mustParseRFC3339(t, "2026-01-10T00:00:00Z")
+	lastAccessedBefore := mustParseRFC3339(t, "2026-02-10T00:00:00Z")
+	freshnessComputedAfter := mustParseRFC3339(t, "2026-01-15T00:00:00Z")
+	freshnessComputedBefore := mustParseRFC3339(t, "2026-02-15T00:00:00Z")
+	projectID := "proj-alpha"
+	accessCountMin := 3
+	freshnessScoreMin := 0.42
+	params := map[string]any{
+		"query":                     "roadmap",
+		"top_k":                     7.0,
+		"project_id":                projectID,
+		"tags":                      []any{"ops", "planning"},
+		"keywords":                  []any{"risk"},
+		"created_after":             createdAfter.Format(time.RFC3339),
+		"created_before":            createdBefore.Format(time.RFC3339),
+		"access_count_min":          float64(accessCountMin),
+		"freshness_score_min":       freshnessScoreMin,
+		"last_accessed_after":       lastAccessedAfter.Format(time.RFC3339),
+		"last_accessed_before":      lastAccessedBefore.Format(time.RFC3339),
+		"freshness_computed_after":  freshnessComputedAfter.Format(time.RFC3339),
+		"freshness_computed_before": freshnessComputedBefore.Format(time.RFC3339),
+	}
 	expected := EngramQueryDispatchRequest{
 		ActorUserID: actorUserID,
 		Payload: models.EngramQueryRequest{
-			Query:             "roadmap",
-			TopK:              7,
-			ProjectID:         &projectID,
-			Tags:              []string{"ops", "planning"},
-			Keywords:          []string{"risk"},
-			CreatedAfter:      &createdAfter,
-			CreatedBefore:     &createdBefore,
-			AccessCountMin:    &accessCountMin,
-			FreshnessScoreMin: &freshnessScoreMin,
+			Query:                   "roadmap",
+			TopK:                    7,
+			ProjectID:               &projectID,
+			Tags:                    []string{"ops", "planning"},
+			Keywords:                []string{"risk"},
+			CreatedAfter:            &createdAfter,
+			CreatedBefore:           &createdBefore,
+			AccessCountMin:          &accessCountMin,
+			FreshnessScoreMin:       &freshnessScoreMin,
+			LastAccessedAfter:       &lastAccessedAfter,
+			LastAccessedBefore:      &lastAccessedBefore,
+			FreshnessComputedAfter:  &freshnessComputedAfter,
+			FreshnessComputedBefore: &freshnessComputedBefore,
 		},
 	}
-
-	testCases := []struct {
-		name            string
-		request         StreamCallRequest
-		asToolsCallPath bool
-	}{
-		{
-			name:            "direct",
-			request:         directToolRequest(actorUserID.String(), "engram.query", params),
-			asToolsCallPath: false,
-		},
-		{
-			name:            "tools call",
-			request:         toolsCallRequest(actorUserID.String(), "engram_query", params),
-			asToolsCallPath: true,
-		},
-	}
-
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			frame := runCompatibilityRequestWithService(
-				t,
-				newEngramQueryCompatibilityService(service),
-				testCase.request,
-			)
-			results := engramQueryResultsFromFrame(t, frame, testCase.asToolsCallPath)
-			if !reflect.DeepEqual(service.results, results) {
-				t.Fatalf("expected query results payload to match service output")
-			}
-			assertEngramQueryCall(t, service.call, expected)
-		})
-	}
+	return params, expected
 }
 
 func TestCompatibilityServiceEngramQueryUsesDefaults(t *testing.T) {
@@ -138,6 +172,13 @@ func TestCompatibilityServiceEngramQueryValidationAndErrors(t *testing.T) {
 		{name: "invalid keywords type", params: map[string]any{"query": "x", "keywords": "bad"}},
 		{name: "invalid created_after", params: map[string]any{"query": "x", "created_after": "bad"}},
 		{name: "invalid created_before", params: map[string]any{"query": "x", "created_before": "bad"}},
+		{name: "invalid created window", params: map[string]any{"query": "x", "created_after": "2026-02-02T00:00:00Z", "created_before": "2026-02-01T00:00:00Z"}},
+		{name: "invalid last_accessed_after", params: map[string]any{"query": "x", "last_accessed_after": "bad"}},
+		{name: "invalid last_accessed_before", params: map[string]any{"query": "x", "last_accessed_before": "bad"}},
+		{name: "invalid last_accessed window", params: map[string]any{"query": "x", "last_accessed_after": "2026-02-02T00:00:00Z", "last_accessed_before": "2026-02-01T00:00:00Z"}},
+		{name: "invalid freshness_computed_after", params: map[string]any{"query": "x", "freshness_computed_after": "bad"}},
+		{name: "invalid freshness_computed_before", params: map[string]any{"query": "x", "freshness_computed_before": "bad"}},
+		{name: "invalid freshness_computed window", params: map[string]any{"query": "x", "freshness_computed_after": "2026-02-02T00:00:00Z", "freshness_computed_before": "2026-02-01T00:00:00Z"}},
 		{name: "invalid access_count_min type", params: map[string]any{"query": "x", "access_count_min": "bad"}},
 		{name: "invalid access_count_min negative", params: map[string]any{"query": "x", "access_count_min": -1.0}},
 		{name: "invalid freshness_score_min low", params: map[string]any{"query": "x", "freshness_score_min": -0.1}},

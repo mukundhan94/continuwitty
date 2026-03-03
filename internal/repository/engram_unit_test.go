@@ -17,17 +17,25 @@ func TestBuildEngramQueryWhereIncludesAllFilters(t *testing.T) {
 	createdBefore := time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC)
 	accessCountMin := 3
 	freshnessScoreMin := 0.6
+	lastAccessedAfter := time.Date(2026, 2, 7, 0, 0, 0, 0, time.UTC)
+	lastAccessedBefore := time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC)
+	freshnessComputedAfter := time.Date(2026, 2, 8, 0, 0, 0, 0, time.UTC)
+	freshnessComputedBefore := time.Date(2026, 2, 21, 0, 0, 0, 0, time.UTC)
 	projectID := "engram-vault"
 	request := models.EngramQueryRequest{
-		Query:             "durable memory",
-		TopK:              5,
-		ProjectID:         &projectID,
-		Tags:              []string{"memory"},
-		Keywords:          []string{"checkpoint"},
-		CreatedAfter:      &createdAfter,
-		CreatedBefore:     &createdBefore,
-		AccessCountMin:    &accessCountMin,
-		FreshnessScoreMin: &freshnessScoreMin,
+		Query:                   "durable memory",
+		TopK:                    5,
+		ProjectID:               &projectID,
+		Tags:                    []string{"memory"},
+		Keywords:                []string{"checkpoint"},
+		CreatedAfter:            &createdAfter,
+		CreatedBefore:           &createdBefore,
+		AccessCountMin:          &accessCountMin,
+		FreshnessScoreMin:       &freshnessScoreMin,
+		LastAccessedAfter:       &lastAccessedAfter,
+		LastAccessedBefore:      &lastAccessedBefore,
+		FreshnessComputedAfter:  &freshnessComputedAfter,
+		FreshnessComputedBefore: &freshnessComputedBefore,
 	}
 
 	whereSQL, params := buildEngramQueryWhere(request, &actorUserID, "[0.1,0.2,0.3]")
@@ -41,6 +49,10 @@ func TestBuildEngramQueryWhereIncludesAllFilters(t *testing.T) {
 		"created_at <= $7",
 		"COALESCE(access_count, 0) >= $8",
 		"COALESCE(freshness_score, 1.0) >= $9",
+		"COALESCE(last_accessed_at, created_at) >= $10",
+		"COALESCE(last_accessed_at, created_at) <= $11",
+		"COALESCE(freshness_last_computed_at, created_at) >= $12",
+		"COALESCE(freshness_last_computed_at, created_at) <= $13",
 		"owner_user_id = $3",
 		"actor_user.user_id = $3",
 		"pm.project_id = project_id",
@@ -63,6 +75,10 @@ func TestBuildEngramQueryWhereIncludesAllFilters(t *testing.T) {
 		createdBefore,
 		accessCountMin,
 		freshnessScoreMin,
+		lastAccessedAfter,
+		lastAccessedBefore,
+		freshnessComputedAfter,
+		freshnessComputedBefore,
 	}
 	if !reflect.DeepEqual(params, expectedParams) {
 		t.Fatalf("expected params %#v, got %#v", expectedParams, params)

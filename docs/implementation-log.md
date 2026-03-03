@@ -7,6 +7,31 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 39 extension: recall/timeline temporal windows)
+
+1. Extended engram query contracts with recall/timeline window filters:
+   - `last_accessed_after`
+   - `last_accessed_before`
+   - `freshness_computed_after`
+   - `freshness_computed_before`
+2. Added repository query support:
+   - `internal/repository/engram.go` now applies optional predicates on:
+     - `COALESCE(last_accessed_at, created_at)`
+     - `COALESCE(freshness_last_computed_at, created_at)`
+3. Added REST + MCP parity:
+   - `internal/api/session_engrams.go` validates temporal window ordering for:
+     - created window
+     - last-accessed window
+     - freshness-computed window
+   - `internal/mcp/compatibility_dispatch_engram_query_support.go` parses and validates the same windows.
+   - `internal/mcp/catalog_metadata_data.go` exposes the new `engram.query` arguments.
+4. Added regression coverage:
+   - repository SQL/placeholder/arg coverage in `internal/repository/engram_unit_test.go`.
+   - MCP parity/validation coverage in `internal/mcp/compatibility_service_engram_query_test.go`.
+   - session route parsing/validation coverage in `internal/api/session_engrams_test.go`.
+5. Validation:
+   - `go test ./internal/models ./internal/repository ./internal/mcp ./internal/api -count=1`
+
 ### 2026-03-03 (Phase 39 extension: temporal query filters for engagement + freshness)
 
 1. Extended engram query contracts with temporal/engagement filters:

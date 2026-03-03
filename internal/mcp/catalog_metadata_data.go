@@ -582,6 +582,22 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":   "string",
 					"format": "date-time",
 				},
+				"last_accessed_after": map[string]any{
+					"type":   "string",
+					"format": "date-time",
+				},
+				"last_accessed_before": map[string]any{
+					"type":   "string",
+					"format": "date-time",
+				},
+				"freshness_computed_after": map[string]any{
+					"type":   "string",
+					"format": "date-time",
+				},
+				"freshness_computed_before": map[string]any{
+					"type":   "string",
+					"format": "date-time",
+				},
 				"access_count_min": map[string]any{
 					"type":    "integer",
 					"minimum": 0,

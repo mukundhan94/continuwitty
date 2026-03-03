@@ -149,6 +149,55 @@ func TestMountSessionAuthRoutesEngramCollectionRoutesUseRepository(t *testing.T)
 	}
 }
 
+func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidTemporalWindow(t *testing.T) {
+	actor := newSessionRoutesTestActor(t, models.UserRoleAdmin)
+	handler, manager := buildSessionEngramRoutesTestHandler(
+		t,
+		sessionEngramRoutesHandlerOptions{
+			actor: actor,
+			queryEngrams: func(
+				_ context.Context,
+				_ models.EngramQueryRequest,
+				_ uuid.UUID,
+			) ([]models.EngramQueryResult, error) {
+				t.Fatalf("query engrams should not be called when temporal window is invalid")
+				return nil, nil
+			},
+		},
+	)
+	loginCookie := loginSessionEngramActor(
+		t,
+		handler,
+		manager,
+		sessionEngramLoginCredentials{
+			username: actor.Username,
+			password: "StrongPassword-12345",
+		},
+	)
+
+	response := executeEngramRequest(
+		t,
+		handler,
+		loginCookie,
+		engramRequestSpec{
+			method: http.MethodPost,
+			path:   "/api/v1/engrams/query",
+			body: map[string]any{
+				"query":          "durable memory",
+				"created_after":  "2026-03-01T00:00:00Z",
+				"created_before": "2026-02-01T00:00:00Z",
+			},
+		},
+	)
+
+	requireEqual(t, http.StatusBadRequest, response.Code)
+	var payload map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode invalid query response: %v", err)
+	}
+	requireEqual(t, "invalid created_at window", payload["detail"].(string))
+}
+
 func engramCollectionRouteCases() []engramCollectionRouteCase {
 	return []engramCollectionRouteCase{
 		{
@@ -167,7 +216,16 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 			requestSpec: engramRequestSpec{
 				method: http.MethodPost,
 				path:   "/api/v1/engrams/query",
-				body:   map[string]any{"query": "durable memory", "top_k": 5},
+				body: map[string]any{
+					"query":                     "durable memory",
+					"top_k":                     5,
+					"access_count_min":          2,
+					"freshness_score_min":       0.4,
+					"last_accessed_after":       "2026-02-01T00:00:00Z",
+					"last_accessed_before":      "2026-02-20T00:00:00Z",
+					"freshness_computed_after":  "2026-02-02T00:00:00Z",
+					"freshness_computed_before": "2026-02-21T00:00:00Z",
+				},
 			},
 		},
 	}
@@ -178,64 +236,106 @@ func buildCollectionRouteOptions(
 	actor *models.UserAuthRecord,
 	testCase engramCollectionRouteCase,
 ) sessionEngramRoutesHandlerOptions {
-	switch testCase.routeType {
-	case engramCollectionRouteList:
-		return sessionEngramRoutesHandlerOptions{
-			actor: actor,
-			listEngrams: func(
-				_ context.Context,
-				projectID *string,
-				limit int,
-				offset int,
-				actorUserID uuid.UUID,
-			) ([]models.EngramSummary, error) {
-				requireEqual(t, "proj-1", *projectID)
-				requireEqual(t, 10, limit)
-				requireEqual(t, 2, offset)
-				requireEqual(t, actor.UserID, actorUserID)
-				return []models.EngramSummary{
-					{
-						EngramID:        testCase.engramID,
-						ProjectID:       "proj-1",
-						Title:           "Title",
-						Abstract:        "Abstract",
-						CreatedAt:       time.Date(2026, 2, 22, 6, 0, 0, 0, time.UTC),
-						Tags:            []string{"tag"},
-						Keywords:        []string{"kw"},
-						VisibilityScope: "private",
-					},
-				}, nil
-			},
-		}
-	case engramCollectionRouteQuery:
-		return sessionEngramRoutesHandlerOptions{
-			actor: actor,
-			queryEngrams: func(
-				_ context.Context,
-				request models.EngramQueryRequest,
-				actorUserID uuid.UUID,
-			) ([]models.EngramQueryResult, error) {
-				requireEqual(t, "durable memory", request.Query)
-				requireEqual(t, 5, request.TopK)
-				requireEqual(t, actor.UserID, actorUserID)
-				return []models.EngramQueryResult{
-					{
-						EngramID:        testCase.engramID,
-						ProjectID:       "proj-1",
-						Title:           "LangGraph decision",
-						Abstract:        "Used for checkpoints",
-						CreatedAt:       time.Date(2026, 2, 22, 7, 0, 0, 0, time.UTC),
-						Tags:            []string{"memory"},
-						Keywords:        []string{"langgraph"},
-						VisibilityScope: "private",
-						Distance:        0.1,
-					},
-				}, nil
-			},
-		}
-	default:
-		t.Fatalf("unsupported engram collection route type: %d", testCase.routeType)
-		return sessionEngramRoutesHandlerOptions{}
+	if testCase.routeType == engramCollectionRouteList {
+		return buildListCollectionRouteOptions(t, actor, testCase)
+	}
+	if testCase.routeType == engramCollectionRouteQuery {
+		return buildQueryCollectionRouteOptions(t, actor, testCase)
+	}
+	t.Fatalf("unsupported engram collection route type: %d", testCase.routeType)
+	return sessionEngramRoutesHandlerOptions{}
+}
+
+func buildListCollectionRouteOptions(
+	t *testing.T,
+	actor *models.UserAuthRecord,
+	testCase engramCollectionRouteCase,
+) sessionEngramRoutesHandlerOptions {
+	return sessionEngramRoutesHandlerOptions{
+		actor: actor,
+		listEngrams: func(
+			_ context.Context,
+			projectID *string,
+			limit int,
+			offset int,
+			actorUserID uuid.UUID,
+		) ([]models.EngramSummary, error) {
+			requireEqualString(t, "proj-1", projectID)
+			requireEqual(t, 10, limit)
+			requireEqual(t, 2, offset)
+			requireEqual(t, actor.UserID, actorUserID)
+			return []models.EngramSummary{
+				{
+					EngramID:        testCase.engramID,
+					ProjectID:       "proj-1",
+					Title:           "Title",
+					Abstract:        "Abstract",
+					CreatedAt:       time.Date(2026, 2, 22, 6, 0, 0, 0, time.UTC),
+					Tags:            []string{"tag"},
+					Keywords:        []string{"kw"},
+					VisibilityScope: "private",
+				},
+			}, nil
+		},
+	}
+}
+
+func buildQueryCollectionRouteOptions(
+	t *testing.T,
+	actor *models.UserAuthRecord,
+	testCase engramCollectionRouteCase,
+) sessionEngramRoutesHandlerOptions {
+	return sessionEngramRoutesHandlerOptions{
+		actor: actor,
+		queryEngrams: func(
+			_ context.Context,
+			request models.EngramQueryRequest,
+			actorUserID uuid.UUID,
+		) ([]models.EngramQueryResult, error) {
+			assertTemporalQueryRequest(t, request)
+			requireEqual(t, actor.UserID, actorUserID)
+			return []models.EngramQueryResult{
+				{
+					EngramID:        testCase.engramID,
+					ProjectID:       "proj-1",
+					Title:           "LangGraph decision",
+					Abstract:        "Used for checkpoints",
+					CreatedAt:       time.Date(2026, 2, 22, 7, 0, 0, 0, time.UTC),
+					Tags:            []string{"memory"},
+					Keywords:        []string{"langgraph"},
+					VisibilityScope: "private",
+					Distance:        0.1,
+				},
+			}, nil
+		},
+	}
+}
+
+func requireEqualString(t *testing.T, expected string, value *string) {
+	t.Helper()
+	if value == nil {
+		t.Fatalf("expected string value %q", expected)
+	}
+	requireEqual(t, expected, *value)
+}
+
+func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest) {
+	t.Helper()
+	requireEqual(t, "durable memory", request.Query)
+	requireEqual(t, 5, request.TopK)
+	if request.AccessCountMin == nil {
+		t.Fatalf("expected access_count_min to be parsed")
+	}
+	if request.FreshnessScoreMin == nil {
+		t.Fatalf("expected freshness_score_min to be parsed")
+	}
+	requireEqual(t, 2, *request.AccessCountMin)
+	requireEqual(t, 0.4, *request.FreshnessScoreMin)
+	if request.LastAccessedAfter == nil || request.LastAccessedBefore == nil {
+		t.Fatalf("expected last_accessed window to be parsed")
+	}
+	if request.FreshnessComputedAfter == nil || request.FreshnessComputedBefore == nil {
+		t.Fatalf("expected freshness_computed window to be parsed")
 	}
 }
 

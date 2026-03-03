@@ -528,12 +528,14 @@ Document pin/list helpers:
     "project_id": "engram-vault",
     "top_k": 5,
     "access_count_min": 2,
-    "freshness_score_min": 0.4
+    "freshness_score_min": 0.4,
+    "last_accessed_after": "2026-02-01T00:00:00Z",
+    "last_accessed_before": "2026-03-01T00:00:00Z"
   }
 }
 ```
 
-`engram.query` also supports optional `created_after` / `created_before` (RFC3339), `access_count_min`, and `freshness_score_min` filters.
+`engram.query` also supports optional `created_after` / `created_before` and `freshness_computed_after` / `freshness_computed_before` (RFC3339), plus `access_count_min` and `freshness_score_min` filters.
 
 Collection add-items flow (resolve collection UUID first):
 

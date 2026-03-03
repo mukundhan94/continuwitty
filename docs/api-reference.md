@@ -282,6 +282,8 @@ curl -X POST http://localhost:8000/api/v1/engrams/query \
 Optional temporal/engagement filters:
 
 - `created_after` / `created_before` (RFC3339 timestamp)
+- `last_accessed_after` / `last_accessed_before` (RFC3339 timestamp)
+- `freshness_computed_after` / `freshness_computed_before` (RFC3339 timestamp)
 - `access_count_min` (int, minimum `0`)
 - `freshness_score_min` (number, bounded `0..1`)
 
