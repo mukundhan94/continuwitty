@@ -52,6 +52,7 @@ type engramQueryPayloadParts struct {
 	keywords                []string
 	createdAfter            *time.Time
 	createdBefore           *time.Time
+	distanceMax             *float64
 	usefulCountMin          *int
 	usefulCountMax          *int
 	accessCountMin          *int
@@ -103,6 +104,10 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
 	}
+	distanceMax, dispatchErr := parseEngramQueryDistanceMax(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
 	engagementParts, dispatchErr := parseEngramQueryEngagementParts(params)
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
@@ -118,6 +123,7 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		keywords:                keywords,
 		createdAfter:            temporalParts.createdAfter,
 		createdBefore:           temporalParts.createdBefore,
+		distanceMax:             distanceMax,
 		usefulCountMin:          engagementParts.usefulCountMin,
 		usefulCountMax:          engagementParts.usefulCountMax,
 		accessCountMin:          engagementParts.accessCountMin,
@@ -506,6 +512,7 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		Keywords:                parts.keywords,
 		CreatedAfter:            parts.createdAfter,
 		CreatedBefore:           parts.createdBefore,
+		DistanceMax:             parts.distanceMax,
 		UsefulCountMin:          parts.usefulCountMin,
 		UsefulCountMax:          parts.usefulCountMax,
 		AccessCountMin:          parts.accessCountMin,
@@ -563,6 +570,22 @@ func parseEngramQueryTopKParam(params map[string]any) (int, *toolDispatchError) 
 		return 0, invalidParamError("top_k")
 	}
 	return topK, nil
+}
+
+func parseEngramQueryDistanceMax(params map[string]any) (*float64, *toolDispatchError) {
+	rawValue, found := optionalParamValue(params, "distance_max")
+	if !found {
+		return nil, nil
+	}
+	parsed, ok := parseFloatValue(rawValue)
+	if !ok {
+		return nil, invalidParamError("distance_max")
+	}
+	if parsed < 0 {
+		return nil, invalidParamError("distance_max")
+	}
+	copy := parsed
+	return &copy, nil
 }
 
 func optionalStringArrayParam(params map[string]any, key string) ([]string, bool) {

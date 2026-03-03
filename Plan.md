@@ -1980,6 +1980,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 65 - Semantic Distance Ceiling Query Filter
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `distance_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `distance_max`.
+  - repository query builder now supports vector-distance ceiling predicate (`embed <=> $1::vector <= ...`).
+  - MCP `engram.query` parser/catalog now accept and validate `distance_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to bound semantic recall by absolute vector-distance ceiling.
+2. Keep semantic-distance filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for query payloads that omit distance controls.
+
+### Deliverables
+
+1. Contract extension for `distance_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum vector-distance thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for distance-ceiling filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2059,3 +2091,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 63: `contradiction_count_min` parity across REST/MCP/repository.
 29. Execute query range coherence validation increment:
    - [x] Phase 64: reject numeric `*_min > *_max` payloads across REST/MCP.
+30. Execute semantic distance ceiling query filter increment:
+   - [x] Phase 65: `distance_max` parity across REST/MCP/repository.

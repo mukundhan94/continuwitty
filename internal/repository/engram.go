@@ -217,6 +217,7 @@ func buildEngramQueryWhere(
 	builder.addStringSliceOverlapFilter("keywords", request.Keywords)
 	addOptionalPointerClause(builder, request.CreatedAfter, "created_at >= %s")
 	addOptionalPointerClause(builder, request.CreatedBefore, "created_at <= %s")
+	addOptionalPointerClause(builder, request.DistanceMax, "embed <=> $1::vector <= %s")
 	addOptionalPointerClause(builder, request.UsefulCountMin, "COALESCE(useful_count, 0) >= %s")
 	addOptionalPointerClause(builder, request.UsefulCountMax, "COALESCE(useful_count, 0) <= %s")
 	addOptionalPointerClause(builder, request.AccessCountMin, "COALESCE(access_count, 0) >= %s")

@@ -99,6 +99,7 @@ func buildEngramQueryParityExpectations(
 	freshnessComputedAfter := mustParseRFC3339(t, "2026-01-15T00:00:00Z")
 	freshnessComputedBefore := mustParseRFC3339(t, "2026-02-15T00:00:00Z")
 	projectID := "proj-alpha"
+	distanceMax := 0.45
 	usefulCountMin := 2
 	usefulCountMax := 8
 	accessCountMin := 3
@@ -127,6 +128,7 @@ func buildEngramQueryParityExpectations(
 		"keywords":                         []any{"risk"},
 		"created_after":                    createdAfter.Format(time.RFC3339),
 		"created_before":                   createdBefore.Format(time.RFC3339),
+		"distance_max":                     distanceMax,
 		"useful_count_min":                 float64(usefulCountMin),
 		"useful_count_max":                 float64(usefulCountMax),
 		"access_count_min":                 float64(accessCountMin),
@@ -162,6 +164,7 @@ func buildEngramQueryParityExpectations(
 			Keywords:                []string{"risk"},
 			CreatedAfter:            &createdAfter,
 			CreatedBefore:           &createdBefore,
+			DistanceMax:             &distanceMax,
 			UsefulCountMin:          &usefulCountMin,
 			UsefulCountMax:          &usefulCountMax,
 			AccessCountMin:          &accessCountMin,
@@ -271,6 +274,8 @@ func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
 		{name: "invalid created_after", params: map[string]any{"query": "x", "created_after": "bad"}},
 		{name: "invalid created_before", params: map[string]any{"query": "x", "created_before": "bad"}},
 		{name: "invalid created window", params: map[string]any{"query": "x", "created_after": "2026-02-02T00:00:00Z", "created_before": "2026-02-01T00:00:00Z"}},
+		{name: "invalid distance_max type", params: map[string]any{"query": "x", "distance_max": "bad"}},
+		{name: "invalid distance_max negative", params: map[string]any{"query": "x", "distance_max": -0.1}},
 		{name: "invalid last_accessed_after", params: map[string]any{"query": "x", "last_accessed_after": "bad"}},
 		{name: "invalid last_accessed_before", params: map[string]any{"query": "x", "last_accessed_before": "bad"}},
 		{name: "invalid last_accessed window", params: map[string]any{"query": "x", "last_accessed_after": "2026-02-02T00:00:00Z", "last_accessed_before": "2026-02-01T00:00:00Z"}},

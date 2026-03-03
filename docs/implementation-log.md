@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 65: semantic-distance ceiling query filter parity)
+
+1. Added semantic-distance ceiling query contract extension:
+   - new optional filter: `distance_max` (number, minimum `0`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `distance_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `distance_max`.
+3. Added repository predicate support:
+   - query builder now supports `embed <=> $1::vector <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `distance_max`.
+   - repository where-clause/parameter assertions for distance-ceiling predicate.
+   - MCP parity and validation coverage for distance-ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 64: query numeric-range coherence validation)
 
 1. Added REST range-coherence validation:
