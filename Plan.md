@@ -2276,6 +2276,70 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 74 - Freshness-Signal Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `freshness_signal_score_min` and `freshness_signal_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded freshness-signal filters (`0..1`) and rejects inverted freshness-signal windows.
+  - repository query pipeline now supports post-rerank freshness-signal filtering in combination with other score-band filters.
+  - MCP `engram.query` parser/catalog now accept and validate freshness-signal filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain retrieval by normalized freshness contribution in rerank diagnostics.
+2. Keep freshness-signal filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit freshness-signal filters.
+
+### Deliverables
+
+1. Contract extension for `freshness_signal_score_min` and `freshness_signal_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank freshness-signal filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply freshness-signal floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted freshness-signal windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for freshness-signal band filtering behavior.
+
+---
+
+### Phase 75 - Authority-Signal Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `authority_signal_score_min` and `authority_signal_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded authority-signal filters (`0..1`) and rejects inverted authority-signal windows.
+  - repository query pipeline now supports post-rerank authority-signal filtering in combination with other score-band filters.
+  - MCP `engram.query` parser/catalog now accept and validate authority-signal filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain retrieval by authority contribution in rerank diagnostics.
+2. Keep authority-signal filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit authority-signal filters.
+
+### Deliverables
+
+1. Contract extension for `authority_signal_score_min` and `authority_signal_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank authority-signal filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply authority-signal floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted authority-signal windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for authority-signal band filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2373,3 +2437,7 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 72: `feedback_signal_score_min` + `feedback_signal_score_max` parity across REST/MCP/repository.
 38. Execute engagement-signal filter increment:
    - [x] Phase 73: `engagement_signal_score_min` + `engagement_signal_score_max` parity across REST/MCP/repository.
+39. Execute freshness-signal filter increment:
+   - [x] Phase 74: `freshness_signal_score_min` + `freshness_signal_score_max` parity across REST/MCP/repository.
+40. Execute authority-signal filter increment:
+   - [x] Phase 75: `authority_signal_score_min` + `authority_signal_score_max` parity across REST/MCP/repository.

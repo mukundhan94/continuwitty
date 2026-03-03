@@ -162,6 +162,8 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 		input.Request.EngagementSignalScoreMax,
 		input.Request.FreshnessSignalScoreMin,
 		input.Request.FreshnessSignalScoreMax,
+		input.Request.AuthoritySignalScoreMin,
+		input.Request.AuthoritySignalScoreMax,
 		input.Request.CompositeRankScoreMin,
 		input.Request.CompositeRankScoreMax,
 	)
@@ -186,6 +188,8 @@ func filterByRankScoreBands(
 	engagementSignalScoreMax *float64,
 	freshnessSignalScoreMin *float64,
 	freshnessSignalScoreMax *float64,
+	authoritySignalScoreMin *float64,
+	authoritySignalScoreMax *float64,
 	minScore *float64,
 	maxScore *float64,
 ) []map[string]any {
@@ -199,6 +203,8 @@ func filterByRankScoreBands(
 		engagementSignalScoreMax == nil &&
 		freshnessSignalScoreMin == nil &&
 		freshnessSignalScoreMax == nil &&
+		authoritySignalScoreMin == nil &&
+		authoritySignalScoreMax == nil &&
 		minScore == nil &&
 		maxScore == nil {
 		return rows
@@ -238,6 +244,13 @@ func filterByRankScoreBands(
 			continue
 		}
 		if freshnessSignalScoreMax != nil && freshnessSignal > *freshnessSignalScoreMax {
+			continue
+		}
+		authoritySignal := authoritySignalScoreFromRow(row)
+		if authoritySignalScoreMin != nil && authoritySignal < *authoritySignalScoreMin {
+			continue
+		}
+		if authoritySignalScoreMax != nil && authoritySignal > *authoritySignalScoreMax {
 			continue
 		}
 		score := compositeRankScoreFromRow(row)

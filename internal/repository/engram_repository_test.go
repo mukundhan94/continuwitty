@@ -389,6 +389,90 @@ func TestQueryEngramsAppliesFreshnessSignalScoreFilters(t *testing.T) {
 	}
 }
 
+func TestQueryEngramsAppliesAuthoritySignalScoreFilters(t *testing.T) {
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	projectID := "engram-vault"
+	minAuthoritySignal := 0.45
+	maxAuthoritySignal := 0.55
+	db := buildAuthoritySignalQueryEngramsFixture(projectID)
+
+	results, err := QueryEngrams(
+		context.Background(),
+		db,
+		QueryEngramsInput{
+			Request: models.EngramQueryRequest{
+				Query:                   "durable checkpoint",
+				TopK:                    2,
+				ProjectID:               &projectID,
+				AuthoritySignalScoreMin: &minAuthoritySignal,
+				AuthoritySignalScoreMax: &maxAuthoritySignal,
+			},
+			QueryLiteral: "[0.1,0.2,0.3]",
+			ActorUserID:  &actorUserID,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, 1, len(results))
+	requireEqual(t, "Lexical Authority Match", results[0].Title)
+	if results[0].AuthoritySignalScore < minAuthoritySignal {
+		t.Fatalf("expected authority signal >= %v, got %v", minAuthoritySignal, results[0].AuthoritySignalScore)
+	}
+	if results[0].AuthoritySignalScore > maxAuthoritySignal {
+		t.Fatalf("expected authority signal <= %v, got %v", maxAuthoritySignal, results[0].AuthoritySignalScore)
+	}
+}
+
+func buildAuthoritySignalQueryEngramsFixture(projectID string) *fakeQueryer {
+	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
+	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)
+	return &fakeQueryer{
+		queryRowsResult: &fakeRows{
+			values: [][]any{
+				{
+					uuid.MustParse("00000000-0000-0000-0000-000000000231"),
+					projectID,
+					"Dense Authority Match",
+					"",
+					createdDense,
+					[]string{},
+					[]string{},
+					nil,
+					"private",
+					"unrelated text",
+					0,
+					2,
+					0.55,
+					0,
+					1,
+					0.4,
+					0.2,
+					0.2,
+				},
+				{
+					uuid.MustParse("00000000-0000-0000-0000-000000000232"),
+					projectID,
+					"Lexical Authority Match",
+					"",
+					createdLexical,
+					[]string{},
+					[]string{"durable", "checkpoint"},
+					nil,
+					"private",
+					"durable checkpoint lifecycle",
+					0,
+					1,
+					0.82,
+					0,
+					7,
+					0.88,
+					0.5,
+					0.25,
+				},
+			},
+		},
+	}
+}
+
 func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
 	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)

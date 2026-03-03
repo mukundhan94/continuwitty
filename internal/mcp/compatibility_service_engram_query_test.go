@@ -137,6 +137,8 @@ func buildEngramQueryParityExpectations(
 	engagementSignalScoreMax := 0.93
 	freshnessSignalScoreMin := 0.4
 	freshnessSignalScoreMax := 0.98
+	authoritySignalScoreMin := 0.39
+	authoritySignalScoreMax := 0.97
 	compositeRankScoreMin := 0.66
 	compositeRankScoreMax := 0.93
 	relationType := models.EngramLinkRelationSupports
@@ -179,6 +181,8 @@ func buildEngramQueryParityExpectations(
 		"engagement_signal_score_max":      engagementSignalScoreMax,
 		"freshness_signal_score_min":       freshnessSignalScoreMin,
 		"freshness_signal_score_max":       freshnessSignalScoreMax,
+		"authority_signal_score_min":       authoritySignalScoreMin,
+		"authority_signal_score_max":       authoritySignalScoreMax,
 		"composite_rank_score_min":         compositeRankScoreMin,
 		"composite_rank_score_max":         compositeRankScoreMax,
 		"last_accessed_after":              lastAccessedAfter.Format(time.RFC3339),
@@ -228,6 +232,8 @@ func buildEngramQueryParityExpectations(
 			EngagementSignalScoreMax: &engagementSignalScoreMax,
 			FreshnessSignalScoreMin:  &freshnessSignalScoreMin,
 			FreshnessSignalScoreMax:  &freshnessSignalScoreMax,
+			AuthoritySignalScoreMin:  &authoritySignalScoreMin,
+			AuthoritySignalScoreMax:  &authoritySignalScoreMax,
 			CompositeRankScoreMin:    &compositeRankScoreMin,
 			CompositeRankScoreMax:    &compositeRankScoreMax,
 			LastAccessedAfter:        &lastAccessedAfter,
@@ -413,6 +419,13 @@ func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
 		{name: "invalid freshness_signal_score_max low", params: map[string]any{"query": "x", "freshness_signal_score_max": -0.1}},
 		{name: "invalid freshness_signal_score_max high", params: map[string]any{"query": "x", "freshness_signal_score_max": 1.1}},
 		{name: "invalid freshness_signal_score window", params: map[string]any{"query": "x", "freshness_signal_score_min": 0.9, "freshness_signal_score_max": 0.7}},
+		{name: "invalid authority_signal_score_min type", params: map[string]any{"query": "x", "authority_signal_score_min": "bad"}},
+		{name: "invalid authority_signal_score_min low", params: map[string]any{"query": "x", "authority_signal_score_min": -0.1}},
+		{name: "invalid authority_signal_score_min high", params: map[string]any{"query": "x", "authority_signal_score_min": 1.1}},
+		{name: "invalid authority_signal_score_max type", params: map[string]any{"query": "x", "authority_signal_score_max": "bad"}},
+		{name: "invalid authority_signal_score_max low", params: map[string]any{"query": "x", "authority_signal_score_max": -0.1}},
+		{name: "invalid authority_signal_score_max high", params: map[string]any{"query": "x", "authority_signal_score_max": 1.1}},
+		{name: "invalid authority_signal_score window", params: map[string]any{"query": "x", "authority_signal_score_min": 0.9, "authority_signal_score_max": 0.7}},
 		{name: "invalid composite_rank_score_min type", params: map[string]any{"query": "x", "composite_rank_score_min": "bad"}},
 		{name: "invalid composite_rank_score_min low", params: map[string]any{"query": "x", "composite_rank_score_min": -0.1}},
 		{name: "invalid composite_rank_score_min high", params: map[string]any{"query": "x", "composite_rank_score_min": 1.1}},

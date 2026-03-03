@@ -473,6 +473,14 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 			invalid: invalidFreshnessSignalScoreMax(payload.FreshnessSignalScoreMax),
 		},
 		{
+			detail:  "invalid authority_signal_score_min",
+			invalid: invalidAuthoritySignalScoreMin(payload.AuthoritySignalScoreMin),
+		},
+		{
+			detail:  "invalid authority_signal_score_max",
+			invalid: invalidAuthoritySignalScoreMax(payload.AuthoritySignalScoreMax),
+		},
+		{
 			detail:  "invalid composite_rank_score_min",
 			invalid: invalidCompositeRankScoreMin(payload.CompositeRankScoreMin),
 		},
@@ -606,6 +614,14 @@ func invalidFreshnessSignalScoreMin(value *float64) bool {
 }
 
 func invalidFreshnessSignalScoreMax(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidAuthoritySignalScoreMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidAuthoritySignalScoreMax(value *float64) bool {
 	return invalidBoundedUnitInterval(value)
 }
 
@@ -750,6 +766,9 @@ func invalidQueryNumericWindowDetail(payload models.EngramQueryRequest) string {
 	}
 	if hasInvalidScoreWindow(payload.FreshnessSignalScoreMin, payload.FreshnessSignalScoreMax) {
 		return "invalid freshness_signal_score window"
+	}
+	if hasInvalidScoreWindow(payload.AuthoritySignalScoreMin, payload.AuthoritySignalScoreMax) {
+		return "invalid authority_signal_score window"
 	}
 	if hasInvalidScoreWindow(payload.CompositeRankScoreMin, payload.CompositeRankScoreMax) {
 		return "invalid composite_rank_score window"

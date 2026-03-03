@@ -7,6 +7,42 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 75: authority-signal score query band filters)
+
+1. Added authority-signal query filter contract extensions:
+   - new optional filters: `authority_signal_score_min` and `authority_signal_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded authority-signal filters and rejects inverted authority-signal windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate authority-signal filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports authority-signal score band filtering alongside other score-band filters.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for authority-signal filters.
+   - repository query-runtime coverage for authority-signal filtering behavior.
+   - MCP parity and validation coverage for authority-signal filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include authority-signal filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 74: freshness-signal score query band filters)
+
+1. Added freshness-signal query filter contract extensions:
+   - new optional filters: `freshness_signal_score_min` and `freshness_signal_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded freshness-signal filters and rejects inverted freshness-signal windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate freshness-signal filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports freshness-signal score band filtering alongside other score-band filters.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for freshness-signal filters.
+   - repository query-runtime coverage for freshness-signal filtering behavior.
+   - MCP parity and validation coverage for freshness-signal filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include freshness-signal filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 73: engagement-signal score query band filters)
 
 1. Added engagement-signal query filter contract extensions:
