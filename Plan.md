@@ -2180,6 +2180,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 71 - Lexical-Overlap Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `lexical_overlap_score_min` and `lexical_overlap_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded lexical-overlap filters (`0..1`) and rejects inverted lexical-overlap windows.
+  - repository query pipeline now supports post-rerank lexical-overlap filtering in combination with dense/composite score bands.
+  - MCP `engram.query` parser/catalog now accept and validate lexical-overlap filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to target retrieval rows with explicit lexical grounding confidence thresholds.
+2. Keep lexical-overlap filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit lexical-overlap filters.
+
+### Deliverables
+
+1. Contract extension for `lexical_overlap_score_min` and `lexical_overlap_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank lexical-overlap filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply lexical-overlap floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted lexical-overlap windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for lexical-overlap band filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2271,3 +2303,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 69: expose final `rank_position` in query result payloads across repository/REST/MCP.
 35. Execute dense-score filter increment:
    - [x] Phase 70: `dense_score_min` + `dense_score_max` parity across REST/MCP/repository.
+36. Execute lexical-overlap filter increment:
+   - [x] Phase 71: `lexical_overlap_score_min` + `lexical_overlap_score_max` parity across REST/MCP/repository.

@@ -7,6 +7,24 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 71: lexical-overlap score query band filters)
+
+1. Added lexical-overlap query filter contract extensions:
+   - new optional filters: `lexical_overlap_score_min` and `lexical_overlap_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded lexical-overlap filters and rejects inverted lexical-overlap windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate lexical-overlap filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports lexical-overlap band filtering alongside dense/composite score filtering.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for lexical-overlap filters.
+   - repository query-runtime coverage for lexical-overlap filtering behavior.
+   - MCP parity and validation coverage for lexical-overlap filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include lexical-overlap filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 70: dense-score query band filters)
 
 1. Added dense-score query filter contract extensions:

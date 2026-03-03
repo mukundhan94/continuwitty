@@ -257,6 +257,39 @@ func TestQueryEngramsAppliesDenseScoreFilters(t *testing.T) {
 	}
 }
 
+func TestQueryEngramsAppliesLexicalOverlapScoreFilters(t *testing.T) {
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	projectID := "engram-vault"
+	minLexicalScore := 0.9
+	maxLexicalScore := 1.0
+	db := buildQueryEngramsFixture(projectID)
+
+	results, err := QueryEngrams(
+		context.Background(),
+		db,
+		QueryEngramsInput{
+			Request: models.EngramQueryRequest{
+				Query:                  "durable checkpoint",
+				TopK:                   2,
+				ProjectID:              &projectID,
+				LexicalOverlapScoreMin: &minLexicalScore,
+				LexicalOverlapScoreMax: &maxLexicalScore,
+			},
+			QueryLiteral: "[0.1,0.2,0.3]",
+			ActorUserID:  &actorUserID,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, 1, len(results))
+	requireEqual(t, "Lexical Match", results[0].Title)
+	if results[0].LexicalOverlapScore < minLexicalScore {
+		t.Fatalf("expected lexical overlap >= %v, got %v", minLexicalScore, results[0].LexicalOverlapScore)
+	}
+	if results[0].LexicalOverlapScore > maxLexicalScore {
+		t.Fatalf("expected lexical overlap <= %v, got %v", maxLexicalScore, results[0].LexicalOverlapScore)
+	}
+}
+
 func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
 	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)

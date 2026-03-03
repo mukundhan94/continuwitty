@@ -129,6 +129,8 @@ func buildEngramQueryParityExpectations(
 	sourceSessionQualityMax := 0.95
 	denseScoreMin := 0.71
 	denseScoreMax := 0.97
+	lexicalOverlapScoreMin := 0.62
+	lexicalOverlapScoreMax := 0.99
 	compositeRankScoreMin := 0.66
 	compositeRankScoreMax := 0.93
 	relationType := models.EngramLinkRelationSupports
@@ -163,6 +165,8 @@ func buildEngramQueryParityExpectations(
 		"source_session_quality_max":       sourceSessionQualityMax,
 		"dense_score_min":                  denseScoreMin,
 		"dense_score_max":                  denseScoreMax,
+		"lexical_overlap_score_min":        lexicalOverlapScoreMin,
+		"lexical_overlap_score_max":        lexicalOverlapScoreMax,
 		"composite_rank_score_min":         compositeRankScoreMin,
 		"composite_rank_score_max":         compositeRankScoreMax,
 		"last_accessed_after":              lastAccessedAfter.Format(time.RFC3339),
@@ -204,6 +208,8 @@ func buildEngramQueryParityExpectations(
 			SourceSessionQualityMax: &sourceSessionQualityMax,
 			DenseScoreMin:           &denseScoreMin,
 			DenseScoreMax:           &denseScoreMax,
+			LexicalOverlapScoreMin:  &lexicalOverlapScoreMin,
+			LexicalOverlapScoreMax:  &lexicalOverlapScoreMax,
 			CompositeRankScoreMin:   &compositeRankScoreMin,
 			CompositeRankScoreMax:   &compositeRankScoreMax,
 			LastAccessedAfter:       &lastAccessedAfter,
@@ -361,6 +367,13 @@ func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
 		{name: "invalid dense_score_max low", params: map[string]any{"query": "x", "dense_score_max": -0.1}},
 		{name: "invalid dense_score_max high", params: map[string]any{"query": "x", "dense_score_max": 1.1}},
 		{name: "invalid dense_score window", params: map[string]any{"query": "x", "dense_score_min": 0.9, "dense_score_max": 0.7}},
+		{name: "invalid lexical_overlap_score_min type", params: map[string]any{"query": "x", "lexical_overlap_score_min": "bad"}},
+		{name: "invalid lexical_overlap_score_min low", params: map[string]any{"query": "x", "lexical_overlap_score_min": -0.1}},
+		{name: "invalid lexical_overlap_score_min high", params: map[string]any{"query": "x", "lexical_overlap_score_min": 1.1}},
+		{name: "invalid lexical_overlap_score_max type", params: map[string]any{"query": "x", "lexical_overlap_score_max": "bad"}},
+		{name: "invalid lexical_overlap_score_max low", params: map[string]any{"query": "x", "lexical_overlap_score_max": -0.1}},
+		{name: "invalid lexical_overlap_score_max high", params: map[string]any{"query": "x", "lexical_overlap_score_max": 1.1}},
+		{name: "invalid lexical_overlap_score window", params: map[string]any{"query": "x", "lexical_overlap_score_min": 0.9, "lexical_overlap_score_max": 0.7}},
 		{name: "invalid composite_rank_score_min type", params: map[string]any{"query": "x", "composite_rank_score_min": "bad"}},
 		{name: "invalid composite_rank_score_min low", params: map[string]any{"query": "x", "composite_rank_score_min": -0.1}},
 		{name: "invalid composite_rank_score_min high", params: map[string]any{"query": "x", "composite_rank_score_min": 1.1}},

@@ -154,6 +154,8 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 		rerankedRows,
 		input.Request.DenseScoreMin,
 		input.Request.DenseScoreMax,
+		input.Request.LexicalOverlapScoreMin,
+		input.Request.LexicalOverlapScoreMax,
 		input.Request.CompositeRankScoreMin,
 		input.Request.CompositeRankScoreMax,
 	)
@@ -170,10 +172,17 @@ func filterByRankScoreBands(
 	rows []map[string]any,
 	denseScoreMin *float64,
 	denseScoreMax *float64,
+	lexicalOverlapScoreMin *float64,
+	lexicalOverlapScoreMax *float64,
 	minScore *float64,
 	maxScore *float64,
 ) []map[string]any {
-	if denseScoreMin == nil && denseScoreMax == nil && minScore == nil && maxScore == nil {
+	if denseScoreMin == nil &&
+		denseScoreMax == nil &&
+		lexicalOverlapScoreMin == nil &&
+		lexicalOverlapScoreMax == nil &&
+		minScore == nil &&
+		maxScore == nil {
 		return rows
 	}
 	filtered := make([]map[string]any, 0, len(rows))
@@ -183,6 +192,13 @@ func filterByRankScoreBands(
 			continue
 		}
 		if denseScoreMax != nil && denseScore > *denseScoreMax {
+			continue
+		}
+		lexicalScore := lexicalOverlapScoreFromRow(row)
+		if lexicalOverlapScoreMin != nil && lexicalScore < *lexicalOverlapScoreMin {
+			continue
+		}
+		if lexicalOverlapScoreMax != nil && lexicalScore > *lexicalOverlapScoreMax {
 			continue
 		}
 		score := compositeRankScoreFromRow(row)
