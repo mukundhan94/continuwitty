@@ -7,6 +7,23 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 38 benchmark pass: contradiction warning synthesis latency baseline)
+
+1. Added contradiction warning microbenchmarks in `internal/chat/context_contradictions_benchmark_test.go`:
+   - `BenchmarkBuildContradictionWarnings50Paths`
+   - `BenchmarkBuildContradictionWarnings200Paths`
+2. Captured benchmark artifact in `docs/phase38-contradiction-benchmark.md`:
+   - command, environment, measured `ns/op`, memory, and allocation profiles.
+3. Added phase-scoped acceptance benchmark scenario scaffolding:
+   - `acceptance-tests/features/phase38-contradiction-mock.feature`
+   - `acceptance-tests/src/steps/phase38-contradiction-mock.steps.ts`
+   - tagged for explicit Phase 38 runs (`@phase38`) and excluded from default `@mock` CI gate while contradiction-link seed path investigation continues.
+4. Validation:
+   - `go test ./internal/chat -run '^$' -bench 'BenchmarkBuildContradictionWarnings(50Paths|200Paths)$' -benchmem`
+   - `make acceptance-bddgen`
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock`
+
 ### 2026-03-03 (Phase 38 continuation: contradiction alert admin API + MCP maintenance parity)
 
 1. Added contradiction alert maintenance workflows in admin service:

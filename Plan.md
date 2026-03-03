@@ -1044,6 +1044,9 @@ Build a local-first memory system where agents and humans can:
       - `engram.contradiction_list`
       - `engram.contradiction_resolve`
     - regression coverage for admin routes, service adapters, MCP parse/dispatch, and compatibility response parity.
+  - contradiction warning synthesis benchmark baseline documented:
+    - microbenchmarks for `buildContradictionWarnings` at 50/200 trace-path workloads.
+    - benchmark artifact captured in `docs/phase38-contradiction-benchmark.md`.
 - Remaining in this phase:
   - precision/recall benchmark coverage for contradiction warning quality.
 

@@ -241,6 +241,9 @@
     - `engram.contradiction_list`
     - `engram.contradiction_resolve`
   - regression coverage across admin routes, adapters, MCP parser/dispatch paths.
+- [x] Added contradiction warning synthesis latency benchmark baseline:
+  - chat benchmark coverage for `buildContradictionWarnings` at 50/200 path workloads.
+  - benchmark results + runbook documented in `docs/phase38-contradiction-benchmark.md`.
 - [ ] Add warning-quality benchmarks.
 
 ---
