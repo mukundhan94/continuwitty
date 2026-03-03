@@ -256,13 +256,11 @@ func newMCPCompatibilityService(
 	dependencies mcpCompatibilityRuntimeDependencies,
 	chatObservability chat.ObservabilityRecorder,
 ) *mcp.CompatibilityService {
-	messageAdapter := newMCPMessageAdapter(settings, dependencies.pool, chatObservability)
-	var messageSend mcp.MessageSendService
-	var messageStream mcp.MessageStreamService
-	if messageAdapter != nil {
-		messageSend = messageAdapter
-		messageStream = messageAdapter
-	}
+	messageSend, messageStream := resolveMCPMessageServices(
+		settings,
+		dependencies.pool,
+		chatObservability,
+	)
 
 	return mcp.NewCompatibilityServiceWithDependencies(
 		settings.AppSemanticVersion,
@@ -297,19 +295,22 @@ func newMCPCompatibilityService(
 				dependencies.projectService,
 				settings.EmbeddingDim,
 			),
-			EngramList:           newMCPEngramListAdapter(dependencies.memoryAdminService),
-			EngramGet:            newMCPEngramGetAdapter(dependencies.memoryAdminService),
-			EngramQuery:          newMCPEngramQueryAdapter(dependencies.pool, settings.EmbeddingDim),
-			EngramRehydrate:      newMCPEngramRehydrateAdapter(dependencies.pool),
-			EngramLinkGet:        newMCPEngramLinkGetAdapter(dependencies.pool),
-			EngramLinkCreate:     newMCPEngramLinkCreateAdapter(dependencies.pool),
-			EngramLinkList:       newMCPEngramLinkListAdapter(dependencies.pool),
-			EngramLinkUpdate:     newMCPEngramLinkUpdateAdapter(dependencies.pool),
-			EngramLinkArchive:    newMCPEngramLinkArchiveAdapter(dependencies.pool),
-			EngramLinkSuggest:    newMCPEngramLinkSuggestAdapter(dependencies.pool, settings.EmbeddingDim),
-			EngramTracePath:      newMCPEngramTracePathAdapter(dependencies.pool),
-			EngramUpdate:         newMCPEngramUpdateAdapter(dependencies.memoryAdminService),
-			EngramFeedback:       newMCPEngramFeedbackAdapter(dependencies.pool),
+			EngramList:        newMCPEngramListAdapter(dependencies.memoryAdminService),
+			EngramGet:         newMCPEngramGetAdapter(dependencies.memoryAdminService),
+			EngramQuery:       newMCPEngramQueryAdapter(dependencies.pool, settings.EmbeddingDim),
+			EngramRehydrate:   newMCPEngramRehydrateAdapter(dependencies.pool),
+			EngramLinkGet:     newMCPEngramLinkGetAdapter(dependencies.pool),
+			EngramLinkCreate:  newMCPEngramLinkCreateAdapter(dependencies.pool),
+			EngramLinkList:    newMCPEngramLinkListAdapter(dependencies.pool),
+			EngramLinkUpdate:  newMCPEngramLinkUpdateAdapter(dependencies.pool),
+			EngramLinkArchive: newMCPEngramLinkArchiveAdapter(dependencies.pool),
+			EngramLinkSuggest: newMCPEngramLinkSuggestAdapter(dependencies.pool, settings.EmbeddingDim),
+			EngramTracePath:   newMCPEngramTracePathAdapter(dependencies.pool),
+			EngramUpdate:      newMCPEngramUpdateAdapter(dependencies.memoryAdminService),
+			EngramFeedback:    newMCPEngramFeedbackAdapter(dependencies.pool),
+			EngramFreshnessRefresh: newMCPEngramFreshnessRefreshAdapter(
+				dependencies.memoryAdminService,
+			),
 			EngramMove:           newMCPEngramMoveAdapter(dependencies.memoryAdminService),
 			EngramDelete:         newMCPEngramDeleteAdapter(dependencies.memoryAdminService),
 			EngramRestore:        newMCPEngramRestoreAdapter(dependencies.memoryAdminService),
@@ -329,6 +330,18 @@ func newMCPCompatibilityService(
 			UnpinDocumentService:     newMCPUnpinDocumentAdapter(dependencies.pool),
 		},
 	)
+}
+
+func resolveMCPMessageServices(
+	settings config.Settings,
+	pool *pgxpool.Pool,
+	chatObservability chat.ObservabilityRecorder,
+) (mcp.MessageSendService, mcp.MessageStreamService) {
+	messageAdapter := newMCPMessageAdapter(settings, pool, chatObservability)
+	if messageAdapter == nil {
+		return nil, nil
+	}
+	return messageAdapter, messageAdapter
 }
 
 func resolveChatObservabilityRecorder(

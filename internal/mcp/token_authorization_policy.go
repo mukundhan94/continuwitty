@@ -13,6 +13,7 @@ var optionalProjectTools = map[string]struct{}{
 	"chat.list_project_documents": {},
 	"engram.list":                 {},
 	"engram.collection_list":      {},
+	"engram.refresh_freshness":    {},
 }
 
 var projectFallbackTools = map[string]struct{}{

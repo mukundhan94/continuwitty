@@ -985,6 +985,7 @@ Build a local-first memory system where agents and humans can:
   - schema baseline for freshness scoring (`engrams.freshness_score`, `engrams.freshness_last_computed_at`).
   - repository freshness refresh routine with half-life decay and optional project scoping.
   - admin memory API route to trigger freshness refresh (`POST /api/v1/admin/memory/engrams/freshness/refresh`).
+  - MCP maintenance tool to trigger freshness refresh (`engram.refresh_freshness` / `engram_refresh_freshness`, admin-only).
 - Remaining in this phase:
   - consolidation suggestion schema/services.
   - MCP/API tooling for consolidation listing/action.

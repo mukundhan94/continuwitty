@@ -31,6 +31,31 @@
    - `make test-unit`
    - CodeScene scores on touched Go files: `10.0`.
 
+### 2026-03-03 (Phase 37 extension: MCP freshness maintenance tool)
+
+1. Added MCP freshness maintenance dispatch path:
+   - new tool `engram.refresh_freshness` (tools-call alias `engram_refresh_freshness`) in:
+     - `internal/mcp/compatibility_dispatch_engram_freshness_support.go`
+     - `internal/mcp/compatibility_dispatch_engram_mutation_handlers.go`
+     - `internal/mcp/catalog.go`
+     - `internal/mcp/catalog_metadata_data.go`
+   - admin-only actor guard enforced in dispatch.
+2. Added compatibility service + runtime wiring:
+   - new compatibility interface/request/response contracts in `internal/mcp/compatibility_service.go`.
+   - dependency wiring in `cmd/api/main.go`.
+   - new adapter `cmd/api/mcp_engram_admin_freshness_adapter.go` forwarding to admin freshness service.
+3. Added token project-policy support:
+   - `internal/mcp/token_authorization_policy.go` now treats `engram.refresh_freshness` as an optional-project tool for project allowlist normalization/autofill behavior.
+4. Added regression coverage:
+   - `internal/mcp/compatibility_service_engram_refresh_freshness_test.go` verifies direct/tools parity, admin guard, parameter validation, and internal error mapping.
+5. Documentation updates:
+   - `docs/mcp-guide.md` tool catalog now includes `engram.feedback` and `engram.refresh_freshness`.
+   - roadmap/checkpoint entries updated for Phase 37 MCP slice progress.
+6. Validation:
+   - `go test ./internal/mcp ./cmd/api -count=1`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
 ### 2026-03-01 (Security follow-up closeout: OIDC rollout validation + centralized audit sink regression)
 
 1. Added explicit OIDC-to-sink integration coverage in `internal/api/session_ui_oidc_test.go`:

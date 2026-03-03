@@ -1255,6 +1255,21 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 			},
 		},
 	},
+	"engram.refresh_freshness": {
+		description: "Recompute engram freshness scores using half-life decay (admin-only maintenance).",
+		inputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"project_id": map[string]any{
+					"type": "string",
+				},
+				"half_life_days": map[string]any{
+					"type":    "number",
+					"minimum": 0.000001,
+				},
+			},
+		},
+	},
 	"engram.share": {
 		description: "Set an engram visibility scope to project.",
 		inputSchema: map[string]any{

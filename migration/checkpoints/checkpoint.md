@@ -195,6 +195,8 @@
   - `RefreshEngramFreshnessScores` with half-life decay and optional project scope.
 - [x] Added admin API trigger route:
   - `POST /api/v1/admin/memory/engrams/freshness/refresh`.
+- [x] Added MCP maintenance trigger tool:
+  - `engram.refresh_freshness` / `engram_refresh_freshness` (admin-only).
 - [ ] Add consolidation suggestion schema/services.
 - [ ] Add MCP/API consolidation tooling and acceptance/benchmark coverage.
 

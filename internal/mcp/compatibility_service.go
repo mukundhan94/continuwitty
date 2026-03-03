@@ -330,6 +330,14 @@ type EngramFeedbackService interface {
 	) (*models.EngramFeedbackRecord, error)
 }
 
+// EngramFreshnessRefreshService captures freshness maintenance behavior used by MCP compatibility engram dispatch.
+type EngramFreshnessRefreshService interface {
+	RefreshEngramFreshness(
+		ctx context.Context,
+		request EngramFreshnessRefreshRequest,
+	) (*EngramFreshnessRefreshResponse, error)
+}
+
 // EngramMoveService captures engram move-project behavior used by MCP compatibility engram dispatch.
 type EngramMoveService interface {
 	MoveEngram(
@@ -778,6 +786,22 @@ type EngramFeedbackRequest struct {
 	Note         *string
 }
 
+// EngramFreshnessRefreshRequest captures compatibility-level engram freshness refresh inputs.
+type EngramFreshnessRefreshRequest struct {
+	ActorUserID  uuid.UUID
+	ActorRole    models.UserRole
+	ProjectID    *string
+	HalfLifeDays *float64
+}
+
+// EngramFreshnessRefreshResponse captures compatibility-level freshness refresh outputs.
+type EngramFreshnessRefreshResponse struct {
+	ProjectID     *string   `json:"project_id,omitempty"`
+	HalfLifeDays  float64   `json:"half_life_days"`
+	ReferenceTime time.Time `json:"reference_time"`
+	UpdatedCount  int       `json:"updated_count"`
+}
+
 // EngramMoveRequest captures compatibility-level engram move inputs.
 type EngramMoveRequest struct {
 	ActorUserID       uuid.UUID
@@ -935,6 +959,7 @@ type CompatibilityServiceDependencies struct {
 	EngramCreateConversation EngramCreateFromConversationService
 	EngramUpdate             EngramUpdateService
 	EngramFeedback           EngramFeedbackService
+	EngramFreshnessRefresh   EngramFreshnessRefreshService
 	EngramMove               EngramMoveService
 	EngramDelete             EngramDeleteService
 	EngramRestore            EngramRestoreService
@@ -989,6 +1014,7 @@ type CompatibilityService struct {
 	engramCreateConversation EngramCreateFromConversationService
 	engramUpdate             EngramUpdateService
 	engramFeedback           EngramFeedbackService
+	engramFreshnessRefresh   EngramFreshnessRefreshService
 	engramMove               EngramMoveService
 	engramDelete             EngramDeleteService
 	engramRestore            EngramRestoreService
@@ -1067,6 +1093,7 @@ func NewCompatibilityServiceWithDependencies(
 		engramCreateConversation: dependencies.EngramCreateConversation,
 		engramUpdate:             dependencies.EngramUpdate,
 		engramFeedback:           dependencies.EngramFeedback,
+		engramFreshnessRefresh:   dependencies.EngramFreshnessRefresh,
 		engramMove:               dependencies.EngramMove,
 		engramDelete:             dependencies.EngramDelete,
 		engramRestore:            dependencies.EngramRestore,
