@@ -949,14 +949,15 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In Progress (2026-03-03).
+- Completed (2026-03-03).
 - Delivered in this cycle:
   - explicit `engram_feedback` storage and aggregate updates (`useful_count`, `contradiction_count`).
   - REST endpoint `POST /api/v1/engrams/{engram_id}/feedback`.
   - MCP tool `engram.feedback` / `engram_feedback`.
   - feedback signal integration in retrieval reranking.
-- Remaining in this phase:
-  - complete engagement/freshness weighting calibration and benchmark notes under current latency targets.
+  - engagement/freshness weighting calibration in composite rerank scoring.
+  - deterministic ranking tests for feedback + engagement + freshness signal effects.
+  - latency benchmark notes captured in `docs/phase36-relevance-calibration.md`.
 
 ### Goals
 
@@ -1044,5 +1045,5 @@ Build a local-first memory system where agents and humans can:
    - [x] enable access-aware federated linked recall across projects
 5. Execute memory-intelligence foundation in order:
    - [x] Phase 35: memory engagement tracking baseline.
-   - [ ] Phase 36: feedback loop + relevance/freshness scoring.
+   - [x] Phase 36: feedback loop + relevance/freshness scoring.
    - [x] Phase 37: time-decay + consolidation suggestions.

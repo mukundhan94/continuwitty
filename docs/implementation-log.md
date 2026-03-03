@@ -7,6 +7,39 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 36 closeout: engagement/freshness weighting calibration + latency benchmarks)
+
+1. Calibrated retrieval reranking with engagement/freshness signals:
+   - `internal/repository/engram_store.go` now includes:
+     - `COALESCE(access_count, 0) AS access_count`
+     - `COALESCE(freshness_score, 1.0) AS freshness_score`
+   - composite ranking weights now include five deterministic factors:
+     - dense `0.55`
+     - lexical `0.20`
+     - feedback `0.10`
+     - engagement `0.10`
+     - freshness `0.05`
+2. Refactored ranking logic into focused module for maintainability and code health:
+   - moved ranking/tokenization/score-normalization routines into `internal/repository/engram_rerank.go`.
+   - kept `internal/repository/engram.go` focused on retrieval text/context helpers.
+3. Expanded deterministic coverage:
+   - `internal/repository/engram_unit_test.go` now validates engagement+freshness preference behavior.
+   - `internal/repository/engram_repository_test.go` asserts query projection includes calibrated ranking inputs.
+   - added microbenchmarks in `internal/repository/engram_benchmark_test.go`:
+     - `BenchmarkRerankByCombinedScore50Candidates`
+     - `BenchmarkRerankByCombinedScore200Candidates`
+4. Captured benchmark notes and calibration rationale:
+   - `docs/phase36-relevance-calibration.md` records weight rationale, command, environment, and measured latency.
+5. Roadmap/checkpoint alignment:
+   - `Plan.md`: Phase 36 marked completed with calibration + benchmark documentation in delivered scope.
+   - `migration/checkpoints/checkpoint.md`: Phase 36 summary/tracker marked completed.
+6. Validation:
+   - `go test ./internal/repository -count=1`
+   - `go test ./internal/repository -run '^$' -bench 'BenchmarkRerankByCombinedScore(50Candidates|200Candidates)$' -benchmem`
+   - `make lint`
+   - `make test-unit`
+   - CodeScene scores on touched Go files: `10.0`.
+
 ### 2026-03-03 (Phase 37 kickoff slice: freshness maintenance baseline)
 
 1. Added freshness schema baseline in `db/init/001_schema.sql`:

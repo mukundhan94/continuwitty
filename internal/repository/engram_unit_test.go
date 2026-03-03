@@ -104,32 +104,28 @@ func TestRerankByCombinedScorePrefersLexicalOverlap(t *testing.T) {
 
 func TestRerankByCombinedScoreIncorporatesFeedbackSignal(t *testing.T) {
 	rows := []map[string]any{
-		{
-			"engram_id":           uuid.MustParse("00000000-0000-0000-0000-000000000311"),
-			"project_id":          "engram-vault",
-			"title":               "Useful Memory",
-			"abstract":            "shared checkpoint details",
-			"created_at":          time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
-			"tags":                []string{},
-			"keywords":            []string{"checkpoint"},
-			"retrieval_text":      "checkpoint details",
-			"useful_count":        10,
-			"contradiction_count": 0,
-			"distance":            0.3,
-		},
-		{
-			"engram_id":           uuid.MustParse("00000000-0000-0000-0000-000000000312"),
-			"project_id":          "engram-vault",
-			"title":               "Contradicted Memory",
-			"abstract":            "shared checkpoint details",
-			"created_at":          time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
-			"tags":                []string{},
-			"keywords":            []string{"checkpoint"},
-			"retrieval_text":      "checkpoint details",
-			"useful_count":        0,
-			"contradiction_count": 8,
-			"distance":            0.3,
-		},
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:           uuid.MustParse("00000000-0000-0000-0000-000000000311"),
+				title:              "Useful Memory",
+				usefulCount:        10,
+				contradictionCount: 0,
+				accessCount:        6,
+				freshnessScore:     0.85,
+				distance:           0.3,
+			},
+		),
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:           uuid.MustParse("00000000-0000-0000-0000-000000000312"),
+				title:              "Contradicted Memory",
+				usefulCount:        0,
+				contradictionCount: 8,
+				accessCount:        6,
+				freshnessScore:     0.85,
+				distance:           0.3,
+			},
+		),
 	}
 
 	reranked := rerankByCombinedScore(
@@ -144,6 +140,53 @@ func TestRerankByCombinedScoreIncorporatesFeedbackSignal(t *testing.T) {
 	}
 	if title, _ := reranked[0]["title"].(string); title != "Useful Memory" {
 		t.Fatalf("expected positive feedback memory to rank first, got %q", title)
+	}
+}
+
+func TestRerankByCombinedScoreIncorporatesEngagementAndFreshnessSignals(t *testing.T) {
+	rows := []map[string]any{
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:           uuid.MustParse("00000000-0000-0000-0000-000000000321"),
+				title:              "Active Fresh Memory",
+				usefulCount:        2,
+				contradictionCount: 0,
+				accessCount:        28,
+				freshnessScore:     0.95,
+				distance:           0.35,
+				keywords:           []string{"runbook"},
+				retrievalText:      "runbook context",
+				abstract:           "shared runbook context",
+			},
+		),
+		newRerankSignalRow(
+			rerankSignalRowInput{
+				engramID:           uuid.MustParse("00000000-0000-0000-0000-000000000322"),
+				title:              "Cold Stale Memory",
+				usefulCount:        2,
+				contradictionCount: 0,
+				accessCount:        0,
+				freshnessScore:     0.05,
+				distance:           0.35,
+				keywords:           []string{"runbook"},
+				retrievalText:      "runbook context",
+				abstract:           "shared runbook context",
+			},
+		),
+	}
+
+	reranked := rerankByCombinedScore(
+		rerankRowsInput{
+			rows:  rows,
+			query: "runbook context",
+			topK:  1,
+		},
+	)
+	if len(reranked) != 1 {
+		t.Fatalf("expected one reranked result, got %d", len(reranked))
+	}
+	if title, _ := reranked[0]["title"].(string); title != "Active Fresh Memory" {
+		t.Fatalf("expected active/fresh memory to rank first, got %q", title)
 	}
 }
 
@@ -319,4 +362,44 @@ func TestBuildEngramJSONPayloadSerializesReportAndSourceSessionID(t *testing.T) 
 
 func ptr(value string) *string {
 	return &value
+}
+
+type rerankSignalRowInput struct {
+	engramID           uuid.UUID
+	title              string
+	abstract           string
+	keywords           []string
+	retrievalText      string
+	usefulCount        int
+	contradictionCount int
+	accessCount        int
+	freshnessScore     float64
+	distance           float64
+}
+
+func newRerankSignalRow(input rerankSignalRowInput) map[string]any {
+	if input.abstract == "" {
+		input.abstract = "shared checkpoint details"
+	}
+	if input.retrievalText == "" {
+		input.retrievalText = "checkpoint details"
+	}
+	if input.keywords == nil {
+		input.keywords = []string{"checkpoint"}
+	}
+	return map[string]any{
+		"engram_id":           input.engramID,
+		"project_id":          "engram-vault",
+		"title":               input.title,
+		"abstract":            input.abstract,
+		"created_at":          time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC),
+		"tags":                []string{},
+		"keywords":            input.keywords,
+		"retrieval_text":      input.retrievalText,
+		"useful_count":        input.usefulCount,
+		"contradiction_count": input.contradictionCount,
+		"access_count":        input.accessCount,
+		"freshness_score":     input.freshnessScore,
+		"distance":            input.distance,
+	}
 }

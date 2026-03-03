@@ -109,6 +109,8 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 			retrieval_text,
 			COALESCE(useful_count, 0) AS useful_count,
 			COALESCE(contradiction_count, 0) AS contradiction_count,
+			COALESCE(access_count, 0) AS access_count,
+			COALESCE(freshness_score, 1.0) AS freshness_score,
 			embed <=> $1::vector AS distance
 		FROM engrams
 		%s
@@ -204,6 +206,8 @@ func scanEngramCandidateRow(row interface {
 		retrievalText   string
 		usefulCount     int
 		contradiction   int
+		accessCount     int
+		freshnessScore  float64
 		distance        float64
 	)
 
@@ -220,6 +224,8 @@ func scanEngramCandidateRow(row interface {
 		&retrievalText,
 		&usefulCount,
 		&contradiction,
+		&accessCount,
+		&freshnessScore,
 		&distance,
 	)
 	if err != nil {
@@ -244,6 +250,8 @@ func scanEngramCandidateRow(row interface {
 		"retrieval_text":      retrievalText,
 		"useful_count":        usefulCount,
 		"contradiction_count": contradiction,
+		"access_count":        accessCount,
+		"freshness_score":     freshnessScore,
 		"distance":            distance,
 	}, nil
 }

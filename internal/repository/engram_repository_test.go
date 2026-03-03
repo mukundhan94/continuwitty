@@ -179,6 +179,8 @@ func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 					"unrelated text",
 					0,
 					0,
+					0,
+					1.0,
 					0.2,
 				},
 				{
@@ -194,6 +196,8 @@ func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 					"durable checkpoint lifecycle",
 					0,
 					0,
+					0,
+					1.0,
 					0.25,
 				},
 			},
@@ -212,6 +216,12 @@ func assertQueryEngramsRuntimeQuery(t *testing.T, input queryRuntimeAssertionInp
 	t.Helper()
 	if !strings.Contains(input.query, "embed <=> $1::vector AS distance") {
 		t.Fatalf("expected vector distance clause in query, got %q", input.query)
+	}
+	if !strings.Contains(input.query, "COALESCE(access_count, 0) AS access_count") {
+		t.Fatalf("expected access_count clause in query, got %q", input.query)
+	}
+	if !strings.Contains(input.query, "COALESCE(freshness_score, 1.0) AS freshness_score") {
+		t.Fatalf("expected freshness_score clause in query, got %q", input.query)
 	}
 	if !strings.Contains(input.query, "WHERE deleted_at IS NULL AND project_id = $2") {
 		t.Fatalf("expected project clause with pgx placeholders, got %q", input.query)
