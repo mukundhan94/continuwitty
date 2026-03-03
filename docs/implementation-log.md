@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 40 continuation: curation acceptance coverage)
+
+1. Added deterministic acceptance coverage for Phase 40 curation flows:
+   - feature: `acceptance-tests/features/phase40-curation-mock.feature`
+   - steps: `acceptance-tests/src/steps/phase40-curation-mock.steps.ts`
+2. Scenario validates end-to-end curation behavior:
+   - seeds deterministic consolidation + contradiction prerequisites.
+   - triggers consolidation/contradiction refresh workflows.
+   - asserts generated curation type coverage (`consolidate`, `contradiction`).
+   - actions one curation suggestion to `accepted`.
+   - verifies accepted-list payload includes actioned record + audit fields.
+3. Validation:
+   - `make acceptance-bddgen`
+   - `make acceptance-typecheck`
+   - `make acceptance-test-mock-docker` -> `23 passed`
+
 ### 2026-03-03 (Phase 40 continuation: deterministic curation-generation hooks)
 
 1. Added deterministic curation-generation sync in admin service:

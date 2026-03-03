@@ -1157,8 +1157,7 @@ Build a local-first memory system where agents and humans can:
     - contradiction refresh now regenerates type `contradiction` curation suggestions.
     - generation pass resets stale `suggested` curation rows per type/project before rebuilding deterministic candidates.
 - Remaining in this phase:
-  - acceptance coverage for curation-generation flows.
-  - benchmark coverage for suggestion precision/recall and action latency.
+  - benchmark coverage for curation suggestion precision/recall and action latency.
 
 ### Goals
 
