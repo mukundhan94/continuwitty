@@ -392,6 +392,7 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 		{detail: "invalid useful_count_max", invalid: invalidUsefulCountMax(payload.UsefulCountMax)},
 		{detail: "invalid access_count_min", invalid: invalidAccessCountMin(payload.AccessCountMin)},
 		{detail: "invalid access_count_max", invalid: invalidAccessCountMax(payload.AccessCountMax)},
+		{detail: "invalid distance_min", invalid: invalidDistanceMin(payload.DistanceMin)},
 		{detail: "invalid distance_max", invalid: invalidDistanceMax(payload.DistanceMax)},
 		{detail: "invalid feedback_count_min", invalid: invalidFeedbackCountMin(payload.FeedbackCountMin)},
 		{detail: "invalid feedback_count_max", invalid: invalidFeedbackCountMax(payload.FeedbackCountMax)},
@@ -467,6 +468,10 @@ func invalidFeedbackCountMin(value *int) bool {
 }
 
 func invalidDistanceMax(value *float64) bool {
+	return value != nil && *value < 0
+}
+
+func invalidDistanceMin(value *float64) bool {
 	return value != nil && *value < 0
 }
 
@@ -616,6 +621,9 @@ func invalidQueryNumericWindowDetail(payload models.EngramQueryRequest) string {
 	}
 	if hasInvalidIntWindow(payload.AccessCountMin, payload.AccessCountMax) {
 		return "invalid access_count window"
+	}
+	if hasInvalidScoreWindow(payload.DistanceMin, payload.DistanceMax) {
+		return "invalid distance window"
 	}
 	if hasInvalidIntWindow(payload.FeedbackCountMin, payload.FeedbackCountMax) {
 		return "invalid feedback_count window"

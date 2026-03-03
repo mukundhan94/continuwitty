@@ -2012,6 +2012,39 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 66 - Semantic Distance Floor Query Filter
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `distance_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `distance_min`.
+  - repository query builder now supports vector-distance floor predicate (`embed <=> $1::vector >= ...`).
+  - MCP `engram.query` parser/catalog now accept and validate `distance_min`.
+  - range-coherence guardrails now enforce `distance_min <= distance_max` when both are provided.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to define semantic distance bands with both minimum and maximum bounds.
+2. Keep semantic-distance band filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for payloads that omit distance-floor controls.
+
+### Deliverables
+
+1. Contract extension for `distance_min`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply minimum vector-distance thresholds across REST and MCP query paths.
+2. Invalid threshold values and inverted distance windows are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for distance-floor and distance-window behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2093,3 +2126,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 64: reject numeric `*_min > *_max` payloads across REST/MCP.
 30. Execute semantic distance ceiling query filter increment:
    - [x] Phase 65: `distance_max` parity across REST/MCP/repository.
+31. Execute semantic distance floor query filter increment:
+   - [x] Phase 66: `distance_min` parity across REST/MCP/repository.

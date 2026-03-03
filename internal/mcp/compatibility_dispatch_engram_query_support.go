@@ -52,6 +52,7 @@ type engramQueryPayloadParts struct {
 	keywords                []string
 	createdAfter            *time.Time
 	createdBefore           *time.Time
+	distanceMin             *float64
 	distanceMax             *float64
 	usefulCountMin          *int
 	usefulCountMax          *int
@@ -104,9 +105,16 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
 	}
+	distanceMin, dispatchErr := parseEngramQueryDistanceMin(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
 	distanceMax, dispatchErr := parseEngramQueryDistanceMax(params)
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
+	}
+	if hasInvalidScoreWindow(distanceMin, distanceMax) {
+		return engramQueryPayloadParts{}, invalidParamError("distance_min")
 	}
 	engagementParts, dispatchErr := parseEngramQueryEngagementParts(params)
 	if dispatchErr != nil {
@@ -123,6 +131,7 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		keywords:                keywords,
 		createdAfter:            temporalParts.createdAfter,
 		createdBefore:           temporalParts.createdBefore,
+		distanceMin:             distanceMin,
 		distanceMax:             distanceMax,
 		usefulCountMin:          engagementParts.usefulCountMin,
 		usefulCountMax:          engagementParts.usefulCountMax,
@@ -512,6 +521,7 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		Keywords:                parts.keywords,
 		CreatedAfter:            parts.createdAfter,
 		CreatedBefore:           parts.createdBefore,
+		DistanceMin:             parts.distanceMin,
 		DistanceMax:             parts.distanceMax,
 		UsefulCountMin:          parts.usefulCountMin,
 		UsefulCountMax:          parts.usefulCountMax,
@@ -583,6 +593,22 @@ func parseEngramQueryDistanceMax(params map[string]any) (*float64, *toolDispatch
 	}
 	if parsed < 0 {
 		return nil, invalidParamError("distance_max")
+	}
+	copy := parsed
+	return &copy, nil
+}
+
+func parseEngramQueryDistanceMin(params map[string]any) (*float64, *toolDispatchError) {
+	rawValue, found := optionalParamValue(params, "distance_min")
+	if !found {
+		return nil, nil
+	}
+	parsed, ok := parseFloatValue(rawValue)
+	if !ok {
+		return nil, invalidParamError("distance_min")
+	}
+	if parsed < 0 {
+		return nil, invalidParamError("distance_min")
 	}
 	copy := parsed
 	return &copy, nil

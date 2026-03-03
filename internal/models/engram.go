@@ -63,6 +63,7 @@ type EngramQueryRequest struct {
 	Keywords                []string                `json:"keywords,omitempty"`
 	CreatedAfter            *time.Time              `json:"created_after,omitempty"`
 	CreatedBefore           *time.Time              `json:"created_before,omitempty"`
+	DistanceMin             *float64                `json:"distance_min,omitempty"`
 	DistanceMax             *float64                `json:"distance_max,omitempty"`
 	UsefulCountMin          *int                    `json:"useful_count_min,omitempty"`
 	UsefulCountMax          *int                    `json:"useful_count_max,omitempty"`

@@ -7,6 +7,24 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 66: semantic-distance floor query filter parity)
+
+1. Added semantic-distance floor query contract extension:
+   - new optional filter: `distance_min` (number, minimum `0`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `distance_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `distance_min`.
+3. Added repository predicate support:
+   - query builder now supports `embed <=> $1::vector >= ...`.
+4. Added distance-window coherence behavior:
+   - REST and MCP now reject inverted distance windows (`distance_min > distance_max`).
+5. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `distance_min` + distance-window validation.
+   - repository where-clause/parameter assertions for distance-floor predicate.
+   - MCP parity and validation coverage for distance-floor/distance-window handling.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 65: semantic-distance ceiling query filter parity)
 
 1. Added semantic-distance ceiling query contract extension:

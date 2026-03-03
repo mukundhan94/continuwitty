@@ -586,6 +586,10 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":    "number",
 					"minimum": 0,
 				},
+				"distance_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+				},
 				"last_accessed_after": map[string]any{
 					"type":   "string",
 					"format": "date-time",
