@@ -83,6 +83,8 @@ type EngramQueryRequest struct {
 	AvgRelevanceFeedbackMax *float64                `json:"avg_relevance_feedback_max,omitempty"`
 	SourceSessionQualityMin *float64                `json:"source_session_quality_min,omitempty"`
 	SourceSessionQualityMax *float64                `json:"source_session_quality_max,omitempty"`
+	CompositeRankScoreMin   *float64                `json:"composite_rank_score_min,omitempty"`
+	CompositeRankScoreMax   *float64                `json:"composite_rank_score_max,omitempty"`
 	LastAccessedAfter       *time.Time              `json:"last_accessed_after,omitempty"`
 	LastAccessedBefore      *time.Time              `json:"last_accessed_before,omitempty"`
 	FreshnessComputedAfter  *time.Time              `json:"freshness_computed_after,omitempty"`

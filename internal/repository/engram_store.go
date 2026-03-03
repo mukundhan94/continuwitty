@@ -147,14 +147,49 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 		rerankRowsInput{
 			rows:  candidateRows,
 			query: input.Request.Query,
-			topK:  topK,
+			topK:  len(candidateRows),
 		},
 	)
-	results := make([]models.EngramQueryResult, 0, len(rerankedRows))
-	for _, row := range rerankedRows {
+	filteredRows := filterByCompositeRankScore(
+		rerankedRows,
+		input.Request.CompositeRankScoreMin,
+		input.Request.CompositeRankScoreMax,
+	)
+	trimmedRows := trimRowsTopK(filteredRows, topK)
+	results := make([]models.EngramQueryResult, 0, len(trimmedRows))
+	for _, row := range trimmedRows {
 		results = append(results, mapEngramQueryResult(row))
 	}
 	return results, nil
+}
+
+func filterByCompositeRankScore(
+	rows []map[string]any,
+	minScore *float64,
+	maxScore *float64,
+) []map[string]any {
+	if minScore == nil && maxScore == nil {
+		return rows
+	}
+	filtered := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		score := compositeRankScoreFromRow(row)
+		if minScore != nil && score < *minScore {
+			continue
+		}
+		if maxScore != nil && score > *maxScore {
+			continue
+		}
+		filtered = append(filtered, row)
+	}
+	return filtered
+}
+
+func trimRowsTopK(rows []map[string]any, topK int) []map[string]any {
+	if topK <= 0 || topK >= len(rows) {
+		return rows
+	}
+	return rows[:topK]
 }
 
 func scanEngramSummary(row interface {

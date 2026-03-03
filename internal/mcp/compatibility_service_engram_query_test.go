@@ -126,6 +126,8 @@ func buildEngramQueryParityExpectations(
 	avgRelevanceFeedbackMax := 0.92
 	sourceSessionQualityMin := 0.73
 	sourceSessionQualityMax := 0.95
+	compositeRankScoreMin := 0.66
+	compositeRankScoreMax := 0.93
 	relationType := models.EngramLinkRelationSupports
 	traceDepth := 1
 	params := map[string]any{
@@ -156,6 +158,8 @@ func buildEngramQueryParityExpectations(
 		"avg_relevance_feedback_max":       avgRelevanceFeedbackMax,
 		"source_session_quality_min":       sourceSessionQualityMin,
 		"source_session_quality_max":       sourceSessionQualityMax,
+		"composite_rank_score_min":         compositeRankScoreMin,
+		"composite_rank_score_max":         compositeRankScoreMax,
 		"last_accessed_after":              lastAccessedAfter.Format(time.RFC3339),
 		"last_accessed_before":             lastAccessedBefore.Format(time.RFC3339),
 		"freshness_computed_after":         freshnessComputedAfter.Format(time.RFC3339),
@@ -193,6 +197,8 @@ func buildEngramQueryParityExpectations(
 			AvgRelevanceFeedbackMax: &avgRelevanceFeedbackMax,
 			SourceSessionQualityMin: &sourceSessionQualityMin,
 			SourceSessionQualityMax: &sourceSessionQualityMax,
+			CompositeRankScoreMin:   &compositeRankScoreMin,
+			CompositeRankScoreMax:   &compositeRankScoreMax,
 			LastAccessedAfter:       &lastAccessedAfter,
 			LastAccessedBefore:      &lastAccessedBefore,
 			FreshnessComputedAfter:  &freshnessComputedAfter,
@@ -341,6 +347,13 @@ func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
 		{name: "invalid source_session_quality_max type", params: map[string]any{"query": "x", "source_session_quality_max": "bad"}},
 		{name: "invalid source_session_quality_max low", params: map[string]any{"query": "x", "source_session_quality_max": -0.1}},
 		{name: "invalid source_session_quality_max high", params: map[string]any{"query": "x", "source_session_quality_max": 1.1}},
+		{name: "invalid composite_rank_score_min type", params: map[string]any{"query": "x", "composite_rank_score_min": "bad"}},
+		{name: "invalid composite_rank_score_min low", params: map[string]any{"query": "x", "composite_rank_score_min": -0.1}},
+		{name: "invalid composite_rank_score_min high", params: map[string]any{"query": "x", "composite_rank_score_min": 1.1}},
+		{name: "invalid composite_rank_score_max type", params: map[string]any{"query": "x", "composite_rank_score_max": "bad"}},
+		{name: "invalid composite_rank_score_max low", params: map[string]any{"query": "x", "composite_rank_score_max": -0.1}},
+		{name: "invalid composite_rank_score_max high", params: map[string]any{"query": "x", "composite_rank_score_max": 1.1}},
+		{name: "invalid composite_rank_score window", params: map[string]any{"query": "x", "composite_rank_score_min": 0.8, "composite_rank_score_max": 0.6}},
 		{name: "invalid relation_type", params: map[string]any{"query": "x", "relation_type": "invalid"}},
 		{name: "invalid trace_depth type", params: map[string]any{"query": "x", "trace_depth": "bad"}},
 		{name: "invalid trace_depth range", params: map[string]any{"query": "x", "trace_depth": 2.0}},

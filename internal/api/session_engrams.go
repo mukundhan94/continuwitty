@@ -438,6 +438,14 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 			detail:  "invalid source_session_quality_max",
 			invalid: invalidSourceSessionQualityMax(payload.SourceSessionQualityMax),
 		},
+		{
+			detail:  "invalid composite_rank_score_min",
+			invalid: invalidCompositeRankScoreMin(payload.CompositeRankScoreMin),
+		},
+		{
+			detail:  "invalid composite_rank_score_max",
+			invalid: invalidCompositeRankScoreMax(payload.CompositeRankScoreMax),
+		},
 		{detail: "invalid relation_type", invalid: invalidRelationType(payload.RelationType)},
 		{detail: "invalid trace_depth", invalid: invalidTraceDepth(payload.TraceDepth)},
 		{
@@ -524,6 +532,14 @@ func invalidSourceSessionQualityMin(value *float64) bool {
 }
 
 func invalidSourceSessionQualityMax(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidCompositeRankScoreMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidCompositeRankScoreMax(value *float64) bool {
 	return invalidBoundedUnitInterval(value)
 }
 
@@ -645,6 +661,9 @@ func invalidQueryNumericWindowDetail(payload models.EngramQueryRequest) string {
 	}
 	if hasInvalidScoreWindow(payload.SourceSessionQualityMin, payload.SourceSessionQualityMax) {
 		return "invalid source_session_quality window"
+	}
+	if hasInvalidScoreWindow(payload.CompositeRankScoreMin, payload.CompositeRankScoreMax) {
+		return "invalid composite_rank_score window"
 	}
 	return ""
 }

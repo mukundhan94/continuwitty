@@ -194,6 +194,12 @@ func TestCompatibilityServiceToolsListIncludesAuthorityFilterForEngramQuery(t *t
 	if _, exists := properties["distance_min"]; !exists {
 		t.Fatalf("expected distance_min property in engram_query schema")
 	}
+	if _, exists := properties["composite_rank_score_min"]; !exists {
+		t.Fatalf("expected composite_rank_score_min property in engram_query schema")
+	}
+	if _, exists := properties["composite_rank_score_max"]; !exists {
+		t.Fatalf("expected composite_rank_score_max property in engram_query schema")
+	}
 }
 
 func TestBuildVisiblePublicToolCatalogClonesInputSchemas(t *testing.T) {

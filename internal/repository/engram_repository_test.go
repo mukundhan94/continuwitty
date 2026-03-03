@@ -189,6 +189,39 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	)
 }
 
+func TestQueryEngramsAppliesCompositeRankScoreFilters(t *testing.T) {
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	projectID := "engram-vault"
+	minScore := 0.7
+	maxScore := 0.8
+	db := buildQueryEngramsFixture(projectID)
+
+	results, err := QueryEngrams(
+		context.Background(),
+		db,
+		QueryEngramsInput{
+			Request: models.EngramQueryRequest{
+				Query:                 "durable checkpoint",
+				TopK:                  2,
+				ProjectID:             &projectID,
+				CompositeRankScoreMin: &minScore,
+				CompositeRankScoreMax: &maxScore,
+			},
+			QueryLiteral: "[0.1,0.2,0.3]",
+			ActorUserID:  &actorUserID,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, 1, len(results))
+	requireEqual(t, "Lexical Match", results[0].Title)
+	if results[0].CompositeRankScore < minScore {
+		t.Fatalf("expected composite score >= %v, got %v", minScore, results[0].CompositeRankScore)
+	}
+	if results[0].CompositeRankScore > maxScore {
+		t.Fatalf("expected composite score <= %v, got %v", maxScore, results[0].CompositeRankScore)
+	}
+}
+
 func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
 	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)

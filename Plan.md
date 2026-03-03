@@ -2084,6 +2084,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 68 - Composite-Rank Score Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `composite_rank_score_min` and `composite_rank_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded composite-rank filters (`0..1`) and rejects inverted composite-rank windows.
+  - repository query pipeline now supports post-rerank composite-score filtering before final top-k trimming.
+  - MCP `engram.query` parser/catalog now accept and validate composite-rank filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain query results to a desired rerank-confidence band.
+2. Keep composite-rank filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit composite-rank filters.
+
+### Deliverables
+
+1. Contract extension for `composite_rank_score_min` and `composite_rank_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply composite-rank score floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted composite-rank windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for composite-rank band filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2169,3 +2201,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 66: `distance_min` parity across REST/MCP/repository.
 32. Execute rerank diagnostics transparency increment:
    - [x] Phase 67: expose composite/component rerank scores in query result payloads across repository/REST/MCP.
+33. Execute composite-rank score filter increment:
+   - [x] Phase 68: `composite_rank_score_min` + `composite_rank_score_max` parity across REST/MCP/repository.

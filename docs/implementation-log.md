@@ -7,6 +7,24 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 68: composite-rank score query band filters)
+
+1. Added composite-rank query filter contract extensions:
+   - new optional filters: `composite_rank_score_min` and `composite_rank_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded composite-rank scores and rejects inverted composite-rank windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate composite-rank score filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now reranks candidates, filters by composite-rank score band, then applies final top-k trimming.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for composite-rank score filters.
+   - repository query-runtime coverage for composite-score filtering behavior.
+   - MCP parity and validation coverage for composite-rank score filters.
+5. Documentation alignment:
+   - API and MCP query docs now include composite-rank filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 67: rerank diagnostics transparency in query results)
 
 1. Extended engram query-result contracts with rerank diagnostics:

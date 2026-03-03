@@ -335,6 +335,31 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid source_session_quality_max",
 		},
 		{
+			name: "invalid composite rank score min",
+			body: map[string]any{
+				"query":                    "durable memory",
+				"composite_rank_score_min": 1.2,
+			},
+			expectedDetail: "invalid composite_rank_score_min",
+		},
+		{
+			name: "invalid composite rank score max",
+			body: map[string]any{
+				"query":                    "durable memory",
+				"composite_rank_score_max": 1.2,
+			},
+			expectedDetail: "invalid composite_rank_score_max",
+		},
+		{
+			name: "invalid composite rank score window",
+			body: map[string]any{
+				"query":                    "durable memory",
+				"composite_rank_score_min": 0.9,
+				"composite_rank_score_max": 0.7,
+			},
+			expectedDetail: "invalid composite_rank_score window",
+		},
+		{
 			name: "invalid avg relevance feedback max",
 			body: map[string]any{
 				"query":                      "durable memory",
@@ -530,6 +555,8 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"avg_relevance_feedback_max":       0.9,
 					"source_session_quality_min":       0.7,
 					"source_session_quality_max":       0.9,
+					"composite_rank_score_min":         0.75,
+					"composite_rank_score_max":         0.95,
 					"last_accessed_after":              "2026-02-01T00:00:00Z",
 					"last_accessed_before":             "2026-02-20T00:00:00Z",
 					"freshness_computed_after":         "2026-02-02T00:00:00Z",
@@ -700,6 +727,16 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 		t,
 		0.9,
 		requireFloat64Pointer(t, request.SourceSessionQualityMax, "source_session_quality_max"),
+	)
+	requireEqual(
+		t,
+		0.75,
+		requireFloat64Pointer(t, request.CompositeRankScoreMin, "composite_rank_score_min"),
+	)
+	requireEqual(
+		t,
+		0.95,
+		requireFloat64Pointer(t, request.CompositeRankScoreMax, "composite_rank_score_max"),
 	)
 	requireTimeWindowPresent(t, request.LastAccessedAfter, request.LastAccessedBefore, "last_accessed")
 	requireTimeWindowPresent(
