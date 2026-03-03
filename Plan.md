@@ -2340,6 +2340,36 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 76 - Score-Band Filter Hardening and Benchmark Baseline
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added dedicated repository regression tests for post-rerank score-band filtering across dense/lexical/feedback/engagement/freshness/authority/composite bands.
+  - added explicit repository regression test coverage for no-filter pass-through behavior in score-band filter helper paths.
+  - added benchmark coverage for full score-band filter matrices at 50 and 200 candidate sizes.
+
+### Goals
+
+1. Harden score-band filtering behavior with focused unit-level regression coverage.
+2. Establish benchmark baselines for post-rerank score-band filtering throughput as filter complexity grows.
+3. Preserve deterministic filtering semantics while expanding test and benchmark depth.
+
+### Deliverables
+
+1. Repository tests for all-signal score-band filtering and no-filter behavior.
+2. Benchmark coverage for full-matrix score-band filtering at multiple candidate-set sizes.
+3. Documentation updates for phase progress and validation evidence.
+
+### Exit Criteria
+
+1. Score-band filter helper behavior is explicitly verified for both constrained and unconstrained paths.
+2. Benchmark targets run successfully under `go test -bench` for full score-band matrices.
+3. Test suites remain green after benchmark/test additions.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -2441,3 +2471,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 74: `freshness_signal_score_min` + `freshness_signal_score_max` parity across REST/MCP/repository.
 40. Execute authority-signal filter increment:
    - [x] Phase 75: `authority_signal_score_min` + `authority_signal_score_max` parity across REST/MCP/repository.
+41. Execute score-band hardening and benchmark increment:
+   - [x] Phase 76: repository score-band regression + benchmark baseline for full filter matrices.

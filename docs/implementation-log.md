@@ -7,6 +7,18 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 76: score-band hardening and benchmark baseline)
+
+1. Added repository score-band filter regression coverage:
+   - new focused unit test validates combined dense/lexical/feedback/engagement/freshness/authority/composite score-band filtering behavior.
+   - new focused unit test validates no-filter pass-through behavior for score-band helper paths.
+2. Added repository benchmark coverage:
+   - benchmark baseline added for full score-band filter matrix at 50 and 200 reranked candidates.
+3. Documentation alignment:
+   - roadmap and checkpoint updates now track this hardening increment in phase progression.
+4. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 75: authority-signal score query band filters)
 
 1. Added authority-signal query filter contract extensions:

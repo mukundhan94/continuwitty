@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var benchmarkScoreBandFilterRowCount int
+
 func BenchmarkRerankByCombinedScore50Candidates(b *testing.B) {
 	benchmarkRerankByCombinedScore(b, 50, 10)
 }
@@ -77,6 +79,60 @@ func BenchmarkBuildEngramQueryWhereComplexFilterMatrix(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		request := requests[i%len(requests)]
 		_, _ = buildEngramQueryWhere(request, &actorUserID, "[0.1,0.2,0.3]")
+	}
+}
+
+func BenchmarkFilterByRankScoreBandsFullMatrix50Candidates(b *testing.B) {
+	benchmarkFilterByRankScoreBandsFullMatrix(b, 50)
+}
+
+func BenchmarkFilterByRankScoreBandsFullMatrix200Candidates(b *testing.B) {
+	benchmarkFilterByRankScoreBandsFullMatrix(b, 200)
+}
+
+func benchmarkFilterByRankScoreBandsFullMatrix(b *testing.B, candidateCount int) {
+	rows := rerankByCombinedScore(
+		rerankRowsInput{
+			rows:  buildRerankBenchmarkRows(candidateCount),
+			query: "durable checkpoint runbook recovery",
+			topK:  candidateCount,
+		},
+	)
+	denseMin := 0.3
+	denseMax := 0.95
+	lexicalMin := 0.2
+	lexicalMax := 1.0
+	feedbackMin := 0.2
+	feedbackMax := 0.9
+	engagementMin := 0.1
+	engagementMax := 0.9
+	freshnessMin := 0.2
+	freshnessMax := 1.0
+	authorityMin := 0.2
+	authorityMax := 0.9
+	compositeMin := 0.3
+	compositeMax := 0.95
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		filtered := filterByRankScoreBands(
+			rows,
+			&denseMin,
+			&denseMax,
+			&lexicalMin,
+			&lexicalMax,
+			&feedbackMin,
+			&feedbackMax,
+			&engagementMin,
+			&engagementMax,
+			&freshnessMin,
+			&freshnessMax,
+			&authorityMin,
+			&authorityMax,
+			&compositeMin,
+			&compositeMax,
+		)
+		benchmarkScoreBandFilterRowCount = len(filtered)
 	}
 }
 
