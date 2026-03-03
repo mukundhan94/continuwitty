@@ -226,6 +226,17 @@ func buildEngramQueryWhere(
 	addOptionalPointerClause(builder, request.ContradictionCountMax, "COALESCE(contradiction_count, 0) <= %s")
 	addOptionalPointerClause(
 		builder,
+		request.ContradictionRatioMin,
+		`(
+			CASE
+				WHEN COALESCE(feedback_count, 0) = 0 THEN 0.0
+				ELSE COALESCE(contradiction_count, 0)::DOUBLE PRECISION /
+					GREATEST(COALESCE(feedback_count, 0), 1)::DOUBLE PRECISION
+			END
+		) >= %s`,
+	)
+	addOptionalPointerClause(
+		builder,
 		request.ContradictionRatioMax,
 		`(
 			CASE

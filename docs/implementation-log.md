@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 62: contradiction-ratio floor query filter parity)
+
+1. Added contradiction-ratio floor query contract extension:
+   - new optional filter: `contradiction_feedback_ratio_min` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `contradiction_feedback_ratio_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `contradiction_feedback_ratio_min`.
+3. Added repository predicate support:
+   - query builder now supports contradiction-ratio floor predicate with deterministic low-risk fallback (`0.0`) when feedback is absent.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `contradiction_feedback_ratio_min`.
+   - repository where-clause/parameter assertions for contradiction-ratio floor predicate.
+   - MCP parity and validation coverage for contradiction-ratio floor filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 61: useful-ratio ceiling query filter parity)
 
 1. Added useful-ratio ceiling query contract extension:

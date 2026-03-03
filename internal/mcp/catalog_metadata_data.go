@@ -646,6 +646,11 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"minimum": 0,
 					"maximum": 1,
 				},
+				"contradiction_feedback_ratio_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
 				"freshness_score_min": map[string]any{
 					"type":    "number",
 					"minimum": 0,

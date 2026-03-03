@@ -106,6 +106,7 @@ func buildEngramQueryParityExpectations(
 	feedbackCountMin := 4
 	feedbackCountMax := 10
 	contradictionCountMax := 2
+	contradictionFeedbackRatioMin := 0.15
 	contradictionFeedbackRatioMax := 0.3
 	freshnessScoreMin := 0.42
 	freshnessScoreMax := 0.91
@@ -132,6 +133,7 @@ func buildEngramQueryParityExpectations(
 		"feedback_count_min":               float64(feedbackCountMin),
 		"feedback_count_max":               float64(feedbackCountMax),
 		"contradiction_count_max":          float64(contradictionCountMax),
+		"contradiction_feedback_ratio_min": contradictionFeedbackRatioMin,
 		"contradiction_feedback_ratio_max": contradictionFeedbackRatioMax,
 		"freshness_score_min":              freshnessScoreMin,
 		"freshness_score_max":              freshnessScoreMax,
@@ -165,6 +167,7 @@ func buildEngramQueryParityExpectations(
 			FeedbackCountMin:        &feedbackCountMin,
 			FeedbackCountMax:        &feedbackCountMax,
 			ContradictionCountMax:   &contradictionCountMax,
+			ContradictionRatioMin:   &contradictionFeedbackRatioMin,
 			ContradictionRatioMax:   &contradictionFeedbackRatioMax,
 			FreshnessScoreMin:       &freshnessScoreMin,
 			FreshnessScoreMax:       &freshnessScoreMax,
@@ -285,6 +288,9 @@ func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
 		{name: "invalid feedback_count_max negative", params: map[string]any{"query": "x", "feedback_count_max": -1.0}},
 		{name: "invalid contradiction_count_max type", params: map[string]any{"query": "x", "contradiction_count_max": "bad"}},
 		{name: "invalid contradiction_count_max negative", params: map[string]any{"query": "x", "contradiction_count_max": -1.0}},
+		{name: "invalid contradiction_feedback_ratio_min type", params: map[string]any{"query": "x", "contradiction_feedback_ratio_min": "bad"}},
+		{name: "invalid contradiction_feedback_ratio_min low", params: map[string]any{"query": "x", "contradiction_feedback_ratio_min": -0.1}},
+		{name: "invalid contradiction_feedback_ratio_min high", params: map[string]any{"query": "x", "contradiction_feedback_ratio_min": 1.1}},
 		{name: "invalid contradiction_feedback_ratio_max type", params: map[string]any{"query": "x", "contradiction_feedback_ratio_max": "bad"}},
 		{name: "invalid contradiction_feedback_ratio_max low", params: map[string]any{"query": "x", "contradiction_feedback_ratio_max": -0.1}},
 		{name: "invalid contradiction_feedback_ratio_max high", params: map[string]any{"query": "x", "contradiction_feedback_ratio_max": 1.1}},

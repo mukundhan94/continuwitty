@@ -396,6 +396,10 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 			invalid: invalidContradictionCountMax(payload.ContradictionCountMax),
 		},
 		{
+			detail:  "invalid contradiction_feedback_ratio_min",
+			invalid: invalidContradictionRatioMin(payload.ContradictionRatioMin),
+		},
+		{
 			detail:  "invalid contradiction_feedback_ratio_max",
 			invalid: invalidContradictionRatioMax(payload.ContradictionRatioMax),
 		},
@@ -463,6 +467,10 @@ func invalidContradictionCountMax(value *int) bool {
 }
 
 func invalidContradictionRatioMax(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidContradictionRatioMin(value *float64) bool {
 	return invalidBoundedUnitInterval(value)
 }
 

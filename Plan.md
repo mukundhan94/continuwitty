@@ -1885,6 +1885,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 62 - Contradiction-Ratio Floor Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `contradiction_feedback_ratio_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `contradiction_feedback_ratio_min` (`0..1`).
+  - repository query builder now supports contradiction-ratio floor predicate with deterministic low-risk fallback (`0.0` when feedback is absent).
+  - MCP `engram.query` parser/catalog now accept and validate `contradiction_feedback_ratio_min`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to explicitly retrieve higher-contradiction memories for audit and remediation workflows.
+2. Keep contradiction-ratio floor filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `contradiction_feedback_ratio_min`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply minimum contradiction-feedback ratio thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for contradiction-ratio floor filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1958,3 +1990,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 60: `avg_relevance_feedback_max` parity across REST/MCP/repository.
 26. Execute useful-ratio ceiling query filter increment:
    - [x] Phase 61: `useful_feedback_ratio_max` parity across REST/MCP/repository.
+27. Execute contradiction-ratio floor query filter increment:
+   - [x] Phase 62: `contradiction_feedback_ratio_min` parity across REST/MCP/repository.
