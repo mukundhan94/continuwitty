@@ -81,12 +81,13 @@ func (adapter mcpEngramReadAdapter) SubmitEngramFeedback(
 		ctx,
 		adapter.db,
 		repository.EngramFeedbackCreateInput{
-			EngramID:       request.EngramID,
-			SessionID:      request.SessionID,
-			ActorUserID:    request.ActorUserID,
-			FeedbackType:   request.FeedbackType,
-			Note:           request.Note,
-			RelevanceScore: request.RelevanceScore,
+			EngramID:         request.EngramID,
+			SessionID:        request.SessionID,
+			ActorUserID:      request.ActorUserID,
+			FeedbackType:     request.FeedbackType,
+			IntegrationDepth: request.IntegrationDepth,
+			Note:             request.Note,
+			RelevanceScore:   request.RelevanceScore,
 		},
 	)
 }

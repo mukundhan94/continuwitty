@@ -57,13 +57,18 @@ func parseEngramFeedbackRequest(
 	if !ok {
 		return EngramFeedbackRequest{}, invalidParamError("relevance_score")
 	}
+	integrationDepth, ok := optionalFeedbackIntegrationDepthParam(params, "integration_depth")
+	if !ok {
+		return EngramFeedbackRequest{}, invalidParamError("integration_depth")
+	}
 	return EngramFeedbackRequest{
-		ActorUserID:    actor.UserID,
-		EngramID:       engramID,
-		SessionID:      sessionID,
-		FeedbackType:   feedbackType,
-		Note:           normalizeOptionalTrimmedParamString(note),
-		RelevanceScore: relevanceScore,
+		ActorUserID:      actor.UserID,
+		EngramID:         engramID,
+		SessionID:        sessionID,
+		FeedbackType:     feedbackType,
+		IntegrationDepth: integrationDepth,
+		Note:             normalizeOptionalTrimmedParamString(note),
+		RelevanceScore:   relevanceScore,
 	}, nil
 }
 
@@ -83,6 +88,25 @@ func optionalFeedbackRelevanceScoreParam(
 		return nil, false
 	}
 	return &parsed, true
+}
+
+func optionalFeedbackIntegrationDepthParam(
+	params map[string]any,
+	key string,
+) (*models.EngramFeedbackIntegrationDepth, bool) {
+	rawValue, found := optionalStringPointerParam(params, key)
+	if !found {
+		return nil, true
+	}
+	if rawValue == nil {
+		return nil, true
+	}
+	parsed, err := models.ParseEngramFeedbackIntegrationDepth(*rawValue)
+	if err != nil {
+		return nil, false
+	}
+	normalized := parsed
+	return &normalized, true
 }
 
 func normalizeOptionalTrimmedParamString(value *string) *string {

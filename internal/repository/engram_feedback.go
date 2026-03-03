@@ -25,13 +25,14 @@ var (
 
 // EngramFeedbackCreateInput captures feedback write-path dependencies.
 type EngramFeedbackCreateInput struct {
-	EngramID       uuid.UUID
-	SessionID      *uuid.UUID
-	ActorUserID    uuid.UUID
-	FeedbackType   models.EngramFeedbackType
-	Note           *string
-	RelevanceScore *int
-	CreatedAt      time.Time
+	EngramID         uuid.UUID
+	SessionID        *uuid.UUID
+	ActorUserID      uuid.UUID
+	FeedbackType     models.EngramFeedbackType
+	IntegrationDepth *models.EngramFeedbackIntegrationDepth
+	Note             *string
+	RelevanceScore   *int
+	CreatedAt        time.Time
 }
 
 // RecordEngramFeedback persists explicit feedback and updates aggregate counters.
@@ -45,6 +46,7 @@ func RecordEngramFeedback(
 		return nil, err
 	}
 	noteValue := feedbackNoteSQLValue(normalized.Note)
+	integrationDepthValue := feedbackIntegrationDepthSQLValue(normalized.IntegrationDepth)
 	relevanceScoreValue := feedbackRelevanceScoreSQLValue(normalized.RelevanceScore)
 	row := db.QueryRow(
 		ctx,
@@ -54,6 +56,7 @@ func RecordEngramFeedback(
 		feedbackSessionIDSQLValue(normalized.SessionID),
 		normalized.ActorUserID,
 		string(normalized.FeedbackType),
+		integrationDepthValue,
 		noteValue,
 		relevanceScoreValue,
 		normalized.CreatedAt,
@@ -66,6 +69,7 @@ func RecordEngramFeedback(
 		&record.SessionID,
 		&record.ActorUserID,
 		&record.FeedbackType,
+		&record.IntegrationDepth,
 		&record.Note,
 		&record.RelevanceScore,
 		&record.CreatedAt,
@@ -95,24 +99,41 @@ func normalizeEngramFeedbackInput(
 		return EngramFeedbackCreateInput{}, err
 	}
 	input.SessionID = sessionID
-	if strings.TrimSpace(string(input.FeedbackType)) == "" {
-		return EngramFeedbackCreateInput{}, errEngramFeedbackTypeRequired
-	}
-	parsedType, err := models.ParseEngramFeedbackType(string(input.FeedbackType))
+	feedbackType, err := normalizeFeedbackType(input.FeedbackType)
 	if err != nil {
 		return EngramFeedbackCreateInput{}, err
 	}
-	input.FeedbackType = parsedType
+	input.FeedbackType = feedbackType
+	integrationDepth, err := normalizeFeedbackIntegrationDepth(input.IntegrationDepth)
+	if err != nil {
+		return EngramFeedbackCreateInput{}, err
+	}
+	input.IntegrationDepth = integrationDepth
 	input.Note = normalizeFeedbackNote(input.Note)
 	relevanceScore, err := normalizeFeedbackRelevanceScore(input.RelevanceScore)
 	if err != nil {
 		return EngramFeedbackCreateInput{}, err
 	}
 	input.RelevanceScore = relevanceScore
+	return applyDefaultFeedbackCreatedAt(input), nil
+}
+
+func normalizeFeedbackType(
+	feedbackType models.EngramFeedbackType,
+) (models.EngramFeedbackType, error) {
+	if strings.TrimSpace(string(feedbackType)) == "" {
+		return "", errEngramFeedbackTypeRequired
+	}
+	return models.ParseEngramFeedbackType(string(feedbackType))
+}
+
+func applyDefaultFeedbackCreatedAt(
+	input EngramFeedbackCreateInput,
+) EngramFeedbackCreateInput {
 	if input.CreatedAt.IsZero() {
 		input.CreatedAt = nowEngramFeedbackUTC()
 	}
-	return input, nil
+	return input
 }
 
 func normalizeFeedbackNote(note *string) *string {
@@ -131,6 +152,13 @@ func feedbackNoteSQLValue(note *string) any {
 		return nil
 	}
 	return *note
+}
+
+func feedbackIntegrationDepthSQLValue(depth *models.EngramFeedbackIntegrationDepth) any {
+	if depth == nil {
+		return nil
+	}
+	return string(*depth)
 }
 
 func feedbackRelevanceScoreSQLValue(relevanceScore *int) any {
@@ -169,6 +197,20 @@ func normalizeFeedbackRelevanceScore(relevanceScore *int) (*int, error) {
 	return &normalized, nil
 }
 
+func normalizeFeedbackIntegrationDepth(
+	integrationDepth *models.EngramFeedbackIntegrationDepth,
+) (*models.EngramFeedbackIntegrationDepth, error) {
+	if integrationDepth == nil {
+		return nil, nil
+	}
+	parsed, err := models.ParseEngramFeedbackIntegrationDepth(string(*integrationDepth))
+	if err != nil {
+		return nil, err
+	}
+	normalized := parsed
+	return &normalized, nil
+}
+
 func recordEngramFeedbackSQL() string {
 	actorPlaceholder := pgxPlaceholder(4)
 	engramReadClause := buildMembershipReadClause(
@@ -203,6 +245,7 @@ const recordEngramFeedbackSQLTemplate = `
 				session_id,
 				actor_user_id,
 				feedback_type,
+				integration_depth,
 				note,
 				relevance_score,
 				created_at
@@ -213,9 +256,10 @@ const recordEngramFeedbackSQLTemplate = `
 				$3,
 				$4,
 				$5,
-				COALESCE($6, ''),
-				$7,
-				$8
+				$6,
+				COALESCE($7, ''),
+				$8,
+				$9
 			FROM visible_engram ve
 			RETURNING
 				feedback_id,
@@ -223,6 +267,7 @@ const recordEngramFeedbackSQLTemplate = `
 				session_id,
 				actor_user_id,
 				feedback_type,
+				integration_depth,
 				note,
 				relevance_score,
 				created_at
@@ -234,13 +279,13 @@ const recordEngramFeedbackSQLTemplate = `
 				contradiction_count = COALESCE(contradiction_count, 0) + CASE WHEN $5 = 'contradiction' THEN 1 ELSE 0 END,
 				feedback_count = COALESCE(feedback_count, 0) + 1,
 				avg_relevance_feedback = CASE
-					WHEN $7 IS NULL THEN avg_relevance_feedback
+					WHEN $8 IS NULL THEN avg_relevance_feedback
 					ELSE (
 						(COALESCE(avg_relevance_feedback, 0.0) * COALESCE(feedback_count, 0)::DOUBLE PRECISION) +
-						$7::DOUBLE PRECISION
+						$8::DOUBLE PRECISION
 					) / (COALESCE(feedback_count, 0)::DOUBLE PRECISION + 1.0)
 				END,
-				updated_at = GREATEST(updated_at, $8)
+				updated_at = GREATEST(updated_at, $9)
 			FROM inserted i
 			WHERE e.engram_id = i.engram_id
 			RETURNING
@@ -255,6 +300,7 @@ const recordEngramFeedbackSQLTemplate = `
 			i.session_id,
 			i.actor_user_id,
 			i.feedback_type,
+			i.integration_depth,
 			i.note,
 			i.relevance_score,
 			i.created_at,

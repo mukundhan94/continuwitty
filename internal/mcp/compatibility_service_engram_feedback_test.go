@@ -23,6 +23,7 @@ func TestCompatibilityServiceEngramFeedbackParity(t *testing.T) {
 		SessionID:            &sessionID,
 		ActorUserID:          actorUserID,
 		FeedbackType:         models.EngramFeedbackTypeUseful,
+		IntegrationDepth:     feedbackIntegrationDepthPtr(models.EngramFeedbackIntegrationDepthElaborated),
 		Note:                 "helpful",
 		RelevanceScore:       intPtr(5),
 		CreatedAt:            time.Date(2026, 3, 2, 13, 0, 0, 0, time.UTC),
@@ -33,11 +34,12 @@ func TestCompatibilityServiceEngramFeedbackParity(t *testing.T) {
 	}
 	service := &fakeEngramFeedbackService{record: &record}
 	params := map[string]any{
-		"engram_id":       engramID.String(),
-		"session_id":      sessionID.String(),
-		"feedback_type":   "useful",
-		"note":            "helpful",
-		"relevance_score": 5,
+		"engram_id":         engramID.String(),
+		"session_id":        sessionID.String(),
+		"feedback_type":     "useful",
+		"integration_depth": "elaborated",
+		"note":              "helpful",
+		"relevance_score":   5,
 	}
 	testCases := []struct {
 		name            string
@@ -72,12 +74,13 @@ func TestCompatibilityServiceEngramFeedbackParity(t *testing.T) {
 				t,
 				service.call,
 				EngramFeedbackRequest{
-					ActorUserID:    actorUserID,
-					EngramID:       engramID,
-					SessionID:      &sessionID,
-					FeedbackType:   models.EngramFeedbackTypeUseful,
-					Note:           stringPtr("helpful"),
-					RelevanceScore: intPtr(5),
+					ActorUserID:      actorUserID,
+					EngramID:         engramID,
+					SessionID:        &sessionID,
+					FeedbackType:     models.EngramFeedbackTypeUseful,
+					IntegrationDepth: feedbackIntegrationDepthPtr(models.EngramFeedbackIntegrationDepthElaborated),
+					Note:             stringPtr("helpful"),
+					RelevanceScore:   intPtr(5),
 				},
 			)
 		})
@@ -154,6 +157,7 @@ func TestCompatibilityServiceEngramFeedbackValidationAndErrors(t *testing.T) {
 		{name: "missing feedback type", params: map[string]any{"engram_id": uuid.NewString()}},
 		{name: "invalid feedback type", params: map[string]any{"engram_id": uuid.NewString(), "feedback_type": "bad"}},
 		{name: "invalid session id", params: map[string]any{"engram_id": uuid.NewString(), "session_id": "bad", "feedback_type": "useful"}},
+		{name: "invalid integration depth", params: map[string]any{"engram_id": uuid.NewString(), "feedback_type": "useful", "integration_depth": "bad"}},
 		{name: "invalid note", params: map[string]any{"engram_id": uuid.NewString(), "feedback_type": "useful", "note": 123}},
 		{name: "invalid relevance score", params: map[string]any{"engram_id": uuid.NewString(), "feedback_type": "useful", "relevance_score": 7}},
 	}
@@ -247,12 +251,19 @@ func assertEngramFeedbackCall(
 	if actual.FeedbackType != expected.FeedbackType {
 		t.Fatalf("expected feedback type to be forwarded")
 	}
+	assertOptionalPointerValue(t, actual.IntegrationDepth, expected.IntegrationDepth)
 	assertOptionalDeleteReason(t, actual.Note, expected.Note)
 	assertOptionalPointerValue(t, actual.RelevanceScore, expected.RelevanceScore)
 	assertOptionalPointerValue(t, actual.SessionID, expected.SessionID)
 }
 
 func float64Ptr(value float64) *float64 {
+	return &value
+}
+
+func feedbackIntegrationDepthPtr(
+	value models.EngramFeedbackIntegrationDepth,
+) *models.EngramFeedbackIntegrationDepth {
 	return &value
 }
 

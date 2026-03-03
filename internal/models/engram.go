@@ -117,6 +117,16 @@ const (
 	EngramFeedbackTypeContradiction EngramFeedbackType = "contradiction"
 )
 
+// EngramFeedbackIntegrationDepth captures how deeply a recalled engram was integrated.
+type EngramFeedbackIntegrationDepth string
+
+const (
+	EngramFeedbackIntegrationDepthMentioned    EngramFeedbackIntegrationDepth = "mentioned"
+	EngramFeedbackIntegrationDepthElaborated   EngramFeedbackIntegrationDepth = "elaborated"
+	EngramFeedbackIntegrationDepthContradicted EngramFeedbackIntegrationDepth = "contradicted"
+	EngramFeedbackIntegrationDepthIgnored      EngramFeedbackIntegrationDepth = "ignored"
+)
+
 // ParseEngramFeedbackType normalizes an engram feedback type and validates it.
 func ParseEngramFeedbackType(value string) (EngramFeedbackType, error) {
 	trimmed := strings.TrimSpace(strings.ToLower(value))
@@ -130,28 +140,47 @@ func ParseEngramFeedbackType(value string) (EngramFeedbackType, error) {
 	}
 }
 
+// ParseEngramFeedbackIntegrationDepth normalizes an integration-depth value and validates it.
+func ParseEngramFeedbackIntegrationDepth(value string) (EngramFeedbackIntegrationDepth, error) {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	switch EngramFeedbackIntegrationDepth(trimmed) {
+	case EngramFeedbackIntegrationDepthMentioned:
+		return EngramFeedbackIntegrationDepthMentioned, nil
+	case EngramFeedbackIntegrationDepthElaborated:
+		return EngramFeedbackIntegrationDepthElaborated, nil
+	case EngramFeedbackIntegrationDepthContradicted:
+		return EngramFeedbackIntegrationDepthContradicted, nil
+	case EngramFeedbackIntegrationDepthIgnored:
+		return EngramFeedbackIntegrationDepthIgnored, nil
+	default:
+		return "", fmt.Errorf("unsupported engram feedback integration depth %q", value)
+	}
+}
+
 // EngramFeedbackRecord captures one persisted explicit feedback event and updated counters.
 type EngramFeedbackRecord struct {
-	FeedbackID           uuid.UUID          `json:"feedback_id"`
-	EngramID             uuid.UUID          `json:"engram_id"`
-	SessionID            *uuid.UUID         `json:"session_id,omitempty"`
-	ActorUserID          uuid.UUID          `json:"actor_user_id"`
-	FeedbackType         EngramFeedbackType `json:"feedback_type"`
-	Note                 string             `json:"note"`
-	RelevanceScore       *int               `json:"relevance_score,omitempty"`
-	CreatedAt            time.Time          `json:"created_at"`
-	UsefulCount          int                `json:"useful_count"`
-	FeedbackCount        int                `json:"feedback_count"`
-	AvgRelevanceFeedback *float64           `json:"avg_relevance_feedback,omitempty"`
-	ContradictionCount   int                `json:"contradiction_count"`
+	FeedbackID           uuid.UUID                       `json:"feedback_id"`
+	EngramID             uuid.UUID                       `json:"engram_id"`
+	SessionID            *uuid.UUID                      `json:"session_id,omitempty"`
+	ActorUserID          uuid.UUID                       `json:"actor_user_id"`
+	FeedbackType         EngramFeedbackType              `json:"feedback_type"`
+	IntegrationDepth     *EngramFeedbackIntegrationDepth `json:"integration_depth,omitempty"`
+	Note                 string                          `json:"note"`
+	RelevanceScore       *int                            `json:"relevance_score,omitempty"`
+	CreatedAt            time.Time                       `json:"created_at"`
+	UsefulCount          int                             `json:"useful_count"`
+	FeedbackCount        int                             `json:"feedback_count"`
+	AvgRelevanceFeedback *float64                        `json:"avg_relevance_feedback,omitempty"`
+	ContradictionCount   int                             `json:"contradiction_count"`
 }
 
 // EngramFeedbackCreateRequest models explicit feedback submission payload.
 type EngramFeedbackCreateRequest struct {
-	FeedbackType   string  `json:"feedback_type"`
-	Note           *string `json:"note,omitempty"`
-	RelevanceScore *int    `json:"relevance_score,omitempty"`
-	SessionID      *string `json:"session_id,omitempty"`
+	FeedbackType     string  `json:"feedback_type"`
+	IntegrationDepth *string `json:"integration_depth,omitempty"`
+	Note             *string `json:"note,omitempty"`
+	RelevanceScore   *int    `json:"relevance_score,omitempty"`
+	SessionID        *string `json:"session_id,omitempty"`
 }
 
 // EngramCreateResponse is returned when a new engram is persisted.

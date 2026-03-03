@@ -113,7 +113,7 @@ func TestCompatibilityServiceToolsListIncludesProjectScopeForCurationRefresh(t *
 	}
 }
 
-func TestCompatibilityServiceToolsListIncludesRelevanceScoreForEngramFeedback(t *testing.T) {
+func TestCompatibilityServiceToolsListIncludesFeedbackSignalFieldsForEngramFeedback(t *testing.T) {
 	frame := runCompatibilityRequest(
 		t,
 		StreamCallRequest{Request: JSONRPCRequest{JSONRPC: "2.0", ID: "tools-list", Method: "tools/list"}},
@@ -126,6 +126,9 @@ func TestCompatibilityServiceToolsListIncludesRelevanceScoreForEngramFeedback(t 
 	}
 	if _, exists := properties["session_id"]; !exists {
 		t.Fatalf("expected session_id property in engram_feedback schema")
+	}
+	if _, exists := properties["integration_depth"]; !exists {
+		t.Fatalf("expected integration_depth property in engram_feedback schema")
 	}
 }
 

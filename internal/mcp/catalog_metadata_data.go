@@ -1393,6 +1393,15 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 						"contradiction",
 					},
 				},
+				"integration_depth": map[string]any{
+					"type": "string",
+					"enum": []any{
+						"mentioned",
+						"elaborated",
+						"contradicted",
+						"ignored",
+					},
+				},
 				"note": map[string]any{
 					"type": "string",
 				},

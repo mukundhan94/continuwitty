@@ -19,6 +19,7 @@ func TestMountSessionAuthRoutesSubmitEngramFeedbackUsesRepository(t *testing.T) 
 	engramID := uuid.MustParse("00000000-0000-0000-0000-000000000f01")
 	sessionID := uuid.MustParse("00000000-0000-0000-0000-000000000f09")
 	feedbackID := uuid.MustParse("00000000-0000-0000-0000-000000000f02")
+	integrationDepth := models.EngramFeedbackIntegrationDepthElaborated
 	note := "helpful answer"
 	relevanceScore := 5
 	avgRelevanceFeedback := 4.0
@@ -33,20 +34,15 @@ func TestMountSessionAuthRoutesSubmitEngramFeedbackUsesRepository(t *testing.T) 
 				input SessionEngramFeedbackInput,
 			) (*models.EngramFeedbackRecord, error) {
 				capturedInput = input
-				return &models.EngramFeedbackRecord{
-					FeedbackID:           feedbackID,
-					EngramID:             input.EngramID,
-					SessionID:            input.SessionID,
-					ActorUserID:          input.ActorUserID,
-					FeedbackType:         input.FeedbackType,
-					Note:                 note,
-					RelevanceScore:       &relevanceScore,
-					CreatedAt:            time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC),
-					UsefulCount:          3,
-					FeedbackCount:        4,
-					AvgRelevanceFeedback: &avgRelevanceFeedback,
-					ContradictionCount:   1,
-				}, nil
+				return newForwardedFeedbackRecord(
+					forwardedFeedbackRecordInput{
+						input:                input,
+						feedbackID:           feedbackID,
+						note:                 note,
+						relevanceScore:       relevanceScore,
+						avgRelevanceFeedback: avgRelevanceFeedback,
+					},
+				), nil
 			},
 		},
 	)
@@ -66,12 +62,7 @@ func TestMountSessionAuthRoutesSubmitEngramFeedbackUsesRepository(t *testing.T) 
 			handler:     handler,
 			loginCookie: loginCookie,
 			engramID:    engramID,
-			bodyPayload: map[string]any{
-				"feedback_type":   "useful",
-				"session_id":      sessionID.String(),
-				"note":            "  helpful answer  ",
-				"relevance_score": 5,
-			},
+			bodyPayload: submitFeedbackPayload(sessionID),
 		},
 	)
 
@@ -80,19 +71,21 @@ func TestMountSessionAuthRoutesSubmitEngramFeedbackUsesRepository(t *testing.T) 
 		t,
 		capturedInput,
 		feedbackForwardingExpectation{
-			engramID:    engramID,
-			sessionID:   sessionID,
-			actorUserID: actor.UserID,
+			engramID:         engramID,
+			sessionID:        sessionID,
+			actorUserID:      actor.UserID,
+			integrationDepth: integrationDepth,
 		},
 	)
 	assertFeedbackResponsePayload(
 		t,
 		response.Body.Bytes(),
 		feedbackResponseExpectation{
-			feedbackID:  feedbackID,
-			engramID:    engramID,
-			sessionID:   sessionID,
-			actorUserID: actor.UserID,
+			feedbackID:       feedbackID,
+			engramID:         engramID,
+			sessionID:        sessionID,
+			actorUserID:      actor.UserID,
+			integrationDepth: integrationDepth,
 		},
 	)
 }
@@ -127,6 +120,7 @@ func TestMountSessionAuthRoutesSubmitEngramFeedbackValidation(t *testing.T) {
 		{"feedback_type": "invalid"},
 		{"feedback_type": "useful", "relevance_score": 6},
 		{"feedback_type": "useful", "session_id": "bad"},
+		{"feedback_type": "useful", "integration_depth": "bad"},
 	}
 	for _, bodyPayload := range testCases {
 		response := executeSubmitEngramFeedbackRequest(
@@ -190,6 +184,7 @@ func assertCapturedFeedbackForwarding(
 	requireEqual(t, expected.sessionID, derefUUID(capturedInput.SessionID))
 	requireEqual(t, expected.actorUserID, capturedInput.ActorUserID)
 	requireEqual(t, models.EngramFeedbackTypeUseful, capturedInput.FeedbackType)
+	requireEqual(t, expected.integrationDepth, derefFeedbackIntegrationDepth(capturedInput.IntegrationDepth))
 	if capturedInput.Note == nil {
 		t.Fatalf("expected note to be forwarded")
 	}
@@ -215,6 +210,7 @@ func assertFeedbackResponsePayload(
 	requireEqual(t, expected.sessionID.String(), payload["session_id"].(string))
 	requireEqual(t, expected.actorUserID.String(), payload["actor_user_id"].(string))
 	requireEqual(t, "useful", payload["feedback_type"].(string))
+	requireEqual(t, string(expected.integrationDepth), payload["integration_depth"].(string))
 	requireEqual(t, 5.0, payload["relevance_score"].(float64))
 }
 
@@ -245,14 +241,61 @@ type submitEngramFeedbackRequestInput struct {
 }
 
 type feedbackForwardingExpectation struct {
-	engramID    uuid.UUID
-	sessionID   uuid.UUID
-	actorUserID uuid.UUID
+	engramID         uuid.UUID
+	sessionID        uuid.UUID
+	actorUserID      uuid.UUID
+	integrationDepth models.EngramFeedbackIntegrationDepth
 }
 
 type feedbackResponseExpectation struct {
-	feedbackID  uuid.UUID
-	engramID    uuid.UUID
-	sessionID   uuid.UUID
-	actorUserID uuid.UUID
+	feedbackID       uuid.UUID
+	engramID         uuid.UUID
+	sessionID        uuid.UUID
+	actorUserID      uuid.UUID
+	integrationDepth models.EngramFeedbackIntegrationDepth
+}
+
+func derefFeedbackIntegrationDepth(
+	value *models.EngramFeedbackIntegrationDepth,
+) models.EngramFeedbackIntegrationDepth {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func submitFeedbackPayload(sessionID uuid.UUID) map[string]any {
+	return map[string]any{
+		"feedback_type":     "useful",
+		"integration_depth": "elaborated",
+		"session_id":        sessionID.String(),
+		"note":              "  helpful answer  ",
+		"relevance_score":   5,
+	}
+}
+
+func newForwardedFeedbackRecord(input forwardedFeedbackRecordInput) *models.EngramFeedbackRecord {
+	return &models.EngramFeedbackRecord{
+		FeedbackID:           input.feedbackID,
+		EngramID:             input.input.EngramID,
+		SessionID:            input.input.SessionID,
+		ActorUserID:          input.input.ActorUserID,
+		FeedbackType:         input.input.FeedbackType,
+		IntegrationDepth:     input.input.IntegrationDepth,
+		Note:                 input.note,
+		RelevanceScore:       &input.relevanceScore,
+		CreatedAt:            time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC),
+		UsefulCount:          3,
+		FeedbackCount:        4,
+		AvgRelevanceFeedback: &input.avgRelevanceFeedback,
+		ContradictionCount:   1,
+	}
+}
+
+type forwardedFeedbackRecordInput struct {
+	input                SessionEngramFeedbackInput
+	feedbackID           uuid.UUID
+	note                 string
+	relevanceScore       int
+	avgRelevanceFeedback float64
 }

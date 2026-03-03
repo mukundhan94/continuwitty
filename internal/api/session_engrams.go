@@ -34,12 +34,13 @@ type SessionProjectResolution struct {
 
 // SessionEngramFeedbackInput captures feedback route payload + actor context.
 type SessionEngramFeedbackInput struct {
-	EngramID       uuid.UUID
-	SessionID      *uuid.UUID
-	ActorUserID    uuid.UUID
-	FeedbackType   models.EngramFeedbackType
-	Note           *string
-	RelevanceScore *int
+	EngramID         uuid.UUID
+	SessionID        *uuid.UUID
+	ActorUserID      uuid.UUID
+	FeedbackType     models.EngramFeedbackType
+	IntegrationDepth *models.EngramFeedbackIntegrationDepth
+	Note             *string
+	RelevanceScore   *int
 }
 
 func (dependencies sessionAuthDependencies) handleCreateEngram(writer http.ResponseWriter, request *http.Request) {
@@ -214,12 +215,13 @@ func (dependencies sessionAuthDependencies) handleSubmitEngramFeedback(
 	record, err := dependencies.submitEngramFeedback(
 		request.Context(),
 		SessionEngramFeedbackInput{
-			EngramID:       engramID,
-			SessionID:      payload.SessionID,
-			ActorUserID:    actor.UserID,
-			FeedbackType:   payload.FeedbackType,
-			Note:           payload.Note,
-			RelevanceScore: payload.RelevanceScore,
+			EngramID:         engramID,
+			SessionID:        payload.SessionID,
+			ActorUserID:      actor.UserID,
+			FeedbackType:     payload.FeedbackType,
+			IntegrationDepth: payload.IntegrationDepth,
+			Note:             payload.Note,
+			RelevanceScore:   payload.RelevanceScore,
 		},
 	)
 	if err != nil {
@@ -498,6 +500,17 @@ func decodeEngramFeedbackRequest(
 		)
 		return SessionEngramFeedbackInput{}, false
 	}
+	integrationDepth, ok := parseOptionalFeedbackIntegrationDepth(payload.IntegrationDepth)
+	if !ok {
+		writeJSON(
+			writer,
+			http.StatusBadRequest,
+			map[string]string{
+				"detail": "integration_depth must be one of: mentioned, elaborated, contradicted, ignored",
+			},
+		)
+		return SessionEngramFeedbackInput{}, false
+	}
 	sessionID, ok := parseOptionalFeedbackSessionID(payload.SessionID)
 	if !ok {
 		writeJSON(
@@ -508,10 +521,11 @@ func decodeEngramFeedbackRequest(
 		return SessionEngramFeedbackInput{}, false
 	}
 	return SessionEngramFeedbackInput{
-		FeedbackType:   parsedType,
-		Note:           normalizeOptionalTrimmedString(payload.Note),
-		RelevanceScore: relevanceScore,
-		SessionID:      sessionID,
+		FeedbackType:     parsedType,
+		IntegrationDepth: integrationDepth,
+		Note:             normalizeOptionalTrimmedString(payload.Note),
+		RelevanceScore:   relevanceScore,
+		SessionID:        sessionID,
 	}, true
 }
 
@@ -525,6 +539,20 @@ func normalizeOptionalFeedbackRelevanceScore(
 		return nil, false
 	}
 	normalized := *relevanceScore
+	return &normalized, true
+}
+
+func parseOptionalFeedbackIntegrationDepth(
+	integrationDepth *string,
+) (*models.EngramFeedbackIntegrationDepth, bool) {
+	if integrationDepth == nil {
+		return nil, true
+	}
+	parsed, err := models.ParseEngramFeedbackIntegrationDepth(*integrationDepth)
+	if err != nil {
+		return nil, false
+	}
+	normalized := parsed
 	return &normalized, true
 }
 

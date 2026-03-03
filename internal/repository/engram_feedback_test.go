@@ -28,6 +28,7 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 				sessionID,
 				actorUserID,
 				string(models.EngramFeedbackTypeUseful),
+				string(models.EngramFeedbackIntegrationDepthElaborated),
 				"helpful in triage",
 				5,
 				createdAt,
@@ -48,37 +49,36 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 		context.Background(),
 		db,
 		EngramFeedbackCreateInput{
-			EngramID:       engramID,
-			SessionID:      &sessionID,
-			ActorUserID:    actorUserID,
-			FeedbackType:   models.EngramFeedbackTypeUseful,
-			Note:           &note,
-			RelevanceScore: intPtr(5),
-			CreatedAt:      createdAt,
+			EngramID:         engramID,
+			SessionID:        &sessionID,
+			ActorUserID:      actorUserID,
+			FeedbackType:     models.EngramFeedbackTypeUseful,
+			IntegrationDepth: feedbackIntegrationDepthPtr(models.EngramFeedbackIntegrationDepthElaborated),
+			Note:             &note,
+			RelevanceScore:   intPtr(5),
+			CreatedAt:        createdAt,
 		},
 	)
 	requireNoError(t, err)
 	requireNotNil(t, record)
-	requireEqual(t, feedbackID, record.FeedbackID)
-	requireEqual(t, engramID, record.EngramID)
-	if record.SessionID == nil {
-		t.Fatalf("expected session id in feedback record")
-	}
-	requireEqual(t, sessionID, *record.SessionID)
-	requireEqual(t, actorUserID, record.ActorUserID)
-	requireEqual(t, models.EngramFeedbackTypeUseful, record.FeedbackType)
-	requireEqual(t, "helpful in triage", record.Note)
-	if record.RelevanceScore == nil {
-		t.Fatalf("expected relevance score in feedback record")
-	}
-	requireEqual(t, 5, *record.RelevanceScore)
-	requireEqual(t, 4, record.UsefulCount)
-	requireEqual(t, 1, record.ContradictionCount)
-	requireEqual(t, 6, record.FeedbackCount)
-	if record.AvgRelevanceFeedback == nil {
-		t.Fatalf("expected avg relevance feedback in feedback record")
-	}
-	requireEqual(t, 4.5, *record.AvgRelevanceFeedback)
+	assertPersistedFeedbackRecord(
+		t,
+		record,
+		persistedFeedbackExpectation{
+			feedbackID:         feedbackID,
+			engramID:           engramID,
+			sessionID:          sessionID,
+			actorUserID:        actorUserID,
+			feedbackType:       models.EngramFeedbackTypeUseful,
+			integrationDepth:   models.EngramFeedbackIntegrationDepthElaborated,
+			note:               "helpful in triage",
+			relevanceScore:     5,
+			usefulCount:        4,
+			contradictionCount: 1,
+			feedbackCount:      6,
+			avgRelevance:       4.5,
+		},
+	)
 
 	expectedArgs := []any{
 		feedbackID,
@@ -86,6 +86,7 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 		sessionID,
 		actorUserID,
 		"useful",
+		"elaborated",
 		"helpful in triage",
 		5,
 		createdAt,
@@ -173,6 +174,16 @@ func TestRecordEngramFeedbackValidation(t *testing.T) {
 				RelevanceScore: intPtr(9),
 			},
 			expectErr: errEngramFeedbackRelevanceInvalid,
+		},
+		{
+			name: "invalid integration depth",
+			input: EngramFeedbackCreateInput{
+				EngramID:         uuid.New(),
+				ActorUserID:      uuid.New(),
+				FeedbackType:     models.EngramFeedbackTypeUseful,
+				IntegrationDepth: feedbackIntegrationDepthPtr(models.EngramFeedbackIntegrationDepth("invalid")),
+			},
+			expectMessage: "unsupported engram feedback integration depth",
 		},
 		{
 			name: "invalid session id",
@@ -279,6 +290,7 @@ func assertFeedbackNoteNormalizationCase(
 				nil,
 				testCase.actorUserID,
 				string(testCase.feedbackType),
+				nil,
 				testCase.expectedNote,
 				nil,
 				now,
@@ -316,8 +328,9 @@ func assertFeedbackNoteNormalizationCase(
 	if record.RelevanceScore != nil {
 		t.Fatalf("expected relevance score to be nil when omitted")
 	}
-	requireEqual(t, testCase.expectedSQLNote, db.queryRowArgs[0][5])
-	requireEqual(t, nil, db.queryRowArgs[0][6])
+	requireEqual(t, nil, db.queryRowArgs[0][5])
+	requireEqual(t, testCase.expectedSQLNote, db.queryRowArgs[0][6])
+	requireEqual(t, nil, db.queryRowArgs[0][7])
 }
 
 func intPtr(value int) *int {
@@ -326,4 +339,57 @@ func intPtr(value int) *int {
 
 func uuidPointer(value uuid.UUID) *uuid.UUID {
 	return &value
+}
+
+func feedbackIntegrationDepthPtr(
+	value models.EngramFeedbackIntegrationDepth,
+) *models.EngramFeedbackIntegrationDepth {
+	return &value
+}
+
+type persistedFeedbackExpectation struct {
+	feedbackID         uuid.UUID
+	engramID           uuid.UUID
+	sessionID          uuid.UUID
+	actorUserID        uuid.UUID
+	feedbackType       models.EngramFeedbackType
+	integrationDepth   models.EngramFeedbackIntegrationDepth
+	note               string
+	relevanceScore     int
+	usefulCount        int
+	contradictionCount int
+	feedbackCount      int
+	avgRelevance       float64
+}
+
+func assertPersistedFeedbackRecord(
+	t *testing.T,
+	record *models.EngramFeedbackRecord,
+	expected persistedFeedbackExpectation,
+) {
+	t.Helper()
+	requireEqual(t, expected.feedbackID, record.FeedbackID)
+	requireEqual(t, expected.engramID, record.EngramID)
+	if record.SessionID == nil {
+		t.Fatalf("expected session id in feedback record")
+	}
+	requireEqual(t, expected.sessionID, *record.SessionID)
+	requireEqual(t, expected.actorUserID, record.ActorUserID)
+	requireEqual(t, expected.feedbackType, record.FeedbackType)
+	if record.IntegrationDepth == nil {
+		t.Fatalf("expected integration depth in feedback record")
+	}
+	requireEqual(t, expected.integrationDepth, *record.IntegrationDepth)
+	requireEqual(t, expected.note, record.Note)
+	if record.RelevanceScore == nil {
+		t.Fatalf("expected relevance score in feedback record")
+	}
+	requireEqual(t, expected.relevanceScore, *record.RelevanceScore)
+	requireEqual(t, expected.usefulCount, record.UsefulCount)
+	requireEqual(t, expected.contradictionCount, record.ContradictionCount)
+	requireEqual(t, expected.feedbackCount, record.FeedbackCount)
+	if record.AvgRelevanceFeedback == nil {
+		t.Fatalf("expected avg relevance feedback in feedback record")
+	}
+	requireEqual(t, expected.avgRelevance, *record.AvgRelevanceFeedback)
 }

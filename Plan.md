@@ -1206,15 +1206,16 @@ Build a local-first memory system where agents and humans can:
 
 ### Status
 
-- In progress (2026-03-03).
+- Completed (2026-03-03).
 - Delivered in this checkpoint:
   - explicit feedback supports optional `relevance_score` (`1-5`) across REST + MCP submit paths.
   - explicit feedback supports optional `session_id` attribution across REST + MCP submit paths.
+  - explicit feedback supports optional `integration_depth` (`mentioned`/`elaborated`/`contradicted`/`ignored`) across REST + MCP submit paths.
   - feedback persistence now tracks aggregate counters on `engrams`:
     - `feedback_count`
     - `avg_relevance_feedback`
-  - feedback records now persist optional per-event `relevance_score` and `session_id`.
-  - regression coverage expanded across repository/API/MCP for relevance-score validation and forwarding.
+  - feedback records now persist optional per-event `relevance_score`, `session_id`, and `integration_depth`.
+  - regression coverage expanded across repository/API/MCP for relevance-score, session-attribution, and integration-depth validation and forwarding.
 
 ### Goals
 
@@ -1224,13 +1225,13 @@ Build a local-first memory system where agents and humans can:
 
 ### Deliverables
 
-1. Schema/model extensions for relevance-score and aggregate counters.
+1. Schema/model extensions for relevance-score, integration-depth, and aggregate counters.
 2. Repository feedback-write path updates for aggregate maintenance.
 3. REST/MCP payload parity plus validation and regression coverage.
 
 ### Exit Criteria
 
-1. Feedback submissions remain backward-compatible while accepting optional relevance score.
+1. Feedback submissions remain backward-compatible while accepting optional `relevance_score`, `session_id`, and `integration_depth`.
 2. Aggregate counters are updated deterministically for each persisted feedback event.
 3. REST/MCP docs and tests fully reflect feedback contract changes.
 
@@ -1268,4 +1269,4 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 39: temporal query extensions + cost-aware context assembly.
    - [x] Phase 40: autonomous memory suggestions and action workflows.
 6. Execute feedback-signal enrichment increment:
-   - [ ] Phase 41: richer explicit feedback payloads + aggregate relevance counters.
+   - [x] Phase 41: richer explicit feedback payloads + aggregate relevance counters.

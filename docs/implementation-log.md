@@ -7,6 +7,26 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 41 closeout: integration-depth feedback signal)
+
+1. Extended explicit feedback contracts with optional `integration_depth` across REST + MCP:
+   - accepted values: `mentioned`, `elaborated`, `contradicted`, `ignored`.
+   - REST decode path now validates `integration_depth` and returns explicit bad-request detail on invalid input.
+   - MCP `engram.feedback` parser and catalog schema now validate/document `integration_depth`.
+2. Added schema/model support for integration depth:
+   - `engram_feedback.integration_depth` column + idempotent enum check constraint.
+   - index added: `engram_feedback_integration_depth_created_idx`.
+   - `EngramFeedbackRecord` now returns optional `integration_depth`.
+3. Updated repository and runtime forwarding:
+   - feedback repository input + SQL write/read paths now persist optional `integration_depth`.
+   - API and MCP adapters now forward `integration_depth` end-to-end.
+4. Updated roadmap/docs parity:
+   - `Plan.md` Phase 41 marked completed.
+   - API/MCP reference docs updated for `integration_depth`.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./cmd/api -count=1`
+   - `make lint`
+
 ### 2026-03-03 (Phase 41 continuation: session-scoped feedback attribution)
 
 1. Extended feedback event contracts with optional `session_id` across REST + MCP:

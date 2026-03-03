@@ -526,6 +526,9 @@ CREATE TABLE IF NOT EXISTS engram_feedback (
   session_id UUID REFERENCES chat_sessions(session_id) ON DELETE SET NULL,
   actor_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   feedback_type TEXT NOT NULL CHECK (feedback_type IN ('useful', 'contradiction')),
+  integration_depth TEXT CHECK (
+    integration_depth IS NULL OR integration_depth IN ('mentioned', 'elaborated', 'contradicted', 'ignored')
+  ),
   relevance_score INTEGER CHECK (relevance_score >= 1 AND relevance_score <= 5),
   note TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -533,6 +536,7 @@ CREATE TABLE IF NOT EXISTS engram_feedback (
 
 ALTER TABLE engram_feedback
   ADD COLUMN IF NOT EXISTS session_id UUID,
+  ADD COLUMN IF NOT EXISTS integration_depth TEXT,
   ADD COLUMN IF NOT EXISTS relevance_score INTEGER;
 
 DO $$
@@ -544,6 +548,20 @@ BEGIN
     ALTER TABLE engram_feedback
       ADD CONSTRAINT engram_feedback_session_id_fkey
       FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'engram_feedback_integration_depth_check'
+  ) THEN
+    ALTER TABLE engram_feedback
+      ADD CONSTRAINT engram_feedback_integration_depth_check
+      CHECK (
+        integration_depth IS NULL OR integration_depth IN ('mentioned', 'elaborated', 'contradicted', 'ignored')
+      );
   END IF;
 END $$;
 
@@ -570,6 +588,9 @@ CREATE INDEX IF NOT EXISTS engram_feedback_actor_created_idx
 
 CREATE INDEX IF NOT EXISTS engram_feedback_type_created_idx
   ON engram_feedback (feedback_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS engram_feedback_integration_depth_created_idx
+  ON engram_feedback (integration_depth, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS engram_consolidation_suggestions (
   suggestion_id UUID PRIMARY KEY,
