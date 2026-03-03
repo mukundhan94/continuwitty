@@ -95,6 +95,7 @@ func buildEngramQueryParityExpectations(
 	freshnessComputedAfter := mustParseRFC3339(t, "2026-01-15T00:00:00Z")
 	freshnessComputedBefore := mustParseRFC3339(t, "2026-02-15T00:00:00Z")
 	projectID := "proj-alpha"
+	usefulCountMin := 2
 	accessCountMin := 3
 	feedbackCountMin := 4
 	contradictionCountMax := 2
@@ -111,6 +112,7 @@ func buildEngramQueryParityExpectations(
 		"keywords":                   []any{"risk"},
 		"created_after":              createdAfter.Format(time.RFC3339),
 		"created_before":             createdBefore.Format(time.RFC3339),
+		"useful_count_min":           float64(usefulCountMin),
 		"access_count_min":           float64(accessCountMin),
 		"feedback_count_min":         float64(feedbackCountMin),
 		"contradiction_count_max":    float64(contradictionCountMax),
@@ -134,6 +136,7 @@ func buildEngramQueryParityExpectations(
 			Keywords:                []string{"risk"},
 			CreatedAfter:            &createdAfter,
 			CreatedBefore:           &createdBefore,
+			UsefulCountMin:          &usefulCountMin,
 			AccessCountMin:          &accessCountMin,
 			FeedbackCountMin:        &feedbackCountMin,
 			ContradictionCountMax:   &contradictionCountMax,
@@ -202,6 +205,8 @@ func TestCompatibilityServiceEngramQueryValidationAndErrors(t *testing.T) {
 		{name: "invalid freshness_computed_after", params: map[string]any{"query": "x", "freshness_computed_after": "bad"}},
 		{name: "invalid freshness_computed_before", params: map[string]any{"query": "x", "freshness_computed_before": "bad"}},
 		{name: "invalid freshness_computed window", params: map[string]any{"query": "x", "freshness_computed_after": "2026-02-02T00:00:00Z", "freshness_computed_before": "2026-02-01T00:00:00Z"}},
+		{name: "invalid useful_count_min type", params: map[string]any{"query": "x", "useful_count_min": "bad"}},
+		{name: "invalid useful_count_min negative", params: map[string]any{"query": "x", "useful_count_min": -1.0}},
 		{name: "invalid access_count_min type", params: map[string]any{"query": "x", "access_count_min": "bad"}},
 		{name: "invalid access_count_min negative", params: map[string]any{"query": "x", "access_count_min": -1.0}},
 		{name: "invalid feedback_count_min type", params: map[string]any{"query": "x", "feedback_count_min": "bad"}},

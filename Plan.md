@@ -1496,6 +1496,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 50 - Useful-Signal Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `useful_count_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `useful_count_min`.
+  - repository query builder now supports `COALESCE(useful_count, 0) >= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `useful_count_min`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape parity.
+
+### Goals
+
+1. Allow operators and agents to favor memories with stronger explicit usefulness history.
+2. Keep useful-signal filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `useful_count_min`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply minimum useful-feedback thresholds across REST and MCP query paths.
+2. Invalid values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for the new filter.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1545,3 +1577,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 48: expose `access_count` + `freshness_score` in query results.
 14. Execute feedback-volume query filter increment:
    - [x] Phase 49: `feedback_count_min` parity across REST/MCP/repository.
+15. Execute useful-signal query filter increment:
+   - [x] Phase 50: `useful_count_min` parity across REST/MCP/repository.

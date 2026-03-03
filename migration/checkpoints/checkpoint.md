@@ -480,6 +480,22 @@
   - repository where-clause/params assertions for feedback-count predicate.
   - MCP parity and validation tests for feedback-volume filter behavior.
 
+### Phase 50 Progress Tracker
+
+- [x] Added useful-signal query filter contract:
+  - `useful_count_min` on `models.EngramQueryRequest`.
+- [x] Added REST validation parity:
+  - `useful_count_min` now validates as non-negative.
+- [x] Added repository predicate support:
+  - `COALESCE(useful_count, 0) >= ...` filter path.
+- [x] Added MCP parser/catalog parity:
+  - `engram.query` now accepts and validates `useful_count_min`.
+  - tool schema now documents `useful_count_min`.
+- [x] Added regression coverage:
+  - REST invalid-filter and parsed-request assertions for `useful_count_min`.
+  - repository where-clause/params assertions for useful-count predicate.
+  - MCP parity and validation tests for useful-signal filter behavior.
+
 ---
 
 ## Completed Milestones
@@ -636,3 +652,4 @@
 | 47 | Query Quality Diagnostics in Results | Completed |
 | 48 | Query Engagement Diagnostics in Results | Completed |
 | 49 | Feedback-Volume Query Filters | Completed |
+| 50 | Useful-Signal Query Filters | Completed |

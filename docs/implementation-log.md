@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 50: useful-signal query filter parity)
+
+1. Added useful-signal query contract extension:
+   - new optional filter: `useful_count_min` (non-negative integer) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `useful_count_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `useful_count_min`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(useful_count, 0) >= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `useful_count_min`.
+   - repository where-clause/parameter assertions for useful-count predicate.
+   - MCP parity and validation coverage for useful-signal filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 49: feedback-volume query filter parity)
 
 1. Added feedback-volume query contract extension:

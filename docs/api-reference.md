@@ -288,6 +288,7 @@ Optional temporal/engagement filters:
 - `created_after` / `created_before` (RFC3339 timestamp)
 - `last_accessed_after` / `last_accessed_before` (RFC3339 timestamp)
 - `freshness_computed_after` / `freshness_computed_before` (RFC3339 timestamp)
+- `useful_count_min` (int, minimum `0`)
 - `access_count_min` (int, minimum `0`)
 - `feedback_count_min` (int, minimum `0`)
 - `contradiction_count_max` (int, minimum `0`)

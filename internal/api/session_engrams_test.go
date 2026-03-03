@@ -131,6 +131,12 @@ type engramCollectionRouteCase struct {
 	requestSpec engramRequestSpec
 }
 
+type invalidQueryFilterCase struct {
+	name           string
+	body           map[string]any
+	expectedDetail string
+}
+
 func TestMountSessionAuthRoutesEngramCollectionRoutesUseRepository(t *testing.T) {
 	actor := newSessionRoutesTestActor(t, models.UserRoleAdmin)
 	for _, testCase := range engramCollectionRouteCases() {
@@ -150,11 +156,28 @@ func TestMountSessionAuthRoutesEngramCollectionRoutesUseRepository(t *testing.T)
 }
 
 func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidFilters(t *testing.T) {
-	testCases := []struct {
-		name           string
-		body           map[string]any
-		expectedDetail string
-	}{
+	for _, testCase := range invalidQueryFilterCases() {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			handler, loginCookie := buildInvalidQueryFilterTestRequestHarness(t)
+			response := executeEngramRequest(
+				t,
+				handler,
+				loginCookie,
+				engramRequestSpec{
+					method: http.MethodPost,
+					path:   "/api/v1/engrams/query",
+					body:   testCase.body,
+				},
+			)
+			requireEqual(t, http.StatusBadRequest, response.Code)
+			requireErrorDetail(t, response, testCase.expectedDetail)
+		})
+	}
+}
+
+func invalidQueryFilterCases() []invalidQueryFilterCase {
+	return []invalidQueryFilterCase{
 		{
 			name: "invalid temporal window",
 			body: map[string]any{
@@ -205,25 +228,14 @@ func TestMountSessionAuthRoutesQueryEngramsRejectsInvalidFilters(t *testing.T) {
 			},
 			expectedDetail: "invalid feedback_count_min",
 		},
-	}
-
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			handler, loginCookie := buildInvalidQueryFilterTestRequestHarness(t)
-			response := executeEngramRequest(
-				t,
-				handler,
-				loginCookie,
-				engramRequestSpec{
-					method: http.MethodPost,
-					path:   "/api/v1/engrams/query",
-					body:   testCase.body,
-				},
-			)
-			requireEqual(t, http.StatusBadRequest, response.Code)
-			requireErrorDetail(t, response, testCase.expectedDetail)
-		})
+		{
+			name: "invalid useful count min",
+			body: map[string]any{
+				"query":            "durable memory",
+				"useful_count_min": -1,
+			},
+			expectedDetail: "invalid useful_count_min",
+		},
 	}
 }
 
@@ -354,6 +366,7 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 				body: map[string]any{
 					"query":                      "durable memory",
 					"top_k":                      5,
+					"useful_count_min":           1,
 					"access_count_min":           2,
 					"feedback_count_min":         4,
 					"contradiction_count_max":    3,
@@ -463,6 +476,7 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 	t.Helper()
 	requireEqual(t, "durable memory", request.Query)
 	requireEqual(t, 5, request.TopK)
+	requireEqual(t, 1, requireIntPointer(t, request.UsefulCountMin, "useful_count_min"))
 	requireEqual(t, 2, requireIntPointer(t, request.AccessCountMin, "access_count_min"))
 	requireEqual(t, 4, requireIntPointer(t, request.FeedbackCountMin, "feedback_count_min"))
 	requireEqual(

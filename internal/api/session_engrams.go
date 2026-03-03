@@ -385,6 +385,7 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 	return []queryEngramValidationRule{
 		{detail: "query is required", invalid: payload.Query == ""},
 		{detail: "invalid top_k", invalid: payload.TopK < 1 || payload.TopK > 50},
+		{detail: "invalid useful_count_min", invalid: invalidUsefulCountMin(payload.UsefulCountMin)},
 		{detail: "invalid access_count_min", invalid: invalidAccessCountMin(payload.AccessCountMin)},
 		{detail: "invalid feedback_count_min", invalid: invalidFeedbackCountMin(payload.FeedbackCountMin)},
 		{
@@ -407,6 +408,10 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 			invalid: relationTypeTraceDepthConflict(payload.RelationType, payload.TraceDepth),
 		},
 	}
+}
+
+func invalidUsefulCountMin(value *int) bool {
+	return value != nil && *value < 0
 }
 
 func invalidAccessCountMin(value *int) bool {

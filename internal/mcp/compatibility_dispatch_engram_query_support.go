@@ -52,6 +52,7 @@ type engramQueryPayloadParts struct {
 	keywords                []string
 	createdAfter            *time.Time
 	createdBefore           *time.Time
+	usefulCountMin          *int
 	accessCountMin          *int
 	feedbackCountMin        *int
 	contradictionCountMax   *int
@@ -106,6 +107,7 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		keywords:                keywords,
 		createdAfter:            temporalParts.createdAfter,
 		createdBefore:           temporalParts.createdBefore,
+		usefulCountMin:          engagementParts.usefulCountMin,
 		accessCountMin:          engagementParts.accessCountMin,
 		feedbackCountMin:        engagementParts.feedbackCountMin,
 		contradictionCountMax:   engagementParts.contradictionCountMax,
@@ -183,6 +185,7 @@ func temporalWindowSpecs(parts engramQueryTemporalParts) []temporalWindowSpec {
 }
 
 type engramQueryEngagementParts struct {
+	usefulCountMin          *int
 	accessCountMin          *int
 	feedbackCountMin        *int
 	contradictionCountMax   *int
@@ -192,6 +195,10 @@ type engramQueryEngagementParts struct {
 }
 
 func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngagementParts, *toolDispatchError) {
+	usefulCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "useful_count_min")
+	if dispatchErr != nil {
+		return engramQueryEngagementParts{}, dispatchErr
+	}
 	accessCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "access_count_min")
 	if dispatchErr != nil {
 		return engramQueryEngagementParts{}, dispatchErr
@@ -220,6 +227,7 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 		return engramQueryEngagementParts{}, dispatchErr
 	}
 	return engramQueryEngagementParts{
+		usefulCountMin:          usefulCountMin,
 		accessCountMin:          accessCountMin,
 		feedbackCountMin:        feedbackCountMin,
 		contradictionCountMax:   contradictionCountMax,
@@ -292,6 +300,7 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		Keywords:                parts.keywords,
 		CreatedAfter:            parts.createdAfter,
 		CreatedBefore:           parts.createdBefore,
+		UsefulCountMin:          parts.usefulCountMin,
 		AccessCountMin:          parts.accessCountMin,
 		FeedbackCountMin:        parts.feedbackCountMin,
 		ContradictionCountMax:   parts.contradictionCountMax,
