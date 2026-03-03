@@ -7,6 +7,22 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 59: authority-ceiling query filter parity)
+
+1. Added authority-ceiling query contract extension:
+   - new optional filter: `source_session_quality_max` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `source_session_quality_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `source_session_quality_max`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(source_session_quality_score, 0.5) <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `source_session_quality_max`.
+   - repository where-clause/parameter assertions for authority-ceiling predicate.
+   - MCP parity and validation coverage for authority-ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 58: freshness-ceiling query filter parity)
 
 1. Added freshness-ceiling query contract extension:

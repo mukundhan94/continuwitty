@@ -112,6 +112,7 @@ func buildEngramQueryParityExpectations(
 	usefulFeedbackRatioMin := 0.8
 	avgRelevanceFeedbackMin := 0.58
 	sourceSessionQualityMin := 0.73
+	sourceSessionQualityMax := 0.95
 	relationType := models.EngramLinkRelationSupports
 	traceDepth := 1
 	params := map[string]any{
@@ -135,6 +136,7 @@ func buildEngramQueryParityExpectations(
 		"useful_feedback_ratio_min":        usefulFeedbackRatioMin,
 		"avg_relevance_feedback_min":       avgRelevanceFeedbackMin,
 		"source_session_quality_min":       sourceSessionQualityMin,
+		"source_session_quality_max":       sourceSessionQualityMax,
 		"last_accessed_after":              lastAccessedAfter.Format(time.RFC3339),
 		"last_accessed_before":             lastAccessedBefore.Format(time.RFC3339),
 		"freshness_computed_after":         freshnessComputedAfter.Format(time.RFC3339),
@@ -165,6 +167,7 @@ func buildEngramQueryParityExpectations(
 			UsefulFeedbackRatioMin:  &usefulFeedbackRatioMin,
 			AvgRelevanceFeedbackMin: &avgRelevanceFeedbackMin,
 			SourceSessionQualityMin: &sourceSessionQualityMin,
+			SourceSessionQualityMax: &sourceSessionQualityMax,
 			LastAccessedAfter:       &lastAccessedAfter,
 			LastAccessedBefore:      &lastAccessedBefore,
 			FreshnessComputedAfter:  &freshnessComputedAfter,
@@ -293,6 +296,9 @@ func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
 		{name: "invalid source_session_quality_min type", params: map[string]any{"query": "x", "source_session_quality_min": "bad"}},
 		{name: "invalid source_session_quality_min low", params: map[string]any{"query": "x", "source_session_quality_min": -0.1}},
 		{name: "invalid source_session_quality_min high", params: map[string]any{"query": "x", "source_session_quality_min": 1.1}},
+		{name: "invalid source_session_quality_max type", params: map[string]any{"query": "x", "source_session_quality_max": "bad"}},
+		{name: "invalid source_session_quality_max low", params: map[string]any{"query": "x", "source_session_quality_max": -0.1}},
+		{name: "invalid source_session_quality_max high", params: map[string]any{"query": "x", "source_session_quality_max": 1.1}},
 		{name: "invalid relation_type", params: map[string]any{"query": "x", "relation_type": "invalid"}},
 		{name: "invalid trace_depth type", params: map[string]any{"query": "x", "trace_depth": "bad"}},
 		{name: "invalid trace_depth range", params: map[string]any{"query": "x", "trace_depth": 2.0}},

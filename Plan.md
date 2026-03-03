@@ -1789,6 +1789,38 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 59 - Authority-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `source_session_quality_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `source_session_quality_max` (`0..1`).
+  - repository query builder now supports `COALESCE(source_session_quality_score, 0.5) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `source_session_quality_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to target lower-authority memories for review and calibration workflows.
+2. Keep authority-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `source_session_quality_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum authority-score thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for authority-ceiling filtering behavior.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1856,3 +1888,5 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 57: `access_count_max` parity across REST/MCP/repository.
 23. Execute freshness-ceiling query filter increment:
    - [x] Phase 58: `freshness_score_max` parity across REST/MCP/repository.
+24. Execute authority-ceiling query filter increment:
+   - [x] Phase 59: `source_session_quality_max` parity across REST/MCP/repository.

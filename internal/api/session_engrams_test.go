@@ -277,6 +277,14 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid freshness_score_max",
 		},
 		{
+			name: "invalid source session quality max",
+			body: map[string]any{
+				"query":                      "durable memory",
+				"source_session_quality_max": 1.2,
+			},
+			expectedDetail: "invalid source_session_quality_max",
+		},
+		{
 			name: "invalid useful feedback ratio min",
 			body: map[string]any{
 				"query":                     "durable memory",
@@ -435,6 +443,7 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"useful_feedback_ratio_min":        0.8,
 					"avg_relevance_feedback_min":       0.55,
 					"source_session_quality_min":       0.7,
+					"source_session_quality_max":       0.9,
 					"last_accessed_after":              "2026-02-01T00:00:00Z",
 					"last_accessed_before":             "2026-02-20T00:00:00Z",
 					"freshness_computed_after":         "2026-02-02T00:00:00Z",
@@ -574,6 +583,11 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 		t,
 		0.7,
 		requireFloat64Pointer(t, request.SourceSessionQualityMin, "source_session_quality_min"),
+	)
+	requireEqual(
+		t,
+		0.9,
+		requireFloat64Pointer(t, request.SourceSessionQualityMax, "source_session_quality_max"),
 	)
 	requireTimeWindowPresent(t, request.LastAccessedAfter, request.LastAccessedBefore, "last_accessed")
 	requireTimeWindowPresent(

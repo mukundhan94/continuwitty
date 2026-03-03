@@ -65,6 +65,7 @@ type engramQueryPayloadParts struct {
 	usefulFeedbackRatioMin  *float64
 	avgRelevanceFeedbackMin *float64
 	sourceSessionQualityMin *float64
+	sourceSessionQualityMax *float64
 	lastAccessedAfter       *time.Time
 	lastAccessedBefore      *time.Time
 	freshnessComputedAfter  *time.Time
@@ -126,6 +127,7 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		usefulFeedbackRatioMin:  engagementParts.usefulFeedbackRatioMin,
 		avgRelevanceFeedbackMin: engagementParts.avgRelevanceFeedbackMin,
 		sourceSessionQualityMin: engagementParts.sourceSessionQualityMin,
+		sourceSessionQualityMax: engagementParts.sourceSessionQualityMax,
 		lastAccessedAfter:       temporalParts.lastAccessedAfter,
 		lastAccessedBefore:      temporalParts.lastAccessedBefore,
 		freshnessComputedAfter:  temporalParts.freshnessComputedAfter,
@@ -210,6 +212,7 @@ type engramQueryEngagementParts struct {
 	usefulFeedbackRatioMin  *float64
 	avgRelevanceFeedbackMin *float64
 	sourceSessionQualityMin *float64
+	sourceSessionQualityMax *float64
 }
 
 func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngagementParts, *toolDispatchError) {
@@ -235,6 +238,7 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 		usefulFeedbackRatioMin:  scoreParts.usefulFeedbackRatioMin,
 		avgRelevanceFeedbackMin: scoreParts.avgRelevanceFeedbackMin,
 		sourceSessionQualityMin: scoreParts.sourceSessionQualityMin,
+		sourceSessionQualityMax: scoreParts.sourceSessionQualityMax,
 	}, nil
 }
 
@@ -300,6 +304,7 @@ type engramQueryScoreEngagementParts struct {
 	usefulFeedbackRatioMin  *float64
 	avgRelevanceFeedbackMin *float64
 	sourceSessionQualityMin *float64
+	sourceSessionQualityMax *float64
 }
 
 func parseEngramQueryScoreEngagementParts(
@@ -329,6 +334,10 @@ func parseEngramQueryScoreEngagementParts(
 	if dispatchErr != nil {
 		return engramQueryScoreEngagementParts{}, dispatchErr
 	}
+	sourceSessionQualityMax, dispatchErr := parseEngramQuerySourceSessionQualityMax(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
 	return engramQueryScoreEngagementParts{
 		contradictionRatioMax:   contradictionRatioMax,
 		freshnessScoreMin:       freshnessScoreMin,
@@ -336,6 +345,7 @@ func parseEngramQueryScoreEngagementParts(
 		usefulFeedbackRatioMin:  usefulFeedbackRatioMin,
 		avgRelevanceFeedbackMin: avgRelevanceFeedbackMin,
 		sourceSessionQualityMin: sourceSessionQualityMin,
+		sourceSessionQualityMax: sourceSessionQualityMax,
 	}, nil
 }
 
@@ -415,6 +425,7 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		UsefulFeedbackRatioMin:  parts.usefulFeedbackRatioMin,
 		AvgRelevanceFeedbackMin: parts.avgRelevanceFeedbackMin,
 		SourceSessionQualityMin: parts.sourceSessionQualityMin,
+		SourceSessionQualityMax: parts.sourceSessionQualityMax,
 		LastAccessedAfter:       parts.lastAccessedAfter,
 		LastAccessedBefore:      parts.lastAccessedBefore,
 		FreshnessComputedAfter:  parts.freshnessComputedAfter,
@@ -545,6 +556,10 @@ func parseEngramQueryAvgRelevanceFeedbackMin(params map[string]any) (*float64, *
 
 func parseEngramQuerySourceSessionQualityMin(params map[string]any) (*float64, *toolDispatchError) {
 	return parseEngramQueryBoundedScoreMin(params, "source_session_quality_min")
+}
+
+func parseEngramQuerySourceSessionQualityMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "source_session_quality_max")
 }
 
 func parseEngramQueryBoundedScoreMin(

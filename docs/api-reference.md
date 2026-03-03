@@ -301,6 +301,7 @@ Optional temporal/engagement filters:
 - `useful_feedback_ratio_min` (number, bounded `0..1`)
 - `avg_relevance_feedback_min` (number, bounded `0..1`)
 - `source_session_quality_min` (number, bounded `0..1`)
+- `source_session_quality_max` (number, bounded `0..1`)
 - `relation_type` (`supports|depends_on|contradicts|related_to|derived_from`)
 - `trace_depth` (`0` or `1`; defaults to `1` when `relation_type` is set)
 

@@ -413,6 +413,10 @@ func queryEngramValidationRules(payload models.EngramQueryRequest) []queryEngram
 			detail:  "invalid source_session_quality_min",
 			invalid: invalidSourceSessionQualityMin(payload.SourceSessionQualityMin),
 		},
+		{
+			detail:  "invalid source_session_quality_max",
+			invalid: invalidSourceSessionQualityMax(payload.SourceSessionQualityMax),
+		},
 		{detail: "invalid relation_type", invalid: invalidRelationType(payload.RelationType)},
 		{detail: "invalid trace_depth", invalid: invalidTraceDepth(payload.TraceDepth)},
 		{
@@ -471,6 +475,10 @@ func invalidAvgRelevanceFeedbackMin(value *float64) bool {
 }
 
 func invalidSourceSessionQualityMin(value *float64) bool {
+	return invalidBoundedUnitInterval(value)
+}
+
+func invalidSourceSessionQualityMax(value *float64) bool {
 	return invalidBoundedUnitInterval(value)
 }
 

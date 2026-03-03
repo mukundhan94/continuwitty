@@ -69,6 +69,7 @@ func buildQueryWhereAllFiltersFixture() queryWhereAllFiltersFixture {
 		usefulFeedbackRatioMin:  0.8,
 		avgRelevanceFeedbackMin: 0.55,
 		sourceSessionQualityMin: 0.7,
+		sourceSessionQualityMax: 0.95,
 	}
 	relationType := models.EngramLinkRelationSupports
 	traceDepth := 1
@@ -114,6 +115,7 @@ type queryWhereScoreValues struct {
 	usefulFeedbackRatioMin  float64
 	avgRelevanceFeedbackMin float64
 	sourceSessionQualityMin float64
+	sourceSessionQualityMax float64
 }
 
 type queryWhereRequestInput struct {
@@ -146,6 +148,7 @@ func buildQueryWhereRequest(input queryWhereRequestInput) models.EngramQueryRequ
 		UsefulFeedbackRatioMin:  &input.scoreValues.usefulFeedbackRatioMin,
 		AvgRelevanceFeedbackMin: &input.scoreValues.avgRelevanceFeedbackMin,
 		SourceSessionQualityMin: &input.scoreValues.sourceSessionQualityMin,
+		SourceSessionQualityMax: &input.scoreValues.sourceSessionQualityMax,
 		LastAccessedAfter:       &input.timeValues.lastAccessedAfter,
 		LastAccessedBefore:      &input.timeValues.lastAccessedBefore,
 		FreshnessComputedAfter:  &input.timeValues.freshnessComputedAfter,
@@ -182,13 +185,14 @@ func queryWhereExpectedFragments() []string {
 		") >= $18",
 		"COALESCE(avg_relevance_feedback, 0.5) >= $19",
 		"COALESCE(source_session_quality_score, 0.5) >= $20",
-		"COALESCE(last_accessed_at, created_at) >= $21",
-		"COALESCE(last_accessed_at, created_at) <= $22",
-		"COALESCE(freshness_last_computed_at, created_at) >= $23",
-		"COALESCE(freshness_last_computed_at, created_at) <= $24",
+		"COALESCE(source_session_quality_score, 0.5) <= $21",
+		"COALESCE(last_accessed_at, created_at) >= $22",
+		"COALESCE(last_accessed_at, created_at) <= $23",
+		"COALESCE(freshness_last_computed_at, created_at) >= $24",
+		"COALESCE(freshness_last_computed_at, created_at) <= $25",
 		"EXISTS (",
 		"link.status = 'active'",
-		"link.relation_type = $25",
+		"link.relation_type = $26",
 		"owner_user_id = $3",
 		"actor_user.user_id = $3",
 		"pm.project_id = project_id",
@@ -224,6 +228,7 @@ func queryWhereExpectedParams(input queryWhereExpectedParamsInput) []any {
 		input.request.scoreValues.usefulFeedbackRatioMin,
 		input.request.scoreValues.avgRelevanceFeedbackMin,
 		input.request.scoreValues.sourceSessionQualityMin,
+		input.request.scoreValues.sourceSessionQualityMax,
 		input.request.timeValues.lastAccessedAfter,
 		input.request.timeValues.lastAccessedBefore,
 		input.request.timeValues.freshnessComputedAfter,
