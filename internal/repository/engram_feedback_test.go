@@ -89,6 +89,7 @@ func TestRecordEngramFeedbackPersistsFeedbackAndReturnsUpdatedCounters(t *testin
 		"elaborated",
 		"helpful in triage",
 		5,
+		1.0,
 		createdAt,
 	}
 	assertRecordEngramFeedbackQuery(t, db, expectedArgs)
@@ -98,24 +99,26 @@ func TestRecordEngramFeedbackNormalizesNoteAndDefaultsTimestamp(t *testing.T) {
 	now := time.Date(2026, 3, 2, 9, 30, 0, 0, time.UTC)
 	testCases := []feedbackNormalizationCase{
 		{
-			name:            "trimmed note",
-			feedbackID:      uuid.MustParse("00000000-0000-0000-0000-000000000a11"),
-			engramID:        uuid.MustParse("00000000-0000-0000-0000-000000000a12"),
-			actorUserID:     uuid.MustParse("00000000-0000-0000-0000-000000000a13"),
-			feedbackType:    models.EngramFeedbackTypeContradiction,
-			note:            "  mismatch  ",
-			expectedNote:    "mismatch",
-			expectedSQLNote: "mismatch",
+			name:                    "trimmed note",
+			feedbackID:              uuid.MustParse("00000000-0000-0000-0000-000000000a11"),
+			engramID:                uuid.MustParse("00000000-0000-0000-0000-000000000a12"),
+			actorUserID:             uuid.MustParse("00000000-0000-0000-0000-000000000a13"),
+			feedbackType:            models.EngramFeedbackTypeContradiction,
+			note:                    "  mismatch  ",
+			expectedNote:            "mismatch",
+			expectedSQLNote:         "mismatch",
+			expectedAuthoritySignal: 0.15,
 		},
 		{
-			name:            "blank note becomes nil SQL value",
-			feedbackID:      uuid.MustParse("00000000-0000-0000-0000-000000000a16"),
-			engramID:        uuid.MustParse("00000000-0000-0000-0000-000000000a17"),
-			actorUserID:     uuid.MustParse("00000000-0000-0000-0000-000000000a18"),
-			feedbackType:    models.EngramFeedbackTypeUseful,
-			note:            "   ",
-			expectedNote:    "",
-			expectedSQLNote: nil,
+			name:                    "blank note becomes nil SQL value",
+			feedbackID:              uuid.MustParse("00000000-0000-0000-0000-000000000a16"),
+			engramID:                uuid.MustParse("00000000-0000-0000-0000-000000000a17"),
+			actorUserID:             uuid.MustParse("00000000-0000-0000-0000-000000000a18"),
+			feedbackType:            models.EngramFeedbackTypeUseful,
+			note:                    "   ",
+			expectedNote:            "",
+			expectedSQLNote:         nil,
+			expectedAuthoritySignal: 0.60,
 		},
 	}
 	for _, testCase := range testCases {
@@ -222,6 +225,55 @@ func TestRecordEngramFeedbackValidation(t *testing.T) {
 	}
 }
 
+func TestFeedbackAuthoritySignalNormalization(t *testing.T) {
+	relevanceScore := 4
+	elaborated := models.EngramFeedbackIntegrationDepthElaborated
+	testCases := []struct {
+		name             string
+		relevanceScore   *int
+		feedbackType     models.EngramFeedbackType
+		integrationDepth *models.EngramFeedbackIntegrationDepth
+		expected         float64
+	}{
+		{
+			name:           "relevance score takes precedence",
+			relevanceScore: &relevanceScore,
+			feedbackType:   models.EngramFeedbackTypeContradiction,
+			expected:       0.75,
+		},
+		{
+			name:             "integration depth maps to authority",
+			feedbackType:     models.EngramFeedbackTypeUseful,
+			integrationDepth: &elaborated,
+			expected:         0.85,
+		},
+		{
+			name:         "feedback type contradiction fallback",
+			feedbackType: models.EngramFeedbackTypeContradiction,
+			expected:     0.15,
+		},
+		{
+			name:         "feedback type useful fallback",
+			feedbackType: models.EngramFeedbackTypeUseful,
+			expected:     0.60,
+		},
+	}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			value := feedbackAuthoritySignal(
+				testCase.relevanceScore,
+				testCase.feedbackType,
+				testCase.integrationDepth,
+			)
+			if value == nil {
+				t.Fatalf("expected authority signal value")
+			}
+			requireEqual(t, testCase.expected, *value)
+		})
+	}
+}
+
 func assertFeedbackValidationError(
 	t *testing.T,
 	err error,
@@ -269,14 +321,15 @@ func assertRecordEngramFeedbackQuery(
 }
 
 type feedbackNormalizationCase struct {
-	name            string
-	feedbackID      uuid.UUID
-	engramID        uuid.UUID
-	actorUserID     uuid.UUID
-	feedbackType    models.EngramFeedbackType
-	note            string
-	expectedNote    string
-	expectedSQLNote any
+	name                    string
+	feedbackID              uuid.UUID
+	engramID                uuid.UUID
+	actorUserID             uuid.UUID
+	feedbackType            models.EngramFeedbackType
+	note                    string
+	expectedNote            string
+	expectedSQLNote         any
+	expectedAuthoritySignal float64
 }
 
 func assertFeedbackNoteNormalizationCase(
@@ -334,6 +387,8 @@ func assertFeedbackNoteNormalizationCase(
 	requireEqual(t, nil, db.queryRowArgs[0][5])
 	requireEqual(t, testCase.expectedSQLNote, db.queryRowArgs[0][6])
 	requireEqual(t, nil, db.queryRowArgs[0][7])
+	requireEqual(t, testCase.expectedAuthoritySignal, db.queryRowArgs[0][8].(float64))
+	requireEqual(t, now, db.queryRowArgs[0][9].(time.Time))
 }
 
 func intPtr(value int) *int {

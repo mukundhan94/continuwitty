@@ -48,6 +48,13 @@ func RecordEngramFeedback(
 	noteValue := feedbackNoteSQLValue(normalized.Note)
 	integrationDepthValue := feedbackIntegrationDepthSQLValue(normalized.IntegrationDepth)
 	relevanceScoreValue := feedbackRelevanceScoreSQLValue(normalized.RelevanceScore)
+	authoritySignalValue := feedbackAuthoritySignalSQLValue(
+		feedbackAuthoritySignal(
+			normalized.RelevanceScore,
+			normalized.FeedbackType,
+			normalized.IntegrationDepth,
+		),
+	)
 	row := db.QueryRow(
 		ctx,
 		recordEngramFeedbackSQL(),
@@ -59,6 +66,7 @@ func RecordEngramFeedback(
 		integrationDepthValue,
 		noteValue,
 		relevanceScoreValue,
+		authoritySignalValue,
 		normalized.CreatedAt,
 	)
 
@@ -168,6 +176,13 @@ func feedbackRelevanceScoreSQLValue(relevanceScore *int) any {
 	return *relevanceScore
 }
 
+func feedbackAuthoritySignalSQLValue(authoritySignal *float64) any {
+	if authoritySignal == nil {
+		return nil
+	}
+	return *authoritySignal
+}
+
 func feedbackSessionIDSQLValue(sessionID *uuid.UUID) any {
 	if sessionID == nil {
 		return nil
@@ -195,6 +210,53 @@ func normalizeFeedbackRelevanceScore(relevanceScore *int) (*int, error) {
 	}
 	normalized := *relevanceScore
 	return &normalized, nil
+}
+
+func feedbackAuthoritySignal(
+	relevanceScore *int,
+	feedbackType models.EngramFeedbackType,
+	integrationDepth *models.EngramFeedbackIntegrationDepth,
+) *float64 {
+	if relevanceScore != nil {
+		value := clamp01(float64(*relevanceScore-1) / 4.0)
+		return &value
+	}
+	if integrationDepth != nil {
+		value := authoritySignalFromIntegrationDepth(*integrationDepth)
+		return &value
+	}
+	value := authoritySignalFromFeedbackType(feedbackType)
+	return &value
+}
+
+func authoritySignalFromIntegrationDepth(
+	integrationDepth models.EngramFeedbackIntegrationDepth,
+) float64 {
+	switch integrationDepth {
+	case models.EngramFeedbackIntegrationDepthElaborated:
+		return 0.85
+	case models.EngramFeedbackIntegrationDepthMentioned:
+		return 0.70
+	case models.EngramFeedbackIntegrationDepthIgnored:
+		return 0.35
+	case models.EngramFeedbackIntegrationDepthContradicted:
+		return 0.10
+	default:
+		return 0.50
+	}
+}
+
+func authoritySignalFromFeedbackType(
+	feedbackType models.EngramFeedbackType,
+) float64 {
+	switch feedbackType {
+	case models.EngramFeedbackTypeUseful:
+		return 0.60
+	case models.EngramFeedbackTypeContradiction:
+		return 0.15
+	default:
+		return 0.50
+	}
 }
 
 func normalizeFeedbackIntegrationDepth(
@@ -259,7 +321,7 @@ const recordEngramFeedbackSQLTemplate = `
 				$6,
 				COALESCE($7, ''),
 				$8,
-				$9
+				$10
 			FROM visible_engram ve
 			RETURNING
 				feedback_id,
@@ -286,13 +348,13 @@ const recordEngramFeedbackSQLTemplate = `
 					) / (COALESCE(feedback_count, 0)::DOUBLE PRECISION + 1.0)
 				END,
 				source_session_quality_score = CASE
-					WHEN $8 IS NULL THEN source_session_quality_score
+					WHEN $9 IS NULL THEN source_session_quality_score
 					ELSE (
 						(COALESCE(source_session_quality_score, 0.5) * COALESCE(feedback_count, 0)::DOUBLE PRECISION) +
-						(($8::DOUBLE PRECISION - 1.0) / 4.0)
+						$9::DOUBLE PRECISION
 					) / (COALESCE(feedback_count, 0)::DOUBLE PRECISION + 1.0)
 				END,
-				updated_at = GREATEST(updated_at, $9)
+				updated_at = GREATEST(updated_at, $10)
 			FROM inserted i
 			WHERE e.engram_id = i.engram_id
 			RETURNING
