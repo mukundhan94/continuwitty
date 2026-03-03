@@ -435,6 +435,31 @@ func invalidQueryFilterCases() []invalidQueryFilterCase {
 			expectedDetail: "invalid engagement_signal_score window",
 		},
 		{
+			name: "invalid freshness signal score min",
+			body: map[string]any{
+				"query":                      "durable memory",
+				"freshness_signal_score_min": 1.2,
+			},
+			expectedDetail: "invalid freshness_signal_score_min",
+		},
+		{
+			name: "invalid freshness signal score max",
+			body: map[string]any{
+				"query":                      "durable memory",
+				"freshness_signal_score_max": 1.2,
+			},
+			expectedDetail: "invalid freshness_signal_score_max",
+		},
+		{
+			name: "invalid freshness signal score window",
+			body: map[string]any{
+				"query":                      "durable memory",
+				"freshness_signal_score_min": 0.9,
+				"freshness_signal_score_max": 0.7,
+			},
+			expectedDetail: "invalid freshness_signal_score window",
+		},
+		{
 			name: "invalid composite rank score min",
 			body: map[string]any{
 				"query":                    "durable memory",
@@ -665,6 +690,8 @@ func engramCollectionRouteCases() []engramCollectionRouteCase {
 					"feedback_signal_score_max":        0.94,
 					"engagement_signal_score_min":      0.45,
 					"engagement_signal_score_max":      0.92,
+					"freshness_signal_score_min":       0.41,
+					"freshness_signal_score_max":       0.97,
 					"composite_rank_score_min":         0.75,
 					"composite_rank_score_max":         0.95,
 					"last_accessed_after":              "2026-02-01T00:00:00Z",
@@ -869,6 +896,16 @@ func assertTemporalQueryRequest(t *testing.T, request models.EngramQueryRequest)
 		t,
 		0.92,
 		requireFloat64Pointer(t, request.EngagementSignalScoreMax, "engagement_signal_score_max"),
+	)
+	requireEqual(
+		t,
+		0.41,
+		requireFloat64Pointer(t, request.FreshnessSignalScoreMin, "freshness_signal_score_min"),
+	)
+	requireEqual(
+		t,
+		0.97,
+		requireFloat64Pointer(t, request.FreshnessSignalScoreMax, "freshness_signal_score_max"),
 	)
 	requireEqual(
 		t,

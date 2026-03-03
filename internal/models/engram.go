@@ -91,6 +91,8 @@ type EngramQueryRequest struct {
 	FeedbackSignalScoreMax   *float64                `json:"feedback_signal_score_max,omitempty"`
 	EngagementSignalScoreMin *float64                `json:"engagement_signal_score_min,omitempty"`
 	EngagementSignalScoreMax *float64                `json:"engagement_signal_score_max,omitempty"`
+	FreshnessSignalScoreMin  *float64                `json:"freshness_signal_score_min,omitempty"`
+	FreshnessSignalScoreMax  *float64                `json:"freshness_signal_score_max,omitempty"`
 	CompositeRankScoreMin    *float64                `json:"composite_rank_score_min,omitempty"`
 	CompositeRankScoreMax    *float64                `json:"composite_rank_score_max,omitempty"`
 	LastAccessedAfter        *time.Time              `json:"last_accessed_after,omitempty"`

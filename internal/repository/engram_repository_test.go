@@ -356,6 +356,39 @@ func TestQueryEngramsAppliesEngagementSignalScoreFilters(t *testing.T) {
 	}
 }
 
+func TestQueryEngramsAppliesFreshnessSignalScoreFilters(t *testing.T) {
+	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	projectID := "engram-vault"
+	minFreshnessSignal := 0.8
+	maxFreshnessSignal := 0.95
+	db := buildQueryEngramsFixture(projectID)
+
+	results, err := QueryEngrams(
+		context.Background(),
+		db,
+		QueryEngramsInput{
+			Request: models.EngramQueryRequest{
+				Query:                   "durable checkpoint",
+				TopK:                    2,
+				ProjectID:               &projectID,
+				FreshnessSignalScoreMin: &minFreshnessSignal,
+				FreshnessSignalScoreMax: &maxFreshnessSignal,
+			},
+			QueryLiteral: "[0.1,0.2,0.3]",
+			ActorUserID:  &actorUserID,
+		},
+	)
+	requireNoError(t, err)
+	requireEqual(t, 1, len(results))
+	requireEqual(t, "Lexical Match", results[0].Title)
+	if results[0].FreshnessSignalScore < minFreshnessSignal {
+		t.Fatalf("expected freshness signal >= %v, got %v", minFreshnessSignal, results[0].FreshnessSignalScore)
+	}
+	if results[0].FreshnessSignalScore > maxFreshnessSignal {
+		t.Fatalf("expected freshness signal <= %v, got %v", maxFreshnessSignal, results[0].FreshnessSignalScore)
+	}
+}
+
 func buildQueryEngramsFixture(projectID string) *fakeQueryer {
 	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
 	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)

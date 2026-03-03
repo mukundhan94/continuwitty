@@ -80,6 +80,8 @@ type engramQueryPayloadParts struct {
 	feedbackSignalScoreMax   *float64
 	engagementSignalScoreMin *float64
 	engagementSignalScoreMax *float64
+	freshnessSignalScoreMin  *float64
+	freshnessSignalScoreMax  *float64
 	compositeRankScoreMin    *float64
 	compositeRankScoreMax    *float64
 	lastAccessedAfter        *time.Time
@@ -169,6 +171,8 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		feedbackSignalScoreMax:   engagementParts.feedbackSignalScoreMax,
 		engagementSignalScoreMin: engagementParts.engagementSignalScoreMin,
 		engagementSignalScoreMax: engagementParts.engagementSignalScoreMax,
+		freshnessSignalScoreMin:  engagementParts.freshnessSignalScoreMin,
+		freshnessSignalScoreMax:  engagementParts.freshnessSignalScoreMax,
 		compositeRankScoreMin:    engagementParts.compositeRankScoreMin,
 		compositeRankScoreMax:    engagementParts.compositeRankScoreMax,
 		lastAccessedAfter:        temporalParts.lastAccessedAfter,
@@ -268,6 +272,8 @@ type engramQueryEngagementParts struct {
 	feedbackSignalScoreMax   *float64
 	engagementSignalScoreMin *float64
 	engagementSignalScoreMax *float64
+	freshnessSignalScoreMin  *float64
+	freshnessSignalScoreMax  *float64
 	compositeRankScoreMin    *float64
 	compositeRankScoreMax    *float64
 }
@@ -308,6 +314,8 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 		feedbackSignalScoreMax:   scoreParts.feedbackSignalScoreMax,
 		engagementSignalScoreMin: scoreParts.engagementSignalScoreMin,
 		engagementSignalScoreMax: scoreParts.engagementSignalScoreMax,
+		freshnessSignalScoreMin:  scoreParts.freshnessSignalScoreMin,
+		freshnessSignalScoreMax:  scoreParts.freshnessSignalScoreMax,
 		compositeRankScoreMin:    scoreParts.compositeRankScoreMin,
 		compositeRankScoreMax:    scoreParts.compositeRankScoreMax,
 	}
@@ -369,6 +377,9 @@ func invalidQueryEngagementWindowError(
 	}
 	if hasInvalidScoreWindow(parts.engagementSignalScoreMin, parts.engagementSignalScoreMax) {
 		return invalidParamError("engagement_signal_score_min")
+	}
+	if hasInvalidScoreWindow(parts.freshnessSignalScoreMin, parts.freshnessSignalScoreMax) {
+		return invalidParamError("freshness_signal_score_min")
 	}
 	if hasInvalidScoreWindow(parts.compositeRankScoreMin, parts.compositeRankScoreMax) {
 		return invalidParamError("composite_rank_score_min")
@@ -462,6 +473,8 @@ type engramQueryScoreEngagementParts struct {
 	feedbackSignalScoreMax   *float64
 	engagementSignalScoreMin *float64
 	engagementSignalScoreMax *float64
+	freshnessSignalScoreMin  *float64
+	freshnessSignalScoreMax  *float64
 	compositeRankScoreMin    *float64
 	compositeRankScoreMax    *float64
 }
@@ -541,6 +554,14 @@ func parseEngramQueryScoreEngagementParts(
 	if dispatchErr != nil {
 		return engramQueryScoreEngagementParts{}, dispatchErr
 	}
+	freshnessSignalScoreMin, dispatchErr := parseEngramQueryFreshnessSignalScoreMin(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
+	freshnessSignalScoreMax, dispatchErr := parseEngramQueryFreshnessSignalScoreMax(params)
+	if dispatchErr != nil {
+		return engramQueryScoreEngagementParts{}, dispatchErr
+	}
 	compositeRankScoreMin, dispatchErr := parseEngramQueryCompositeRankScoreMin(params)
 	if dispatchErr != nil {
 		return engramQueryScoreEngagementParts{}, dispatchErr
@@ -568,6 +589,8 @@ func parseEngramQueryScoreEngagementParts(
 		feedbackSignalScoreMax:   feedbackSignalScoreMax,
 		engagementSignalScoreMin: engagementSignalScoreMin,
 		engagementSignalScoreMax: engagementSignalScoreMax,
+		freshnessSignalScoreMin:  freshnessSignalScoreMin,
+		freshnessSignalScoreMax:  freshnessSignalScoreMax,
 		compositeRankScoreMin:    compositeRankScoreMin,
 		compositeRankScoreMax:    compositeRankScoreMax,
 	}, nil
@@ -664,6 +687,8 @@ func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryR
 		FeedbackSignalScoreMax:   parts.feedbackSignalScoreMax,
 		EngagementSignalScoreMin: parts.engagementSignalScoreMin,
 		EngagementSignalScoreMax: parts.engagementSignalScoreMax,
+		FreshnessSignalScoreMin:  parts.freshnessSignalScoreMin,
+		FreshnessSignalScoreMax:  parts.freshnessSignalScoreMax,
 		CompositeRankScoreMin:    parts.compositeRankScoreMin,
 		CompositeRankScoreMax:    parts.compositeRankScoreMax,
 		LastAccessedAfter:        parts.lastAccessedAfter,
@@ -878,6 +903,14 @@ func parseEngramQueryEngagementSignalScoreMin(params map[string]any) (*float64, 
 
 func parseEngramQueryEngagementSignalScoreMax(params map[string]any) (*float64, *toolDispatchError) {
 	return parseEngramQueryBoundedScoreMin(params, "engagement_signal_score_max")
+}
+
+func parseEngramQueryFreshnessSignalScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "freshness_signal_score_min")
+}
+
+func parseEngramQueryFreshnessSignalScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "freshness_signal_score_max")
 }
 
 func parseEngramQueryCompositeRankScoreMin(params map[string]any) (*float64, *toolDispatchError) {
