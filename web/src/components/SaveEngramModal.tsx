@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import styled from 'styled-components'
 
 import type { VisibilityScope } from '../api/types'
 import { ModalBackdrop, ModalCard } from '../styles/primitives'
@@ -16,7 +17,15 @@ interface SaveEngramModalProps {
     tags: string[]
     keywords: string[]
   }) => Promise<void>
+  variant?: 'modal' | 'inline'
 }
+
+const InlineCard = styled(ModalCard)`
+  width: 100%;
+  max-width: none;
+  background: var(--surface-glass);
+  border: 1px solid var(--surface-glass-border);
+`
 
 function splitCsv(input: string): string[] {
   return input
@@ -31,6 +40,7 @@ export function SaveEngramModal({
   saving,
   onClose,
   onSave,
+  variant = 'modal',
 }: SaveEngramModalProps) {
   const [title, setTitle] = useState(defaultTitle)
   const [abstract, setAbstract] = useState(
@@ -51,54 +61,68 @@ export function SaveEngramModal({
     })
   }
 
+  const formContent = (
+    <>
+      <h3 className="font-display text-lg font-semibold text-ink">Save Session as Engram</h3>
+
+      <form className="mt-3 grid gap-2.5" onSubmit={handleSubmit}>
+        <label htmlFor="save-title">Title</label>
+        <input id="save-title" value={title} onChange={(event) => setTitle(event.target.value)} required />
+
+        <label htmlFor="save-abstract">Abstract</label>
+        <textarea
+          id="save-abstract"
+          value={abstract}
+          onChange={(event) => setAbstract(event.target.value)}
+          rows={3}
+          required
+        />
+
+        <label htmlFor="save-visibility">Visibility</label>
+        <select
+          id="save-visibility"
+          value={visibilityScope}
+          onChange={(event) => setVisibilityScope(event.target.value as VisibilityScope)}
+        >
+          <option value="private">Private</option>
+          <option value="project">Project</option>
+        </select>
+
+        <label htmlFor="save-tags">Tags (comma separated)</label>
+        <input id="save-tags" value={tagsText} onChange={(event) => setTagsText(event.target.value)} />
+
+        <label htmlFor="save-keywords">Keywords (comma separated)</label>
+        <input id="save-keywords" value={keywordsText} onChange={(event) => setKeywordsText(event.target.value)} />
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            className="border border-line bg-white text-ink"
+            onClick={onClose}
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button type="submit" disabled={saving || !title.trim() || !abstract.trim()}>
+            {saving ? 'Saving...' : 'Save Engram'}
+          </button>
+        </div>
+      </form>
+    </>
+  )
+
+  if (variant === 'inline') {
+    return (
+      <InlineCard role="dialog" aria-modal="false">
+        {formContent}
+      </InlineCard>
+    )
+  }
+
   return (
     <ModalBackdrop role="presentation" onClick={onClose}>
       <ModalCard role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-        <h3 className="font-display text-lg font-semibold text-ink">Save Session as Engram</h3>
-
-        <form className="mt-3 grid gap-2.5" onSubmit={handleSubmit}>
-          <label htmlFor="save-title">Title</label>
-          <input id="save-title" value={title} onChange={(event) => setTitle(event.target.value)} required />
-
-          <label htmlFor="save-abstract">Abstract</label>
-          <textarea
-            id="save-abstract"
-            value={abstract}
-            onChange={(event) => setAbstract(event.target.value)}
-            rows={3}
-            required
-          />
-
-          <label htmlFor="save-visibility">Visibility</label>
-          <select
-            id="save-visibility"
-            value={visibilityScope}
-            onChange={(event) => setVisibilityScope(event.target.value as VisibilityScope)}
-          >
-            <option value="private">Private</option>
-            <option value="project">Project</option>
-          </select>
-
-          <label htmlFor="save-tags">Tags (comma separated)</label>
-          <input id="save-tags" value={tagsText} onChange={(event) => setTagsText(event.target.value)} />
-
-          <label htmlFor="save-keywords">Keywords (comma separated)</label>
-          <input id="save-keywords" value={keywordsText} onChange={(event) => setKeywordsText(event.target.value)} />
-
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="border border-line bg-white text-ink"
-              onClick={onClose}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button type="submit" disabled={saving || !title.trim() || !abstract.trim()}>
-              {saving ? 'Saving...' : 'Save Engram'}
-            </button>
-          </div>
-        </form>
+        {formContent}
       </ModalCard>
     </ModalBackdrop>
   )

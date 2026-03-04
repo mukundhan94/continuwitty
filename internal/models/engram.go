@@ -56,28 +56,53 @@ type MemoryEngramCreate struct {
 
 // EngramQueryRequest models vector/lexical query constraints.
 type EngramQueryRequest struct {
-	Query                   string                  `json:"query"`
-	TopK                    int                     `json:"top_k"`
-	ProjectID               *string                 `json:"project_id,omitempty"`
-	Tags                    []string                `json:"tags,omitempty"`
-	Keywords                []string                `json:"keywords,omitempty"`
-	CreatedAfter            *time.Time              `json:"created_after,omitempty"`
-	CreatedBefore           *time.Time              `json:"created_before,omitempty"`
-	UsefulCountMin          *int                    `json:"useful_count_min,omitempty"`
-	AccessCountMin          *int                    `json:"access_count_min,omitempty"`
-	FeedbackCountMin        *int                    `json:"feedback_count_min,omitempty"`
-	ContradictionCountMax   *int                    `json:"contradiction_count_max,omitempty"`
-	ContradictionRatioMax   *float64                `json:"contradiction_feedback_ratio_max,omitempty"`
-	FreshnessScoreMin       *float64                `json:"freshness_score_min,omitempty"`
-	UsefulFeedbackRatioMin  *float64                `json:"useful_feedback_ratio_min,omitempty"`
-	AvgRelevanceFeedbackMin *float64                `json:"avg_relevance_feedback_min,omitempty"`
-	SourceSessionQualityMin *float64                `json:"source_session_quality_min,omitempty"`
-	LastAccessedAfter       *time.Time              `json:"last_accessed_after,omitempty"`
-	LastAccessedBefore      *time.Time              `json:"last_accessed_before,omitempty"`
-	FreshnessComputedAfter  *time.Time              `json:"freshness_computed_after,omitempty"`
-	FreshnessComputedBefore *time.Time              `json:"freshness_computed_before,omitempty"`
-	RelationType            *EngramLinkRelationType `json:"relation_type,omitempty"`
-	TraceDepth              *int                    `json:"trace_depth,omitempty"`
+	Query                    string                  `json:"query"`
+	TopK                     int                     `json:"top_k"`
+	ProjectID                *string                 `json:"project_id,omitempty"`
+	Tags                     []string                `json:"tags,omitempty"`
+	Keywords                 []string                `json:"keywords,omitempty"`
+	CreatedAfter             *time.Time              `json:"created_after,omitempty"`
+	CreatedBefore            *time.Time              `json:"created_before,omitempty"`
+	DistanceMin              *float64                `json:"distance_min,omitempty"`
+	DistanceMax              *float64                `json:"distance_max,omitempty"`
+	UsefulCountMin           *int                    `json:"useful_count_min,omitempty"`
+	UsefulCountMax           *int                    `json:"useful_count_max,omitempty"`
+	AccessCountMin           *int                    `json:"access_count_min,omitempty"`
+	AccessCountMax           *int                    `json:"access_count_max,omitempty"`
+	FeedbackCountMin         *int                    `json:"feedback_count_min,omitempty"`
+	FeedbackCountMax         *int                    `json:"feedback_count_max,omitempty"`
+	ContradictionCountMin    *int                    `json:"contradiction_count_min,omitempty"`
+	ContradictionCountMax    *int                    `json:"contradiction_count_max,omitempty"`
+	ContradictionRatioMin    *float64                `json:"contradiction_feedback_ratio_min,omitempty"`
+	ContradictionRatioMax    *float64                `json:"contradiction_feedback_ratio_max,omitempty"`
+	FreshnessScoreMin        *float64                `json:"freshness_score_min,omitempty"`
+	FreshnessScoreMax        *float64                `json:"freshness_score_max,omitempty"`
+	UsefulFeedbackRatioMin   *float64                `json:"useful_feedback_ratio_min,omitempty"`
+	UsefulFeedbackRatioMax   *float64                `json:"useful_feedback_ratio_max,omitempty"`
+	AvgRelevanceFeedbackMin  *float64                `json:"avg_relevance_feedback_min,omitempty"`
+	AvgRelevanceFeedbackMax  *float64                `json:"avg_relevance_feedback_max,omitempty"`
+	SourceSessionQualityMin  *float64                `json:"source_session_quality_min,omitempty"`
+	SourceSessionQualityMax  *float64                `json:"source_session_quality_max,omitempty"`
+	DenseScoreMin            *float64                `json:"dense_score_min,omitempty"`
+	DenseScoreMax            *float64                `json:"dense_score_max,omitempty"`
+	LexicalOverlapScoreMin   *float64                `json:"lexical_overlap_score_min,omitempty"`
+	LexicalOverlapScoreMax   *float64                `json:"lexical_overlap_score_max,omitempty"`
+	FeedbackSignalScoreMin   *float64                `json:"feedback_signal_score_min,omitempty"`
+	FeedbackSignalScoreMax   *float64                `json:"feedback_signal_score_max,omitempty"`
+	EngagementSignalScoreMin *float64                `json:"engagement_signal_score_min,omitempty"`
+	EngagementSignalScoreMax *float64                `json:"engagement_signal_score_max,omitempty"`
+	FreshnessSignalScoreMin  *float64                `json:"freshness_signal_score_min,omitempty"`
+	FreshnessSignalScoreMax  *float64                `json:"freshness_signal_score_max,omitempty"`
+	AuthoritySignalScoreMin  *float64                `json:"authority_signal_score_min,omitempty"`
+	AuthoritySignalScoreMax  *float64                `json:"authority_signal_score_max,omitempty"`
+	CompositeRankScoreMin    *float64                `json:"composite_rank_score_min,omitempty"`
+	CompositeRankScoreMax    *float64                `json:"composite_rank_score_max,omitempty"`
+	LastAccessedAfter        *time.Time              `json:"last_accessed_after,omitempty"`
+	LastAccessedBefore       *time.Time              `json:"last_accessed_before,omitempty"`
+	FreshnessComputedAfter   *time.Time              `json:"freshness_computed_after,omitempty"`
+	FreshnessComputedBefore  *time.Time              `json:"freshness_computed_before,omitempty"`
+	RelationType             *EngramLinkRelationType `json:"relation_type,omitempty"`
+	TraceDepth               *int                    `json:"trace_depth,omitempty"`
 }
 
 // RehydrationCitation models a source snippet used in rehydration output.
@@ -104,24 +129,33 @@ type EngramSummary struct {
 
 // EngramQueryResult models query-engrams response rows.
 type EngramQueryResult struct {
-	EngramID                  uuid.UUID  `json:"engram_id"`
-	ProjectID                 string     `json:"project_id"`
-	Title                     string     `json:"title"`
-	Abstract                  string     `json:"abstract"`
-	CreatedAt                 time.Time  `json:"created_at"`
-	Tags                      []string   `json:"tags,omitempty"`
-	Keywords                  []string   `json:"keywords,omitempty"`
-	OwnerUserID               *uuid.UUID `json:"owner_user_id,omitempty"`
-	VisibilityScope           string     `json:"visibility_scope"`
-	AccessCount               int        `json:"access_count"`
-	FreshnessScore            float64    `json:"freshness_score"`
-	FeedbackCount             int        `json:"feedback_count"`
-	UsefulCount               int        `json:"useful_count"`
-	AvgRelevanceFeedback      float64    `json:"avg_relevance_feedback"`
-	UsefulFeedbackRatio       float64    `json:"useful_feedback_ratio"`
-	ContradictionCount        int        `json:"contradiction_count"`
-	SourceSessionQualityScore float64    `json:"source_session_quality_score"`
-	Distance                  float64    `json:"distance"`
+	EngramID                   uuid.UUID  `json:"engram_id"`
+	ProjectID                  string     `json:"project_id"`
+	Title                      string     `json:"title"`
+	Abstract                   string     `json:"abstract"`
+	CreatedAt                  time.Time  `json:"created_at"`
+	Tags                       []string   `json:"tags,omitempty"`
+	Keywords                   []string   `json:"keywords,omitempty"`
+	OwnerUserID                *uuid.UUID `json:"owner_user_id,omitempty"`
+	VisibilityScope            string     `json:"visibility_scope"`
+	AccessCount                int        `json:"access_count"`
+	FreshnessScore             float64    `json:"freshness_score"`
+	FeedbackCount              int        `json:"feedback_count"`
+	UsefulCount                int        `json:"useful_count"`
+	AvgRelevanceFeedback       float64    `json:"avg_relevance_feedback"`
+	UsefulFeedbackRatio        float64    `json:"useful_feedback_ratio"`
+	ContradictionCount         int        `json:"contradiction_count"`
+	ContradictionFeedbackRatio float64    `json:"contradiction_feedback_ratio"`
+	SourceSessionQualityScore  float64    `json:"source_session_quality_score"`
+	CompositeRankScore         float64    `json:"composite_rank_score"`
+	DenseScore                 float64    `json:"dense_score"`
+	LexicalOverlapScore        float64    `json:"lexical_overlap_score"`
+	FeedbackSignalScore        float64    `json:"feedback_signal_score"`
+	EngagementSignalScore      float64    `json:"engagement_signal_score"`
+	FreshnessSignalScore       float64    `json:"freshness_signal_score"`
+	AuthoritySignalScore       float64    `json:"authority_signal_score"`
+	RankPosition               int        `json:"rank_position"`
+	Distance                   float64    `json:"distance"`
 }
 
 // EngramFeedbackType identifies explicit feedback semantics for one engram.

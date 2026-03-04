@@ -49,23 +49,32 @@ func buildEngramQueryParityFixture(t *testing.T) engramQueryParityFixture {
 	service := &fakeEngramQueryService{
 		results: []models.EngramQueryResult{
 			{
-				EngramID:                  uuid.MustParse("39500000-0000-0000-0000-000000000396"),
-				ProjectID:                 "proj-alpha",
-				Title:                     "Roadmap",
-				Abstract:                  "Quarterly plan",
-				CreatedAt:                 time.Unix(1700003950, 0).UTC(),
-				Distance:                  0.1,
-				SourceSessionQualityScore: 0.78,
-				AccessCount:               9,
-				FreshnessScore:            0.67,
-				FeedbackCount:             4,
-				UsefulCount:               3,
-				AvgRelevanceFeedback:      0.72,
-				UsefulFeedbackRatio:       0.75,
-				ContradictionCount:        1,
-				Keywords:                  []string{"risk"},
-				Tags:                      []string{"ops"},
-				OwnerUserID:               uuidPtr(uuid.MustParse("39500000-0000-0000-0000-000000000397")),
+				EngramID:                   uuid.MustParse("39500000-0000-0000-0000-000000000396"),
+				ProjectID:                  "proj-alpha",
+				Title:                      "Roadmap",
+				Abstract:                   "Quarterly plan",
+				CreatedAt:                  time.Unix(1700003950, 0).UTC(),
+				Distance:                   0.1,
+				SourceSessionQualityScore:  0.78,
+				AccessCount:                9,
+				FreshnessScore:             0.67,
+				FeedbackCount:              4,
+				UsefulCount:                3,
+				AvgRelevanceFeedback:       0.72,
+				UsefulFeedbackRatio:        0.75,
+				ContradictionCount:         1,
+				ContradictionFeedbackRatio: 0.25,
+				Keywords:                   []string{"risk"},
+				Tags:                       []string{"ops"},
+				OwnerUserID:                uuidPtr(uuid.MustParse("39500000-0000-0000-0000-000000000397")),
+				CompositeRankScore:         0.82,
+				DenseScore:                 0.91,
+				LexicalOverlapScore:        0.68,
+				FeedbackSignalScore:        0.73,
+				EngagementSignalScore:      0.61,
+				FreshnessSignalScore:       0.67,
+				AuthoritySignalScore:       0.78,
+				RankPosition:               1,
 			},
 		},
 	}
@@ -91,76 +100,230 @@ func buildEngramQueryParityExpectations(
 	t *testing.T,
 	actorUserID uuid.UUID,
 ) (map[string]any, EngramQueryDispatchRequest) {
-	createdAfter := mustParseRFC3339(t, "2026-01-01T00:00:00Z")
-	createdBefore := mustParseRFC3339(t, "2026-02-01T00:00:00Z")
-	lastAccessedAfter := mustParseRFC3339(t, "2026-01-10T00:00:00Z")
-	lastAccessedBefore := mustParseRFC3339(t, "2026-02-10T00:00:00Z")
-	freshnessComputedAfter := mustParseRFC3339(t, "2026-01-15T00:00:00Z")
-	freshnessComputedBefore := mustParseRFC3339(t, "2026-02-15T00:00:00Z")
-	projectID := "proj-alpha"
-	usefulCountMin := 2
-	accessCountMin := 3
-	feedbackCountMin := 4
-	contradictionCountMax := 2
-	contradictionFeedbackRatioMax := 0.3
-	freshnessScoreMin := 0.42
-	usefulFeedbackRatioMin := 0.8
-	avgRelevanceFeedbackMin := 0.58
-	sourceSessionQualityMin := 0.73
-	relationType := models.EngramLinkRelationSupports
-	traceDepth := 1
-	params := map[string]any{
+	values := buildEngramQueryParityValues(t)
+	return values.params(), values.dispatchRequest(actorUserID)
+}
+
+type engramQueryParityValues struct {
+	projectID string
+
+	createdAfter            time.Time
+	createdBefore           time.Time
+	lastAccessedAfter       time.Time
+	lastAccessedBefore      time.Time
+	freshnessComputedAfter  time.Time
+	freshnessComputedBefore time.Time
+
+	distanceMin float64
+	distanceMax float64
+
+	usefulCountMin int
+	usefulCountMax int
+	accessCountMin int
+	accessCountMax int
+
+	feedbackCountMin int
+	feedbackCountMax int
+
+	contradictionCountMin int
+	contradictionCountMax int
+
+	contradictionFeedbackRatioMin float64
+	contradictionFeedbackRatioMax float64
+
+	freshnessScoreMin float64
+	freshnessScoreMax float64
+
+	usefulFeedbackRatioMin float64
+	usefulFeedbackRatioMax float64
+
+	avgRelevanceFeedbackMin float64
+	avgRelevanceFeedbackMax float64
+
+	sourceSessionQualityMin float64
+	sourceSessionQualityMax float64
+
+	denseScoreMin           float64
+	denseScoreMax           float64
+	lexicalOverlapScoreMin  float64
+	lexicalOverlapScoreMax  float64
+	feedbackSignalScoreMin  float64
+	feedbackSignalScoreMax  float64
+	engagementScoreMin      float64
+	engagementScoreMax      float64
+	freshnessSignalScoreMin float64
+	freshnessSignalScoreMax float64
+	authoritySignalScoreMin float64
+	authoritySignalScoreMax float64
+	compositeRankScoreMin   float64
+	compositeRankScoreMax   float64
+
+	relationType models.EngramLinkRelationType
+	traceDepth   int
+}
+
+func buildEngramQueryParityValues(t *testing.T) *engramQueryParityValues {
+	return &engramQueryParityValues{
+		projectID: "proj-alpha",
+
+		createdAfter:            mustParseRFC3339(t, "2026-01-01T00:00:00Z"),
+		createdBefore:           mustParseRFC3339(t, "2026-02-01T00:00:00Z"),
+		lastAccessedAfter:       mustParseRFC3339(t, "2026-01-10T00:00:00Z"),
+		lastAccessedBefore:      mustParseRFC3339(t, "2026-02-10T00:00:00Z"),
+		freshnessComputedAfter:  mustParseRFC3339(t, "2026-01-15T00:00:00Z"),
+		freshnessComputedBefore: mustParseRFC3339(t, "2026-02-15T00:00:00Z"),
+
+		distanceMin: 0.1,
+		distanceMax: 0.45,
+
+		usefulCountMin: 2,
+		usefulCountMax: 8,
+		accessCountMin: 3,
+		accessCountMax: 20,
+
+		feedbackCountMin: 4,
+		feedbackCountMax: 10,
+
+		contradictionCountMin: 1,
+		contradictionCountMax: 2,
+
+		contradictionFeedbackRatioMin: 0.15,
+		contradictionFeedbackRatioMax: 0.3,
+		freshnessScoreMin:             0.42,
+		freshnessScoreMax:             0.91,
+		usefulFeedbackRatioMin:        0.8,
+		usefulFeedbackRatioMax:        0.96,
+		avgRelevanceFeedbackMin:       0.58,
+		avgRelevanceFeedbackMax:       0.92,
+		sourceSessionQualityMin:       0.73,
+		sourceSessionQualityMax:       0.95,
+		denseScoreMin:                 0.71,
+		denseScoreMax:                 0.97,
+		lexicalOverlapScoreMin:        0.62,
+		lexicalOverlapScoreMax:        0.99,
+		feedbackSignalScoreMin:        0.52,
+		feedbackSignalScoreMax:        0.95,
+		engagementScoreMin:            0.44,
+		engagementScoreMax:            0.93,
+		freshnessSignalScoreMin:       0.4,
+		freshnessSignalScoreMax:       0.98,
+		authoritySignalScoreMin:       0.39,
+		authoritySignalScoreMax:       0.97,
+		compositeRankScoreMin:         0.66,
+		compositeRankScoreMax:         0.93,
+
+		relationType: models.EngramLinkRelationSupports,
+		traceDepth:   1,
+	}
+}
+
+func (values *engramQueryParityValues) params() map[string]any {
+	return map[string]any{
 		"query":                            "roadmap",
 		"top_k":                            7.0,
-		"project_id":                       projectID,
+		"project_id":                       values.projectID,
 		"tags":                             []any{"ops", "planning"},
 		"keywords":                         []any{"risk"},
-		"created_after":                    createdAfter.Format(time.RFC3339),
-		"created_before":                   createdBefore.Format(time.RFC3339),
-		"useful_count_min":                 float64(usefulCountMin),
-		"access_count_min":                 float64(accessCountMin),
-		"feedback_count_min":               float64(feedbackCountMin),
-		"contradiction_count_max":          float64(contradictionCountMax),
-		"contradiction_feedback_ratio_max": contradictionFeedbackRatioMax,
-		"freshness_score_min":              freshnessScoreMin,
-		"useful_feedback_ratio_min":        usefulFeedbackRatioMin,
-		"avg_relevance_feedback_min":       avgRelevanceFeedbackMin,
-		"source_session_quality_min":       sourceSessionQualityMin,
-		"last_accessed_after":              lastAccessedAfter.Format(time.RFC3339),
-		"last_accessed_before":             lastAccessedBefore.Format(time.RFC3339),
-		"freshness_computed_after":         freshnessComputedAfter.Format(time.RFC3339),
-		"freshness_computed_before":        freshnessComputedBefore.Format(time.RFC3339),
-		"relation_type":                    string(relationType),
-		"trace_depth":                      float64(traceDepth),
+		"created_after":                    values.createdAfter.Format(time.RFC3339),
+		"created_before":                   values.createdBefore.Format(time.RFC3339),
+		"distance_min":                     values.distanceMin,
+		"distance_max":                     values.distanceMax,
+		"useful_count_min":                 float64(values.usefulCountMin),
+		"useful_count_max":                 float64(values.usefulCountMax),
+		"access_count_min":                 float64(values.accessCountMin),
+		"access_count_max":                 float64(values.accessCountMax),
+		"feedback_count_min":               float64(values.feedbackCountMin),
+		"feedback_count_max":               float64(values.feedbackCountMax),
+		"contradiction_count_min":          float64(values.contradictionCountMin),
+		"contradiction_count_max":          float64(values.contradictionCountMax),
+		"contradiction_feedback_ratio_min": values.contradictionFeedbackRatioMin,
+		"contradiction_feedback_ratio_max": values.contradictionFeedbackRatioMax,
+		"freshness_score_min":              values.freshnessScoreMin,
+		"freshness_score_max":              values.freshnessScoreMax,
+		"useful_feedback_ratio_min":        values.usefulFeedbackRatioMin,
+		"useful_feedback_ratio_max":        values.usefulFeedbackRatioMax,
+		"avg_relevance_feedback_min":       values.avgRelevanceFeedbackMin,
+		"avg_relevance_feedback_max":       values.avgRelevanceFeedbackMax,
+		"source_session_quality_min":       values.sourceSessionQualityMin,
+		"source_session_quality_max":       values.sourceSessionQualityMax,
+		"dense_score_min":                  values.denseScoreMin,
+		"dense_score_max":                  values.denseScoreMax,
+		"lexical_overlap_score_min":        values.lexicalOverlapScoreMin,
+		"lexical_overlap_score_max":        values.lexicalOverlapScoreMax,
+		"feedback_signal_score_min":        values.feedbackSignalScoreMin,
+		"feedback_signal_score_max":        values.feedbackSignalScoreMax,
+		"engagement_signal_score_min":      values.engagementScoreMin,
+		"engagement_signal_score_max":      values.engagementScoreMax,
+		"freshness_signal_score_min":       values.freshnessSignalScoreMin,
+		"freshness_signal_score_max":       values.freshnessSignalScoreMax,
+		"authority_signal_score_min":       values.authoritySignalScoreMin,
+		"authority_signal_score_max":       values.authoritySignalScoreMax,
+		"composite_rank_score_min":         values.compositeRankScoreMin,
+		"composite_rank_score_max":         values.compositeRankScoreMax,
+		"last_accessed_after":              values.lastAccessedAfter.Format(time.RFC3339),
+		"last_accessed_before":             values.lastAccessedBefore.Format(time.RFC3339),
+		"freshness_computed_after":         values.freshnessComputedAfter.Format(time.RFC3339),
+		"freshness_computed_before":        values.freshnessComputedBefore.Format(time.RFC3339),
+		"relation_type":                    string(values.relationType),
+		"trace_depth":                      float64(values.traceDepth),
 	}
-	expected := EngramQueryDispatchRequest{
+}
+
+func (values *engramQueryParityValues) dispatchRequest(
+	actorUserID uuid.UUID,
+) EngramQueryDispatchRequest {
+	return EngramQueryDispatchRequest{
 		ActorUserID: actorUserID,
 		Payload: models.EngramQueryRequest{
-			Query:                   "roadmap",
-			TopK:                    7,
-			ProjectID:               &projectID,
-			Tags:                    []string{"ops", "planning"},
-			Keywords:                []string{"risk"},
-			CreatedAfter:            &createdAfter,
-			CreatedBefore:           &createdBefore,
-			UsefulCountMin:          &usefulCountMin,
-			AccessCountMin:          &accessCountMin,
-			FeedbackCountMin:        &feedbackCountMin,
-			ContradictionCountMax:   &contradictionCountMax,
-			ContradictionRatioMax:   &contradictionFeedbackRatioMax,
-			FreshnessScoreMin:       &freshnessScoreMin,
-			UsefulFeedbackRatioMin:  &usefulFeedbackRatioMin,
-			AvgRelevanceFeedbackMin: &avgRelevanceFeedbackMin,
-			SourceSessionQualityMin: &sourceSessionQualityMin,
-			LastAccessedAfter:       &lastAccessedAfter,
-			LastAccessedBefore:      &lastAccessedBefore,
-			FreshnessComputedAfter:  &freshnessComputedAfter,
-			FreshnessComputedBefore: &freshnessComputedBefore,
-			RelationType:            &relationType,
-			TraceDepth:              &traceDepth,
+			Query:                    "roadmap",
+			TopK:                     7,
+			ProjectID:                &values.projectID,
+			Tags:                     []string{"ops", "planning"},
+			Keywords:                 []string{"risk"},
+			CreatedAfter:             &values.createdAfter,
+			CreatedBefore:            &values.createdBefore,
+			DistanceMin:              &values.distanceMin,
+			DistanceMax:              &values.distanceMax,
+			UsefulCountMin:           &values.usefulCountMin,
+			UsefulCountMax:           &values.usefulCountMax,
+			AccessCountMin:           &values.accessCountMin,
+			AccessCountMax:           &values.accessCountMax,
+			FeedbackCountMin:         &values.feedbackCountMin,
+			FeedbackCountMax:         &values.feedbackCountMax,
+			ContradictionCountMin:    &values.contradictionCountMin,
+			ContradictionCountMax:    &values.contradictionCountMax,
+			ContradictionRatioMin:    &values.contradictionFeedbackRatioMin,
+			ContradictionRatioMax:    &values.contradictionFeedbackRatioMax,
+			FreshnessScoreMin:        &values.freshnessScoreMin,
+			FreshnessScoreMax:        &values.freshnessScoreMax,
+			UsefulFeedbackRatioMin:   &values.usefulFeedbackRatioMin,
+			UsefulFeedbackRatioMax:   &values.usefulFeedbackRatioMax,
+			AvgRelevanceFeedbackMin:  &values.avgRelevanceFeedbackMin,
+			AvgRelevanceFeedbackMax:  &values.avgRelevanceFeedbackMax,
+			SourceSessionQualityMin:  &values.sourceSessionQualityMin,
+			SourceSessionQualityMax:  &values.sourceSessionQualityMax,
+			DenseScoreMin:            &values.denseScoreMin,
+			DenseScoreMax:            &values.denseScoreMax,
+			LexicalOverlapScoreMin:   &values.lexicalOverlapScoreMin,
+			LexicalOverlapScoreMax:   &values.lexicalOverlapScoreMax,
+			FeedbackSignalScoreMin:   &values.feedbackSignalScoreMin,
+			FeedbackSignalScoreMax:   &values.feedbackSignalScoreMax,
+			EngagementSignalScoreMin: &values.engagementScoreMin,
+			EngagementSignalScoreMax: &values.engagementScoreMax,
+			FreshnessSignalScoreMin:  &values.freshnessSignalScoreMin,
+			FreshnessSignalScoreMax:  &values.freshnessSignalScoreMax,
+			AuthoritySignalScoreMin:  &values.authoritySignalScoreMin,
+			AuthoritySignalScoreMax:  &values.authoritySignalScoreMax,
+			CompositeRankScoreMin:    &values.compositeRankScoreMin,
+			CompositeRankScoreMax:    &values.compositeRankScoreMax,
+			LastAccessedAfter:        &values.lastAccessedAfter,
+			LastAccessedBefore:       &values.lastAccessedBefore,
+			FreshnessComputedAfter:   &values.freshnessComputedAfter,
+			FreshnessComputedBefore:  &values.freshnessComputedBefore,
+			RelationType:             &values.relationType,
+			TraceDepth:               &values.traceDepth,
 		},
 	}
-	return params, expected
 }
 
 func TestCompatibilityServiceEngramQueryUsesDefaults(t *testing.T) {
@@ -230,55 +393,135 @@ type engramQueryValidationErrorCase struct {
 	params map[string]any
 }
 
+var engramQueryValidationErrorCaseFixtures = []engramQueryValidationErrorCase{
+	{name: "missing query", params: map[string]any{}},
+	{name: "blank query", params: map[string]any{"query": "   "}},
+	{name: "invalid top_k type", params: map[string]any{"query": "x", "top_k": "bad"}},
+	{name: "invalid top_k low", params: map[string]any{"query": "x", "top_k": 0.0}},
+	{name: "invalid top_k high", params: map[string]any{"query": "x", "top_k": 51.0}},
+	{name: "invalid tags type", params: map[string]any{"query": "x", "tags": "bad"}},
+	{name: "invalid tag item", params: map[string]any{"query": "x", "tags": []any{"ok", 1}}},
+	{name: "invalid keywords type", params: map[string]any{"query": "x", "keywords": "bad"}},
+	{name: "invalid created_after", params: map[string]any{"query": "x", "created_after": "bad"}},
+	{name: "invalid created_before", params: map[string]any{"query": "x", "created_before": "bad"}},
+	{name: "invalid created window", params: map[string]any{"query": "x", "created_after": "2026-02-02T00:00:00Z", "created_before": "2026-02-01T00:00:00Z"}},
+	{name: "invalid distance_min type", params: map[string]any{"query": "x", "distance_min": "bad"}},
+	{name: "invalid distance_min negative", params: map[string]any{"query": "x", "distance_min": -0.1}},
+	{name: "invalid distance_max type", params: map[string]any{"query": "x", "distance_max": "bad"}},
+	{name: "invalid distance_max negative", params: map[string]any{"query": "x", "distance_max": -0.1}},
+	{name: "invalid distance window", params: map[string]any{"query": "x", "distance_min": 0.8, "distance_max": 0.2}},
+	{name: "invalid last_accessed_after", params: map[string]any{"query": "x", "last_accessed_after": "bad"}},
+	{name: "invalid last_accessed_before", params: map[string]any{"query": "x", "last_accessed_before": "bad"}},
+	{name: "invalid last_accessed window", params: map[string]any{"query": "x", "last_accessed_after": "2026-02-02T00:00:00Z", "last_accessed_before": "2026-02-01T00:00:00Z"}},
+	{name: "invalid freshness_computed_after", params: map[string]any{"query": "x", "freshness_computed_after": "bad"}},
+	{name: "invalid freshness_computed_before", params: map[string]any{"query": "x", "freshness_computed_before": "bad"}},
+	{name: "invalid freshness_computed window", params: map[string]any{"query": "x", "freshness_computed_after": "2026-02-02T00:00:00Z", "freshness_computed_before": "2026-02-01T00:00:00Z"}},
+	{name: "invalid useful_count_min type", params: map[string]any{"query": "x", "useful_count_min": "bad"}},
+	{name: "invalid useful_count_min negative", params: map[string]any{"query": "x", "useful_count_min": -1.0}},
+	{name: "invalid useful_count_max type", params: map[string]any{"query": "x", "useful_count_max": "bad"}},
+	{name: "invalid useful_count_max negative", params: map[string]any{"query": "x", "useful_count_max": -1.0}},
+	{name: "invalid useful_count window", params: map[string]any{"query": "x", "useful_count_min": 5.0, "useful_count_max": 2.0}},
+	{name: "invalid access_count_min type", params: map[string]any{"query": "x", "access_count_min": "bad"}},
+	{name: "invalid access_count_min negative", params: map[string]any{"query": "x", "access_count_min": -1.0}},
+	{name: "invalid access_count_max type", params: map[string]any{"query": "x", "access_count_max": "bad"}},
+	{name: "invalid access_count_max negative", params: map[string]any{"query": "x", "access_count_max": -1.0}},
+	{name: "invalid feedback_count_min type", params: map[string]any{"query": "x", "feedback_count_min": "bad"}},
+	{name: "invalid feedback_count_min negative", params: map[string]any{"query": "x", "feedback_count_min": -1.0}},
+	{name: "invalid feedback_count_max type", params: map[string]any{"query": "x", "feedback_count_max": "bad"}},
+	{name: "invalid feedback_count_max negative", params: map[string]any{"query": "x", "feedback_count_max": -1.0}},
+	{name: "invalid contradiction_count_min type", params: map[string]any{"query": "x", "contradiction_count_min": "bad"}},
+	{name: "invalid contradiction_count_min negative", params: map[string]any{"query": "x", "contradiction_count_min": -1.0}},
+	{name: "invalid contradiction_count_max type", params: map[string]any{"query": "x", "contradiction_count_max": "bad"}},
+	{name: "invalid contradiction_count_max negative", params: map[string]any{"query": "x", "contradiction_count_max": -1.0}},
+	{name: "invalid contradiction_feedback_ratio_min type", params: map[string]any{"query": "x", "contradiction_feedback_ratio_min": "bad"}},
+	{name: "invalid contradiction_feedback_ratio_min low", params: map[string]any{"query": "x", "contradiction_feedback_ratio_min": -0.1}},
+	{name: "invalid contradiction_feedback_ratio_min high", params: map[string]any{"query": "x", "contradiction_feedback_ratio_min": 1.1}},
+	{name: "invalid contradiction_feedback_ratio_max type", params: map[string]any{"query": "x", "contradiction_feedback_ratio_max": "bad"}},
+	{name: "invalid contradiction_feedback_ratio_max low", params: map[string]any{"query": "x", "contradiction_feedback_ratio_max": -0.1}},
+	{name: "invalid contradiction_feedback_ratio_max high", params: map[string]any{"query": "x", "contradiction_feedback_ratio_max": 1.1}},
+	{name: "invalid freshness_score_min low", params: map[string]any{"query": "x", "freshness_score_min": -0.1}},
+	{name: "invalid freshness_score_min high", params: map[string]any{"query": "x", "freshness_score_min": 1.1}},
+	{name: "invalid freshness_score_max type", params: map[string]any{"query": "x", "freshness_score_max": "bad"}},
+	{name: "invalid freshness_score_max low", params: map[string]any{"query": "x", "freshness_score_max": -0.1}},
+	{name: "invalid freshness_score_max high", params: map[string]any{"query": "x", "freshness_score_max": 1.1}},
+	{name: "invalid useful_feedback_ratio_min type", params: map[string]any{"query": "x", "useful_feedback_ratio_min": "bad"}},
+	{name: "invalid useful_feedback_ratio_min low", params: map[string]any{"query": "x", "useful_feedback_ratio_min": -0.1}},
+	{name: "invalid useful_feedback_ratio_min high", params: map[string]any{"query": "x", "useful_feedback_ratio_min": 1.1}},
+	{name: "invalid useful_feedback_ratio_max type", params: map[string]any{"query": "x", "useful_feedback_ratio_max": "bad"}},
+	{name: "invalid useful_feedback_ratio_max low", params: map[string]any{"query": "x", "useful_feedback_ratio_max": -0.1}},
+	{name: "invalid useful_feedback_ratio_max high", params: map[string]any{"query": "x", "useful_feedback_ratio_max": 1.1}},
+	{name: "invalid avg_relevance_feedback_min type", params: map[string]any{"query": "x", "avg_relevance_feedback_min": "bad"}},
+	{name: "invalid avg_relevance_feedback_min low", params: map[string]any{"query": "x", "avg_relevance_feedback_min": -0.1}},
+	{name: "invalid avg_relevance_feedback_min high", params: map[string]any{"query": "x", "avg_relevance_feedback_min": 1.1}},
+	{name: "invalid avg_relevance_feedback_max type", params: map[string]any{"query": "x", "avg_relevance_feedback_max": "bad"}},
+	{name: "invalid avg_relevance_feedback_max low", params: map[string]any{"query": "x", "avg_relevance_feedback_max": -0.1}},
+	{name: "invalid avg_relevance_feedback_max high", params: map[string]any{"query": "x", "avg_relevance_feedback_max": 1.1}},
+	{name: "invalid source_session_quality_min type", params: map[string]any{"query": "x", "source_session_quality_min": "bad"}},
+	{name: "invalid source_session_quality_min low", params: map[string]any{"query": "x", "source_session_quality_min": -0.1}},
+	{name: "invalid source_session_quality_min high", params: map[string]any{"query": "x", "source_session_quality_min": 1.1}},
+	{name: "invalid source_session_quality_max type", params: map[string]any{"query": "x", "source_session_quality_max": "bad"}},
+	{name: "invalid source_session_quality_max low", params: map[string]any{"query": "x", "source_session_quality_max": -0.1}},
+	{name: "invalid source_session_quality_max high", params: map[string]any{"query": "x", "source_session_quality_max": 1.1}},
+	{name: "invalid dense_score_min type", params: map[string]any{"query": "x", "dense_score_min": "bad"}},
+	{name: "invalid dense_score_min low", params: map[string]any{"query": "x", "dense_score_min": -0.1}},
+	{name: "invalid dense_score_min high", params: map[string]any{"query": "x", "dense_score_min": 1.1}},
+	{name: "invalid dense_score_max type", params: map[string]any{"query": "x", "dense_score_max": "bad"}},
+	{name: "invalid dense_score_max low", params: map[string]any{"query": "x", "dense_score_max": -0.1}},
+	{name: "invalid dense_score_max high", params: map[string]any{"query": "x", "dense_score_max": 1.1}},
+	{name: "invalid dense_score window", params: map[string]any{"query": "x", "dense_score_min": 0.9, "dense_score_max": 0.7}},
+	{name: "invalid lexical_overlap_score_min type", params: map[string]any{"query": "x", "lexical_overlap_score_min": "bad"}},
+	{name: "invalid lexical_overlap_score_min low", params: map[string]any{"query": "x", "lexical_overlap_score_min": -0.1}},
+	{name: "invalid lexical_overlap_score_min high", params: map[string]any{"query": "x", "lexical_overlap_score_min": 1.1}},
+	{name: "invalid lexical_overlap_score_max type", params: map[string]any{"query": "x", "lexical_overlap_score_max": "bad"}},
+	{name: "invalid lexical_overlap_score_max low", params: map[string]any{"query": "x", "lexical_overlap_score_max": -0.1}},
+	{name: "invalid lexical_overlap_score_max high", params: map[string]any{"query": "x", "lexical_overlap_score_max": 1.1}},
+	{name: "invalid lexical_overlap_score window", params: map[string]any{"query": "x", "lexical_overlap_score_min": 0.9, "lexical_overlap_score_max": 0.7}},
+	{name: "invalid feedback_signal_score_min type", params: map[string]any{"query": "x", "feedback_signal_score_min": "bad"}},
+	{name: "invalid feedback_signal_score_min low", params: map[string]any{"query": "x", "feedback_signal_score_min": -0.1}},
+	{name: "invalid feedback_signal_score_min high", params: map[string]any{"query": "x", "feedback_signal_score_min": 1.1}},
+	{name: "invalid feedback_signal_score_max type", params: map[string]any{"query": "x", "feedback_signal_score_max": "bad"}},
+	{name: "invalid feedback_signal_score_max low", params: map[string]any{"query": "x", "feedback_signal_score_max": -0.1}},
+	{name: "invalid feedback_signal_score_max high", params: map[string]any{"query": "x", "feedback_signal_score_max": 1.1}},
+	{name: "invalid feedback_signal_score window", params: map[string]any{"query": "x", "feedback_signal_score_min": 0.9, "feedback_signal_score_max": 0.7}},
+	{name: "invalid engagement_signal_score_min type", params: map[string]any{"query": "x", "engagement_signal_score_min": "bad"}},
+	{name: "invalid engagement_signal_score_min low", params: map[string]any{"query": "x", "engagement_signal_score_min": -0.1}},
+	{name: "invalid engagement_signal_score_min high", params: map[string]any{"query": "x", "engagement_signal_score_min": 1.1}},
+	{name: "invalid engagement_signal_score_max type", params: map[string]any{"query": "x", "engagement_signal_score_max": "bad"}},
+	{name: "invalid engagement_signal_score_max low", params: map[string]any{"query": "x", "engagement_signal_score_max": -0.1}},
+	{name: "invalid engagement_signal_score_max high", params: map[string]any{"query": "x", "engagement_signal_score_max": 1.1}},
+	{name: "invalid engagement_signal_score window", params: map[string]any{"query": "x", "engagement_signal_score_min": 0.9, "engagement_signal_score_max": 0.7}},
+	{name: "invalid freshness_signal_score_min type", params: map[string]any{"query": "x", "freshness_signal_score_min": "bad"}},
+	{name: "invalid freshness_signal_score_min low", params: map[string]any{"query": "x", "freshness_signal_score_min": -0.1}},
+	{name: "invalid freshness_signal_score_min high", params: map[string]any{"query": "x", "freshness_signal_score_min": 1.1}},
+	{name: "invalid freshness_signal_score_max type", params: map[string]any{"query": "x", "freshness_signal_score_max": "bad"}},
+	{name: "invalid freshness_signal_score_max low", params: map[string]any{"query": "x", "freshness_signal_score_max": -0.1}},
+	{name: "invalid freshness_signal_score_max high", params: map[string]any{"query": "x", "freshness_signal_score_max": 1.1}},
+	{name: "invalid freshness_signal_score window", params: map[string]any{"query": "x", "freshness_signal_score_min": 0.9, "freshness_signal_score_max": 0.7}},
+	{name: "invalid authority_signal_score_min type", params: map[string]any{"query": "x", "authority_signal_score_min": "bad"}},
+	{name: "invalid authority_signal_score_min low", params: map[string]any{"query": "x", "authority_signal_score_min": -0.1}},
+	{name: "invalid authority_signal_score_min high", params: map[string]any{"query": "x", "authority_signal_score_min": 1.1}},
+	{name: "invalid authority_signal_score_max type", params: map[string]any{"query": "x", "authority_signal_score_max": "bad"}},
+	{name: "invalid authority_signal_score_max low", params: map[string]any{"query": "x", "authority_signal_score_max": -0.1}},
+	{name: "invalid authority_signal_score_max high", params: map[string]any{"query": "x", "authority_signal_score_max": 1.1}},
+	{name: "invalid authority_signal_score window", params: map[string]any{"query": "x", "authority_signal_score_min": 0.9, "authority_signal_score_max": 0.7}},
+	{name: "invalid composite_rank_score_min type", params: map[string]any{"query": "x", "composite_rank_score_min": "bad"}},
+	{name: "invalid composite_rank_score_min low", params: map[string]any{"query": "x", "composite_rank_score_min": -0.1}},
+	{name: "invalid composite_rank_score_min high", params: map[string]any{"query": "x", "composite_rank_score_min": 1.1}},
+	{name: "invalid composite_rank_score_max type", params: map[string]any{"query": "x", "composite_rank_score_max": "bad"}},
+	{name: "invalid composite_rank_score_max low", params: map[string]any{"query": "x", "composite_rank_score_max": -0.1}},
+	{name: "invalid composite_rank_score_max high", params: map[string]any{"query": "x", "composite_rank_score_max": 1.1}},
+	{name: "invalid composite_rank_score window", params: map[string]any{"query": "x", "composite_rank_score_min": 0.8, "composite_rank_score_max": 0.6}},
+	{name: "invalid relation_type", params: map[string]any{"query": "x", "relation_type": "invalid"}},
+	{name: "invalid trace_depth type", params: map[string]any{"query": "x", "trace_depth": "bad"}},
+	{name: "invalid trace_depth range", params: map[string]any{"query": "x", "trace_depth": 2.0}},
+	{
+		name:   "invalid trace_depth relation conflict",
+		params: map[string]any{"query": "x", "relation_type": "supports", "trace_depth": 0.0},
+	},
+}
+
 func engramQueryValidationErrorCases() []engramQueryValidationErrorCase {
-	return []engramQueryValidationErrorCase{
-		{name: "missing query", params: map[string]any{}},
-		{name: "blank query", params: map[string]any{"query": "   "}},
-		{name: "invalid top_k type", params: map[string]any{"query": "x", "top_k": "bad"}},
-		{name: "invalid top_k low", params: map[string]any{"query": "x", "top_k": 0.0}},
-		{name: "invalid top_k high", params: map[string]any{"query": "x", "top_k": 51.0}},
-		{name: "invalid tags type", params: map[string]any{"query": "x", "tags": "bad"}},
-		{name: "invalid tag item", params: map[string]any{"query": "x", "tags": []any{"ok", 1}}},
-		{name: "invalid keywords type", params: map[string]any{"query": "x", "keywords": "bad"}},
-		{name: "invalid created_after", params: map[string]any{"query": "x", "created_after": "bad"}},
-		{name: "invalid created_before", params: map[string]any{"query": "x", "created_before": "bad"}},
-		{name: "invalid created window", params: map[string]any{"query": "x", "created_after": "2026-02-02T00:00:00Z", "created_before": "2026-02-01T00:00:00Z"}},
-		{name: "invalid last_accessed_after", params: map[string]any{"query": "x", "last_accessed_after": "bad"}},
-		{name: "invalid last_accessed_before", params: map[string]any{"query": "x", "last_accessed_before": "bad"}},
-		{name: "invalid last_accessed window", params: map[string]any{"query": "x", "last_accessed_after": "2026-02-02T00:00:00Z", "last_accessed_before": "2026-02-01T00:00:00Z"}},
-		{name: "invalid freshness_computed_after", params: map[string]any{"query": "x", "freshness_computed_after": "bad"}},
-		{name: "invalid freshness_computed_before", params: map[string]any{"query": "x", "freshness_computed_before": "bad"}},
-		{name: "invalid freshness_computed window", params: map[string]any{"query": "x", "freshness_computed_after": "2026-02-02T00:00:00Z", "freshness_computed_before": "2026-02-01T00:00:00Z"}},
-		{name: "invalid useful_count_min type", params: map[string]any{"query": "x", "useful_count_min": "bad"}},
-		{name: "invalid useful_count_min negative", params: map[string]any{"query": "x", "useful_count_min": -1.0}},
-		{name: "invalid access_count_min type", params: map[string]any{"query": "x", "access_count_min": "bad"}},
-		{name: "invalid access_count_min negative", params: map[string]any{"query": "x", "access_count_min": -1.0}},
-		{name: "invalid feedback_count_min type", params: map[string]any{"query": "x", "feedback_count_min": "bad"}},
-		{name: "invalid feedback_count_min negative", params: map[string]any{"query": "x", "feedback_count_min": -1.0}},
-		{name: "invalid contradiction_count_max type", params: map[string]any{"query": "x", "contradiction_count_max": "bad"}},
-		{name: "invalid contradiction_count_max negative", params: map[string]any{"query": "x", "contradiction_count_max": -1.0}},
-		{name: "invalid contradiction_feedback_ratio_max type", params: map[string]any{"query": "x", "contradiction_feedback_ratio_max": "bad"}},
-		{name: "invalid contradiction_feedback_ratio_max low", params: map[string]any{"query": "x", "contradiction_feedback_ratio_max": -0.1}},
-		{name: "invalid contradiction_feedback_ratio_max high", params: map[string]any{"query": "x", "contradiction_feedback_ratio_max": 1.1}},
-		{name: "invalid freshness_score_min low", params: map[string]any{"query": "x", "freshness_score_min": -0.1}},
-		{name: "invalid freshness_score_min high", params: map[string]any{"query": "x", "freshness_score_min": 1.1}},
-		{name: "invalid useful_feedback_ratio_min type", params: map[string]any{"query": "x", "useful_feedback_ratio_min": "bad"}},
-		{name: "invalid useful_feedback_ratio_min low", params: map[string]any{"query": "x", "useful_feedback_ratio_min": -0.1}},
-		{name: "invalid useful_feedback_ratio_min high", params: map[string]any{"query": "x", "useful_feedback_ratio_min": 1.1}},
-		{name: "invalid avg_relevance_feedback_min type", params: map[string]any{"query": "x", "avg_relevance_feedback_min": "bad"}},
-		{name: "invalid avg_relevance_feedback_min low", params: map[string]any{"query": "x", "avg_relevance_feedback_min": -0.1}},
-		{name: "invalid avg_relevance_feedback_min high", params: map[string]any{"query": "x", "avg_relevance_feedback_min": 1.1}},
-		{name: "invalid source_session_quality_min type", params: map[string]any{"query": "x", "source_session_quality_min": "bad"}},
-		{name: "invalid source_session_quality_min low", params: map[string]any{"query": "x", "source_session_quality_min": -0.1}},
-		{name: "invalid source_session_quality_min high", params: map[string]any{"query": "x", "source_session_quality_min": 1.1}},
-		{name: "invalid relation_type", params: map[string]any{"query": "x", "relation_type": "invalid"}},
-		{name: "invalid trace_depth type", params: map[string]any{"query": "x", "trace_depth": "bad"}},
-		{name: "invalid trace_depth range", params: map[string]any{"query": "x", "trace_depth": 2.0}},
-		{
-			name:   "invalid trace_depth relation conflict",
-			params: map[string]any{"query": "x", "relation_type": "supports", "trace_depth": 0.0},
-		},
-	}
+	return engramQueryValidationErrorCaseFixtures
 }
 
 func newEngramQueryCompatibilityService(service EngramQueryService) Service {

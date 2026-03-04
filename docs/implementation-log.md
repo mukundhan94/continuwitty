@@ -7,6 +7,403 @@
 
 ## Implementation Log
 
+### 2026-03-03 (Phase 78: optional CI benchmark workflow)
+
+1. Extended CI manual-dispatch controls:
+   - added `run_query_benchmarks` boolean input to `.github/workflows/ci.yml`.
+2. Added optional CI benchmark job:
+   - new `query-benchmark` job runs only for `workflow_dispatch` with `run_query_benchmarks=true`.
+   - job executes `make benchmark-query-score-bands` and uploads benchmark output as `query-score-band-benchmark` artifact.
+3. Validation:
+   - YAML parse check for `.github/workflows/ci.yml` passed via local Ruby parser.
+
+### 2026-03-03 (Phase 77: score-band benchmark operationalization)
+
+1. Added benchmark execution target:
+   - new Makefile target `benchmark-query-score-bands` runs repository rerank/query/filter benchmarks in one command.
+2. Added benchmark artifact:
+   - `docs/phase77-query-score-band-benchmark.md` captures command, environment, and baseline measurements for rerank/query/filter matrix benchmarks.
+3. Validation:
+   - `make benchmark-query-score-bands`
+
+### 2026-03-03 (Phase 76: score-band hardening and benchmark baseline)
+
+1. Added repository score-band filter regression coverage:
+   - new focused unit test validates combined dense/lexical/feedback/engagement/freshness/authority/composite score-band filtering behavior.
+   - new focused unit test validates no-filter pass-through behavior for score-band helper paths.
+2. Added repository benchmark coverage:
+   - benchmark baseline added for full score-band filter matrix at 50 and 200 reranked candidates.
+3. Documentation alignment:
+   - roadmap and checkpoint updates now track this hardening increment in phase progression.
+4. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 75: authority-signal score query band filters)
+
+1. Added authority-signal query filter contract extensions:
+   - new optional filters: `authority_signal_score_min` and `authority_signal_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded authority-signal filters and rejects inverted authority-signal windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate authority-signal filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports authority-signal score band filtering alongside other score-band filters.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for authority-signal filters.
+   - repository query-runtime coverage for authority-signal filtering behavior.
+   - MCP parity and validation coverage for authority-signal filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include authority-signal filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 74: freshness-signal score query band filters)
+
+1. Added freshness-signal query filter contract extensions:
+   - new optional filters: `freshness_signal_score_min` and `freshness_signal_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded freshness-signal filters and rejects inverted freshness-signal windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate freshness-signal filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports freshness-signal score band filtering alongside other score-band filters.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for freshness-signal filters.
+   - repository query-runtime coverage for freshness-signal filtering behavior.
+   - MCP parity and validation coverage for freshness-signal filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include freshness-signal filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 73: engagement-signal score query band filters)
+
+1. Added engagement-signal query filter contract extensions:
+   - new optional filters: `engagement_signal_score_min` and `engagement_signal_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded engagement-signal filters and rejects inverted engagement-signal windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate engagement-signal filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports engagement-signal score band filtering alongside other score-band filters.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for engagement-signal filters.
+   - repository query-runtime coverage for engagement-signal filtering behavior.
+   - MCP parity and validation coverage for engagement-signal filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include engagement-signal filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 72: feedback-signal score query band filters)
+
+1. Added feedback-signal query filter contract extensions:
+   - new optional filters: `feedback_signal_score_min` and `feedback_signal_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded feedback-signal filters and rejects inverted feedback-signal windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate feedback-signal filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports feedback-signal score band filtering alongside dense/lexical/composite score filtering.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for feedback-signal filters.
+   - repository query-runtime coverage for feedback-signal filtering behavior.
+   - MCP parity and validation coverage for feedback-signal filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include feedback-signal filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 71: lexical-overlap score query band filters)
+
+1. Added lexical-overlap query filter contract extensions:
+   - new optional filters: `lexical_overlap_score_min` and `lexical_overlap_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded lexical-overlap filters and rejects inverted lexical-overlap windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate lexical-overlap filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports lexical-overlap band filtering alongside dense/composite score filtering.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for lexical-overlap filters.
+   - repository query-runtime coverage for lexical-overlap filtering behavior.
+   - MCP parity and validation coverage for lexical-overlap filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include lexical-overlap filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 70: dense-score query band filters)
+
+1. Added dense-score query filter contract extensions:
+   - new optional filters: `dense_score_min` and `dense_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded dense-score filters and rejects inverted dense-score windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate dense-score filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now supports dense-score band filtering alongside composite-rank score filtering.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for dense-score filters.
+   - repository query-runtime coverage for dense-score filtering behavior.
+   - MCP parity and validation coverage for dense-score filter handling.
+5. Documentation alignment:
+   - API and MCP query docs now include dense-score filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 69: rank-position diagnostics in query results)
+
+1. Extended engram query-result contracts with `rank_position`.
+2. Updated repository query pipeline ranking annotation:
+   - final query rows are now tagged with deterministic 1-based rank position after rerank + filtering + top-k trim.
+3. Added regression coverage:
+   - repository query runtime assertions now verify `rank_position`.
+   - REST query-route response assertions now verify serialized `rank_position`.
+   - MCP compatibility parity fixture now includes `rank_position`.
+4. Documentation alignment:
+   - API and MCP query docs now describe returned `rank_position`.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 68: composite-rank score query band filters)
+
+1. Added composite-rank query filter contract extensions:
+   - new optional filters: `composite_rank_score_min` and `composite_rank_score_max` (both bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded composite-rank scores and rejects inverted composite-rank windows.
+   - MCP `engram.query` parser/catalog metadata now accept and validate composite-rank score filters, including min/max window coherence.
+3. Added repository post-rerank filtering support:
+   - query pipeline now reranks candidates, filters by composite-rank score band, then applies final top-k trimming.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for composite-rank score filters.
+   - repository query-runtime coverage for composite-score filtering behavior.
+   - MCP parity and validation coverage for composite-rank score filters.
+5. Documentation alignment:
+   - API and MCP query docs now include composite-rank filter options.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 67: rerank diagnostics transparency in query results)
+
+1. Extended engram query-result contracts with rerank diagnostics:
+   - added `composite_rank_score`, `dense_score`, `lexical_overlap_score`, `feedback_signal_score`, `engagement_signal_score`, `freshness_signal_score`, and `authority_signal_score`.
+2. Updated repository rerank pipeline diagnostics:
+   - rerank step now computes and stores component signals plus final composite rank score on candidate rows before sorting.
+3. Added mapping fallback behavior:
+   - query-result mapping now computes deterministic fallback diagnostics when score fields are absent in row payloads.
+4. Added parity/regression coverage:
+   - repository diagnostics and query-runtime tests now assert rerank explainability fields.
+   - REST query-route response assertions now validate serialized rerank diagnostics.
+   - MCP compatibility parity fixture now includes rerank diagnostics fields.
+5. Documentation alignment:
+   - API and MCP query docs now describe returned rerank explainability fields.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 66: semantic-distance floor query filter parity)
+
+1. Added semantic-distance floor query contract extension:
+   - new optional filter: `distance_min` (number, minimum `0`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `distance_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `distance_min`.
+3. Added repository predicate support:
+   - query builder now supports `embed <=> $1::vector >= ...`.
+4. Added distance-window coherence behavior:
+   - REST and MCP now reject inverted distance windows (`distance_min > distance_max`).
+5. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `distance_min` + distance-window validation.
+   - repository where-clause/parameter assertions for distance-floor predicate.
+   - MCP parity and validation coverage for distance-floor/distance-window handling.
+6. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 65: semantic-distance ceiling query filter parity)
+
+1. Added semantic-distance ceiling query contract extension:
+   - new optional filter: `distance_max` (number, minimum `0`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `distance_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `distance_max`.
+3. Added repository predicate support:
+   - query builder now supports `embed <=> $1::vector <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `distance_max`.
+   - repository where-clause/parameter assertions for distance-ceiling predicate.
+   - MCP parity and validation coverage for distance-ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 64: query numeric-range coherence validation)
+
+1. Added REST range-coherence validation:
+   - engram query payloads now reject inverted numeric windows (`*_min > *_max`) across count and score filter pairs.
+2. Added MCP range-coherence validation:
+   - `engram.query` parser now rejects inverted numeric windows with invalid-parameter (`-32602`) responses.
+3. Added regression coverage:
+   - REST invalid request coverage for inverted numeric windows.
+   - MCP validation coverage for inverted numeric windows.
+4. Documentation alignment:
+   - API and MCP query docs now explicitly require `min <= max` when both bounds are provided.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 63: contradiction-count floor query filter parity)
+
+1. Added contradiction-count floor query contract extension:
+   - new optional filter: `contradiction_count_min` (non-negative integer) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `contradiction_count_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `contradiction_count_min`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(contradiction_count, 0) >= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `contradiction_count_min`.
+   - repository where-clause/parameter assertions for contradiction-count floor predicate.
+   - MCP parity and validation coverage for contradiction-count floor filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 62: contradiction-ratio floor query filter parity)
+
+1. Added contradiction-ratio floor query contract extension:
+   - new optional filter: `contradiction_feedback_ratio_min` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `contradiction_feedback_ratio_min`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `contradiction_feedback_ratio_min`.
+3. Added repository predicate support:
+   - query builder now supports contradiction-ratio floor predicate with deterministic low-risk fallback (`0.0`) when feedback is absent.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `contradiction_feedback_ratio_min`.
+   - repository where-clause/parameter assertions for contradiction-ratio floor predicate.
+   - MCP parity and validation coverage for contradiction-ratio floor filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 61: useful-ratio ceiling query filter parity)
+
+1. Added useful-ratio ceiling query contract extension:
+   - new optional filter: `useful_feedback_ratio_max` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `useful_feedback_ratio_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `useful_feedback_ratio_max`.
+3. Added repository predicate support:
+   - query builder now supports useful-ratio ceiling predicate with deterministic fallback (`0.5`) when feedback is absent.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `useful_feedback_ratio_max`.
+   - repository where-clause/parameter assertions for useful-ratio ceiling predicate.
+   - MCP parity and validation coverage for useful-ratio ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 60: relevance-ceiling query filter parity)
+
+1. Added relevance-ceiling query contract extension:
+   - new optional filter: `avg_relevance_feedback_max` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `avg_relevance_feedback_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `avg_relevance_feedback_max`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(avg_relevance_feedback, 0.5) <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `avg_relevance_feedback_max`.
+   - repository where-clause/parameter assertions for relevance-ceiling predicate.
+   - MCP parity and validation coverage for relevance-ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 59: authority-ceiling query filter parity)
+
+1. Added authority-ceiling query contract extension:
+   - new optional filter: `source_session_quality_max` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `source_session_quality_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `source_session_quality_max`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(source_session_quality_score, 0.5) <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `source_session_quality_max`.
+   - repository where-clause/parameter assertions for authority-ceiling predicate.
+   - MCP parity and validation coverage for authority-ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 58: freshness-ceiling query filter parity)
+
+1. Added freshness-ceiling query contract extension:
+   - new optional filter: `freshness_score_max` (bounded `0..1`) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates bounded `freshness_score_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `freshness_score_max`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(freshness_score, 1.0) <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `freshness_score_max`.
+   - repository where-clause/parameter assertions for freshness-ceiling predicate.
+   - MCP parity and validation coverage for freshness-ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 57: access-ceiling query filter parity)
+
+1. Added access-ceiling query contract extension:
+   - new optional filter: `access_count_max` (non-negative integer) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `access_count_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `access_count_max`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(access_count, 0) <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `access_count_max`.
+   - repository where-clause/parameter assertions for access-ceiling predicate.
+   - MCP parity and validation coverage for access-ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 56: useful-ceiling query filter parity)
+
+1. Added useful-ceiling query contract extension:
+   - new optional filter: `useful_count_max` (non-negative integer) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `useful_count_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `useful_count_max`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(useful_count, 0) <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `useful_count_max`.
+   - repository where-clause/parameter assertions for useful-ceiling predicate.
+   - MCP parity and validation coverage for useful-ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 55: feedback-ceiling query filter parity)
+
+1. Added feedback-ceiling query contract extension:
+   - new optional filter: `feedback_count_max` (non-negative integer) on engram query payloads.
+2. Added REST/MCP validation and parser parity:
+   - REST query decode now validates non-negative `feedback_count_max`.
+   - MCP `engram.query` parser and catalog metadata now accept and validate `feedback_count_max`.
+3. Added repository predicate support:
+   - query builder now supports `COALESCE(feedback_count, 0) <= ...`.
+4. Added regression coverage:
+   - API invalid-filter and parsed-request assertions for `feedback_count_max`.
+   - repository where-clause/parameter assertions for feedback-ceiling predicate.
+   - MCP parity and validation coverage for feedback-ceiling filter handling.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
+### 2026-03-03 (Phase 54: contradiction-ratio diagnostics in query result payloads)
+
+1. Extended engram query result contracts with contradiction-ratio diagnostics:
+   - added `contradiction_feedback_ratio` to `EngramQueryResult`.
+2. Updated repository query result mapping:
+   - result mapping now computes contradiction ratio as `contradiction_count / feedback_count` when feedback exists.
+   - deterministic low-risk fallback `0.0` is returned when `feedback_count` is zero.
+3. Added parity/regression coverage:
+   - repository diagnostics tests now assert contradiction-ratio mapping and fallback semantics.
+   - repository query runtime test now asserts contradiction-ratio field on returned results.
+   - REST query-route response test now asserts serialized `contradiction_feedback_ratio`.
+   - MCP compatibility parity fixture now includes contradiction-ratio diagnostics.
+4. Documentation alignment:
+   - API and MCP query docs now describe returned `contradiction_feedback_ratio`.
+5. Validation:
+   - `go test ./internal/repository ./internal/api ./internal/mcp ./internal/models -count=1`
+
 ### 2026-03-03 (Phase 53: contradiction-ratio query filter parity)
 
 1. Added contradiction-ratio query contract extension:

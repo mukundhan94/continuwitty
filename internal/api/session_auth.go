@@ -392,7 +392,7 @@ func (dependencies sessionAuthDependencies) handleOIDCStart(writer http.Response
 	}
 	nextPath := safeNextPath(request.URL.Query().Get("next"))
 	if nextPath == "" {
-		nextPath = "/ui"
+		nextPath = "/app/workspace"
 	}
 	state.OIDCState = oidcState
 	state.OIDCNonce = oidcNonce

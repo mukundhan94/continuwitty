@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_query_benchmarks:
+        description: "Run optional repository query benchmark suite"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -145,3 +150,31 @@ jobs:
 
       - name: Run live-provider release gate
         run: make release-live-provider-gate
+
+  query-benchmark:
+    name: Query Score-Band Benchmarks
+    runs-on: ubuntu-latest
+    needs:
+      - go-backend
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_query_benchmarks == true }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run query score-band benchmark suite
+        run: make benchmark-query-score-bands | tee query-score-band-benchmark.txt
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: query-score-band-benchmark
+          path: query-score-band-benchmark.txt

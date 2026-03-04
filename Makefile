@@ -23,7 +23,7 @@ NC = \033[0m
 
 WEB_PORT ?= 5173
 
-.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke release-smoke-docker release-gate release-live-provider-gate acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api lint format format-check check test test-unit test-integration coverage eval eval-report web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
+.PHONY: help print-config db-up db-down db-reset db-logs stack-up stack-down stack-reset stack-logs stack-smoke release-smoke-docker release-gate release-live-provider-gate acceptance-sync acceptance-bddgen acceptance-typecheck acceptance-test acceptance-test-mock acceptance-test-bedrock-live acceptance-test-triage-live acceptance-test-docker acceptance-test-mock-docker acceptance-test-bedrock-live-docker acceptance-test-triage-live-docker sync dev api lint format format-check check test test-unit test-integration coverage benchmark-query-score-bands eval eval-report web-sync web web-lint web-test web-build web-check diagram-render diagram-render-png
 
 help: ## Print all Makefile commands with categorized descriptions and usage hints
 	@printf '$(INFO)Engram Make Command Reference$(NC)\n'
@@ -46,7 +46,7 @@ help: ## Print all Makefile commands with categorized descriptions and usage hin
 			if (target ~ /^acceptance-/) return "Acceptance"; \
 			if (target ~ /^web-/ || target == "web") return "Web"; \
 			if (target ~ /^diagram-/) return "Diagrams"; \
-			if (target == "sync" || target == "api" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "coverage" || target == "eval" || target == "eval-report" || target == "check") return "API/Backend"; \
+			if (target == "sync" || target == "api" || target == "lint" || target == "format" || target == "format-check" || target == "test" || target == "test-unit" || target == "test-integration" || target == "coverage" || target == "benchmark-query-score-bands" || target == "eval" || target == "eval-report" || target == "check") return "API/Backend"; \
 			return "Other"; \
 		} \
 		/^[a-zA-Z0-9_.-]+:.*## / { \
@@ -294,6 +294,11 @@ coverage: ## Run backend Go coverage and write coverage.out
 	@go test ./... -coverprofile=coverage.out -covermode=atomic
 	@go tool cover -func=coverage.out | tail -n 1
 	@printf '$(SUCCESS)✓ Backend Go coverage completed (coverage.out)$(NC)\n'
+
+benchmark-query-score-bands: ## Run repository query/rerank/score-band benchmarks
+	@printf '$(PROGRESS)Running repository score-band benchmark suite...$(NC)\n'
+	@go test ./internal/repository -run '^$$' -bench 'Benchmark(FilterByRankScoreBandsFullMatrix(50Candidates|200Candidates)|RerankByCombinedScore(50Candidates|200Candidates)|BuildEngramQueryWhereComplexFilterMatrix)$$' -benchmem
+	@printf '$(SUCCESS)✓ Repository score-band benchmark suite completed$(NC)\n'
 
 eval: ## Run EvalOps suite + baseline/previous delta gate and write reports
 	@printf '$(PROGRESS)Running EvalOps suite with regression delta gate...$(NC)\n'

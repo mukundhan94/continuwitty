@@ -217,10 +217,27 @@ func buildEngramQueryWhere(
 	builder.addStringSliceOverlapFilter("keywords", request.Keywords)
 	addOptionalPointerClause(builder, request.CreatedAfter, "created_at >= %s")
 	addOptionalPointerClause(builder, request.CreatedBefore, "created_at <= %s")
+	addOptionalPointerClause(builder, request.DistanceMin, "embed <=> $1::vector >= %s")
+	addOptionalPointerClause(builder, request.DistanceMax, "embed <=> $1::vector <= %s")
 	addOptionalPointerClause(builder, request.UsefulCountMin, "COALESCE(useful_count, 0) >= %s")
+	addOptionalPointerClause(builder, request.UsefulCountMax, "COALESCE(useful_count, 0) <= %s")
 	addOptionalPointerClause(builder, request.AccessCountMin, "COALESCE(access_count, 0) >= %s")
+	addOptionalPointerClause(builder, request.AccessCountMax, "COALESCE(access_count, 0) <= %s")
 	addOptionalPointerClause(builder, request.FeedbackCountMin, "COALESCE(feedback_count, 0) >= %s")
+	addOptionalPointerClause(builder, request.FeedbackCountMax, "COALESCE(feedback_count, 0) <= %s")
+	addOptionalPointerClause(builder, request.ContradictionCountMin, "COALESCE(contradiction_count, 0) >= %s")
 	addOptionalPointerClause(builder, request.ContradictionCountMax, "COALESCE(contradiction_count, 0) <= %s")
+	addOptionalPointerClause(
+		builder,
+		request.ContradictionRatioMin,
+		`(
+			CASE
+				WHEN COALESCE(feedback_count, 0) = 0 THEN 0.0
+				ELSE COALESCE(contradiction_count, 0)::DOUBLE PRECISION /
+					GREATEST(COALESCE(feedback_count, 0), 1)::DOUBLE PRECISION
+			END
+		) >= %s`,
+	)
 	addOptionalPointerClause(
 		builder,
 		request.ContradictionRatioMax,
@@ -233,6 +250,7 @@ func buildEngramQueryWhere(
 		) <= %s`,
 	)
 	addOptionalPointerClause(builder, request.FreshnessScoreMin, "COALESCE(freshness_score, 1.0) >= %s")
+	addOptionalPointerClause(builder, request.FreshnessScoreMax, "COALESCE(freshness_score, 1.0) <= %s")
 	addOptionalPointerClause(
 		builder,
 		request.UsefulFeedbackRatioMin,
@@ -244,8 +262,21 @@ func buildEngramQueryWhere(
 			END
 		) >= %s`,
 	)
+	addOptionalPointerClause(
+		builder,
+		request.UsefulFeedbackRatioMax,
+		`(
+			CASE
+				WHEN COALESCE(feedback_count, 0) = 0 THEN 0.5
+				ELSE COALESCE(useful_count, 0)::DOUBLE PRECISION /
+					GREATEST(COALESCE(feedback_count, 0), 1)::DOUBLE PRECISION
+			END
+		) <= %s`,
+	)
 	addOptionalPointerClause(builder, request.AvgRelevanceFeedbackMin, "COALESCE(avg_relevance_feedback, 0.5) >= %s")
+	addOptionalPointerClause(builder, request.AvgRelevanceFeedbackMax, "COALESCE(avg_relevance_feedback, 0.5) <= %s")
 	addOptionalPointerClause(builder, request.SourceSessionQualityMin, "COALESCE(source_session_quality_score, 0.5) >= %s")
+	addOptionalPointerClause(builder, request.SourceSessionQualityMax, "COALESCE(source_session_quality_score, 0.5) <= %s")
 	addOptionalPointerClause(builder, request.LastAccessedAfter, "COALESCE(last_accessed_at, created_at) >= %s")
 	addOptionalPointerClause(builder, request.LastAccessedBefore, "COALESCE(last_accessed_at, created_at) <= %s")
 	addOptionalPointerClause(builder, request.FreshnessComputedAfter, "COALESCE(freshness_last_computed_at, created_at) >= %s")

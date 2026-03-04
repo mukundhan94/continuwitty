@@ -23,6 +23,7 @@ type Props = {
   onRefresh: () => Promise<void>
   onCreate: (payload: McpTokenCreateRequest) => Promise<void>
   onRevoke: (tokenId: string) => Promise<void>
+  variant?: 'overlay' | 'inline'
 }
 
 interface OptionChipSelectorProps {
@@ -76,6 +77,13 @@ const Dialog = styled.section`
   padding: 1rem;
   display: grid;
   gap: 0.8rem;
+`
+
+const InlineDialog = styled(Dialog)`
+  width: 100%;
+  max-height: none;
+  background: var(--surface-glass);
+  border: 1px solid var(--surface-glass-border);
 `
 
 const Header = styled.header`
@@ -514,6 +522,7 @@ export function AdminMcpTokenPanel({
   onRefresh,
   onCreate,
   onRevoke,
+  variant = 'overlay',
 }: Props) {
   const activeCount = useMemo(() => tokens.filter((item) => item.is_active).length, [tokens])
 
@@ -521,54 +530,67 @@ export function AdminMcpTokenPanel({
     return null
   }
 
-  return (
-    <Overlay role="dialog" aria-modal="true" aria-label="Admin MCP Tokens" data-testid="admin-mcp-token-panel">
-      <Dialog>
-        <Header>
-          <div>
-            <h2 className="font-display text-xl font-semibold tracking-tight text-ink">MCP Tokens</h2>
-            <Hint>
-              Admin-only workspace for issuing scoped tokens for external MCP clients. Token values are shown only
-              once after creation.
-            </Hint>
-          </div>
-          <HeaderActions>
-            <button type="button" onClick={() => void onRefresh()} data-testid="admin-token-refresh">
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </button>
+  const isOverlay = variant === 'overlay'
+  const DialogComponent = isOverlay ? Dialog : InlineDialog
+
+  const content = (
+    <DialogComponent>
+      <Header>
+        <div>
+          <h2 className="font-display text-xl font-semibold tracking-tight text-ink">MCP Tokens</h2>
+          <Hint>
+            Admin-only workspace for issuing scoped tokens for external MCP clients. Token values are shown only
+            once after creation.
+          </Hint>
+        </div>
+        <HeaderActions>
+          <button type="button" onClick={() => void onRefresh()} data-testid="admin-token-refresh">
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+          {isOverlay ? (
             <button type="button" onClick={onClose}>
               Close
             </button>
-          </HeaderActions>
-        </Header>
+          ) : null}
+        </HeaderActions>
+      </Header>
 
-        <Hint>
-          Active tokens: <strong>{activeCount}</strong> / {tokens.length}
-        </Hint>
-        <Hint>
-          Available options loaded: {optionsLoading ? 'loading...' : `${availableTools.length} tools, ${availableProjects.length} projects`}
-        </Hint>
+      <Hint>
+        Active tokens: <strong>{activeCount}</strong> / {tokens.length}
+      </Hint>
+      <Hint>
+        Available options loaded: {optionsLoading ? 'loading...' : `${availableTools.length} tools, ${availableProjects.length} projects`}
+      </Hint>
 
-        {error ? <ErrorText>{error}</ErrorText> : null}
+      {error ? <ErrorText>{error}</ErrorText> : null}
 
-        {latestToken ? (
-          <SuccessBox>
-            <strong>New token created</strong>
-            <TokenCode>{latestToken.token}</TokenCode>
-            <Hint>Store this token now. It will not be retrievable from the server after this view refreshes.</Hint>
-          </SuccessBox>
-        ) : null}
+      {latestToken ? (
+        <SuccessBox>
+          <strong>New token created</strong>
+          <TokenCode>{latestToken.token}</TokenCode>
+          <Hint>Store this token now. It will not be retrievable from the server after this view refreshes.</Hint>
+        </SuccessBox>
+      ) : null}
 
-        <TokenCreationForm
-          creating={creating}
-          availableTools={availableTools}
-          availableProjects={availableProjects}
-          onCreate={onCreate}
-        />
+      <TokenCreationForm
+        creating={creating}
+        availableTools={availableTools}
+        availableProjects={availableProjects}
+        onCreate={onCreate}
+      />
 
-        <h3 className="font-display text-lg font-semibold tracking-tight text-ink">Issued Tokens</h3>
-        <IssuedTokensTable tokens={tokens} onRevoke={onRevoke} />
-      </Dialog>
+      <h3 className="font-display text-lg font-semibold tracking-tight text-ink">Issued Tokens</h3>
+      <IssuedTokensTable tokens={tokens} onRevoke={onRevoke} />
+    </DialogComponent>
+  )
+
+  if (!isOverlay) {
+    return <section data-testid="admin-mcp-token-page">{content}</section>
+  }
+
+  return (
+    <Overlay role="dialog" aria-modal="true" aria-label="Admin MCP Tokens" data-testid="admin-mcp-token-panel">
+      {content}
     </Overlay>
   )
 }

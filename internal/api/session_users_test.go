@@ -291,8 +291,11 @@ func TestMountSessionAuthRoutesNonAdminCannotAccessAdminRoutes(t *testing.T) {
 	adminUIRequest.AddCookie(loginCookie)
 	adminUIResponse := httptest.NewRecorder()
 	handler.ServeHTTP(adminUIResponse, adminUIRequest)
-	if adminUIResponse.Code != http.StatusForbidden {
-		t.Fatalf("expected admin ui status 403, got %d", adminUIResponse.Code)
+	if adminUIResponse.Code != http.StatusSeeOther {
+		t.Fatalf("expected admin ui status 303, got %d", adminUIResponse.Code)
+	}
+	if adminUIResponse.Header().Get("Location") != "/app/admin/sessions" {
+		t.Fatalf("expected admin ui redirect to /app/admin/sessions, got %q", adminUIResponse.Header().Get("Location"))
 	}
 }
 

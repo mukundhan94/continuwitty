@@ -286,21 +286,48 @@ curl -X POST http://localhost:8000/api/v1/engrams/query \
 Optional temporal/engagement filters:
 
 - `created_after` / `created_before` (RFC3339 timestamp)
+- `distance_min` (number, minimum `0`)
+- `distance_max` (number, minimum `0`)
 - `last_accessed_after` / `last_accessed_before` (RFC3339 timestamp)
 - `freshness_computed_after` / `freshness_computed_before` (RFC3339 timestamp)
 - `useful_count_min` (int, minimum `0`)
+- `useful_count_max` (int, minimum `0`)
 - `access_count_min` (int, minimum `0`)
+- `access_count_max` (int, minimum `0`)
 - `feedback_count_min` (int, minimum `0`)
+- `feedback_count_max` (int, minimum `0`)
+- `contradiction_count_min` (int, minimum `0`)
 - `contradiction_count_max` (int, minimum `0`)
+- `contradiction_feedback_ratio_min` (number, bounded `0..1`)
 - `contradiction_feedback_ratio_max` (number, bounded `0..1`)
 - `freshness_score_min` (number, bounded `0..1`)
+- `freshness_score_max` (number, bounded `0..1`)
 - `useful_feedback_ratio_min` (number, bounded `0..1`)
+- `useful_feedback_ratio_max` (number, bounded `0..1`)
 - `avg_relevance_feedback_min` (number, bounded `0..1`)
+- `avg_relevance_feedback_max` (number, bounded `0..1`)
 - `source_session_quality_min` (number, bounded `0..1`)
+- `source_session_quality_max` (number, bounded `0..1`)
+- `dense_score_min` (number, bounded `0..1`)
+- `dense_score_max` (number, bounded `0..1`)
+- `lexical_overlap_score_min` (number, bounded `0..1`)
+- `lexical_overlap_score_max` (number, bounded `0..1`)
+- `feedback_signal_score_min` (number, bounded `0..1`)
+- `feedback_signal_score_max` (number, bounded `0..1`)
+- `engagement_signal_score_min` (number, bounded `0..1`)
+- `engagement_signal_score_max` (number, bounded `0..1`)
+- `freshness_signal_score_min` (number, bounded `0..1`)
+- `freshness_signal_score_max` (number, bounded `0..1`)
+- `authority_signal_score_min` (number, bounded `0..1`)
+- `authority_signal_score_max` (number, bounded `0..1`)
+- `composite_rank_score_min` (number, bounded `0..1`)
+- `composite_rank_score_max` (number, bounded `0..1`)
 - `relation_type` (`supports|depends_on|contradicts|related_to|derived_from`)
 - `trace_depth` (`0` or `1`; defaults to `1` when `relation_type` is set)
 
-Query results include `source_session_quality_score` (`0..1`), `access_count`, `freshness_score`, `feedback_count`, `useful_count`, `avg_relevance_feedback` (`0..1`), `useful_feedback_ratio` (`0..1`), and `contradiction_count` for recall-quality diagnostics.
+When both `*_min` and `*_max` are provided for the same metric, `min` must be less than or equal to `max`.
+
+Query results include `source_session_quality_score` (`0..1`), `access_count`, `freshness_score`, `feedback_count`, `useful_count`, `avg_relevance_feedback` (`0..1`), `useful_feedback_ratio` (`0..1`), `contradiction_count`, and `contradiction_feedback_ratio` (`0..1`) for recall-quality diagnostics, plus rerank explainability fields: `composite_rank_score`, `dense_score`, `lexical_overlap_score`, `feedback_signal_score`, `engagement_signal_score`, `freshness_signal_score`, `authority_signal_score`, and `rank_position`.
 
 ### Agent Run (With Snapshots)
 

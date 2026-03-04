@@ -530,14 +530,32 @@ Document pin/list helpers:
     "query": "incident mitigation",
     "project_id": "engram-vault",
     "top_k": 5,
+    "distance_min": 0.1,
+    "distance_max": 0.45,
     "useful_count_min": 1,
+    "useful_count_max": 8,
     "access_count_min": 2,
+    "access_count_max": 20,
     "feedback_count_min": 3,
+    "feedback_count_max": 12,
+    "contradiction_count_min": 1,
     "contradiction_count_max": 2,
+    "contradiction_feedback_ratio_min": 0.1,
     "contradiction_feedback_ratio_max": 0.4,
     "freshness_score_min": 0.4,
+    "freshness_score_max": 0.9,
     "useful_feedback_ratio_min": 0.7,
+    "useful_feedback_ratio_max": 0.95,
+    "avg_relevance_feedback_max": 0.9,
     "source_session_quality_min": 0.7,
+    "source_session_quality_max": 0.9,
+    "dense_score_min": 0.75,
+    "lexical_overlap_score_min": 0.65,
+    "feedback_signal_score_min": 0.55,
+    "engagement_signal_score_min": 0.45,
+    "freshness_signal_score_min": 0.4,
+    "authority_signal_score_min": 0.38,
+    "composite_rank_score_min": 0.7,
     "last_accessed_after": "2026-02-01T00:00:00Z",
     "last_accessed_before": "2026-03-01T00:00:00Z",
     "relation_type": "supports",
@@ -546,8 +564,10 @@ Document pin/list helpers:
 }
 ```
 
-`engram.query` also supports optional `created_after` / `created_before` and `freshness_computed_after` / `freshness_computed_before` (RFC3339), plus `useful_count_min`, `access_count_min`, `feedback_count_min`, `contradiction_count_max`, `contradiction_feedback_ratio_max`, `freshness_score_min`, `useful_feedback_ratio_min`, `avg_relevance_feedback_min`, `source_session_quality_min`, and trace constraints (`relation_type`, `trace_depth`).
-Returned rows include `source_session_quality_score` (`0..1`) plus `access_count`, `freshness_score`, `feedback_count`, `useful_count`, `avg_relevance_feedback` (`0..1`), `useful_feedback_ratio` (`0..1`), and `contradiction_count` for authority/quality diagnostics.
+`engram.query` also supports optional `created_after` / `created_before`, `distance_min`, `distance_max`, and `freshness_computed_after` / `freshness_computed_before` (RFC3339), plus `useful_count_min`, `useful_count_max`, `access_count_min`, `access_count_max`, `feedback_count_min`, `feedback_count_max`, `contradiction_count_min`, `contradiction_count_max`, `contradiction_feedback_ratio_min`, `contradiction_feedback_ratio_max`, `freshness_score_min`, `freshness_score_max`, `useful_feedback_ratio_min`, `useful_feedback_ratio_max`, `avg_relevance_feedback_min`, `avg_relevance_feedback_max`, `source_session_quality_min`, `source_session_quality_max`, and trace constraints (`relation_type`, `trace_depth`).
+`engram.query` also supports optional `dense_score_min`, `dense_score_max`, `lexical_overlap_score_min`, `lexical_overlap_score_max`, `feedback_signal_score_min`, `feedback_signal_score_max`, `engagement_signal_score_min`, `engagement_signal_score_max`, `freshness_signal_score_min`, `freshness_signal_score_max`, `authority_signal_score_min`, `authority_signal_score_max`, `composite_rank_score_min`, and `composite_rank_score_max` (all bounded `0..1`) for post-rerank score banding.
+When both `*_min` and `*_max` are provided for the same metric, `min` must be less than or equal to `max`.
+Returned rows include `source_session_quality_score` (`0..1`) plus `access_count`, `freshness_score`, `feedback_count`, `useful_count`, `avg_relevance_feedback` (`0..1`), `useful_feedback_ratio` (`0..1`), `contradiction_count`, and `contradiction_feedback_ratio` (`0..1`) for authority/quality diagnostics, plus rerank explainability fields: `composite_rank_score`, `dense_score`, `lexical_overlap_score`, `feedback_signal_score`, `engagement_signal_score`, `freshness_signal_score`, `authority_signal_score`, and `rank_position`.
 
 Collection add-items flow (resolve collection UUID first):
 

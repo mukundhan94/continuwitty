@@ -1628,6 +1628,807 @@ Build a local-first memory system where agents and humans can:
 
 ---
 
+### Phase 54 - Contradiction-Ratio Diagnostics in Query Results
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - `models.EngramQueryResult` now includes `contradiction_feedback_ratio`.
+  - repository result mapping now computes and returns contradiction ratio using:
+    - `contradiction_count / feedback_count` when feedback exists.
+    - deterministic low-risk fallback (`0.0`) when feedback is absent.
+  - REST and MCP query flows now return contradiction-ratio diagnostics alongside existing quality/engagement/usefulness signals.
+  - regression coverage expanded for repository mapping helpers and REST/MCP payload parity.
+
+### Goals
+
+1. Expose contradiction-risk diagnostics so contradiction-aware filtering is transparent in retrieval output.
+2. Keep contradiction-ratio diagnostics deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending query observability.
+
+### Deliverables
+
+1. Query-result contract extension for `contradiction_feedback_ratio`.
+2. Repository mapping updates with deterministic fallback behavior.
+3. REST/MCP parity tests and docs synchronization.
+
+### Exit Criteria
+
+1. Query responses include `contradiction_feedback_ratio` in REST and MCP.
+2. Zero-feedback rows return deterministic low-risk fallback (`0.0`) and are regression-tested.
+3. API/MCP docs and tests remain synchronized with repository output behavior.
+
+---
+
+### Phase 55 - Feedback-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `feedback_count_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `feedback_count_max`.
+  - repository query builder now supports `COALESCE(feedback_count, 0) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `feedback_count_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to scope recall to low-feedback memories that need review or curation.
+2. Keep feedback-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `feedback_count_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum feedback-count thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for feedback-ceiling filtering behavior.
+
+---
+
+### Phase 56 - Useful-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `useful_count_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `useful_count_max`.
+  - repository query builder now supports `COALESCE(useful_count, 0) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `useful_count_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to scope recall to lower-usefulness memories for review or curation.
+2. Keep useful-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `useful_count_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum useful-count thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for useful-ceiling filtering behavior.
+
+---
+
+### Phase 57 - Access-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `access_count_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `access_count_max`.
+  - repository query builder now supports `COALESCE(access_count, 0) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `access_count_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to cap recall by engagement volume so low-touch memories can be reviewed.
+2. Keep access-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `access_count_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum access-count thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for access-ceiling filtering behavior.
+
+---
+
+### Phase 58 - Freshness-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `freshness_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `freshness_score_max` (`0..1`).
+  - repository query builder now supports `COALESCE(freshness_score, 1.0) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `freshness_score_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain recall to memories below a freshness ceiling for decay-driven review workflows.
+2. Keep freshness-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `freshness_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum freshness-score thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for freshness-ceiling filtering behavior.
+
+---
+
+### Phase 59 - Authority-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `source_session_quality_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `source_session_quality_max` (`0..1`).
+  - repository query builder now supports `COALESCE(source_session_quality_score, 0.5) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `source_session_quality_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to target lower-authority memories for review and calibration workflows.
+2. Keep authority-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `source_session_quality_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum authority-score thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for authority-ceiling filtering behavior.
+
+---
+
+### Phase 60 - Relevance-Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `avg_relevance_feedback_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `avg_relevance_feedback_max` (`0..1`).
+  - repository query builder now supports `COALESCE(avg_relevance_feedback, 0.5) <= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `avg_relevance_feedback_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to target lower-confidence memories by capping average relevance feedback.
+2. Keep relevance-ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `avg_relevance_feedback_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum average relevance-feedback thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for relevance-ceiling filtering behavior.
+
+---
+
+### Phase 61 - Useful-Ratio Ceiling Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `useful_feedback_ratio_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `useful_feedback_ratio_max` (`0..1`).
+  - repository query builder now supports useful-ratio ceiling predicate with deterministic fallback (`0.5` when feedback is absent).
+  - MCP `engram.query` parser/catalog now accept and validate `useful_feedback_ratio_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to cap retrieval by useful-feedback ratio to surface low-value memories for review.
+2. Keep useful-ratio ceiling filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `useful_feedback_ratio_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum useful-feedback ratio thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for useful-ratio ceiling filtering behavior.
+
+---
+
+### Phase 62 - Contradiction-Ratio Floor Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `contradiction_feedback_ratio_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded `contradiction_feedback_ratio_min` (`0..1`).
+  - repository query builder now supports contradiction-ratio floor predicate with deterministic low-risk fallback (`0.0` when feedback is absent).
+  - MCP `engram.query` parser/catalog now accept and validate `contradiction_feedback_ratio_min`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to explicitly retrieve higher-contradiction memories for audit and remediation workflows.
+2. Keep contradiction-ratio floor filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `contradiction_feedback_ratio_min`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply minimum contradiction-feedback ratio thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for contradiction-ratio floor filtering behavior.
+
+---
+
+### Phase 63 - Contradiction-Count Floor Query Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `contradiction_count_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `contradiction_count_min`.
+  - repository query builder now supports `COALESCE(contradiction_count, 0) >= ...` predicate.
+  - MCP `engram.query` parser/catalog now accept and validate `contradiction_count_min`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to retrieve high-contradiction memories explicitly for triage workflows.
+2. Keep contradiction-count floor filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility while extending retrieval-quality controls.
+
+### Deliverables
+
+1. Contract extension for `contradiction_count_min`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply minimum contradiction-count thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for contradiction-count floor filtering behavior.
+
+---
+
+### Phase 64 - Query Range Coherence Validation
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - REST query validation now rejects inconsistent numeric ranges when both bounds are present (`*_min` must be `<= *_max`).
+  - MCP `engram.query` parser now enforces the same range-coherence guardrails and returns `-32602` invalid-parameter errors for inverted ranges.
+  - API/MCP docs now explicitly describe `min <= max` requirement for paired numeric filters.
+  - regression coverage expanded for REST and MCP invalid-range scenarios.
+
+### Goals
+
+1. Prevent ambiguous or self-contradicting query payloads that can cause surprising retrieval behavior.
+2. Keep numeric-range semantics deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for all valid query payloads.
+
+### Deliverables
+
+1. REST range-coherence validation for numeric min/max filter pairs.
+2. MCP parity validation for numeric min/max filter pairs.
+3. Documentation and regression test updates.
+
+### Exit Criteria
+
+1. Inverted numeric ranges are rejected consistently across REST and MCP.
+2. Validation error behavior is covered by regression tests.
+3. Docs clearly communicate min/max ordering expectations.
+
+---
+
+### Phase 65 - Semantic Distance Ceiling Query Filter
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `distance_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `distance_max`.
+  - repository query builder now supports vector-distance ceiling predicate (`embed <=> $1::vector <= ...`).
+  - MCP `engram.query` parser/catalog now accept and validate `distance_max`.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to bound semantic recall by absolute vector-distance ceiling.
+2. Keep semantic-distance filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for query payloads that omit distance controls.
+
+### Deliverables
+
+1. Contract extension for `distance_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply maximum vector-distance thresholds across REST and MCP query paths.
+2. Invalid threshold values are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for distance-ceiling filtering behavior.
+
+---
+
+### Phase 66 - Semantic Distance Floor Query Filter
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `distance_min` to `models.EngramQueryRequest`.
+  - REST query validation now enforces non-negative `distance_min`.
+  - repository query builder now supports vector-distance floor predicate (`embed <=> $1::vector >= ...`).
+  - MCP `engram.query` parser/catalog now accept and validate `distance_min`.
+  - range-coherence guardrails now enforce `distance_min <= distance_max` when both are provided.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, and query-shape assertions.
+
+### Goals
+
+1. Allow operators and agents to define semantic distance bands with both minimum and maximum bounds.
+2. Keep semantic-distance band filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for payloads that omit distance-floor controls.
+
+### Deliverables
+
+1. Contract extension for `distance_min`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository predicate support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply minimum vector-distance thresholds across REST and MCP query paths.
+2. Invalid threshold values and inverted distance windows are rejected with explicit validation details.
+3. Parser/repository/docs/tests remain synchronized for distance-floor and distance-window behavior.
+
+---
+
+### Phase 67 - Query Rerank Diagnostics Transparency
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - extended `models.EngramQueryResult` with rerank explainability diagnostics:
+    - `composite_rank_score`
+    - `dense_score`
+    - `lexical_overlap_score`
+    - `feedback_signal_score`
+    - `engagement_signal_score`
+    - `freshness_signal_score`
+    - `authority_signal_score`
+  - repository rerank pipeline now records component signals and final composite rank score per candidate row.
+  - query-result mapping now forwards rerank diagnostics with deterministic fallback computation when score fields are absent.
+  - REST and MCP query parity tests now assert rerank diagnostics are preserved in response payloads.
+  - API and MCP docs now describe rerank explainability fields returned in query rows.
+
+### Goals
+
+1. Expose ranking internals so operators and agents can explain retrieval ordering without reverse-engineering repository logic.
+2. Keep rerank diagnostics deterministic across repository, REST, and MCP surfaces.
+3. Preserve backward compatibility while extending query-result diagnostics.
+
+### Deliverables
+
+1. Query-result contract extension for rerank diagnostics.
+2. Repository rerank instrumentation and result mapping parity.
+3. REST/MCP test and documentation updates.
+
+### Exit Criteria
+
+1. Query responses include composite and component rerank scores for every row.
+2. Diagnostics remain deterministic and stable in regression tests.
+3. API/MCP docs reflect the expanded query-result diagnostics contract.
+
+---
+
+### Phase 68 - Composite-Rank Score Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `composite_rank_score_min` and `composite_rank_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded composite-rank filters (`0..1`) and rejects inverted composite-rank windows.
+  - repository query pipeline now supports post-rerank composite-score filtering before final top-k trimming.
+  - MCP `engram.query` parser/catalog now accept and validate composite-rank filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain query results to a desired rerank-confidence band.
+2. Keep composite-rank filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit composite-rank filters.
+
+### Deliverables
+
+1. Contract extension for `composite_rank_score_min` and `composite_rank_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply composite-rank score floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted composite-rank windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for composite-rank band filtering behavior.
+
+---
+
+### Phase 69 - Query Rank Position Diagnostics
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - extended `models.EngramQueryResult` with `rank_position`.
+  - repository query pipeline now annotates each final query row with 1-based rank position after filtering and top-k trimming.
+  - query-result mapping now forwards `rank_position` to REST and MCP clients.
+  - regression coverage expanded across repository/API/MCP parity tests for rank-position diagnostics.
+  - API and MCP docs now describe `rank_position` in query-result diagnostics.
+
+### Goals
+
+1. Expose final rank ordering as an explicit diagnostic instead of forcing clients to infer position from array index.
+2. Keep rank-position semantics deterministic after score-band filters and top-k trimming.
+3. Preserve backward compatibility while extending query-result diagnostics.
+
+### Deliverables
+
+1. Query-result contract extension for `rank_position`.
+2. Repository ranking annotation and result mapping parity.
+3. REST/MCP regression and doc updates.
+
+### Exit Criteria
+
+1. Query result rows include stable 1-based `rank_position`.
+2. Rank-position values remain deterministic under rerank and filter flows.
+3. API/MCP docs and tests are aligned with rank-position behavior.
+
+---
+
+### Phase 70 - Dense-Score Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `dense_score_min` and `dense_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded dense-score filters (`0..1`) and rejects inverted dense-score windows.
+  - repository query pipeline now supports post-rerank dense-score filtering in combination with composite-score band filters.
+  - MCP `engram.query` parser/catalog now accept and validate dense-score filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain recall by dense semantic confidence independently of composite scoring.
+2. Keep dense-score filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit dense-score filters.
+
+### Deliverables
+
+1. Contract extension for `dense_score_min` and `dense_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank dense-score filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply dense-score floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted dense-score windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for dense-score band filtering behavior.
+
+---
+
+### Phase 71 - Lexical-Overlap Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `lexical_overlap_score_min` and `lexical_overlap_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded lexical-overlap filters (`0..1`) and rejects inverted lexical-overlap windows.
+  - repository query pipeline now supports post-rerank lexical-overlap filtering in combination with dense/composite score bands.
+  - MCP `engram.query` parser/catalog now accept and validate lexical-overlap filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to target retrieval rows with explicit lexical grounding confidence thresholds.
+2. Keep lexical-overlap filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit lexical-overlap filters.
+
+### Deliverables
+
+1. Contract extension for `lexical_overlap_score_min` and `lexical_overlap_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank lexical-overlap filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply lexical-overlap floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted lexical-overlap windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for lexical-overlap band filtering behavior.
+
+---
+
+### Phase 72 - Feedback-Signal Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `feedback_signal_score_min` and `feedback_signal_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded feedback-signal filters (`0..1`) and rejects inverted feedback-signal windows.
+  - repository query pipeline now supports post-rerank feedback-signal filtering in combination with other score-band filters.
+  - MCP `engram.query` parser/catalog now accept and validate feedback-signal filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain retrieval by calibrated usefulness-vs-contradiction feedback signal.
+2. Keep feedback-signal filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit feedback-signal filters.
+
+### Deliverables
+
+1. Contract extension for `feedback_signal_score_min` and `feedback_signal_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank feedback-signal filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply feedback-signal floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted feedback-signal windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for feedback-signal band filtering behavior.
+
+---
+
+### Phase 73 - Engagement-Signal Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `engagement_signal_score_min` and `engagement_signal_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded engagement-signal filters (`0..1`) and rejects inverted engagement-signal windows.
+  - repository query pipeline now supports post-rerank engagement-signal filtering in combination with other score-band filters.
+  - MCP `engram.query` parser/catalog now accept and validate engagement-signal filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain retrieval by normalized engagement strength.
+2. Keep engagement-signal filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit engagement-signal filters.
+
+### Deliverables
+
+1. Contract extension for `engagement_signal_score_min` and `engagement_signal_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank engagement-signal filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply engagement-signal floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted engagement-signal windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for engagement-signal band filtering behavior.
+
+---
+
+### Phase 74 - Freshness-Signal Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `freshness_signal_score_min` and `freshness_signal_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded freshness-signal filters (`0..1`) and rejects inverted freshness-signal windows.
+  - repository query pipeline now supports post-rerank freshness-signal filtering in combination with other score-band filters.
+  - MCP `engram.query` parser/catalog now accept and validate freshness-signal filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain retrieval by normalized freshness contribution in rerank diagnostics.
+2. Keep freshness-signal filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit freshness-signal filters.
+
+### Deliverables
+
+1. Contract extension for `freshness_signal_score_min` and `freshness_signal_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank freshness-signal filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply freshness-signal floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted freshness-signal windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for freshness-signal band filtering behavior.
+
+---
+
+### Phase 75 - Authority-Signal Query Band Filters
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `authority_signal_score_min` and `authority_signal_score_max` to `models.EngramQueryRequest`.
+  - REST query validation now enforces bounded authority-signal filters (`0..1`) and rejects inverted authority-signal windows.
+  - repository query pipeline now supports post-rerank authority-signal filtering in combination with other score-band filters.
+  - MCP `engram.query` parser/catalog now accept and validate authority-signal filters with min/max window parity.
+  - regression coverage expanded across repository/API/MCP for parsing, validation, filtering, and catalog metadata assertions.
+
+### Goals
+
+1. Allow operators and agents to constrain retrieval by authority contribution in rerank diagnostics.
+2. Keep authority-signal filtering deterministic and aligned across REST and MCP.
+3. Preserve backward compatibility for clients that omit authority-signal filters.
+
+### Deliverables
+
+1. Contract extension for `authority_signal_score_min` and `authority_signal_score_max`.
+2. REST/MCP validation and schema metadata parity.
+3. Repository post-rerank authority-signal filter support with regression tests.
+
+### Exit Criteria
+
+1. Query clients can apply authority-signal floors/ceilings across REST and MCP query paths.
+2. Invalid threshold values and inverted authority-signal windows are rejected consistently.
+3. Parser/repository/docs/tests remain synchronized for authority-signal band filtering behavior.
+
+---
+
+### Phase 76 - Score-Band Filter Hardening and Benchmark Baseline
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added dedicated repository regression tests for post-rerank score-band filtering across dense/lexical/feedback/engagement/freshness/authority/composite bands.
+  - added explicit repository regression test coverage for no-filter pass-through behavior in score-band filter helper paths.
+  - added benchmark coverage for full score-band filter matrices at 50 and 200 candidate sizes.
+
+### Goals
+
+1. Harden score-band filtering behavior with focused unit-level regression coverage.
+2. Establish benchmark baselines for post-rerank score-band filtering throughput as filter complexity grows.
+3. Preserve deterministic filtering semantics while expanding test and benchmark depth.
+
+### Deliverables
+
+1. Repository tests for all-signal score-band filtering and no-filter behavior.
+2. Benchmark coverage for full-matrix score-band filtering at multiple candidate-set sizes.
+3. Documentation updates for phase progress and validation evidence.
+
+### Exit Criteria
+
+1. Score-band filter helper behavior is explicitly verified for both constrained and unconstrained paths.
+2. Benchmark targets run successfully under `go test -bench` for full score-band matrices.
+3. Test suites remain green after benchmark/test additions.
+
+---
+
+### Phase 77 - Score-Band Benchmark Operationalization
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - added `benchmark-query-score-bands` Makefile target to run repository query/rerank/filter benchmarks as one reproducible command.
+  - published benchmark artifact with environment and baseline numbers in `docs/phase77-query-score-band-benchmark.md`.
+
+### Goals
+
+1. Make score-band benchmark runs consistent and low-friction for operators and contributors.
+2. Capture a committed baseline artifact so future performance regressions are easy to detect.
+3. Keep benchmark execution independent from default CI unit/acceptance gates.
+
+### Deliverables
+
+1. Makefile benchmark target for score-band benchmark suite.
+2. Versioned benchmark artifact documenting command and baseline metrics.
+3. Roadmap/checkpoint/docs alignment for this benchmark-operationalization phase.
+
+### Exit Criteria
+
+1. A single make target can execute the score-band benchmark suite end-to-end.
+2. Baseline benchmark metrics are documented in-repo for future comparisons.
+3. Existing lint/test/acceptance gates remain unaffected.
+
+---
+
+### Phase 78 - Optional CI Benchmark Workflow
+
+### Status
+
+- Completed (2026-03-03).
+- Delivered in this checkpoint:
+  - extended `workflow_dispatch` inputs in `.github/workflows/ci.yml` with `run_query_benchmarks`.
+  - added optional `query-benchmark` CI job that runs only when manually dispatched with `run_query_benchmarks=true`.
+  - benchmark job executes `make benchmark-query-score-bands` and uploads `query-score-band-benchmark.txt` as a workflow artifact.
+
+### Goals
+
+1. Enable reproducible benchmark execution in CI without impacting default PR/push duration.
+2. Keep benchmark runs opt-in and separate from mandatory unit/acceptance gates.
+3. Preserve existing disabled live-provider/release-smoke policy while adding benchmark observability.
+
+### Deliverables
+
+1. Manual-dispatch CI input for query benchmark execution.
+2. Optional CI benchmark job with output artifact upload.
+3. Roadmap/checkpoint/docs alignment for CI benchmark workflow support.
+
+### Exit Criteria
+
+1. CI benchmark job remains skipped on standard push/pull-request events.
+2. Manual workflow dispatch can run benchmark job and publish output artifact.
+3. Existing unit/acceptance CI paths remain unchanged.
+
+---
+
 ## Cross-Phase Working Rules
 
 1. Keep local-first default behavior and deterministic fallback paths.
@@ -1685,3 +2486,53 @@ Build a local-first memory system where agents and humans can:
    - [x] Phase 52: expose `useful_count` + `avg_relevance_feedback` + `useful_feedback_ratio` in query results.
 18. Execute contradiction-ratio query filter increment:
    - [x] Phase 53: `contradiction_feedback_ratio_max` parity across REST/MCP/repository.
+19. Execute contradiction-ratio diagnostics increment:
+   - [x] Phase 54: expose `contradiction_feedback_ratio` in query results.
+20. Execute feedback-ceiling query filter increment:
+   - [x] Phase 55: `feedback_count_max` parity across REST/MCP/repository.
+21. Execute useful-ceiling query filter increment:
+   - [x] Phase 56: `useful_count_max` parity across REST/MCP/repository.
+22. Execute access-ceiling query filter increment:
+   - [x] Phase 57: `access_count_max` parity across REST/MCP/repository.
+23. Execute freshness-ceiling query filter increment:
+   - [x] Phase 58: `freshness_score_max` parity across REST/MCP/repository.
+24. Execute authority-ceiling query filter increment:
+   - [x] Phase 59: `source_session_quality_max` parity across REST/MCP/repository.
+25. Execute relevance-ceiling query filter increment:
+   - [x] Phase 60: `avg_relevance_feedback_max` parity across REST/MCP/repository.
+26. Execute useful-ratio ceiling query filter increment:
+   - [x] Phase 61: `useful_feedback_ratio_max` parity across REST/MCP/repository.
+27. Execute contradiction-ratio floor query filter increment:
+   - [x] Phase 62: `contradiction_feedback_ratio_min` parity across REST/MCP/repository.
+28. Execute contradiction-count floor query filter increment:
+   - [x] Phase 63: `contradiction_count_min` parity across REST/MCP/repository.
+29. Execute query range coherence validation increment:
+   - [x] Phase 64: reject numeric `*_min > *_max` payloads across REST/MCP.
+30. Execute semantic distance ceiling query filter increment:
+   - [x] Phase 65: `distance_max` parity across REST/MCP/repository.
+31. Execute semantic distance floor query filter increment:
+   - [x] Phase 66: `distance_min` parity across REST/MCP/repository.
+32. Execute rerank diagnostics transparency increment:
+   - [x] Phase 67: expose composite/component rerank scores in query result payloads across repository/REST/MCP.
+33. Execute composite-rank score filter increment:
+   - [x] Phase 68: `composite_rank_score_min` + `composite_rank_score_max` parity across REST/MCP/repository.
+34. Execute rank-position diagnostics increment:
+   - [x] Phase 69: expose final `rank_position` in query result payloads across repository/REST/MCP.
+35. Execute dense-score filter increment:
+   - [x] Phase 70: `dense_score_min` + `dense_score_max` parity across REST/MCP/repository.
+36. Execute lexical-overlap filter increment:
+   - [x] Phase 71: `lexical_overlap_score_min` + `lexical_overlap_score_max` parity across REST/MCP/repository.
+37. Execute feedback-signal filter increment:
+   - [x] Phase 72: `feedback_signal_score_min` + `feedback_signal_score_max` parity across REST/MCP/repository.
+38. Execute engagement-signal filter increment:
+   - [x] Phase 73: `engagement_signal_score_min` + `engagement_signal_score_max` parity across REST/MCP/repository.
+39. Execute freshness-signal filter increment:
+   - [x] Phase 74: `freshness_signal_score_min` + `freshness_signal_score_max` parity across REST/MCP/repository.
+40. Execute authority-signal filter increment:
+   - [x] Phase 75: `authority_signal_score_min` + `authority_signal_score_max` parity across REST/MCP/repository.
+41. Execute score-band hardening and benchmark increment:
+   - [x] Phase 76: repository score-band regression + benchmark baseline for full filter matrices.
+42. Execute score-band benchmark operationalization increment:
+   - [x] Phase 77: Makefile benchmark target + committed benchmark artifact for score-band query/rerank/filter paths.
+43. Execute optional CI benchmark workflow increment:
+   - [x] Phase 78: workflow-dispatch benchmark toggle + artifact publishing for query score-band benchmarks.

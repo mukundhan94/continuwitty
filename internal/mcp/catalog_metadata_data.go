@@ -582,6 +582,14 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":   "string",
 					"format": "date-time",
 				},
+				"distance_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+				},
+				"distance_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+				},
 				"last_accessed_after": map[string]any{
 					"type":   "string",
 					"format": "date-time",
@@ -617,7 +625,15 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":    "integer",
 					"minimum": 0,
 				},
+				"access_count_max": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
 				"useful_count_min": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
+				"useful_count_max": map[string]any{
 					"type":    "integer",
 					"minimum": 0,
 				},
@@ -625,11 +641,24 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"type":    "integer",
 					"minimum": 0,
 				},
+				"feedback_count_max": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
 				"contradiction_count_max": map[string]any{
 					"type":    "integer",
 					"minimum": 0,
 				},
+				"contradiction_count_min": map[string]any{
+					"type":    "integer",
+					"minimum": 0,
+				},
 				"contradiction_feedback_ratio_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"contradiction_feedback_ratio_min": map[string]any{
 					"type":    "number",
 					"minimum": 0,
 					"maximum": 1,
@@ -639,7 +668,17 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"minimum": 0,
 					"maximum": 1,
 				},
+				"freshness_score_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
 				"useful_feedback_ratio_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"useful_feedback_ratio_max": map[string]any{
 					"type":    "number",
 					"minimum": 0,
 					"maximum": 1,
@@ -649,7 +688,87 @@ var toolCatalogEntries = map[string]toolCatalogEntry{
 					"minimum": 0,
 					"maximum": 1,
 				},
+				"avg_relevance_feedback_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
 				"source_session_quality_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"source_session_quality_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"dense_score_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"dense_score_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"lexical_overlap_score_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"lexical_overlap_score_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"feedback_signal_score_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"feedback_signal_score_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"engagement_signal_score_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"engagement_signal_score_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"freshness_signal_score_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"freshness_signal_score_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"authority_signal_score_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"authority_signal_score_max": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"composite_rank_score_min": map[string]any{
+					"type":    "number",
+					"minimum": 0,
+					"maximum": 1,
+				},
+				"composite_rank_score_max": map[string]any{
 					"type":    "number",
 					"minimum": 0,
 					"maximum": 1,

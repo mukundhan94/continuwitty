@@ -31,7 +31,7 @@ func TestMountSessionUIRoutesOIDCCallbackAuthenticatesAndRedirects(t *testing.T)
 
 	callbackResponse := performOIDCCallbackRequest(handler, pendingCookie, pendingState.OIDCState, "auth-code-1")
 
-	assertRedirect(t, callbackResponse, "/ui/admin")
+	assertRedirect(t, callbackResponse, "/app/admin/sessions")
 	assertOIDCCallbackCall(t, oidcProvider, pendingState.OIDCNonce)
 	assertAuthenticatedOIDCSessionState(t, manager, callbackResponse)
 }
@@ -57,7 +57,7 @@ func TestMountSessionUIRoutesOIDCCallbackRejectsReplayAfterPendingStateConsumed(
 	pendingCookie, pendingState := startOIDCLoginFlow(t, handler, manager)
 
 	firstCallback := performOIDCCallbackRequest(handler, pendingCookie, pendingState.OIDCState, "auth-code-1")
-	assertRedirect(t, firstCallback, "/ui/admin")
+	assertRedirect(t, firstCallback, "/app/admin/sessions")
 	assertOIDCCallbackCall(t, oidcProvider, pendingState.OIDCNonce)
 
 	consumedStateCookie := findResponseCookie(firstCallback, manager.CookieName())

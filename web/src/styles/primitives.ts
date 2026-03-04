@@ -35,31 +35,34 @@ export const LoginShell = styled.div`
   display: grid;
   place-items: center;
   padding: 1.5rem;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(94, 234, 212, 0.16), transparent 36%),
+    radial-gradient(circle at 82% 76%, rgba(6, 182, 212, 0.2), transparent 40%);
 `
 
 export const LoginCard = styled.div`
-  width: min(480px, 100%);
+  width: min(520px, 100%);
   background: var(--surface-glass);
   border: 1px solid var(--surface-glass-border);
   border-radius: ${({ theme }) => theme.radius.xl};
   box-shadow: var(--shadow-card);
-  padding: 1.5rem;
+  padding: 1.7rem;
   animation: ${slideUp} 400ms ease;
 `
 
 export const AppShell = styled.div`
   min-height: 100vh;
   height: 100vh;
-  padding: 0.7rem;
+  padding: 0.65rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.65rem;
   overflow: hidden;
 `
 
 export const TopNavShell = styled.header`
-  border-radius: 14px;
-  padding: 0.5rem 0.78rem;
+  border-radius: 18px;
+  padding: 0.68rem 0.92rem;
   background: var(--surface-glass);
   border: 1px solid var(--surface-glass-border);
   box-shadow: var(--shadow-nav);
@@ -76,7 +79,7 @@ export const TopNavShell = styled.header`
 
 export const WorkspaceGrid = styled.main`
   display: grid;
-  grid-template-columns: minmax(250px, 300px) 1fr minmax(260px, 330px);
+  grid-template-columns: minmax(260px, 320px) 1fr minmax(280px, 340px);
   grid-template-rows: minmax(0, 1fr);
   gap: 0.9rem;
   flex: 1;
@@ -99,7 +102,7 @@ export const GlassPane = styled.section`
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
-  padding: 0.95rem;
+  padding: 1rem;
   overflow: hidden;
 
   @media (max-width: 1180px) {
@@ -115,7 +118,7 @@ export const TopNavTitleBlock = styled.div`
 export const TopNavUserBlock = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.52rem;
   flex-wrap: wrap;
 `
 
@@ -125,6 +128,8 @@ export const PaneHeader = styled.div`
   justify-content: space-between;
   gap: 0.5rem;
   min-height: 2rem;
+  border-bottom: 1px dashed var(--color-line);
+  padding-bottom: 0.42rem;
 `
 
 export const SectionDivider = styled.div`
@@ -181,7 +186,7 @@ export const ErrorText = styled.p`
 `
 
 export const NoticeBanner = styled.p`
-  padding: 0.5rem 0.75rem;
+  padding: 0.55rem 0.8rem;
   border-radius: ${({ theme }) => theme.radius.md};
   background: var(--color-notice-bg);
   color: var(--color-success);

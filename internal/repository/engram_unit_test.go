@@ -57,20 +57,33 @@ func buildQueryWhereAllFiltersFixture() queryWhereAllFiltersFixture {
 	}
 	scoreValues := queryWhereScoreValues{
 		usefulCountMin:          2,
+		usefulCountMax:          8,
 		accessCountMin:          3,
+		accessCountMax:          20,
 		feedbackCountMin:        4,
+		feedbackCountMax:        10,
+		contradictionCountMin:   1,
 		contradictionCountMax:   2,
+		contradictionRatioMin:   0.12,
 		contradictionRatioMax:   0.35,
 		freshnessScoreMin:       0.6,
+		freshnessScoreMax:       0.92,
 		usefulFeedbackRatioMin:  0.8,
+		usefulFeedbackRatioMax:  0.97,
 		avgRelevanceFeedbackMin: 0.55,
+		avgRelevanceFeedbackMax: 0.93,
 		sourceSessionQualityMin: 0.7,
+		sourceSessionQualityMax: 0.95,
 	}
 	relationType := models.EngramLinkRelationSupports
 	traceDepth := 1
 	projectID := "engram-vault"
+	distanceMin := 0.1
+	distanceMax := 0.45
 	requestInput := queryWhereRequestInput{
 		projectID:    projectID,
+		distanceMin:  distanceMin,
+		distanceMax:  distanceMax,
 		timeValues:   timeValues,
 		scoreValues:  scoreValues,
 		relationType: relationType,
@@ -98,18 +111,29 @@ type queryWhereTimeValues struct {
 
 type queryWhereScoreValues struct {
 	usefulCountMin          int
+	usefulCountMax          int
 	accessCountMin          int
+	accessCountMax          int
 	feedbackCountMin        int
+	feedbackCountMax        int
+	contradictionCountMin   int
 	contradictionCountMax   int
+	contradictionRatioMin   float64
 	contradictionRatioMax   float64
 	freshnessScoreMin       float64
+	freshnessScoreMax       float64
 	usefulFeedbackRatioMin  float64
+	usefulFeedbackRatioMax  float64
 	avgRelevanceFeedbackMin float64
+	avgRelevanceFeedbackMax float64
 	sourceSessionQualityMin float64
+	sourceSessionQualityMax float64
 }
 
 type queryWhereRequestInput struct {
 	projectID    string
+	distanceMin  float64
+	distanceMax  float64
 	timeValues   queryWhereTimeValues
 	scoreValues  queryWhereScoreValues
 	relationType models.EngramLinkRelationType
@@ -125,15 +149,26 @@ func buildQueryWhereRequest(input queryWhereRequestInput) models.EngramQueryRequ
 		Keywords:                []string{"checkpoint"},
 		CreatedAfter:            &input.timeValues.createdAfter,
 		CreatedBefore:           &input.timeValues.createdBefore,
+		DistanceMin:             &input.distanceMin,
+		DistanceMax:             &input.distanceMax,
 		UsefulCountMin:          &input.scoreValues.usefulCountMin,
+		UsefulCountMax:          &input.scoreValues.usefulCountMax,
 		AccessCountMin:          &input.scoreValues.accessCountMin,
+		AccessCountMax:          &input.scoreValues.accessCountMax,
 		FeedbackCountMin:        &input.scoreValues.feedbackCountMin,
+		FeedbackCountMax:        &input.scoreValues.feedbackCountMax,
+		ContradictionCountMin:   &input.scoreValues.contradictionCountMin,
 		ContradictionCountMax:   &input.scoreValues.contradictionCountMax,
+		ContradictionRatioMin:   &input.scoreValues.contradictionRatioMin,
 		ContradictionRatioMax:   &input.scoreValues.contradictionRatioMax,
 		FreshnessScoreMin:       &input.scoreValues.freshnessScoreMin,
+		FreshnessScoreMax:       &input.scoreValues.freshnessScoreMax,
 		UsefulFeedbackRatioMin:  &input.scoreValues.usefulFeedbackRatioMin,
+		UsefulFeedbackRatioMax:  &input.scoreValues.usefulFeedbackRatioMax,
 		AvgRelevanceFeedbackMin: &input.scoreValues.avgRelevanceFeedbackMin,
+		AvgRelevanceFeedbackMax: &input.scoreValues.avgRelevanceFeedbackMax,
 		SourceSessionQualityMin: &input.scoreValues.sourceSessionQualityMin,
+		SourceSessionQualityMax: &input.scoreValues.sourceSessionQualityMax,
 		LastAccessedAfter:       &input.timeValues.lastAccessedAfter,
 		LastAccessedBefore:      &input.timeValues.lastAccessedBefore,
 		FreshnessComputedAfter:  &input.timeValues.freshnessComputedAfter,
@@ -151,28 +186,39 @@ func queryWhereExpectedFragments() []string {
 		"keywords && $5",
 		"created_at >= $6",
 		"created_at <= $7",
-		"COALESCE(useful_count, 0) >= $8",
-		"COALESCE(access_count, 0) >= $9",
-		"COALESCE(feedback_count, 0) >= $10",
-		"COALESCE(contradiction_count, 0) <= $11",
+		"embed <=> $1::vector >= $8",
+		"embed <=> $1::vector <= $9",
+		"COALESCE(useful_count, 0) >= $10",
+		"COALESCE(useful_count, 0) <= $11",
+		"COALESCE(access_count, 0) >= $12",
+		"COALESCE(access_count, 0) <= $13",
+		"COALESCE(feedback_count, 0) >= $14",
+		"COALESCE(feedback_count, 0) <= $15",
+		"COALESCE(contradiction_count, 0) >= $16",
+		"COALESCE(contradiction_count, 0) <= $17",
 		"THEN 0.0",
 		"ELSE COALESCE(contradiction_count, 0)::DOUBLE PRECISION /",
-		") <= $12",
-		"COALESCE(freshness_score, 1.0) >= $13",
+		") >= $18",
+		") <= $19",
+		"COALESCE(freshness_score, 1.0) >= $20",
+		"COALESCE(freshness_score, 1.0) <= $21",
 		"CASE",
 		"THEN 0.5",
 		"ELSE COALESCE(useful_count, 0)::DOUBLE PRECISION /",
 		"GREATEST(COALESCE(feedback_count, 0), 1)::DOUBLE PRECISION",
-		") >= $14",
-		"COALESCE(avg_relevance_feedback, 0.5) >= $15",
-		"COALESCE(source_session_quality_score, 0.5) >= $16",
-		"COALESCE(last_accessed_at, created_at) >= $17",
-		"COALESCE(last_accessed_at, created_at) <= $18",
-		"COALESCE(freshness_last_computed_at, created_at) >= $19",
-		"COALESCE(freshness_last_computed_at, created_at) <= $20",
+		") >= $22",
+		") <= $23",
+		"COALESCE(avg_relevance_feedback, 0.5) >= $24",
+		"COALESCE(avg_relevance_feedback, 0.5) <= $25",
+		"COALESCE(source_session_quality_score, 0.5) >= $26",
+		"COALESCE(source_session_quality_score, 0.5) <= $27",
+		"COALESCE(last_accessed_at, created_at) >= $28",
+		"COALESCE(last_accessed_at, created_at) <= $29",
+		"COALESCE(freshness_last_computed_at, created_at) >= $30",
+		"COALESCE(freshness_last_computed_at, created_at) <= $31",
 		"EXISTS (",
 		"link.status = 'active'",
-		"link.relation_type = $21",
+		"link.relation_type = $32",
 		"owner_user_id = $3",
 		"actor_user.user_id = $3",
 		"pm.project_id = project_id",
@@ -195,15 +241,26 @@ func queryWhereExpectedParams(input queryWhereExpectedParamsInput) []any {
 		[]string{"checkpoint"},
 		input.request.timeValues.createdAfter,
 		input.request.timeValues.createdBefore,
+		input.request.distanceMin,
+		input.request.distanceMax,
 		input.request.scoreValues.usefulCountMin,
+		input.request.scoreValues.usefulCountMax,
 		input.request.scoreValues.accessCountMin,
+		input.request.scoreValues.accessCountMax,
 		input.request.scoreValues.feedbackCountMin,
+		input.request.scoreValues.feedbackCountMax,
+		input.request.scoreValues.contradictionCountMin,
 		input.request.scoreValues.contradictionCountMax,
+		input.request.scoreValues.contradictionRatioMin,
 		input.request.scoreValues.contradictionRatioMax,
 		input.request.scoreValues.freshnessScoreMin,
+		input.request.scoreValues.freshnessScoreMax,
 		input.request.scoreValues.usefulFeedbackRatioMin,
+		input.request.scoreValues.usefulFeedbackRatioMax,
 		input.request.scoreValues.avgRelevanceFeedbackMin,
+		input.request.scoreValues.avgRelevanceFeedbackMax,
 		input.request.scoreValues.sourceSessionQualityMin,
+		input.request.scoreValues.sourceSessionQualityMax,
 		input.request.timeValues.lastAccessedAfter,
 		input.request.timeValues.lastAccessedBefore,
 		input.request.timeValues.freshnessComputedAfter,

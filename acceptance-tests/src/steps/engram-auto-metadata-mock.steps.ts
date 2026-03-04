@@ -58,33 +58,74 @@ function finalResultFrame(frames: McpFrame[]): McpFrame {
   return resultFrames[resultFrames.length - 1]
 }
 
+function retryDelayMs(response: APIResponse, responseBody: string): number {
+  const retryAfterHeader = response.headers()['retry-after']
+  if (retryAfterHeader) {
+    const seconds = Number.parseInt(retryAfterHeader, 10)
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return (seconds + 1) * 1000
+    }
+  }
+
+  const retryInMatch = responseBody.match(/retry in\s+(\d+)\s+seconds?/i)
+  if (retryInMatch) {
+    const seconds = Number.parseInt(retryInMatch[1], 10)
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return (seconds + 1) * 1000
+    }
+  }
+
+  return 1500
+}
+
 async function callMcpToolsCall(
   page: Page,
   name: string,
   args: Record<string, unknown>,
 ): Promise<McpFrame> {
-  const response = await page.request.post('/api/v1/mcp/stream', {
-    headers: {
-      Accept: 'text/event-stream, application/json',
-    },
-    data: {
-      jsonrpc: '2.0',
-      id: `acceptance-${Date.now()}`,
-      method: 'tools/call',
-      params: {
-        name,
-        arguments: args,
-      },
-    },
-  })
+  const maxAttempts = 4
+  let lastError: string | null = null
 
-  expect(response.ok()).toBeTruthy()
-  const frames = await parseMcpResponse(response)
-  const finalFrame = finalResultFrame(frames)
-  if (finalFrame.error) {
-    throw new Error(`MCP tool call failed: ${JSON.stringify(finalFrame.error)}`)
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await page.request.post('/api/v1/mcp/stream', {
+      headers: {
+        Accept: 'text/event-stream, application/json',
+      },
+      data: {
+        jsonrpc: '2.0',
+        id: `acceptance-${Date.now()}-${attempt}`,
+        method: 'tools/call',
+        params: {
+          name,
+          arguments: args,
+        },
+      },
+    })
+
+    if (response.ok()) {
+      const frames = await parseMcpResponse(response)
+      const finalFrame = finalResultFrame(frames)
+      if (finalFrame.error) {
+        throw new Error(`MCP tool call failed: ${JSON.stringify(finalFrame.error)}`)
+      }
+      return finalFrame
+    }
+
+    const responseBody = await response.text()
+    lastError = `HTTP ${response.status()}: ${responseBody}`
+    if (
+      (response.status() === 401 || response.status() === 429 || response.status() >= 500) &&
+      attempt < maxAttempts
+    ) {
+      await page.waitForTimeout(
+        response.status() === 429 ? retryDelayMs(response, responseBody) : 350 * attempt,
+      )
+      continue
+    }
+    break
   }
-  return finalFrame
+
+  throw new Error(`MCP tool call failed after ${maxAttempts} attempts (${lastError || 'unknown'})`)
 }
 
 When('I persist a conversation through MCP with empty metadata fields', async ({ page }) => {

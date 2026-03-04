@@ -179,7 +179,7 @@ func TestSessionAuthRoutesMountedWithDependencies(t *testing.T) {
 		t,
 		router,
 		"/ui/admin",
-		"/login",
+		"/app/admin/sessions",
 	)
 	assertRouteStatus(
 		t,

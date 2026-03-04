@@ -1,6 +1,8 @@
 import { createGlobalStyle } from 'styled-components'
 
 export const GlobalStyle = createGlobalStyle`
+  @import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;600;700&family=Nunito:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
   :root {
     --color-bg-soft: ${({ theme }) => theme.colors.bgSoft};
     --color-bg-strong: ${({ theme }) => theme.colors.bgStrong};
@@ -89,6 +91,7 @@ export const GlobalStyle = createGlobalStyle`
       radial-gradient(circle at 16% 14%, ${({ theme }) => theme.colors.bgGlowPrimary} 0%, transparent 32%),
       radial-gradient(circle at 84% 82%, ${({ theme }) => theme.colors.bgGlowSecondary} 0%, transparent 35%),
       linear-gradient(165deg, var(--color-bg-soft), var(--color-bg-strong));
+    overflow-x: hidden;
   }
 
   button,
@@ -100,13 +103,13 @@ export const GlobalStyle = createGlobalStyle`
 
   button {
     border: 1px solid transparent;
-    border-radius: ${({ theme }) => theme.radius.md};
+    border-radius: 999px;
     background: var(--color-accent);
-    color: #ffffff;
+    color: #032027;
     cursor: pointer;
-    padding: 0.35rem 0.65rem;
+    padding: 0.42rem 0.78rem;
     font-size: 0.82rem;
-    font-weight: 500;
+    font-weight: 700;
     display: inline-flex;
     align-items: center;
     justify-content: center;

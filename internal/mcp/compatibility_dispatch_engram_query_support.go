@@ -46,27 +46,52 @@ func buildEngramQueryDispatchRequest(
 }
 
 type engramQueryPayloadParts struct {
-	topK                    int
-	projectID               *string
-	tags                    []string
-	keywords                []string
-	createdAfter            *time.Time
-	createdBefore           *time.Time
-	usefulCountMin          *int
-	accessCountMin          *int
-	feedbackCountMin        *int
-	contradictionCountMax   *int
-	contradictionRatioMax   *float64
-	freshnessScoreMin       *float64
-	usefulFeedbackRatioMin  *float64
-	avgRelevanceFeedbackMin *float64
-	sourceSessionQualityMin *float64
-	lastAccessedAfter       *time.Time
-	lastAccessedBefore      *time.Time
-	freshnessComputedAfter  *time.Time
-	freshnessComputedBefore *time.Time
-	relationType            *models.EngramLinkRelationType
-	traceDepth              *int
+	topK                     int
+	projectID                *string
+	tags                     []string
+	keywords                 []string
+	createdAfter             *time.Time
+	createdBefore            *time.Time
+	distanceMin              *float64
+	distanceMax              *float64
+	usefulCountMin           *int
+	usefulCountMax           *int
+	accessCountMin           *int
+	accessCountMax           *int
+	feedbackCountMin         *int
+	feedbackCountMax         *int
+	contradictionCountMin    *int
+	contradictionCountMax    *int
+	contradictionRatioMin    *float64
+	contradictionRatioMax    *float64
+	freshnessScoreMin        *float64
+	freshnessScoreMax        *float64
+	usefulFeedbackRatioMin   *float64
+	usefulFeedbackRatioMax   *float64
+	avgRelevanceFeedbackMin  *float64
+	avgRelevanceFeedbackMax  *float64
+	sourceSessionQualityMin  *float64
+	sourceSessionQualityMax  *float64
+	denseScoreMin            *float64
+	denseScoreMax            *float64
+	lexicalOverlapScoreMin   *float64
+	lexicalOverlapScoreMax   *float64
+	feedbackSignalScoreMin   *float64
+	feedbackSignalScoreMax   *float64
+	engagementSignalScoreMin *float64
+	engagementSignalScoreMax *float64
+	freshnessSignalScoreMin  *float64
+	freshnessSignalScoreMax  *float64
+	authoritySignalScoreMin  *float64
+	authoritySignalScoreMax  *float64
+	compositeRankScoreMin    *float64
+	compositeRankScoreMax    *float64
+	lastAccessedAfter        *time.Time
+	lastAccessedBefore       *time.Time
+	freshnessComputedAfter   *time.Time
+	freshnessComputedBefore  *time.Time
+	relationType             *models.EngramLinkRelationType
+	traceDepth               *int
 }
 
 func parseRequiredQueryParam(params map[string]any) (string, *toolDispatchError) {
@@ -82,15 +107,15 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
 	}
-	tags, dispatchErr := parseOptionalParam(params, "tags", optionalStringArrayParam)
-	if dispatchErr != nil {
-		return engramQueryPayloadParts{}, dispatchErr
-	}
-	keywords, dispatchErr := parseOptionalParam(params, "keywords", optionalStringArrayParam)
+	scopeParts, dispatchErr := parseEngramQueryScopeParts(params)
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
 	}
 	temporalParts, dispatchErr := parseEngramQueryTemporalParts(params)
+	if dispatchErr != nil {
+		return engramQueryPayloadParts{}, dispatchErr
+	}
+	distanceParts, dispatchErr := parseEngramQueryDistanceParts(params)
 	if dispatchErr != nil {
 		return engramQueryPayloadParts{}, dispatchErr
 	}
@@ -103,28 +128,103 @@ func parseEngramQueryPayload(params map[string]any) (engramQueryPayloadParts, *t
 		return engramQueryPayloadParts{}, dispatchErr
 	}
 	return engramQueryPayloadParts{
-		topK:                    topK,
-		projectID:               optionalProjectIDParam(params, "project_id"),
-		tags:                    tags,
-		keywords:                keywords,
-		createdAfter:            temporalParts.createdAfter,
-		createdBefore:           temporalParts.createdBefore,
-		usefulCountMin:          engagementParts.usefulCountMin,
-		accessCountMin:          engagementParts.accessCountMin,
-		feedbackCountMin:        engagementParts.feedbackCountMin,
-		contradictionCountMax:   engagementParts.contradictionCountMax,
-		contradictionRatioMax:   engagementParts.contradictionRatioMax,
-		freshnessScoreMin:       engagementParts.freshnessScoreMin,
-		usefulFeedbackRatioMin:  engagementParts.usefulFeedbackRatioMin,
-		avgRelevanceFeedbackMin: engagementParts.avgRelevanceFeedbackMin,
-		sourceSessionQualityMin: engagementParts.sourceSessionQualityMin,
-		lastAccessedAfter:       temporalParts.lastAccessedAfter,
-		lastAccessedBefore:      temporalParts.lastAccessedBefore,
-		freshnessComputedAfter:  temporalParts.freshnessComputedAfter,
-		freshnessComputedBefore: temporalParts.freshnessComputedBefore,
-		relationType:            traceParts.relationType,
-		traceDepth:              traceParts.traceDepth,
+		topK:                     topK,
+		projectID:                scopeParts.projectID,
+		tags:                     scopeParts.tags,
+		keywords:                 scopeParts.keywords,
+		createdAfter:             temporalParts.createdAfter,
+		createdBefore:            temporalParts.createdBefore,
+		distanceMin:              distanceParts.distanceMin,
+		distanceMax:              distanceParts.distanceMax,
+		usefulCountMin:           engagementParts.usefulCountMin,
+		usefulCountMax:           engagementParts.usefulCountMax,
+		accessCountMin:           engagementParts.accessCountMin,
+		accessCountMax:           engagementParts.accessCountMax,
+		feedbackCountMin:         engagementParts.feedbackCountMin,
+		feedbackCountMax:         engagementParts.feedbackCountMax,
+		contradictionCountMin:    engagementParts.contradictionCountMin,
+		contradictionCountMax:    engagementParts.contradictionCountMax,
+		contradictionRatioMin:    engagementParts.contradictionRatioMin,
+		contradictionRatioMax:    engagementParts.contradictionRatioMax,
+		freshnessScoreMin:        engagementParts.freshnessScoreMin,
+		freshnessScoreMax:        engagementParts.freshnessScoreMax,
+		usefulFeedbackRatioMin:   engagementParts.usefulFeedbackRatioMin,
+		usefulFeedbackRatioMax:   engagementParts.usefulFeedbackRatioMax,
+		avgRelevanceFeedbackMin:  engagementParts.avgRelevanceFeedbackMin,
+		avgRelevanceFeedbackMax:  engagementParts.avgRelevanceFeedbackMax,
+		sourceSessionQualityMin:  engagementParts.sourceSessionQualityMin,
+		sourceSessionQualityMax:  engagementParts.sourceSessionQualityMax,
+		denseScoreMin:            engagementParts.denseScoreMin,
+		denseScoreMax:            engagementParts.denseScoreMax,
+		lexicalOverlapScoreMin:   engagementParts.lexicalOverlapScoreMin,
+		lexicalOverlapScoreMax:   engagementParts.lexicalOverlapScoreMax,
+		feedbackSignalScoreMin:   engagementParts.feedbackSignalScoreMin,
+		feedbackSignalScoreMax:   engagementParts.feedbackSignalScoreMax,
+		engagementSignalScoreMin: engagementParts.engagementSignalScoreMin,
+		engagementSignalScoreMax: engagementParts.engagementSignalScoreMax,
+		freshnessSignalScoreMin:  engagementParts.freshnessSignalScoreMin,
+		freshnessSignalScoreMax:  engagementParts.freshnessSignalScoreMax,
+		authoritySignalScoreMin:  engagementParts.authoritySignalScoreMin,
+		authoritySignalScoreMax:  engagementParts.authoritySignalScoreMax,
+		compositeRankScoreMin:    engagementParts.compositeRankScoreMin,
+		compositeRankScoreMax:    engagementParts.compositeRankScoreMax,
+		lastAccessedAfter:        temporalParts.lastAccessedAfter,
+		lastAccessedBefore:       temporalParts.lastAccessedBefore,
+		freshnessComputedAfter:   temporalParts.freshnessComputedAfter,
+		freshnessComputedBefore:  temporalParts.freshnessComputedBefore,
+		relationType:             traceParts.relationType,
+		traceDepth:               traceParts.traceDepth,
 	}, nil
+}
+
+type engramQueryScopeParts struct {
+	projectID *string
+	tags      []string
+	keywords  []string
+}
+
+func parseEngramQueryScopeParts(params map[string]any) (engramQueryScopeParts, *toolDispatchError) {
+	tags, dispatchErr := parseOptionalParam(params, "tags", optionalStringArrayParam)
+	if dispatchErr != nil {
+		return engramQueryScopeParts{}, dispatchErr
+	}
+	keywords, dispatchErr := parseOptionalParam(params, "keywords", optionalStringArrayParam)
+	if dispatchErr != nil {
+		return engramQueryScopeParts{}, dispatchErr
+	}
+	return engramQueryScopeParts{
+		projectID: optionalProjectIDParam(params, "project_id"),
+		tags:      tags,
+		keywords:  keywords,
+	}, nil
+}
+
+type engramQueryDistanceParts struct {
+	distanceMin *float64
+	distanceMax *float64
+}
+
+func parseEngramQueryDistanceParts(params map[string]any) (engramQueryDistanceParts, *toolDispatchError) {
+	distanceMin, dispatchErr := parseEngramQueryFloatWithValidator(
+		params,
+		"distance_min",
+		func(value float64) bool { return value >= 0 },
+	)
+	if dispatchErr != nil {
+		return engramQueryDistanceParts{}, dispatchErr
+	}
+	distanceMax, dispatchErr := parseEngramQueryFloatWithValidator(
+		params,
+		"distance_max",
+		func(value float64) bool { return value >= 0 },
+	)
+	if dispatchErr != nil {
+		return engramQueryDistanceParts{}, dispatchErr
+	}
+	if hasInvalidScoreWindow(distanceMin, distanceMax) {
+		return engramQueryDistanceParts{}, invalidParamError("distance_min")
+	}
+	return engramQueryDistanceParts{distanceMin: distanceMin, distanceMax: distanceMax}, nil
 }
 
 type engramQueryTemporalParts struct {
@@ -189,15 +289,38 @@ func temporalWindowSpecs(parts engramQueryTemporalParts) []temporalWindowSpec {
 }
 
 type engramQueryEngagementParts struct {
-	usefulCountMin          *int
-	accessCountMin          *int
-	feedbackCountMin        *int
-	contradictionCountMax   *int
-	contradictionRatioMax   *float64
-	freshnessScoreMin       *float64
-	usefulFeedbackRatioMin  *float64
-	avgRelevanceFeedbackMin *float64
-	sourceSessionQualityMin *float64
+	usefulCountMin           *int
+	usefulCountMax           *int
+	accessCountMin           *int
+	accessCountMax           *int
+	feedbackCountMin         *int
+	feedbackCountMax         *int
+	contradictionCountMin    *int
+	contradictionCountMax    *int
+	contradictionRatioMin    *float64
+	contradictionRatioMax    *float64
+	freshnessScoreMin        *float64
+	freshnessScoreMax        *float64
+	usefulFeedbackRatioMin   *float64
+	usefulFeedbackRatioMax   *float64
+	avgRelevanceFeedbackMin  *float64
+	avgRelevanceFeedbackMax  *float64
+	sourceSessionQualityMin  *float64
+	sourceSessionQualityMax  *float64
+	denseScoreMin            *float64
+	denseScoreMax            *float64
+	lexicalOverlapScoreMin   *float64
+	lexicalOverlapScoreMax   *float64
+	feedbackSignalScoreMin   *float64
+	feedbackSignalScoreMax   *float64
+	engagementSignalScoreMin *float64
+	engagementSignalScoreMax *float64
+	freshnessSignalScoreMin  *float64
+	freshnessSignalScoreMax  *float64
+	authoritySignalScoreMin  *float64
+	authoritySignalScoreMax  *float64
+	compositeRankScoreMin    *float64
+	compositeRankScoreMax    *float64
 }
 
 func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngagementParts, *toolDispatchError) {
@@ -209,94 +332,441 @@ func parseEngramQueryEngagementParts(params map[string]any) (engramQueryEngageme
 	if dispatchErr != nil {
 		return engramQueryEngagementParts{}, dispatchErr
 	}
-	return engramQueryEngagementParts{
-		usefulCountMin:          integerParts.usefulCountMin,
-		accessCountMin:          integerParts.accessCountMin,
-		feedbackCountMin:        integerParts.feedbackCountMin,
-		contradictionCountMax:   integerParts.contradictionCountMax,
-		contradictionRatioMax:   scoreParts.contradictionRatioMax,
-		freshnessScoreMin:       scoreParts.freshnessScoreMin,
-		usefulFeedbackRatioMin:  scoreParts.usefulFeedbackRatioMin,
-		avgRelevanceFeedbackMin: scoreParts.avgRelevanceFeedbackMin,
-		sourceSessionQualityMin: scoreParts.sourceSessionQualityMin,
-	}, nil
+	parts := engramQueryEngagementParts{
+		usefulCountMin:           integerParts.usefulCountMin,
+		usefulCountMax:           integerParts.usefulCountMax,
+		accessCountMin:           integerParts.accessCountMin,
+		accessCountMax:           integerParts.accessCountMax,
+		feedbackCountMin:         integerParts.feedbackCountMin,
+		feedbackCountMax:         integerParts.feedbackCountMax,
+		contradictionCountMin:    integerParts.contradictionCountMin,
+		contradictionCountMax:    integerParts.contradictionCountMax,
+		contradictionRatioMin:    scoreParts.contradictionRatioMin,
+		contradictionRatioMax:    scoreParts.contradictionRatioMax,
+		freshnessScoreMin:        scoreParts.freshnessScoreMin,
+		freshnessScoreMax:        scoreParts.freshnessScoreMax,
+		usefulFeedbackRatioMin:   scoreParts.usefulFeedbackRatioMin,
+		usefulFeedbackRatioMax:   scoreParts.usefulFeedbackRatioMax,
+		avgRelevanceFeedbackMin:  scoreParts.avgRelevanceFeedbackMin,
+		avgRelevanceFeedbackMax:  scoreParts.avgRelevanceFeedbackMax,
+		sourceSessionQualityMin:  scoreParts.sourceSessionQualityMin,
+		sourceSessionQualityMax:  scoreParts.sourceSessionQualityMax,
+		denseScoreMin:            scoreParts.denseScoreMin,
+		denseScoreMax:            scoreParts.denseScoreMax,
+		lexicalOverlapScoreMin:   scoreParts.lexicalOverlapScoreMin,
+		lexicalOverlapScoreMax:   scoreParts.lexicalOverlapScoreMax,
+		feedbackSignalScoreMin:   scoreParts.feedbackSignalScoreMin,
+		feedbackSignalScoreMax:   scoreParts.feedbackSignalScoreMax,
+		engagementSignalScoreMin: scoreParts.engagementSignalScoreMin,
+		engagementSignalScoreMax: scoreParts.engagementSignalScoreMax,
+		freshnessSignalScoreMin:  scoreParts.freshnessSignalScoreMin,
+		freshnessSignalScoreMax:  scoreParts.freshnessSignalScoreMax,
+		authoritySignalScoreMin:  scoreParts.authoritySignalScoreMin,
+		authoritySignalScoreMax:  scoreParts.authoritySignalScoreMax,
+		compositeRankScoreMin:    scoreParts.compositeRankScoreMin,
+		compositeRankScoreMax:    scoreParts.compositeRankScoreMax,
+	}
+	if dispatchErr := invalidQueryEngagementWindowError(parts); dispatchErr != nil {
+		return engramQueryEngagementParts{}, dispatchErr
+	}
+	return parts, nil
 }
 
 type engramQueryIntegerEngagementParts struct {
 	usefulCountMin        *int
+	usefulCountMax        *int
 	accessCountMin        *int
+	accessCountMax        *int
 	feedbackCountMin      *int
+	feedbackCountMax      *int
+	contradictionCountMin *int
 	contradictionCountMax *int
+}
+
+func invalidQueryEngagementWindowError(
+	parts engramQueryEngagementParts,
+) *toolDispatchError {
+	for _, check := range engramQueryEngagementWindowChecks(parts) {
+		if check.invalid {
+			return invalidParamError(check.param)
+		}
+	}
+	return nil
+}
+
+type engramQueryWindowCheck struct {
+	param   string
+	invalid bool
+}
+
+func engramQueryEngagementWindowChecks(parts engramQueryEngagementParts) []engramQueryWindowCheck {
+	return []engramQueryWindowCheck{
+		{param: "useful_count_min", invalid: hasInvalidIntWindow(parts.usefulCountMin, parts.usefulCountMax)},
+		{param: "access_count_min", invalid: hasInvalidIntWindow(parts.accessCountMin, parts.accessCountMax)},
+		{param: "feedback_count_min", invalid: hasInvalidIntWindow(parts.feedbackCountMin, parts.feedbackCountMax)},
+		{
+			param:   "contradiction_count_min",
+			invalid: hasInvalidIntWindow(parts.contradictionCountMin, parts.contradictionCountMax),
+		},
+		{
+			param:   "contradiction_feedback_ratio_min",
+			invalid: hasInvalidScoreWindow(parts.contradictionRatioMin, parts.contradictionRatioMax),
+		},
+		{param: "freshness_score_min", invalid: hasInvalidScoreWindow(parts.freshnessScoreMin, parts.freshnessScoreMax)},
+		{
+			param:   "useful_feedback_ratio_min",
+			invalid: hasInvalidScoreWindow(parts.usefulFeedbackRatioMin, parts.usefulFeedbackRatioMax),
+		},
+		{
+			param:   "avg_relevance_feedback_min",
+			invalid: hasInvalidScoreWindow(parts.avgRelevanceFeedbackMin, parts.avgRelevanceFeedbackMax),
+		},
+		{
+			param:   "source_session_quality_min",
+			invalid: hasInvalidScoreWindow(parts.sourceSessionQualityMin, parts.sourceSessionQualityMax),
+		},
+		{param: "dense_score_min", invalid: hasInvalidScoreWindow(parts.denseScoreMin, parts.denseScoreMax)},
+		{
+			param:   "lexical_overlap_score_min",
+			invalid: hasInvalidScoreWindow(parts.lexicalOverlapScoreMin, parts.lexicalOverlapScoreMax),
+		},
+		{
+			param:   "feedback_signal_score_min",
+			invalid: hasInvalidScoreWindow(parts.feedbackSignalScoreMin, parts.feedbackSignalScoreMax),
+		},
+		{
+			param:   "engagement_signal_score_min",
+			invalid: hasInvalidScoreWindow(parts.engagementSignalScoreMin, parts.engagementSignalScoreMax),
+		},
+		{
+			param:   "freshness_signal_score_min",
+			invalid: hasInvalidScoreWindow(parts.freshnessSignalScoreMin, parts.freshnessSignalScoreMax),
+		},
+		{
+			param:   "authority_signal_score_min",
+			invalid: hasInvalidScoreWindow(parts.authoritySignalScoreMin, parts.authoritySignalScoreMax),
+		},
+		{
+			param:   "composite_rank_score_min",
+			invalid: hasInvalidScoreWindow(parts.compositeRankScoreMin, parts.compositeRankScoreMax),
+		},
+	}
+}
+
+func hasInvalidIntWindow(minValue *int, maxValue *int) bool {
+	if minValue == nil || maxValue == nil {
+		return false
+	}
+	return *minValue > *maxValue
+}
+
+func hasInvalidScoreWindow(minValue *float64, maxValue *float64) bool {
+	if minValue == nil || maxValue == nil {
+		return false
+	}
+	return *minValue > *maxValue
 }
 
 func parseEngramQueryIntegerEngagementParts(
 	params map[string]any,
 ) (engramQueryIntegerEngagementParts, *toolDispatchError) {
-	usefulCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "useful_count_min")
-	if dispatchErr != nil {
-		return engramQueryIntegerEngagementParts{}, dispatchErr
+	return parseFieldParserSpecs(params, integerEngagementFieldSpecs())
+}
+
+type integerEngagementFieldSpec struct {
+	parse  func(map[string]any) (*int, *toolDispatchError)
+	assign func(*engramQueryIntegerEngagementParts, *int)
+}
+
+func integerEngagementFieldSpecs() []integerEngagementFieldSpec {
+	return []integerEngagementFieldSpec{
+		{
+			parse: nonNegativeIntFieldParser("useful_count_min"),
+			assign: func(parts *engramQueryIntegerEngagementParts, value *int) {
+				parts.usefulCountMin = value
+			},
+		},
+		{
+			parse: nonNegativeIntFieldParser("useful_count_max"),
+			assign: func(parts *engramQueryIntegerEngagementParts, value *int) {
+				parts.usefulCountMax = value
+			},
+		},
+		{
+			parse: nonNegativeIntFieldParser("access_count_min"),
+			assign: func(parts *engramQueryIntegerEngagementParts, value *int) {
+				parts.accessCountMin = value
+			},
+		},
+		{
+			parse: nonNegativeIntFieldParser("access_count_max"),
+			assign: func(parts *engramQueryIntegerEngagementParts, value *int) {
+				parts.accessCountMax = value
+			},
+		},
+		{
+			parse: nonNegativeIntFieldParser("feedback_count_min"),
+			assign: func(parts *engramQueryIntegerEngagementParts, value *int) {
+				parts.feedbackCountMin = value
+			},
+		},
+		{
+			parse: nonNegativeIntFieldParser("feedback_count_max"),
+			assign: func(parts *engramQueryIntegerEngagementParts, value *int) {
+				parts.feedbackCountMax = value
+			},
+		},
+		{
+			parse: nonNegativeIntFieldParser("contradiction_count_min"),
+			assign: func(parts *engramQueryIntegerEngagementParts, value *int) {
+				parts.contradictionCountMin = value
+			},
+		},
+		{
+			parse: nonNegativeIntFieldParser("contradiction_count_max"),
+			assign: func(parts *engramQueryIntegerEngagementParts, value *int) {
+				parts.contradictionCountMax = value
+			},
+		},
 	}
-	accessCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "access_count_min")
-	if dispatchErr != nil {
-		return engramQueryIntegerEngagementParts{}, dispatchErr
+}
+
+func nonNegativeIntFieldParser(paramName string) func(map[string]any) (*int, *toolDispatchError) {
+	return func(params map[string]any) (*int, *toolDispatchError) {
+		return parseEngramQueryNonNegativeIntPointer(params, paramName)
 	}
-	feedbackCountMin, dispatchErr := parseEngramQueryNonNegativeIntPointer(params, "feedback_count_min")
-	if dispatchErr != nil {
-		return engramQueryIntegerEngagementParts{}, dispatchErr
-	}
-	contradictionCountMax, dispatchErr := parseEngramQueryNonNegativeIntPointer(
-		params,
-		"contradiction_count_max",
-	)
-	if dispatchErr != nil {
-		return engramQueryIntegerEngagementParts{}, dispatchErr
-	}
-	return engramQueryIntegerEngagementParts{
-		usefulCountMin:        usefulCountMin,
-		accessCountMin:        accessCountMin,
-		feedbackCountMin:      feedbackCountMin,
-		contradictionCountMax: contradictionCountMax,
-	}, nil
 }
 
 type engramQueryScoreEngagementParts struct {
-	contradictionRatioMax   *float64
-	freshnessScoreMin       *float64
-	usefulFeedbackRatioMin  *float64
-	avgRelevanceFeedbackMin *float64
-	sourceSessionQualityMin *float64
+	contradictionRatioMin    *float64
+	contradictionRatioMax    *float64
+	freshnessScoreMin        *float64
+	freshnessScoreMax        *float64
+	usefulFeedbackRatioMin   *float64
+	usefulFeedbackRatioMax   *float64
+	avgRelevanceFeedbackMin  *float64
+	avgRelevanceFeedbackMax  *float64
+	sourceSessionQualityMin  *float64
+	sourceSessionQualityMax  *float64
+	denseScoreMin            *float64
+	denseScoreMax            *float64
+	lexicalOverlapScoreMin   *float64
+	lexicalOverlapScoreMax   *float64
+	feedbackSignalScoreMin   *float64
+	feedbackSignalScoreMax   *float64
+	engagementSignalScoreMin *float64
+	engagementSignalScoreMax *float64
+	freshnessSignalScoreMin  *float64
+	freshnessSignalScoreMax  *float64
+	authoritySignalScoreMin  *float64
+	authoritySignalScoreMax  *float64
+	compositeRankScoreMin    *float64
+	compositeRankScoreMax    *float64
 }
 
 func parseEngramQueryScoreEngagementParts(
 	params map[string]any,
 ) (engramQueryScoreEngagementParts, *toolDispatchError) {
-	contradictionRatioMax, dispatchErr := parseEngramQueryContradictionFeedbackRatioMax(params)
-	if dispatchErr != nil {
-		return engramQueryScoreEngagementParts{}, dispatchErr
+	return parseFieldParserSpecs(params, scoreEngagementFieldSpecs())
+}
+
+type scoreEngagementFieldSpec struct {
+	parse  func(map[string]any) (*float64, *toolDispatchError)
+	assign func(*engramQueryScoreEngagementParts, *float64)
+}
+
+var scoreEngagementFieldSpecsFixture = []scoreEngagementFieldSpec{
+	{
+		parse: parseEngramQueryContradictionFeedbackRatioMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.contradictionRatioMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryContradictionFeedbackRatioMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.contradictionRatioMax = value
+		},
+	},
+	{
+		parse: parseEngramQueryFreshnessScoreMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.freshnessScoreMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryFreshnessScoreMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.freshnessScoreMax = value
+		},
+	},
+	{
+		parse: parseEngramQueryUsefulFeedbackRatioMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.usefulFeedbackRatioMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryUsefulFeedbackRatioMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.usefulFeedbackRatioMax = value
+		},
+	},
+	{
+		parse: parseEngramQueryAvgRelevanceFeedbackMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.avgRelevanceFeedbackMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryAvgRelevanceFeedbackMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.avgRelevanceFeedbackMax = value
+		},
+	},
+	{
+		parse: parseEngramQuerySourceSessionQualityMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.sourceSessionQualityMin = value
+		},
+	},
+	{
+		parse: parseEngramQuerySourceSessionQualityMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.sourceSessionQualityMax = value
+		},
+	},
+	{
+		parse: parseEngramQueryDenseScoreMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.denseScoreMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryDenseScoreMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.denseScoreMax = value
+		},
+	},
+	{
+		parse: parseEngramQueryLexicalOverlapScoreMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.lexicalOverlapScoreMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryLexicalOverlapScoreMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.lexicalOverlapScoreMax = value
+		},
+	},
+	{
+		parse: parseEngramQueryFeedbackSignalScoreMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.feedbackSignalScoreMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryFeedbackSignalScoreMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.feedbackSignalScoreMax = value
+		},
+	},
+	{
+		parse: parseEngramQueryEngagementSignalScoreMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.engagementSignalScoreMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryEngagementSignalScoreMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.engagementSignalScoreMax = value
+		},
+	},
+	{
+		parse: parseEngramQueryFreshnessSignalScoreMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.freshnessSignalScoreMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryFreshnessSignalScoreMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.freshnessSignalScoreMax = value
+		},
+	},
+	{
+		parse: parseEngramQueryAuthoritySignalScoreMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.authoritySignalScoreMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryAuthoritySignalScoreMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.authoritySignalScoreMax = value
+		},
+	},
+	{
+		parse: parseEngramQueryCompositeRankScoreMin,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.compositeRankScoreMin = value
+		},
+	},
+	{
+		parse: parseEngramQueryCompositeRankScoreMax,
+		assign: func(parts *engramQueryScoreEngagementParts, value *float64) {
+			parts.compositeRankScoreMax = value
+		},
+	},
+}
+
+func scoreEngagementFieldSpecs() []scoreEngagementFieldSpec {
+	return append([]scoreEngagementFieldSpec(nil), scoreEngagementFieldSpecsFixture...)
+}
+
+type fieldParserSpec[T any, V any] interface {
+	parseField(map[string]any) (V, *toolDispatchError)
+	assignField(*T, V)
+}
+
+func parseFieldParserSpecs[T any, V any, S interface {
+	parseField(map[string]any) (V, *toolDispatchError)
+	assignField(*T, V)
+}](params map[string]any, specs []S) (T, *toolDispatchError) {
+	var parts T
+	for _, spec := range specs {
+		value, dispatchErr := spec.parseField(params)
+		if dispatchErr != nil {
+			var zero T
+			return zero, dispatchErr
+		}
+		spec.assignField(&parts, value)
 	}
-	freshnessScoreMin, dispatchErr := parseEngramQueryFreshnessScoreMin(params)
-	if dispatchErr != nil {
-		return engramQueryScoreEngagementParts{}, dispatchErr
-	}
-	usefulFeedbackRatioMin, dispatchErr := parseEngramQueryUsefulFeedbackRatioMin(params)
-	if dispatchErr != nil {
-		return engramQueryScoreEngagementParts{}, dispatchErr
-	}
-	avgRelevanceFeedbackMin, dispatchErr := parseEngramQueryAvgRelevanceFeedbackMin(params)
-	if dispatchErr != nil {
-		return engramQueryScoreEngagementParts{}, dispatchErr
-	}
-	sourceSessionQualityMin, dispatchErr := parseEngramQuerySourceSessionQualityMin(params)
-	if dispatchErr != nil {
-		return engramQueryScoreEngagementParts{}, dispatchErr
-	}
-	return engramQueryScoreEngagementParts{
-		contradictionRatioMax:   contradictionRatioMax,
-		freshnessScoreMin:       freshnessScoreMin,
-		usefulFeedbackRatioMin:  usefulFeedbackRatioMin,
-		avgRelevanceFeedbackMin: avgRelevanceFeedbackMin,
-		sourceSessionQualityMin: sourceSessionQualityMin,
-	}, nil
+	return parts, nil
+}
+
+func (spec integerEngagementFieldSpec) parseField(params map[string]any) (*int, *toolDispatchError) {
+	return spec.parse(params)
+}
+
+func (spec integerEngagementFieldSpec) assignField(
+	parts *engramQueryIntegerEngagementParts,
+	value *int,
+) {
+	spec.assign(parts, value)
+}
+
+func (spec scoreEngagementFieldSpec) parseField(params map[string]any) (*float64, *toolDispatchError) {
+	return spec.parse(params)
+}
+
+func (spec scoreEngagementFieldSpec) assignField(
+	parts *engramQueryScoreEngagementParts,
+	value *float64,
+) {
+	spec.assign(parts, value)
 }
 
 type engramQueryTraceParts struct {
@@ -355,28 +825,53 @@ func parseOptionalParam[T any](
 
 func (parts engramQueryPayloadParts) withQuery(query string) models.EngramQueryRequest {
 	return models.EngramQueryRequest{
-		Query:                   query,
-		TopK:                    parts.topK,
-		ProjectID:               parts.projectID,
-		Tags:                    parts.tags,
-		Keywords:                parts.keywords,
-		CreatedAfter:            parts.createdAfter,
-		CreatedBefore:           parts.createdBefore,
-		UsefulCountMin:          parts.usefulCountMin,
-		AccessCountMin:          parts.accessCountMin,
-		FeedbackCountMin:        parts.feedbackCountMin,
-		ContradictionCountMax:   parts.contradictionCountMax,
-		ContradictionRatioMax:   parts.contradictionRatioMax,
-		FreshnessScoreMin:       parts.freshnessScoreMin,
-		UsefulFeedbackRatioMin:  parts.usefulFeedbackRatioMin,
-		AvgRelevanceFeedbackMin: parts.avgRelevanceFeedbackMin,
-		SourceSessionQualityMin: parts.sourceSessionQualityMin,
-		LastAccessedAfter:       parts.lastAccessedAfter,
-		LastAccessedBefore:      parts.lastAccessedBefore,
-		FreshnessComputedAfter:  parts.freshnessComputedAfter,
-		FreshnessComputedBefore: parts.freshnessComputedBefore,
-		RelationType:            parts.relationType,
-		TraceDepth:              parts.traceDepth,
+		Query:                    query,
+		TopK:                     parts.topK,
+		ProjectID:                parts.projectID,
+		Tags:                     parts.tags,
+		Keywords:                 parts.keywords,
+		CreatedAfter:             parts.createdAfter,
+		CreatedBefore:            parts.createdBefore,
+		DistanceMin:              parts.distanceMin,
+		DistanceMax:              parts.distanceMax,
+		UsefulCountMin:           parts.usefulCountMin,
+		UsefulCountMax:           parts.usefulCountMax,
+		AccessCountMin:           parts.accessCountMin,
+		AccessCountMax:           parts.accessCountMax,
+		FeedbackCountMin:         parts.feedbackCountMin,
+		FeedbackCountMax:         parts.feedbackCountMax,
+		ContradictionCountMin:    parts.contradictionCountMin,
+		ContradictionCountMax:    parts.contradictionCountMax,
+		ContradictionRatioMin:    parts.contradictionRatioMin,
+		ContradictionRatioMax:    parts.contradictionRatioMax,
+		FreshnessScoreMin:        parts.freshnessScoreMin,
+		FreshnessScoreMax:        parts.freshnessScoreMax,
+		UsefulFeedbackRatioMin:   parts.usefulFeedbackRatioMin,
+		UsefulFeedbackRatioMax:   parts.usefulFeedbackRatioMax,
+		AvgRelevanceFeedbackMin:  parts.avgRelevanceFeedbackMin,
+		AvgRelevanceFeedbackMax:  parts.avgRelevanceFeedbackMax,
+		SourceSessionQualityMin:  parts.sourceSessionQualityMin,
+		SourceSessionQualityMax:  parts.sourceSessionQualityMax,
+		DenseScoreMin:            parts.denseScoreMin,
+		DenseScoreMax:            parts.denseScoreMax,
+		LexicalOverlapScoreMin:   parts.lexicalOverlapScoreMin,
+		LexicalOverlapScoreMax:   parts.lexicalOverlapScoreMax,
+		FeedbackSignalScoreMin:   parts.feedbackSignalScoreMin,
+		FeedbackSignalScoreMax:   parts.feedbackSignalScoreMax,
+		EngagementSignalScoreMin: parts.engagementSignalScoreMin,
+		EngagementSignalScoreMax: parts.engagementSignalScoreMax,
+		FreshnessSignalScoreMin:  parts.freshnessSignalScoreMin,
+		FreshnessSignalScoreMax:  parts.freshnessSignalScoreMax,
+		AuthoritySignalScoreMin:  parts.authoritySignalScoreMin,
+		AuthoritySignalScoreMax:  parts.authoritySignalScoreMax,
+		CompositeRankScoreMin:    parts.compositeRankScoreMin,
+		CompositeRankScoreMax:    parts.compositeRankScoreMax,
+		LastAccessedAfter:        parts.lastAccessedAfter,
+		LastAccessedBefore:       parts.lastAccessedBefore,
+		FreshnessComputedAfter:   parts.freshnessComputedAfter,
+		FreshnessComputedBefore:  parts.freshnessComputedBefore,
+		RelationType:             parts.relationType,
+		TraceDepth:               parts.traceDepth,
 	}
 }
 
@@ -481,27 +976,117 @@ func parseEngramQueryFreshnessScoreMin(params map[string]any) (*float64, *toolDi
 	return parseEngramQueryBoundedScoreMin(params, "freshness_score_min")
 }
 
+func parseEngramQueryFreshnessScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "freshness_score_max")
+}
+
 func parseEngramQueryContradictionFeedbackRatioMax(
 	params map[string]any,
 ) (*float64, *toolDispatchError) {
 	return parseEngramQueryBoundedScoreMin(params, "contradiction_feedback_ratio_max")
 }
 
+func parseEngramQueryContradictionFeedbackRatioMin(
+	params map[string]any,
+) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "contradiction_feedback_ratio_min")
+}
+
 func parseEngramQueryUsefulFeedbackRatioMin(params map[string]any) (*float64, *toolDispatchError) {
 	return parseEngramQueryBoundedScoreMin(params, "useful_feedback_ratio_min")
+}
+
+func parseEngramQueryUsefulFeedbackRatioMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "useful_feedback_ratio_max")
 }
 
 func parseEngramQueryAvgRelevanceFeedbackMin(params map[string]any) (*float64, *toolDispatchError) {
 	return parseEngramQueryBoundedScoreMin(params, "avg_relevance_feedback_min")
 }
 
+func parseEngramQueryAvgRelevanceFeedbackMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "avg_relevance_feedback_max")
+}
+
 func parseEngramQuerySourceSessionQualityMin(params map[string]any) (*float64, *toolDispatchError) {
 	return parseEngramQueryBoundedScoreMin(params, "source_session_quality_min")
+}
+
+func parseEngramQuerySourceSessionQualityMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "source_session_quality_max")
+}
+
+func parseEngramQueryDenseScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "dense_score_min")
+}
+
+func parseEngramQueryDenseScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "dense_score_max")
+}
+
+func parseEngramQueryLexicalOverlapScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "lexical_overlap_score_min")
+}
+
+func parseEngramQueryLexicalOverlapScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "lexical_overlap_score_max")
+}
+
+func parseEngramQueryFeedbackSignalScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "feedback_signal_score_min")
+}
+
+func parseEngramQueryFeedbackSignalScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "feedback_signal_score_max")
+}
+
+func parseEngramQueryEngagementSignalScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "engagement_signal_score_min")
+}
+
+func parseEngramQueryEngagementSignalScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "engagement_signal_score_max")
+}
+
+func parseEngramQueryFreshnessSignalScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "freshness_signal_score_min")
+}
+
+func parseEngramQueryFreshnessSignalScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "freshness_signal_score_max")
+}
+
+func parseEngramQueryAuthoritySignalScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "authority_signal_score_min")
+}
+
+func parseEngramQueryAuthoritySignalScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "authority_signal_score_max")
+}
+
+func parseEngramQueryCompositeRankScoreMin(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "composite_rank_score_min")
+}
+
+func parseEngramQueryCompositeRankScoreMax(params map[string]any) (*float64, *toolDispatchError) {
+	return parseEngramQueryBoundedScoreMin(params, "composite_rank_score_max")
 }
 
 func parseEngramQueryBoundedScoreMin(
 	params map[string]any,
 	key string,
+) (*float64, *toolDispatchError) {
+	return parseEngramQueryFloatWithValidator(
+		params,
+		key,
+		func(value float64) bool { return value >= 0 && value <= 1 },
+	)
+}
+
+func parseEngramQueryFloatWithValidator(
+	params map[string]any,
+	key string,
+	validator func(float64) bool,
 ) (*float64, *toolDispatchError) {
 	rawValue, found := optionalParamValue(params, key)
 	if !found {
@@ -511,10 +1096,7 @@ func parseEngramQueryBoundedScoreMin(
 	if !ok {
 		return nil, invalidParamError(key)
 	}
-	if parsed < 0 {
-		return nil, invalidParamError(key)
-	}
-	if parsed > 1 {
+	if !validator(parsed) {
 		return nil, invalidParamError(key)
 	}
 	copy := parsed
