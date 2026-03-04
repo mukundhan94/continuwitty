@@ -13,18 +13,18 @@ const Shell = styled.div`
   background:
     radial-gradient(circle at 20% 18%, rgba(94, 234, 212, 0.1), transparent 35%),
     radial-gradient(circle at 84% 78%, rgba(14, 116, 144, 0.24), transparent 42%),
-    linear-gradient(170deg, #081420 0%, #0b1f31 55%, #0c2d48 100%);
+    linear-gradient(170deg, var(--color-bg-soft) 0%, var(--color-bg-strong) 100%);
   color: var(--color-ink);
   overflow-x: hidden;
 
-  --mktg-deep: #081420;
-  --mktg-sea: #5eead4;
+  --mktg-deep: var(--color-bg-soft);
+  --mktg-sea: var(--color-accent);
   --mktg-cyan: #06b6d4;
   --mktg-teal: #0d9488;
   --mktg-mint: #a7f3d0;
   --mktg-glow: #ccfbf1;
-  --mktg-surface: rgba(8, 20, 32, 0.6);
-  --mktg-border: rgba(94, 234, 212, 0.12);
+  --mktg-surface: var(--surface-glass);
+  --mktg-border: var(--surface-glass-border);
 `
 
 const TopBar = styled.header`
@@ -36,9 +36,9 @@ const TopBar = styled.header`
   justify-content: space-between;
   gap: 1rem;
   padding: 0.8rem 1.25rem;
-  border-bottom: 1px solid rgba(94, 234, 212, 0.14);
+  border-bottom: 1px solid var(--surface-glass-border);
   backdrop-filter: blur(14px);
-  background: rgba(8, 20, 32, 0.78);
+  background: var(--surface-glass);
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
 `
 
@@ -80,7 +80,7 @@ const TopNav = styled.nav<{ $open?: boolean }>`
   a {
     text-decoration: none;
     color: var(--color-ink-muted);
-    border-radius: 999px;
+    border-radius: 9999px;
     padding: 0.35rem 0.7rem;
     border: 1px solid transparent;
     font-size: 0.82rem;
@@ -129,18 +129,18 @@ const HamburgerBtn = styled.button`
 const LoginLink = styled(NavLink)`
   text-decoration: none;
   color: #001822;
-  border-radius: 999px;
+  border-radius: 9999px;
   padding: 0.4rem 0.95rem;
   font-weight: 700;
   font-size: 0.8rem;
   letter-spacing: 0.03em;
-  background: linear-gradient(135deg, #06b6d4, #14b8a6, #5eead4);
+  background: var(--cta-gradient);
   box-shadow: 0 8px 30px rgba(94, 234, 212, 0.24);
   flex-shrink: 0;
-  transition: transform 200ms ease, box-shadow 200ms ease;
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out;
 
   &:hover {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
     box-shadow: 0 12px 36px rgba(94, 234, 212, 0.3);
   }
 `

@@ -38,16 +38,38 @@ export const LoginShell = styled.div`
   background:
     radial-gradient(circle at 18% 16%, rgba(94, 234, 212, 0.16), transparent 36%),
     radial-gradient(circle at 82% 76%, rgba(6, 182, 212, 0.2), transparent 40%);
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 200%;
+    height: 120px;
+    background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg"><path fill="rgba(94, 234, 212, 0.05)" d="M0,160L48,154.7C96,149,192,139,288,149.3C384,160,480,192,576,192C672,192,768,160,864,138.7C960,117,1056,107,1152,112C1248,117,1344,139,1392,149.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
+    background-size: 50% 100%;
+    animation: waveDrift 15s linear infinite;
+    pointer-events: none;
+  }
+  
+  @keyframes waveDrift {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
 `
 
 export const LoginCard = styled.div`
   width: min(520px, 100%);
   background: var(--surface-glass);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--surface-glass-border);
   border-radius: ${({ theme }) => theme.radius.xl};
   box-shadow: var(--shadow-card);
   padding: 1.7rem;
   animation: ${slideUp} 400ms ease;
+  z-index: 10;
 `
 
 export const AppShell = styled.div`
@@ -61,9 +83,10 @@ export const AppShell = styled.div`
 `
 
 export const TopNavShell = styled.header`
-  border-radius: 18px;
+  border-radius: 20px;
   padding: 0.68rem 0.92rem;
   background: var(--surface-glass);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--surface-glass-border);
   box-shadow: var(--shadow-nav);
   display: flex;
@@ -95,8 +118,9 @@ export const WorkspaceGrid = styled.main`
 
 export const GlassPane = styled.section`
   background: var(--surface-glass);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--surface-glass-border);
-  border-radius: ${({ theme }) => theme.radius.lg};
+  border-radius: 20px;
   box-shadow: var(--shadow-panel);
   min-height: 0;
   display: flex;
@@ -202,10 +226,17 @@ export const SessionItemButton = styled.button<{ $active: boolean }>`
   display: grid;
   gap: 0.12rem;
   padding: 0.5rem 0.6rem;
+  border-radius: 12px;
   transition:
-    background 140ms ease,
-    border-color 140ms ease,
-    box-shadow 140ms ease;
+    background 200ms ease-out,
+    border-color 200ms ease-out,
+    box-shadow 200ms ease-out,
+    transform 200ms ease-out;
+
+  &:hover {
+    transform: translateX(4px);
+    background: var(--color-input-bg);
+  }
 
   ${({ $active }) =>
     $active
@@ -226,20 +257,23 @@ export const SessionMeta = styled.span`
 `
 
 export const ChatMessageBubble = styled.article<{ $role: string }>`
-  border-radius: 14px;
-  padding: 0.6rem 0.75rem;
+  border-radius: 16px;
+  padding: 0.65rem 0.85rem;
   max-width: 95%;
-  animation: ${fadeIn} 190ms ease;
+  animation: ${fadeIn} 200ms ease-out;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 
   ${({ $role }) =>
     $role === 'user'
       ? css`
           align-self: flex-end;
           background: linear-gradient(140deg, var(--bubble-user-start), var(--bubble-user-end));
+          border-bottom-right-radius: 8px;
         `
       : css`
           align-self: flex-start;
           background: linear-gradient(130deg, var(--bubble-assistant-start), var(--bubble-assistant-end));
+          border-top-left-radius: 8px;
         `}
 `
 
@@ -305,7 +339,7 @@ export const MessageText = styled.div`
     font-family: var(--font-mono);
     font-size: 0.83rem;
     background: var(--markdown-code-bg);
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 0.1rem 0.3rem;
   }
 
@@ -393,10 +427,17 @@ export const SourceTitle = styled.p`
 export const EngramCard = styled.article`
   border: 1px solid var(--color-line);
   border-radius: 12px;
-  padding: 0.55rem;
+  padding: 0.65rem;
   background: var(--surface-raised);
   display: grid;
   gap: 0.35rem;
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out, border-color 200ms ease-out;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(13, 148, 136, 0.15);
+    border-color: var(--color-accent);
+  }
 `
 
 export const EngramTitle = styled.p`

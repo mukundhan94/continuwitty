@@ -79,12 +79,12 @@ const HeroCtas = styled.div`
 
 const Btn = styled(NavLink)<{ $primary?: boolean }>`
   text-decoration: none;
-  border-radius: 999px;
+  border-radius: 9999px;
   padding: 0.72rem 1.5rem;
   font-weight: ${({ $primary }) => ($primary ? 800 : 700)};
   font-size: 0.85rem;
   color: ${({ $primary }) => ($primary ? '#001821' : '#cffff8')};
-  background: ${({ $primary }) => ($primary ? 'linear-gradient(135deg, #06b6d4, #0d9488, #5eead4)' : 'rgba(94, 234, 212, 0.08)')};
+  background: ${({ $primary }) => ($primary ? 'var(--cta-gradient)' : 'rgba(94, 234, 212, 0.08)')};
   border: ${({ $primary }) => ($primary ? 'none' : '1px solid rgba(94, 234, 212, 0.22)')};
   box-shadow: ${({ $primary }) => ($primary ? '0 4px 24px rgba(94, 234, 212, 0.2)' : 'none')};
   transition: transform 200ms ease, box-shadow 200ms ease;

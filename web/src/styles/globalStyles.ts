@@ -45,6 +45,9 @@ export const GlobalStyle = createGlobalStyle`
     --shadow-nav: ${({ theme }) => theme.shadows.nav};
     --shadow-card: ${({ theme }) => theme.shadows.card};
     --shadow-modal: ${({ theme }) => theme.shadows.modal};
+    
+    --cta-gradient: linear-gradient(135deg, #0f766e, #0d9488, #2fb4a4);
+    --primary-gradient: linear-gradient(135deg, #155e75, #0e7490, #0f766e, #0d9488);
   }
 
   * {
@@ -60,12 +63,12 @@ export const GlobalStyle = createGlobalStyle`
 
   *::-webkit-scrollbar-track {
     background: var(--scrollbar-track);
-    border-radius: 999px;
+    border-radius: 9999px;
   }
 
   *::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
-    border-radius: 999px;
+    border-radius: 9999px;
     border: 2px solid var(--scrollbar-track);
   }
 
@@ -102,27 +105,30 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   button {
-    border: 1px solid transparent;
-    border-radius: 999px;
-    background: var(--color-accent);
-    color: #032027;
+    border: none;
+    border-radius: 9999px;
+    background: var(--cta-gradient);
+    color: #ffffff;
     cursor: pointer;
-    padding: 0.42rem 0.78rem;
-    font-size: 0.82rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
     font-weight: 700;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     line-height: 1.2;
+    box-shadow: 0 4px 12px rgba(15, 118, 110, 0.24);
     transition:
-      transform 160ms ease,
-      filter 160ms ease,
-      opacity 160ms ease;
+      transform 200ms ease-out,
+      filter 200ms ease-out,
+      box-shadow 200ms ease-out,
+      opacity 200ms ease-out;
   }
 
   button:hover {
     transform: translateY(-1px);
-    filter: brightness(1.05);
+    filter: brightness(1.04);
+    box-shadow: 0 6px 16px rgba(15, 118, 110, 0.3);
   }
 
   button:disabled {
@@ -136,12 +142,21 @@ export const GlobalStyle = createGlobalStyle`
   textarea,
   select {
     width: 100%;
-    border: 1px solid var(--color-line);
+    border: 1px solid transparent;
     border-radius: ${({ theme }) => theme.radius.md};
     padding: 0.55rem 0.7rem;
     background: var(--color-input-bg);
     color: var(--color-ink);
     line-height: 1.35;
+    transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
+  }
+  
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.18);
   }
 
   textarea {
@@ -159,6 +174,12 @@ export const GlobalStyle = createGlobalStyle`
   h1,
   h2,
   h3,
+  h4 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+  }
+  
   p {
     margin: 0;
   }

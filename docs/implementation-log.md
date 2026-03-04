@@ -2370,6 +2370,26 @@
    - result: `quality_gates=passed`
    - findings: none
 
+### 2026-03-04 (Phase 79: UI workflow polish + light theme softening)
+
+1. Applied UI consistency polish across workspace + marketing surfaces:
+   - normalized chip/pill radii to `9999px` and centralized CTA styling usage via `--cta-gradient`.
+   - aligned marketing shell to theme-driven surface tokens and subtle interaction transitions.
+2. Refined animation/diagram flow behavior:
+   - updated `FlowLoopDiagram` connector paths and flow-dot keyframes for cleaner continuous motion.
+3. Reduced light-theme glare:
+   - tuned `lightColors` in `web/src/styles/theme.ts` to darker/more neutral background and surface tones, lower glow intensities, and softer highlight/border opacities.
+   - reduced global CTA/focus glow intensity in `web/src/styles/globalStyles.ts`.
+4. Added favicon polish:
+   - linked `web/index.html` favicon metadata and added `web/public/favicon.svg` to remove browser console `favicon` 404 noise.
+5. Validation:
+   - `make web-check` (lint/test/build) passed after theme updates.
+   - Playwright MCP smoke checks run on `/`, `/pricing`, `/login`/`/app/workspace` and mobile navigation toggle behavior.
+6. CodeScene pre-commit safeguard:
+   - `pre_commit_code_health_safeguard(git_repository_path=/Users/mukundhan/Projects/engram)`
+   - result: `quality_gates=passed`
+   - findings: none
+
 ### 2026-03-01 (Code health uplift + ContinuWitty target-state guide)
 
 1. Prioritized code-health uplift to `10.0` for active chat service surface:

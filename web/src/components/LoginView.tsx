@@ -49,13 +49,13 @@ const AnimatedBar = styled.div`
   &::before {
     left: 0;
     background-image: radial-gradient(45px 10px at 50% 120%, rgba(94, 234, 212, 0.35), transparent 65%);
-    animation: login-wave 11s linear infinite;
+    animation: login-wave 12s linear infinite;
   }
 
   &::after {
     left: -8%;
     background-image: radial-gradient(45px 10px at 50% 120%, rgba(6, 182, 212, 0.3), transparent 65%);
-    animation: login-wave 16s linear infinite reverse;
+    animation: login-wave 15s linear infinite reverse;
   }
 
   @keyframes login-wave {

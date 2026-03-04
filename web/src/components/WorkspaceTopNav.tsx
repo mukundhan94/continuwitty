@@ -55,7 +55,7 @@ const NavStrip = styled.nav`
   gap: 0.3rem;
 
   a {
-    border-radius: 999px;
+    border-radius: 9999px;
     border: 1px solid transparent;
     padding: 0.32rem 0.6rem;
     text-decoration: none;

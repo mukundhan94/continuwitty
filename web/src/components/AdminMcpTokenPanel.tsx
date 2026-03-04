@@ -185,7 +185,7 @@ const Chip = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  border-radius: 999px;
+  border-radius: 9999px;
   border: 1px solid var(--color-line);
   padding: 0.2rem 0.5rem;
   background: var(--surface-mute);
@@ -193,7 +193,7 @@ const Chip = styled.span`
 
   button {
     border: 0;
-    border-radius: 999px;
+    border-radius: 9999px;
     width: 1rem;
     height: 1rem;
     line-height: 1rem;
@@ -305,13 +305,13 @@ function OptionChipSelector({
         {selectedValues.length === 0
           ? <Hint>{emptyChipLabel}</Hint>
           : selectedValues.map((value) => (
-              <Chip key={value}>
-                {value}
-                <button type="button" aria-label={`${removeLabelPrefix} ${value}`} onClick={() => onRemove(value)}>
-                  ×
-                </button>
-              </Chip>
-            ))}
+            <Chip key={value}>
+              {value}
+              <button type="button" aria-label={`${removeLabelPrefix} ${value}`} onClick={() => onRemove(value)}>
+                ×
+              </button>
+            </Chip>
+          ))}
       </ChipWrap>
     </Field>
   )
