@@ -42,24 +42,75 @@ export const test = bddBase.extend<AcceptanceFixtures>({
 
 export { expect }
 
+function resolveWebURL(pathname: string): string {
+  const base = acceptanceEnv.webBaseUrl.endsWith('/')
+    ? acceptanceEnv.webBaseUrl
+    : `${acceptanceEnv.webBaseUrl}/`
+  return new URL(pathname, base).toString()
+}
+
+function usernameField(page: Page) {
+  return page.getByLabel(/username/i)
+}
+
+function passwordField(page: Page) {
+  return page.getByLabel(/password/i)
+}
+
+function signInButton(page: Page) {
+  return page.getByRole('button', { name: /^Sign In$/i })
+}
+
+function logoutButton(page: Page) {
+  return page.getByRole('button', { name: /^Logout$/i })
+}
+
+export async function waitForAppShell(page: Page): Promise<void> {
+  await expect(page).toHaveURL(/\/app(\/|$)/, { timeout: 30000 })
+  await expect(logoutButton(page)).toBeVisible({ timeout: 30000 })
+}
+
 export async function openChatApplication(page: Page): Promise<void> {
-  await page.goto(acceptanceEnv.webBaseUrl, { waitUntil: 'networkidle' })
+  await page.goto(resolveWebURL('/login'), { waitUntil: 'domcontentloaded' })
+}
+
+async function ensureLoginForm(page: Page): Promise<void> {
+  await openChatApplication(page)
+
+  if (await logoutButton(page).isVisible({ timeout: 1500 }).catch(() => false)) {
+    return
+  }
+
+  const startFlowingLink = page.getByRole('link', { name: /start flowing|login/i }).first()
+  if (await startFlowingLink.isVisible({ timeout: 1200 }).catch(() => false)) {
+    await startFlowingLink.click()
+  }
+
+  await expect(usernameField(page)).toBeVisible({ timeout: 15000 })
+  await expect(passwordField(page)).toBeVisible({ timeout: 15000 })
+  await expect(signInButton(page)).toBeVisible({ timeout: 15000 })
+}
+
+export async function signInWithCredentials(
+  page: Page,
+  username: string,
+  password: string,
+): Promise<void> {
+  await ensureLoginForm(page)
+  await usernameField(page).fill(username)
+  await passwordField(page).fill(password)
+  await signInButton(page).click()
+  await waitForAppShell(page)
 }
 
 export async function signInIfNeeded(page: Page): Promise<void> {
   await openChatApplication(page)
 
-  const workbenchHeading = page.getByRole('heading', { name: /Memory Continuity Workbench/i })
-  if (await workbenchHeading.isVisible({ timeout: 1500 }).catch(() => false)) {
+  if (await logoutButton(page).isVisible({ timeout: 1500 }).catch(() => false)) {
     return
   }
 
-  await expect(page.getByLabel('Username')).toBeVisible()
-  await expect(page.getByLabel('Password')).toBeVisible()
-  await page.getByLabel('Username').fill(acceptanceEnv.username)
-  await page.getByLabel('Password').fill(acceptanceEnv.password)
-  await page.getByRole('button', { name: /^Sign In$/i }).click()
-  await expect(workbenchHeading).toBeVisible()
+  await signInWithCredentials(page, acceptanceEnv.username, acceptanceEnv.password)
 }
 
 const { Given, When, Then, After } = createBdd(test)

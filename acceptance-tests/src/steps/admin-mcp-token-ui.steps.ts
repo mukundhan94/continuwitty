@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test'
 
-import { When, Then, expect } from '../support/fixtures'
+import { When, Then, expect, signInWithCredentials, waitForAppShell } from '../support/fixtures'
+import { acceptanceEnv } from '../support/env'
 
 type OptionSnapshot = {
   tools: string[]
@@ -52,13 +53,10 @@ async function ensureAdminSession(page: Page) {
   const logoutButton = page.getByRole('button', { name: /^Logout$/i })
   if (await logoutButton.isVisible().catch(() => false)) {
     await logoutButton.click()
-    await expect(page.getByRole('button', { name: /^Sign In$/i })).toBeVisible({ timeout: 30000 })
   }
+  await page.context().clearCookies()
 
-  await page.getByLabel('Username').fill(adminUsername)
-  await page.getByLabel('Password').fill(adminPassword)
-  await page.getByRole('button', { name: /^Sign In$/i }).click()
-  await expect(page.getByRole('heading', { name: /Memory Continuity Workbench/i })).toBeVisible({ timeout: 30000 })
+  await signInWithCredentials(page, adminUsername, adminPassword)
 }
 
 async function installMcpTokenMocks(page: Page): Promise<void> {
@@ -135,11 +133,18 @@ async function installMcpTokenMocks(page: Page): Promise<void> {
   })
 }
 
+function adminTokensRoute(): string {
+  const base = acceptanceEnv.webBaseUrl.endsWith('/')
+    ? acceptanceEnv.webBaseUrl
+    : `${acceptanceEnv.webBaseUrl}/`
+  return new URL('/app/admin/tokens', base).toString()
+}
+
 When('I open the admin MCP token manager', async ({ page }) => {
   await ensureAdminSession(page)
   await installMcpTokenMocks(page)
-  await page.getByTestId('open-admin-token-panel').click()
-  await expect(page.getByTestId('admin-mcp-token-panel')).toBeVisible({ timeout: 30000 })
+  await page.goto(adminTokensRoute(), { waitUntil: 'domcontentloaded' })
+  await expect(page.getByTestId('admin-mcp-token-page')).toBeVisible({ timeout: 30000 })
 })
 
 Then('I should see selectable MCP tool and project options', async ({ page }) => {
@@ -202,7 +207,9 @@ Then('I should see the one-time MCP token value and a persisted token row', asyn
 })
 
 Then('I should not see the MCP Tokens admin action', async ({ page }) => {
-  await expect(page.getByTestId('open-admin-token-panel')).toHaveCount(0)
+  await page.goto(adminTokensRoute(), { waitUntil: 'domcontentloaded' })
+  await expect(page.getByTestId('admin-mcp-token-page')).toHaveCount(0)
+  await expect(page).toHaveURL(/\/app\/workspace(?:\?|$)/)
 })
 
 When('I create a viewer user for admin token UI checks', async ({ page }) => {
@@ -224,12 +231,11 @@ When('I sign out and sign in as the created viewer', async ({ page }) => {
     throw new Error('Missing created viewer username')
   }
 
-  await page.getByRole('button', { name: /^Logout$/i }).click()
-  await expect(page.getByRole('button', { name: /^Sign In$/i })).toBeVisible({ timeout: 30000 })
-
-  await page.getByLabel('Username').fill(createdViewerUsername)
-  await page.getByLabel('Password').fill(createdViewerPassword)
-  await page.getByRole('button', { name: /^Sign In$/i }).click()
-
-  await expect(page.getByRole('heading', { name: /Memory Continuity Workbench/i })).toBeVisible({ timeout: 30000 })
+  const logoutButton = page.getByRole('button', { name: /^Logout$/i })
+  if (await logoutButton.isVisible().catch(() => false)) {
+    await logoutButton.click()
+  }
+  await page.context().clearCookies()
+  await signInWithCredentials(page, createdViewerUsername, createdViewerPassword)
+  await waitForAppShell(page)
 })

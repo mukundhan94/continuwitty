@@ -12,6 +12,7 @@ const testDir = defineBddConfig({
 export default defineConfig({
   testDir,
   timeout: Math.max(acceptanceEnv.timeoutMs * 2, 90_000),
+  workers: 1,
   fullyParallel: false,
   outputDir: 'artifacts/test-results',
   reporter: [['list']],
