@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { createBdd, test as bddBase } from 'playwright-bdd'
 
 import { acceptanceEnv } from './env'
@@ -65,6 +65,22 @@ function logoutButton(page: Page) {
   return page.getByRole('button', { name: /^Logout$/i })
 }
 
+async function clickIfVisible(locator: Locator, timeout: number): Promise<boolean> {
+  if (!(await locator.isVisible({ timeout }).catch(() => false))) {
+    return false
+  }
+  await locator.click()
+  return true
+}
+
+async function hoverIfVisible(locator: Locator, timeout: number): Promise<boolean> {
+  if (!(await locator.isVisible({ timeout }).catch(() => false))) {
+    return false
+  }
+  await locator.hover()
+  return true
+}
+
 export async function waitForAppShell(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app(\/|$)/, { timeout: 30000 })
   await expect(logoutButton(page)).toBeVisible({ timeout: 30000 })
@@ -86,9 +102,16 @@ export async function ensureSessionCreatorVisible(page: Page): Promise<void> {
     return
   }
 
-  const showCreator = page.getByRole('button', { name: /Show Creator/i })
-  if (await showCreator.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await showCreator.click()
+  await clickIfVisible(page.getByRole('button', { name: /Show Sessions Panel/i }), 1200)
+
+  if (await titleInput.isVisible({ timeout: 800 }).catch(() => false)) {
+    return
+  }
+
+  await hoverIfVisible(page.getByTestId('dock-hotzone-left'), 1200)
+
+  if (!(await titleInput.isVisible({ timeout: 800 }).catch(() => false))) {
+    await clickIfVisible(page.getByRole('button', { name: /Show Creator/i }), 5000)
   }
   await expect(titleInput).toBeVisible({ timeout: 15000 })
 }

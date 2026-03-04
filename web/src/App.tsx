@@ -153,25 +153,171 @@ const WorkspaceHomeTitle = styled.h3`
   color: var(--color-ink);
 `
 
-const WorkspaceSplit = styled.div`
+const SessionDockWorkspace = styled.div`
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
-  gap: 0.9rem;
+  height: 100%;
+  position: relative;
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 20px;
+  background: var(--surface-glass);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+  isolation: isolate;
 
   @media (max-width: 1180px) {
-    grid-template-columns: 1fr;
+    height: auto;
+    display: grid;
+    gap: 0.8rem;
+    padding: 0.85rem;
+    overflow: visible;
   }
 `
 
-const WorkspaceMain = styled.div`
-  min-height: 0;
+const SessionDockControls = styled.div`
+  position: absolute;
+  top: 0.62rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.36rem 0.46rem;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+
+  button {
+    font-size: 0.74rem;
+    padding: 0.36rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-ink-muted);
+  }
+
+  button[aria-pressed='true'] {
+    border-color: var(--session-active-border);
+    color: var(--color-ink);
+    background: var(--session-active-bg);
+  }
+
+  @media (max-width: 1180px) {
+    position: static;
+    top: auto;
+    left: auto;
+    transform: none;
+    justify-self: start;
+    z-index: auto;
+    max-width: 100%;
+  }
+`
+
+const SessionDockHotZone = styled.div<{ $side: 'left' | 'right' }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  z-index: 9;
+  ${({ $side }) => ($side === 'left' ? 'left: 0;' : 'right: 0;')}
+
+  @media (max-width: 1180px) {
+    display: none;
+  }
+`
+
+const SessionDockPanel = styled.aside<{ $side: 'left' | 'right'; $visible: boolean }>`
+  position: absolute;
+  top: 0.62rem;
+  bottom: 0.62rem;
+  ${({ $side }) => ($side === 'left' ? 'left: 0;' : 'right: 0;')}
+  width: min(25rem, 35vw);
+  min-width: 300px;
+  padding: 0.8rem;
+  z-index: 11;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-glass) 96%, transparent);
+  border: 1px solid var(--surface-glass-border);
+  border-left: ${({ $side }) => ($side === 'right' ? '1px solid var(--surface-glass-border)' : 'none')};
+  border-right: ${({ $side }) => ($side === 'left' ? '1px solid var(--surface-glass-border)' : 'none')};
+  border-radius: ${({ $side }) => ($side === 'left' ? '0 20px 20px 0' : '20px 0 0 20px')};
+  pointer-events: ${({ $visible }) => ($visible ? 'auto' : 'none')};
+  opacity: ${({ $visible }) => ($visible ? 1 : 0)};
+  visibility: ${({ $visible }) => ($visible ? 'visible' : 'hidden')};
+  transform: ${({ $side, $visible }) =>
+    $side === 'left'
+      ? $visible
+        ? 'translateX(0)'
+        : 'translateX(-100%)'
+      : $visible
+        ? 'translateX(0)'
+        : 'translateX(100%)'};
+  transition:
+    transform 240ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 220ms ease,
+    visibility 0ms linear ${({ $visible }) => ($visible ? '0ms' : '220ms')};
+
+  @media (max-width: 1180px) {
+    position: static;
+    top: auto;
+    bottom: auto;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    pointer-events: auto;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: none;
+  }
+`
+
+const SessionDockPanelBody = styled.div`
+  min-height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: start;
+  gap: 0.8rem;
+`
+
+const SessionChatStage = styled.div`
+  min-height: 0;
+  height: 100%;
+  padding: 3.45rem 1rem 1rem;
+  display: grid;
+
+  @media (max-width: 1180px) {
+    height: auto;
+    padding: 0;
+  }
+`
+
+const SessionPrimaryColumn = styled.div`
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  align-content: start;
   gap: 0.9rem;
 
   @media (max-width: 1180px) {
-    grid-template-rows: auto;
+    height: auto;
+  }
+`
+
+const SessionPrimarySurface = styled.div`
+  min-height: 0;
+  height: 100%;
+  display: grid;
+
+  > * {
+    min-height: 0;
+  }
+
+  @media (max-width: 1180px) {
+    height: auto;
   }
 `
 
@@ -587,6 +733,9 @@ function AppScreen() {
   const [creatingSession, setCreatingSession] = useState(false)
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [selectedSessionIdState, setSelectedSessionId] = useState<string | null>(null)
+  const [leftDockPinned, setLeftDockPinned] = useState(false)
+  const [rightDockPinned, setRightDockPinned] = useState(false)
+  const [hoveredDockSide, setHoveredDockSide] = useState<'left' | 'right' | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [pendingUserText, setPendingUserText] = useState<string | null>(null)
@@ -635,6 +784,8 @@ function AppScreen() {
   const [notice, setNotice] = useState<string | null>(null)
 
   const selectedSessionId = sessionRouteInfo?.sessionId ?? selectedSessionIdState
+  const leftDockVisible = leftDockPinned || hoveredDockSide === 'left'
+  const rightDockVisible = rightDockPinned || hoveredDockSide === 'right'
 
   const selectedSession = useMemo(
     () => sessions.find((item) => item.session_id === selectedSessionId) || null,
@@ -646,6 +797,12 @@ function AppScreen() {
     setUsedEngramLinkIds([])
     setEngramTracePaths([])
   }, [selectedSessionId, setUsedEngramIds, setUsedEngramLinkIds, setEngramTracePaths])
+
+  useEffect(() => {
+    if (workspaceSection !== 'sessions') {
+      setHoveredDockSide(null)
+    }
+  }, [workspaceSection])
 
   const defaultSaveAbstract = useMemo(() => buildDefaultSaveAbstract(messages), [messages])
   const isAdmin = user?.role === 'admin'
@@ -942,6 +1099,57 @@ function AppScreen() {
     }
   }
 
+  const revealDockPanel = (side: 'left' | 'right') => {
+    setHoveredDockSide(side)
+  }
+
+  const hideDockHover = (side: 'left' | 'right') => {
+    setHoveredDockSide((active) => (active === side ? null : active))
+  }
+
+  const toggleDockPanel = (side: 'left' | 'right') => {
+    const isLeftSide = side === 'left'
+    const currentlyPinned = isLeftSide ? leftDockPinned : rightDockPinned
+    const nextPinnedState = !currentlyPinned
+
+    if (isLeftSide) {
+      setLeftDockPinned(nextPinnedState)
+    } else {
+      setRightDockPinned(nextPinnedState)
+    }
+
+    if (nextPinnedState) {
+      setHoveredDockSide(side)
+      return
+    }
+    hideDockHover(side)
+  }
+
+  const focusChatOnly = () => {
+    setLeftDockPinned(false)
+    setRightDockPinned(false)
+    setHoveredDockSide(null)
+  }
+
+  const openEngramPinsWorkspace = () => {
+    if (selectedSessionId) {
+      navigate(`/app/sessions/${selectedSessionId}/pins/engrams`)
+      return
+    }
+    navigate(APP_ROUTES.engrams)
+  }
+
+  const openDocumentPinsWorkspace = () => {
+    if (selectedSessionId) {
+      navigate(`/app/sessions/${selectedSessionId}/pins/documents`)
+      return
+    }
+    navigate(APP_ROUTES.documents)
+  }
+
+  const leftDockToggleLabel = leftDockPinned ? 'Hide Sessions Panel' : 'Show Sessions Panel'
+  const rightDockToggleLabel = rightDockPinned ? 'Hide Actions Panel' : 'Show Actions Panel'
+
   const renderWorkspaceHome = () => (
     <WorkspaceHomeGrid>
       <WorkspaceHomeCard>
@@ -1049,86 +1257,136 @@ function AppScreen() {
     )
   }
 
-  const renderSessionsWorkspace = () => (
-    <WorkspaceSplit>
-      <SessionSidebar
-        sessions={sessions}
+  const renderSessionDockControls = () => (
+    <SessionDockControls>
+      <button
+        type="button"
+        data-testid="dock-toggle-sessions"
+        aria-pressed={leftDockPinned}
+        onClick={() => toggleDockPanel('left')}
+      >
+        {leftDockToggleLabel}
+      </button>
+      <button
+        type="button"
+        data-testid="dock-toggle-actions"
+        aria-pressed={rightDockPinned}
+        onClick={() => toggleDockPanel('right')}
+      >
+        {rightDockToggleLabel}
+      </button>
+      <button
+        type="button"
+        data-testid="dock-focus-chat"
+        aria-pressed={!leftDockPinned && !rightDockPinned}
+        onClick={focusChatOnly}
+      >
+        Focus Chat
+      </button>
+    </SessionDockControls>
+  )
+
+  const renderSessionActionDock = () => (
+    <SessionDockPanelBody>
+      {isContinueRoute ? (
+        <RouteActionStrip>
+          <p>Continue this thread as a fresh session while carrying your pinned continuity context.</p>
+          <button type="button" onClick={() => void handleRouteContinue()} disabled={!selectedSessionId}>
+            Continue Session Now
+          </button>
+        </RouteActionStrip>
+      ) : null}
+      <RouteActionStrip>
+        <p>
+          Primary chat stays centered. Memory actions and panel routes are placed in this dock so the transcript
+          has more working space.
+        </p>
+        <SplitGrid>
+          <button type="button" onClick={openEngramPinsWorkspace}>
+            Engram Pins
+          </button>
+          <button type="button" onClick={openDocumentPinsWorkspace}>
+            Document Pins
+          </button>
+        </SplitGrid>
+      </RouteActionStrip>
+
+      <LinkedEngramPanel
         selectedSessionId={selectedSessionId}
-        projectId={projectId}
-        defaultProjectId={defaultProjectId}
-        settingDefaultProject={settingDefaultProject}
-        defaultProvider={WEB_CONFIG.defaultProvider}
-        defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
-        modelDefaults={WEB_CONFIG.defaultModelByProvider}
-        loading={sessionsLoading}
-        creating={creatingSession}
-        onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
-        onSetDefaultProject={handleSetDefaultProject}
-        onSelectSession={handleSelectSession}
-        onCreateSession={handleCreateSessionAndRoute}
+        loading={linkedEngramLoading}
+        error={linkedEngramError}
+        sourceEngramIds={linkedSourceEngramIds}
+        links={linkedEngramLinks}
+        suggestions={linkedEngramSuggestions}
+        pendingSuggestionKeys={pendingSuggestionKeys}
+        availableEngrams={availableEngrams}
+        sourceReferences={sourceReferences}
+        tracePaths={engramTracePaths}
+        onRefresh={refreshLinkInsights}
+        onAcceptSuggestion={handleAcceptSuggestion}
+        onRejectSuggestion={handleRejectSuggestion}
+      />
+    </SessionDockPanelBody>
+  )
+
+  const renderSessionsWorkspace = () => (
+    <SessionDockWorkspace onMouseLeave={() => setHoveredDockSide(null)}>
+      {renderSessionDockControls()}
+
+      <SessionDockHotZone
+        $side="left"
+        data-testid="dock-hotzone-left"
+        onMouseEnter={() => revealDockPanel('left')}
+      />
+      <SessionDockHotZone
+        $side="right"
+        data-testid="dock-hotzone-right"
+        onMouseEnter={() => revealDockPanel('right')}
       />
 
-      <WorkspaceMain>
-        <WorkspaceSingleColumn>
-          {isContinueRoute ? (
-            <RouteActionStrip>
-              <p>Continue this thread as a fresh session while carrying your pinned continuity context.</p>
-              <button type="button" onClick={() => void handleRouteContinue()} disabled={!selectedSessionId}>
-                Continue Session Now
-              </button>
-            </RouteActionStrip>
-          ) : null}
-          {renderSessionPrimarySurface()}
-        </WorkspaceSingleColumn>
-
-        <WorkspaceSupportGrid>
-          <RouteActionStrip>
-            <p>
-              Chat is intentionally focused. Memory graph, timeline, and pins are available via dedicated
-              routes and this quick-action strip.
-            </p>
-            <SplitGrid>
-              <button
-                type="button"
-                onClick={() =>
-                  selectedSessionId
-                    ? navigate(`/app/sessions/${selectedSessionId}/pins/engrams`)
-                    : navigate(APP_ROUTES.engrams)
-                }
-              >
-                Engram Pins
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  selectedSessionId
-                    ? navigate(`/app/sessions/${selectedSessionId}/pins/documents`)
-                    : navigate(APP_ROUTES.documents)
-                }
-              >
-                Document Pins
-              </button>
-            </SplitGrid>
-          </RouteActionStrip>
-
-          <LinkedEngramPanel
+      <SessionDockPanel
+        $side="left"
+        $visible={leftDockVisible}
+        data-testid="dock-panel-left"
+        onMouseEnter={() => revealDockPanel('left')}
+        onMouseLeave={() => hideDockHover('left')}
+      >
+        <SessionDockPanelBody>
+          <SessionSidebar
+            sessions={sessions}
             selectedSessionId={selectedSessionId}
-            loading={linkedEngramLoading}
-            error={linkedEngramError}
-            sourceEngramIds={linkedSourceEngramIds}
-            links={linkedEngramLinks}
-            suggestions={linkedEngramSuggestions}
-            pendingSuggestionKeys={pendingSuggestionKeys}
-            availableEngrams={availableEngrams}
-            sourceReferences={sourceReferences}
-            tracePaths={engramTracePaths}
-            onRefresh={refreshLinkInsights}
-            onAcceptSuggestion={handleAcceptSuggestion}
-            onRejectSuggestion={handleRejectSuggestion}
+            projectId={projectId}
+            defaultProjectId={defaultProjectId}
+            settingDefaultProject={settingDefaultProject}
+            defaultProvider={WEB_CONFIG.defaultProvider}
+            defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
+            modelDefaults={WEB_CONFIG.defaultModelByProvider}
+            loading={sessionsLoading}
+            creating={creatingSession}
+            onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
+            onSetDefaultProject={handleSetDefaultProject}
+            onSelectSession={handleSelectSession}
+            onCreateSession={handleCreateSessionAndRoute}
           />
-        </WorkspaceSupportGrid>
-      </WorkspaceMain>
-    </WorkspaceSplit>
+        </SessionDockPanelBody>
+      </SessionDockPanel>
+
+      <SessionDockPanel
+        $side="right"
+        $visible={rightDockVisible}
+        data-testid="dock-panel-right"
+        onMouseEnter={() => revealDockPanel('right')}
+        onMouseLeave={() => hideDockHover('right')}
+      >
+        {renderSessionActionDock()}
+      </SessionDockPanel>
+
+      <SessionChatStage>
+        <SessionPrimaryColumn>
+          <SessionPrimarySurface>{renderSessionPrimarySurface()}</SessionPrimarySurface>
+        </SessionPrimaryColumn>
+      </SessionChatStage>
+    </SessionDockWorkspace>
   )
 
   const renderEngramsWorkspace = () => (
