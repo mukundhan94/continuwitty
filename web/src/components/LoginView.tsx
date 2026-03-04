@@ -30,7 +30,7 @@ const HeroHeader = styled.div`
 
 const AnimatedBar = styled.div`
   position: relative;
-  height: 12px;
+  height: 20px;
   margin-top: 0.1rem;
   overflow: hidden;
 
@@ -39,23 +39,23 @@ const AnimatedBar = styled.div`
     content: '';
     position: absolute;
     top: 0;
-    width: 200%;
+    width: 220%;
     height: 100%;
     background-repeat: repeat-x;
-    background-size: 90px 12px;
-    opacity: 0.8;
+    background-size: 156px 20px;
+    opacity: 0.32;
   }
 
   &::before {
     left: 0;
-    background-image: radial-gradient(45px 10px at 50% 120%, rgba(94, 234, 212, 0.35), transparent 65%);
-    animation: login-wave 12s linear infinite;
+    background-image: radial-gradient(78px 18px at 50% 124%, rgba(94, 234, 212, 0.14), transparent 72%);
+    animation: login-wave 24s linear infinite;
   }
 
   &::after {
     left: -8%;
-    background-image: radial-gradient(45px 10px at 50% 120%, rgba(6, 182, 212, 0.3), transparent 65%);
-    animation: login-wave 15s linear infinite reverse;
+    background-image: radial-gradient(78px 18px at 50% 124%, rgba(6, 182, 212, 0.1), transparent 72%);
+    animation: login-wave 34s linear infinite reverse;
   }
 
   @keyframes login-wave {
@@ -64,6 +64,13 @@ const AnimatedBar = styled.div`
     }
     to {
       transform: translateX(-50%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &::before,
+    &::after {
+      animation: none;
     }
   }
 `

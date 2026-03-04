@@ -11,20 +11,22 @@ const Shell = styled.div`
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(circle at 20% 18%, rgba(94, 234, 212, 0.1), transparent 35%),
-    radial-gradient(circle at 84% 78%, rgba(14, 116, 144, 0.24), transparent 42%),
+    radial-gradient(circle at 20% 18%, ${({ theme }) => theme.colors.bgGlowPrimary} 0%, transparent 38%),
+    radial-gradient(circle at 84% 78%, ${({ theme }) => theme.colors.bgGlowSecondary} 0%, transparent 44%),
     linear-gradient(170deg, var(--color-bg-soft) 0%, var(--color-bg-strong) 100%);
   color: var(--color-ink);
   overflow-x: hidden;
 
   --mktg-deep: var(--color-bg-soft);
   --mktg-sea: var(--color-accent);
-  --mktg-cyan: #06b6d4;
-  --mktg-teal: #0d9488;
-  --mktg-mint: #a7f3d0;
-  --mktg-glow: #ccfbf1;
+  --mktg-cyan: var(--color-accent-alt);
+  --mktg-teal: var(--color-accent);
+  --mktg-mint: var(--session-active-border);
+  --mktg-glow: var(--session-active-bg);
   --mktg-surface: var(--surface-glass);
+  --mktg-surface-raised: var(--surface-raised);
   --mktg-border: var(--surface-glass-border);
+  --mktg-muted: var(--color-ink-muted);
 `
 
 const TopBar = styled.header`
@@ -39,7 +41,7 @@ const TopBar = styled.header`
   border-bottom: 1px solid var(--surface-glass-border);
   backdrop-filter: blur(14px);
   background: var(--surface-glass);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-nav);
 `
 
 const Brand = styled(NavLink)`
@@ -47,7 +49,7 @@ const Brand = styled(NavLink)`
   align-items: center;
   gap: 0.5rem;
   text-decoration: none;
-  color: #e8fffb;
+  color: var(--color-ink);
   flex-shrink: 0;
 
   strong {
@@ -63,7 +65,7 @@ const Brand = styled(NavLink)`
     font-family: var(--font-mono);
     font-size: 0.58rem;
     letter-spacing: 0.2em;
-    color: rgba(167, 243, 208, 0.72);
+    color: var(--color-ink-muted);
     text-transform: uppercase;
   }
 `
@@ -90,9 +92,9 @@ const TopNav = styled.nav<{ $open?: boolean }>`
 
   a:hover,
   a.active {
-    color: #dffff9;
-    border-color: rgba(94, 234, 212, 0.3);
-    background: rgba(94, 234, 212, 0.12);
+    color: var(--color-ink);
+    border-color: var(--session-active-border);
+    background: var(--session-active-bg);
   }
 
   @media (max-width: 768px) {
@@ -103,21 +105,21 @@ const TopNav = styled.nav<{ $open?: boolean }>`
     right: 0;
     flex-direction: column;
     padding: 0.75rem 1rem;
-    background: rgba(8, 20, 32, 0.95);
+    background: var(--surface-glass);
     backdrop-filter: blur(14px);
-    border-bottom: 1px solid rgba(94, 234, 212, 0.12);
+    border-bottom: 1px solid var(--surface-glass-border);
     gap: 0.2rem;
   }
 `
 
 const HamburgerBtn = styled.button`
   display: none;
-  background: none;
-  border: 1px solid rgba(94, 234, 212, 0.2);
+  background: transparent;
+  border: 1px solid var(--color-line);
   border-radius: 8px;
   padding: 0.4rem;
   cursor: pointer;
-  color: #5eead4;
+  color: var(--color-accent);
 
   @media (max-width: 768px) {
     display: flex;

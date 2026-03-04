@@ -58,7 +58,7 @@ interface IssuedTokensTableProps {
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(8, 12, 20, 0.48);
+  background: var(--modal-backdrop);
   backdrop-filter: blur(2px);
   display: grid;
   place-items: center;

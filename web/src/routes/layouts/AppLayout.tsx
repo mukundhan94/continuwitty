@@ -9,11 +9,12 @@ const Container = styled.main`
 `
 
 const Header = styled.header`
-  border: 1px solid rgba(94, 234, 212, 0.18);
+  border: 1px solid var(--surface-glass-border);
   border-radius: 18px;
   padding: 0.75rem 0.95rem;
-  background: rgba(8, 20, 32, 0.58);
+  background: var(--surface-glass);
   backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-panel);
   display: grid;
   gap: 0.2rem;
 `

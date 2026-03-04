@@ -1,8 +1,6 @@
 import { createGlobalStyle } from 'styled-components'
 
 export const GlobalStyle = createGlobalStyle`
-  @import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;600;700&family=Nunito:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
   :root {
     --color-bg-soft: ${({ theme }) => theme.colors.bgSoft};
     --color-bg-strong: ${({ theme }) => theme.colors.bgStrong};
@@ -18,6 +16,7 @@ export const GlobalStyle = createGlobalStyle`
     --surface-glass-border: ${({ theme }) => theme.colors.surfaceGlassBorder};
     --surface-raised: ${({ theme }) => theme.colors.surfaceRaised};
     --surface-raised-border: ${({ theme }) => theme.colors.surfaceRaisedBorder};
+    --surface-mute: ${({ theme }) => theme.colors.surfaceMute};
     --color-input-bg: ${({ theme }) => theme.colors.inputBg};
     --color-notice-bg: ${({ theme }) => theme.colors.noticeBg};
     --color-notice-border: ${({ theme }) => theme.colors.noticeBorder};
@@ -46,8 +45,8 @@ export const GlobalStyle = createGlobalStyle`
     --shadow-card: ${({ theme }) => theme.shadows.card};
     --shadow-modal: ${({ theme }) => theme.shadows.modal};
     
-    --cta-gradient: linear-gradient(135deg, #0f766e, #0d9488, #2fb4a4);
-    --primary-gradient: linear-gradient(135deg, #155e75, #0e7490, #0f766e, #0d9488);
+    --cta-gradient: linear-gradient(135deg, var(--color-accent-alt), var(--color-accent), var(--session-active-border));
+    --primary-gradient: linear-gradient(135deg, var(--color-accent-alt), var(--color-accent), var(--session-active-border));
   }
 
   * {
@@ -117,7 +116,7 @@ export const GlobalStyle = createGlobalStyle`
     align-items: center;
     justify-content: center;
     line-height: 1.2;
-    box-shadow: 0 4px 12px rgba(15, 118, 110, 0.24);
+    box-shadow: 0 5px 14px var(--session-active-shadow);
     transition:
       transform 200ms ease-out,
       filter 200ms ease-out,
@@ -128,7 +127,7 @@ export const GlobalStyle = createGlobalStyle`
   button:hover {
     transform: translateY(-1px);
     filter: brightness(1.04);
-    box-shadow: 0 6px 16px rgba(15, 118, 110, 0.3);
+    box-shadow: 0 8px 20px var(--session-active-shadow);
   }
 
   button:disabled {
@@ -156,7 +155,7 @@ export const GlobalStyle = createGlobalStyle`
   select:focus {
     outline: none;
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.18);
+    box-shadow: 0 0 0 2px var(--session-active-shadow);
   }
 
   textarea {

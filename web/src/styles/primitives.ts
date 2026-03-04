@@ -36,22 +36,35 @@ export const LoginShell = styled.div`
   place-items: center;
   padding: 1.5rem;
   background:
-    radial-gradient(circle at 18% 16%, rgba(94, 234, 212, 0.16), transparent 36%),
-    radial-gradient(circle at 82% 76%, rgba(6, 182, 212, 0.2), transparent 40%);
+    radial-gradient(circle at 18% 16%, ${({ theme }) => theme.colors.bgGlowPrimary} 0%, transparent 43%),
+    radial-gradient(circle at 82% 76%, ${({ theme }) => theme.colors.bgGlowSecondary} 0%, transparent 46%);
   position: relative;
   overflow: hidden;
 
+  &::before,
   &::after {
     content: '';
     position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 200%;
-    height: 120px;
-    background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg"><path fill="rgba(94, 234, 212, 0.05)" d="M0,160L48,154.7C96,149,192,139,288,149.3C384,160,480,192,576,192C672,192,768,160,864,138.7C960,117,1056,107,1152,112C1248,117,1344,139,1392,149.3L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
-    background-size: 50% 100%;
-    animation: waveDrift 15s linear infinite;
+    left: -10%;
+    bottom: -16px;
+    width: 220%;
+    height: 210px;
+    background-repeat: repeat-x;
+    background-size: 240px 210px;
     pointer-events: none;
+  }
+
+  &::before {
+    background-image: radial-gradient(120px 44px at 50% 114%, rgba(94, 234, 212, 0.08), transparent 74%);
+    animation: waveDrift 42s linear infinite reverse;
+    opacity: 0.28;
+  }
+
+  &::after {
+    left: 0;
+    background-image: radial-gradient(120px 44px at 50% 114%, rgba(6, 182, 212, 0.06), transparent 74%);
+    animation: waveDrift 30s linear infinite;
+    opacity: 0.22;
   }
   
   @keyframes waveDrift {
