@@ -7,6 +7,7 @@ import type {
   ChatDebugTrace,
   ChatMessage,
   ChatSession,
+  ChatSessionFormPayload,
   ChatSourceReference,
   ChatTimelineEvent,
   DocumentRecord,
@@ -741,6 +742,14 @@ function AppScreen() {
     setNotice,
   })
 
+  const handleCreateSessionAndRoute = async (payload: ChatSessionFormPayload) => {
+    const created = await handleCreateSession(payload)
+    if (!created) {
+      return
+    }
+    navigate(`/app/sessions/${created.session_id}/chat`)
+  }
+
   const { handleSend, handleRetry } = usePromptActions({
     composerText,
     lastPrompt,
@@ -1056,7 +1065,7 @@ function AppScreen() {
         onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
         onSetDefaultProject={handleSetDefaultProject}
         onSelectSession={handleSelectSession}
-        onCreateSession={handleCreateSession}
+        onCreateSession={handleCreateSessionAndRoute}
       />
 
       <WorkspaceMain>

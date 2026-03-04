@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import type { Route } from '@playwright/test'
 
-import { Given, Then, When, expect } from '../support/fixtures'
+import { Given, Then, When, ensureSessionCreatorVisible, expect } from '../support/fixtures'
 import { uniqueTitle, waitForAssistantResponseText } from '../support/chat'
 
 type MockLifecycleSession = {
@@ -240,11 +240,7 @@ When('I create a message-count autosave session named {string}', async ({ page, 
   const actualTitle = uniqueTitle(title)
   scenarioState.latestSessionTitle = actualTitle
 
-  const showCreator = page.getByRole('button', { name: /Show Creator/i })
-  if (await showCreator.isVisible().catch(() => false)) {
-    await showCreator.click()
-  }
-
+  await ensureSessionCreatorVisible(page)
   await page.locator('#session-title').fill(actualTitle)
   await page.locator('#autosave-enabled').check()
   await page.locator('#autosave-strategy').selectOption('message_count')
@@ -258,11 +254,7 @@ When('I create an autosave-off session named {string}', async ({ page, scenarioS
   const actualTitle = uniqueTitle(title)
   scenarioState.latestSessionTitle = actualTitle
 
-  const showCreator = page.getByRole('button', { name: /Show Creator/i })
-  if (await showCreator.isVisible().catch(() => false)) {
-    await showCreator.click()
-  }
-
+  await ensureSessionCreatorVisible(page)
   await page.locator('#session-title').fill(actualTitle)
   await page.locator('#autosave-enabled').uncheck()
   await page.getByRole('button', { name: /Create Session/i }).click()
@@ -278,6 +270,11 @@ When('I send a mocked lifecycle prompt {string}', async ({ page }, prompt: strin
 })
 
 Then('lifecycle timeline should show {int} autosave snapshots', async ({ page }, expectedCount: number) => {
+  const url = page.url()
+  const sessionMatch = url.match(/\/app\/sessions\/([^/]+)\//)
+  if (sessionMatch && !url.includes('/lifecycle')) {
+    await page.goto(`/app/sessions/${sessionMatch[1]}/lifecycle`, { waitUntil: 'domcontentloaded' })
+  }
   const timeline = page.getByTestId('chat-panel').locator('li').filter({ hasText: /Autosave Snapshot/i })
   await expect(timeline).toHaveCount(expectedCount)
 })

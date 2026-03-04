@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 
 import type { APIResponse, Page } from '@playwright/test'
 
-import { Then, When, expect } from '../support/fixtures'
+import { Then, When, ensureSessionCreatorVisible, expect } from '../support/fixtures'
 import { acceptanceEnv } from '../support/env'
 
 type ExportBundle = {
@@ -162,10 +162,7 @@ async function ensureProjectTransferPage(page: Page): Promise<void> {
 }
 
 async function setWorkspaceProject(page: Page, projectId: string): Promise<void> {
-  const showCreator = page.getByRole('button', { name: /Show Creator/i })
-  if (await showCreator.isVisible().catch(() => false)) {
-    await showCreator.click()
-  }
+  await ensureSessionCreatorVisible(page)
   await page.getByTestId('session-project-id-input').fill(projectId)
   await expect(page.getByTestId('session-project-id-input')).toHaveValue(projectId)
 }

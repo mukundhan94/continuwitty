@@ -70,6 +70,29 @@ export async function waitForAppShell(page: Page): Promise<void> {
   await expect(logoutButton(page)).toBeVisible({ timeout: 30000 })
 }
 
+export async function ensureSessionsWorkspace(page: Page): Promise<void> {
+  await waitForAppShell(page)
+  const isSessionsRoute = /\/app\/sessions(\/|$)/.test(page.url())
+  if (!isSessionsRoute) {
+    await page.goto(resolveWebURL('/app/sessions'), { waitUntil: 'domcontentloaded' })
+  }
+  await expect(page).toHaveURL(/\/app\/sessions(\/|$)/, { timeout: 30000 })
+}
+
+export async function ensureSessionCreatorVisible(page: Page): Promise<void> {
+  await ensureSessionsWorkspace(page)
+  const titleInput = page.locator('#session-title')
+  if (await titleInput.isVisible({ timeout: 500 }).catch(() => false)) {
+    return
+  }
+
+  const showCreator = page.getByRole('button', { name: /Show Creator/i })
+  if (await showCreator.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await showCreator.click()
+  }
+  await expect(titleInput).toBeVisible({ timeout: 15000 })
+}
+
 export async function openChatApplication(page: Page): Promise<void> {
   await page.goto(resolveWebURL('/login'), { waitUntil: 'domcontentloaded' })
 }
