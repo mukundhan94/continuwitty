@@ -279,9 +279,11 @@ func upsertContradictionAlertGroup(
 				contradiction_link_ids = EXCLUDED.contradiction_link_ids,
 				reason = EXCLUDED.reason,
 				confidence_score = EXCLUDED.confidence_score,
+				status = 'open',
 				detected_at = EXCLUDED.detected_at,
-				updated_at = EXCLUDED.updated_at
-			WHERE engram_contradiction_alerts.status = 'open'
+				updated_at = EXCLUDED.updated_at,
+				resolved_at = NULL,
+				resolved_by = NULL
 			RETURNING alert_id
 		)
 		SELECT EXISTS(SELECT 1 FROM upserted);

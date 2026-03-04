@@ -70,6 +70,41 @@ func TestRefreshContradictionAlertsUsesDefaults(t *testing.T) {
 	requireEqual(t, now, db.queryRowArgs[0][8].(time.Time))
 }
 
+func TestRefreshContradictionAlertsUpsertReopensResolvedAlerts(t *testing.T) {
+	sourceEngramID := uuid.MustParse("00000000-0000-0000-0000-00000000e111")
+	targetEngramID := uuid.MustParse("00000000-0000-0000-0000-00000000e112")
+	linkID := uuid.MustParse("00000000-0000-0000-0000-00000000e113")
+	db := &fakeQueryer{
+		queryRowsResult: &fakeRows{
+			values: [][]any{
+				{
+					"engram-vault",
+					sourceEngramID,
+					targetEngramID,
+					[]uuid.UUID{linkID},
+					0.71,
+				},
+			},
+		},
+		queryRowResult: &fakeRow{values: []any{true}},
+	}
+
+	_, err := RefreshContradictionAlerts(context.Background(), db, ContradictionAlertRefreshInput{})
+	requireNoError(t, err)
+
+	requireEqual(t, 1, len(db.queryRowSQL))
+	sql := db.queryRowSQL[0]
+	if !strings.Contains(sql, "status = 'open'") {
+		t.Fatalf("expected refresh upsert to reopen contradiction alerts, got %q", sql)
+	}
+	if !strings.Contains(sql, "resolved_at = NULL") || !strings.Contains(sql, "resolved_by = NULL") {
+		t.Fatalf("expected refresh upsert to clear resolver fields, got %q", sql)
+	}
+	if strings.Contains(sql, "WHERE engram_contradiction_alerts.status = 'open'") {
+		t.Fatalf("expected refresh upsert to update conflicts regardless of previous status, got %q", sql)
+	}
+}
+
 func TestListContradictionAlertsUsesFilters(t *testing.T) {
 	alertID := uuid.MustParse("00000000-0000-0000-0000-00000000e201")
 	sourceEngramID := uuid.MustParse("00000000-0000-0000-0000-00000000e202")
