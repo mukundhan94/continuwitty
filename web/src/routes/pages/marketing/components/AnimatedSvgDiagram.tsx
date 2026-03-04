@@ -41,12 +41,15 @@ export function AnimatedSvgDiagram({
   threshold = 0.2,
 }: AnimatedSvgDiagramProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const [visible, setVisible] = useState(false)
+  const [visible, setVisible] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  })
 
   useEffect(() => {
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (prefersReduced) {
-      setVisible(true)
+    if (visible) {
       return
     }
 
@@ -62,7 +65,7 @@ export function AnimatedSvgDiagram({
 
     if (ref.current) observer.observe(ref.current)
     return () => observer.disconnect()
-  }, [threshold])
+  }, [threshold, visible])
 
   // Forward the 'visible' class to the direct child so that &.visible CSS
   // selectors defined on diagram wrapper styled-components actually fire.

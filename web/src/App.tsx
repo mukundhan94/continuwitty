@@ -362,7 +362,7 @@ function AppScreen() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [creatingSession, setCreatingSession] = useState(false)
   const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [selectedSessionIdState, setSelectedSessionId] = useState<string | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [pendingUserText, setPendingUserText] = useState<string | null>(null)
@@ -406,6 +406,8 @@ function AppScreen() {
 
   const [notice, setNotice] = useState<string | null>(null)
 
+  const selectedSessionId = sessionRouteInfo?.sessionId ?? selectedSessionIdState
+
   const selectedSession = useMemo(
     () => sessions.find((item) => item.session_id === selectedSessionId) || null,
     [selectedSessionId, sessions],
@@ -416,16 +418,6 @@ function AppScreen() {
     setUsedEngramLinkIds([])
     setEngramTracePaths([])
   }, [selectedSessionId, setUsedEngramIds, setUsedEngramLinkIds, setEngramTracePaths])
-
-  useEffect(() => {
-    if (!sessionRouteInfo?.sessionId) {
-      return
-    }
-    if (sessionRouteInfo.sessionId === selectedSessionId) {
-      return
-    }
-    setSelectedSessionId(sessionRouteInfo.sessionId)
-  }, [sessionRouteInfo, selectedSessionId])
 
   const defaultSaveAbstract = useMemo(() => buildDefaultSaveAbstract(messages), [messages])
   const isAdmin = user?.role === 'admin'

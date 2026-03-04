@@ -348,6 +348,7 @@ interface LinkedEngramSuggestionActionsConfig {
 
 function useLinkedEngramSuggestionActions(config: LinkedEngramSuggestionActionsConfig) {
   const [pendingSuggestionKeys, setPendingSuggestionKeys] = useState<string[]>([])
+  const { describeError, refreshLinkInsights, setChatError, setNotice } = config
 
   const runSuggestionMutation = useCallback(
     async (suggestion: EngramLinkSuggestion, status: EngramLinkStatus) => {
@@ -358,15 +359,15 @@ function useLinkedEngramSuggestionActions(config: LinkedEngramSuggestionActionsC
           suggestion.source_engram_id,
           buildSuggestionCreatePayload(suggestion, status),
         )
-        config.setNotice(noticeForSuggestionStatus({ status, targetTitle: suggestion.target_title }))
-        await config.refreshLinkInsights()
+        setNotice(noticeForSuggestionStatus({ status, targetTitle: suggestion.target_title }))
+        await refreshLinkInsights()
       } catch (nextError) {
-        config.setChatError(config.describeError(nextError))
+        setChatError(describeError(nextError))
       } finally {
         setPendingSuggestionKeys((current) => removePendingKey({ current, key }))
       }
     },
-    [config],
+    [describeError, refreshLinkInsights, setChatError, setNotice],
   )
 
   const handleAcceptSuggestion = useCallback(
