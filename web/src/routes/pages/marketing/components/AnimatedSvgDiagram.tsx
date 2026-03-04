@@ -1,4 +1,13 @@
-import { Children, cloneElement, type ReactElement, type ReactNode, useEffect, useRef, useState } from 'react'
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import styled, { css } from 'styled-components'
 
 const Wrapper = styled.div<{ $visible: boolean }>`
@@ -59,14 +68,23 @@ export function AnimatedSvgDiagram({
   // selectors defined on diagram wrapper styled-components actually fire.
   // (styled-components v6 requires the class to live on the element itself,
   //  not just on an ancestor.)
-  const child = Children.only(children) as ReactElement
-  const childCls = [child.props.className as string | undefined, visible ? 'visible' : '']
+  const child = Children.only(children)
+  if (!isValidElement<{ className?: string }>(child)) {
+    return (
+      <Wrapper ref={ref} $visible={visible} className={className}>
+        {children}
+      </Wrapper>
+    )
+  }
+
+  const typedChild = child as ReactElement<{ className?: string }>
+  const childCls = [typedChild.props.className, visible ? 'visible' : '']
     .filter(Boolean)
     .join(' ')
 
   return (
     <Wrapper ref={ref} $visible={visible} className={className}>
-      {cloneElement(child, { className: childCls })}
+      {cloneElement(typedChild, { className: childCls })}
     </Wrapper>
   )
 }
