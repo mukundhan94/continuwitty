@@ -117,20 +117,22 @@ func benchmarkFilterByRankScoreBandsFullMatrix(b *testing.B, candidateCount int)
 	for i := 0; i < b.N; i++ {
 		filtered := filterByRankScoreBands(
 			rows,
-			&denseMin,
-			&denseMax,
-			&lexicalMin,
-			&lexicalMax,
-			&feedbackMin,
-			&feedbackMax,
-			&engagementMin,
-			&engagementMax,
-			&freshnessMin,
-			&freshnessMax,
-			&authorityMin,
-			&authorityMax,
-			&compositeMin,
-			&compositeMax,
+			rankScoreBandFilters{
+				denseScoreMin:          &denseMin,
+				denseScoreMax:          &denseMax,
+				lexicalOverlapScoreMin: &lexicalMin,
+				lexicalOverlapScoreMax: &lexicalMax,
+				feedbackSignalScoreMin: &feedbackMin,
+				feedbackSignalScoreMax: &feedbackMax,
+				engagementScoreMin:     &engagementMin,
+				engagementScoreMax:     &engagementMax,
+				freshnessScoreMin:      &freshnessMin,
+				freshnessScoreMax:      &freshnessMax,
+				authorityScoreMin:      &authorityMin,
+				authorityScoreMax:      &authorityMax,
+				compositeScoreMin:      &compositeMin,
+				compositeScoreMax:      &compositeMax,
+			},
 		)
 		benchmarkScoreBandFilterRowCount = len(filtered)
 	}

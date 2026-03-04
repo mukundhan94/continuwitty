@@ -81,19 +81,51 @@ func ListEngrams(ctx context.Context, db Queryer, input ListEngramsInput) ([]mod
 
 // QueryEngrams queries candidate rows by vector distance and reranks with lexical overlap.
 func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]models.EngramQueryResult, error) {
-	topK := input.Request.TopK
-	if topK <= 0 {
-		topK = 5
-	}
-
-	whereSQL, params := buildEngramQueryWhere(
-		input.Request,
-		input.ActorUserID,
-		input.QueryLiteral,
+	topK := normalizeQueryTopK(input.Request.TopK)
+	candidateRows, err := queryEngramCandidates(
+		ctx,
+		db,
+		queryEngramCandidatesInput{
+			request:      input.Request,
+			actorUserID:  input.ActorUserID,
+			queryLiteral: input.QueryLiteral,
+			topK:         topK,
+		},
 	)
-	candidateLimit := min(max(topK*4, topK), 200)
-	limitPlaceholder := pgxPlaceholder(len(params) + 1)
+	if err != nil {
+		return nil, err
+	}
+	rerankedRows := rerankByCombinedScore(
+		rerankRowsInput{
+			rows:  candidateRows,
+			query: input.Request.Query,
+			topK:  len(candidateRows),
+		},
+	)
+	filteredRows := filterByRankScoreBands(rerankedRows, scoreBandFiltersFromRequest(input.Request))
+	trimmedRows := trimRowsTopK(filteredRows, topK)
+	results := make([]models.EngramQueryResult, 0, len(trimmedRows))
+	for index, row := range trimmedRows {
+		row["rank_position"] = index + 1
+		results = append(results, mapEngramQueryResult(row))
+	}
+	return results, nil
+}
 
+type queryEngramCandidatesInput struct {
+	request      models.EngramQueryRequest
+	actorUserID  *uuid.UUID
+	queryLiteral string
+	topK         int
+}
+
+func queryEngramCandidates(
+	ctx context.Context,
+	db Queryer,
+	input queryEngramCandidatesInput,
+) ([]map[string]any, error) {
+	whereSQL, params := buildEngramQueryWhere(input.request, input.actorUserID, input.queryLiteral)
+	limitPlaceholder := pgxPlaceholder(len(params) + 1)
 	sql := fmt.Sprintf(
 		`
 		SELECT
@@ -123,14 +155,21 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 		whereSQL,
 		limitPlaceholder,
 	)
-	params = append(params, candidateLimit)
-
+	params = append(params, candidateLimitForTopK(input.topK))
 	rows, err := db.Query(ctx, sql, params...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	return scanEngramCandidateRows(rows)
+}
 
+func scanEngramCandidateRows(rows interface {
+	Next() bool
+	Scan(dest ...any) error
+	Close()
+	Err() error
+}) ([]map[string]any, error) {
 	candidateRows := make([]map[string]any, 0)
 	for rows.Next() {
 		candidate, scanErr := scanEngramCandidateRow(rows)
@@ -142,127 +181,116 @@ func QueryEngrams(ctx context.Context, db Queryer, input QueryEngramsInput) ([]m
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-
-	rerankedRows := rerankByCombinedScore(
-		rerankRowsInput{
-			rows:  candidateRows,
-			query: input.Request.Query,
-			topK:  len(candidateRows),
-		},
-	)
-	filteredRows := filterByRankScoreBands(
-		rerankedRows,
-		input.Request.DenseScoreMin,
-		input.Request.DenseScoreMax,
-		input.Request.LexicalOverlapScoreMin,
-		input.Request.LexicalOverlapScoreMax,
-		input.Request.FeedbackSignalScoreMin,
-		input.Request.FeedbackSignalScoreMax,
-		input.Request.EngagementSignalScoreMin,
-		input.Request.EngagementSignalScoreMax,
-		input.Request.FreshnessSignalScoreMin,
-		input.Request.FreshnessSignalScoreMax,
-		input.Request.AuthoritySignalScoreMin,
-		input.Request.AuthoritySignalScoreMax,
-		input.Request.CompositeRankScoreMin,
-		input.Request.CompositeRankScoreMax,
-	)
-	trimmedRows := trimRowsTopK(filteredRows, topK)
-	results := make([]models.EngramQueryResult, 0, len(trimmedRows))
-	for index, row := range trimmedRows {
-		row["rank_position"] = index + 1
-		results = append(results, mapEngramQueryResult(row))
-	}
-	return results, nil
+	return candidateRows, nil
 }
 
-func filterByRankScoreBands(
-	rows []map[string]any,
-	denseScoreMin *float64,
-	denseScoreMax *float64,
-	lexicalOverlapScoreMin *float64,
-	lexicalOverlapScoreMax *float64,
-	feedbackSignalScoreMin *float64,
-	feedbackSignalScoreMax *float64,
-	engagementSignalScoreMin *float64,
-	engagementSignalScoreMax *float64,
-	freshnessSignalScoreMin *float64,
-	freshnessSignalScoreMax *float64,
-	authoritySignalScoreMin *float64,
-	authoritySignalScoreMax *float64,
-	minScore *float64,
-	maxScore *float64,
-) []map[string]any {
-	if denseScoreMin == nil &&
-		denseScoreMax == nil &&
-		lexicalOverlapScoreMin == nil &&
-		lexicalOverlapScoreMax == nil &&
-		feedbackSignalScoreMin == nil &&
-		feedbackSignalScoreMax == nil &&
-		engagementSignalScoreMin == nil &&
-		engagementSignalScoreMax == nil &&
-		freshnessSignalScoreMin == nil &&
-		freshnessSignalScoreMax == nil &&
-		authoritySignalScoreMin == nil &&
-		authoritySignalScoreMax == nil &&
-		minScore == nil &&
-		maxScore == nil {
+func normalizeQueryTopK(topK int) int {
+	if topK <= 0 {
+		return 5
+	}
+	return topK
+}
+
+func candidateLimitForTopK(topK int) int {
+	return min(max(topK*4, topK), 200)
+}
+
+type rankScoreBandFilters struct {
+	denseScoreMin          *float64
+	denseScoreMax          *float64
+	lexicalOverlapScoreMin *float64
+	lexicalOverlapScoreMax *float64
+	feedbackSignalScoreMin *float64
+	feedbackSignalScoreMax *float64
+	engagementScoreMin     *float64
+	engagementScoreMax     *float64
+	freshnessScoreMin      *float64
+	freshnessScoreMax      *float64
+	authorityScoreMin      *float64
+	authorityScoreMax      *float64
+	compositeScoreMin      *float64
+	compositeScoreMax      *float64
+}
+
+func scoreBandFiltersFromRequest(payload models.EngramQueryRequest) rankScoreBandFilters {
+	return rankScoreBandFilters{
+		denseScoreMin:          payload.DenseScoreMin,
+		denseScoreMax:          payload.DenseScoreMax,
+		lexicalOverlapScoreMin: payload.LexicalOverlapScoreMin,
+		lexicalOverlapScoreMax: payload.LexicalOverlapScoreMax,
+		feedbackSignalScoreMin: payload.FeedbackSignalScoreMin,
+		feedbackSignalScoreMax: payload.FeedbackSignalScoreMax,
+		engagementScoreMin:     payload.EngagementSignalScoreMin,
+		engagementScoreMax:     payload.EngagementSignalScoreMax,
+		freshnessScoreMin:      payload.FreshnessSignalScoreMin,
+		freshnessScoreMax:      payload.FreshnessSignalScoreMax,
+		authorityScoreMin:      payload.AuthoritySignalScoreMin,
+		authorityScoreMax:      payload.AuthoritySignalScoreMax,
+		compositeScoreMin:      payload.CompositeRankScoreMin,
+		compositeScoreMax:      payload.CompositeRankScoreMax,
+	}
+}
+
+type rankScoreBand struct {
+	min   *float64
+	max   *float64
+	score func(map[string]any) float64
+}
+
+func (filters rankScoreBandFilters) scoreBands() []rankScoreBand {
+	return []rankScoreBand{
+		{min: filters.denseScoreMin, max: filters.denseScoreMax, score: denseScoreFromRow},
+		{min: filters.lexicalOverlapScoreMin, max: filters.lexicalOverlapScoreMax, score: lexicalOverlapScoreFromRow},
+		{min: filters.feedbackSignalScoreMin, max: filters.feedbackSignalScoreMax, score: feedbackSignalScoreFromRow},
+		{min: filters.engagementScoreMin, max: filters.engagementScoreMax, score: engagementSignalScoreFromRow},
+		{min: filters.freshnessScoreMin, max: filters.freshnessScoreMax, score: freshnessSignalScoreFromRow},
+		{min: filters.authorityScoreMin, max: filters.authorityScoreMax, score: authoritySignalScoreFromRow},
+		{min: filters.compositeScoreMin, max: filters.compositeScoreMax, score: compositeRankScoreFromRow},
+	}
+}
+
+func (filters rankScoreBandFilters) hasAnyBounds() bool {
+	for _, band := range filters.scoreBands() {
+		if band.min != nil || band.max != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func filterByRankScoreBands(rows []map[string]any, filters rankScoreBandFilters) []map[string]any {
+	if !filters.hasAnyBounds() {
 		return rows
 	}
+	scoreBands := filters.scoreBands()
 	filtered := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		denseScore := denseScoreFromRow(row)
-		if denseScoreMin != nil && denseScore < *denseScoreMin {
-			continue
-		}
-		if denseScoreMax != nil && denseScore > *denseScoreMax {
-			continue
-		}
-		lexicalScore := lexicalOverlapScoreFromRow(row)
-		if lexicalOverlapScoreMin != nil && lexicalScore < *lexicalOverlapScoreMin {
-			continue
-		}
-		if lexicalOverlapScoreMax != nil && lexicalScore > *lexicalOverlapScoreMax {
-			continue
-		}
-		feedbackSignal := feedbackSignalScoreFromRow(row)
-		if feedbackSignalScoreMin != nil && feedbackSignal < *feedbackSignalScoreMin {
-			continue
-		}
-		if feedbackSignalScoreMax != nil && feedbackSignal > *feedbackSignalScoreMax {
-			continue
-		}
-		engagementSignal := engagementSignalScoreFromRow(row)
-		if engagementSignalScoreMin != nil && engagementSignal < *engagementSignalScoreMin {
-			continue
-		}
-		if engagementSignalScoreMax != nil && engagementSignal > *engagementSignalScoreMax {
-			continue
-		}
-		freshnessSignal := freshnessSignalScoreFromRow(row)
-		if freshnessSignalScoreMin != nil && freshnessSignal < *freshnessSignalScoreMin {
-			continue
-		}
-		if freshnessSignalScoreMax != nil && freshnessSignal > *freshnessSignalScoreMax {
-			continue
-		}
-		authoritySignal := authoritySignalScoreFromRow(row)
-		if authoritySignalScoreMin != nil && authoritySignal < *authoritySignalScoreMin {
-			continue
-		}
-		if authoritySignalScoreMax != nil && authoritySignal > *authoritySignalScoreMax {
-			continue
-		}
-		score := compositeRankScoreFromRow(row)
-		if minScore != nil && score < *minScore {
-			continue
-		}
-		if maxScore != nil && score > *maxScore {
+		if !matchesAllScoreBands(row, scoreBands) {
 			continue
 		}
 		filtered = append(filtered, row)
 	}
 	return filtered
+}
+
+func matchesAllScoreBands(row map[string]any, scoreBands []rankScoreBand) bool {
+	for _, band := range scoreBands {
+		if !matchesRankScoreBand(row, band) {
+			return false
+		}
+	}
+	return true
+}
+
+func matchesRankScoreBand(row map[string]any, band rankScoreBand) bool {
+	score := band.score(row)
+	if band.min != nil && score < *band.min {
+		return false
+	}
+	if band.max != nil && score > *band.max {
+		return false
+	}
+	return true
 }
 
 func trimRowsTopK(rows []map[string]any, topK int) []map[string]any {

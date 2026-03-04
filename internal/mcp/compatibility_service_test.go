@@ -140,101 +140,47 @@ func TestCompatibilityServiceToolsListIncludesAuthorityFilterForEngramQuery(t *t
 	tool := findPublicToolByName(t, frame, "engram_query")
 	inputSchema := mapFromMap(t, tool, "inputSchema")
 	properties := mapFromMap(t, inputSchema, "properties")
-	if _, exists := properties["source_session_quality_min"]; !exists {
-		t.Fatalf("expected source_session_quality_min property in engram_query schema")
+	for _, property := range requiredEngramQueryProperties() {
+		if _, exists := properties[property]; !exists {
+			t.Fatalf("expected %s property in engram_query schema", property)
+		}
 	}
-	if _, exists := properties["avg_relevance_feedback_min"]; !exists {
-		t.Fatalf("expected avg_relevance_feedback_min property in engram_query schema")
-	}
-	if _, exists := properties["contradiction_count_max"]; !exists {
-		t.Fatalf("expected contradiction_count_max property in engram_query schema")
-	}
-	if _, exists := properties["contradiction_feedback_ratio_max"]; !exists {
-		t.Fatalf("expected contradiction_feedback_ratio_max property in engram_query schema")
-	}
-	if _, exists := properties["feedback_count_min"]; !exists {
-		t.Fatalf("expected feedback_count_min property in engram_query schema")
-	}
-	if _, exists := properties["feedback_count_max"]; !exists {
-		t.Fatalf("expected feedback_count_max property in engram_query schema")
-	}
-	if _, exists := properties["useful_count_min"]; !exists {
-		t.Fatalf("expected useful_count_min property in engram_query schema")
-	}
-	if _, exists := properties["useful_count_max"]; !exists {
-		t.Fatalf("expected useful_count_max property in engram_query schema")
-	}
-	if _, exists := properties["access_count_max"]; !exists {
-		t.Fatalf("expected access_count_max property in engram_query schema")
-	}
-	if _, exists := properties["freshness_score_max"]; !exists {
-		t.Fatalf("expected freshness_score_max property in engram_query schema")
-	}
-	if _, exists := properties["useful_feedback_ratio_min"]; !exists {
-		t.Fatalf("expected useful_feedback_ratio_min property in engram_query schema")
-	}
-	if _, exists := properties["source_session_quality_max"]; !exists {
-		t.Fatalf("expected source_session_quality_max property in engram_query schema")
-	}
-	if _, exists := properties["avg_relevance_feedback_max"]; !exists {
-		t.Fatalf("expected avg_relevance_feedback_max property in engram_query schema")
-	}
-	if _, exists := properties["useful_feedback_ratio_max"]; !exists {
-		t.Fatalf("expected useful_feedback_ratio_max property in engram_query schema")
-	}
-	if _, exists := properties["contradiction_feedback_ratio_min"]; !exists {
-		t.Fatalf("expected contradiction_feedback_ratio_min property in engram_query schema")
-	}
-	if _, exists := properties["contradiction_count_min"]; !exists {
-		t.Fatalf("expected contradiction_count_min property in engram_query schema")
-	}
-	if _, exists := properties["distance_max"]; !exists {
-		t.Fatalf("expected distance_max property in engram_query schema")
-	}
-	if _, exists := properties["distance_min"]; !exists {
-		t.Fatalf("expected distance_min property in engram_query schema")
-	}
-	if _, exists := properties["composite_rank_score_min"]; !exists {
-		t.Fatalf("expected composite_rank_score_min property in engram_query schema")
-	}
-	if _, exists := properties["composite_rank_score_max"]; !exists {
-		t.Fatalf("expected composite_rank_score_max property in engram_query schema")
-	}
-	if _, exists := properties["dense_score_min"]; !exists {
-		t.Fatalf("expected dense_score_min property in engram_query schema")
-	}
-	if _, exists := properties["dense_score_max"]; !exists {
-		t.Fatalf("expected dense_score_max property in engram_query schema")
-	}
-	if _, exists := properties["lexical_overlap_score_min"]; !exists {
-		t.Fatalf("expected lexical_overlap_score_min property in engram_query schema")
-	}
-	if _, exists := properties["lexical_overlap_score_max"]; !exists {
-		t.Fatalf("expected lexical_overlap_score_max property in engram_query schema")
-	}
-	if _, exists := properties["feedback_signal_score_min"]; !exists {
-		t.Fatalf("expected feedback_signal_score_min property in engram_query schema")
-	}
-	if _, exists := properties["feedback_signal_score_max"]; !exists {
-		t.Fatalf("expected feedback_signal_score_max property in engram_query schema")
-	}
-	if _, exists := properties["engagement_signal_score_min"]; !exists {
-		t.Fatalf("expected engagement_signal_score_min property in engram_query schema")
-	}
-	if _, exists := properties["engagement_signal_score_max"]; !exists {
-		t.Fatalf("expected engagement_signal_score_max property in engram_query schema")
-	}
-	if _, exists := properties["freshness_signal_score_min"]; !exists {
-		t.Fatalf("expected freshness_signal_score_min property in engram_query schema")
-	}
-	if _, exists := properties["freshness_signal_score_max"]; !exists {
-		t.Fatalf("expected freshness_signal_score_max property in engram_query schema")
-	}
-	if _, exists := properties["authority_signal_score_min"]; !exists {
-		t.Fatalf("expected authority_signal_score_min property in engram_query schema")
-	}
-	if _, exists := properties["authority_signal_score_max"]; !exists {
-		t.Fatalf("expected authority_signal_score_max property in engram_query schema")
+}
+
+func requiredEngramQueryProperties() []string {
+	return []string{
+		"source_session_quality_min",
+		"avg_relevance_feedback_min",
+		"contradiction_count_max",
+		"contradiction_feedback_ratio_max",
+		"feedback_count_min",
+		"feedback_count_max",
+		"useful_count_min",
+		"useful_count_max",
+		"access_count_max",
+		"freshness_score_max",
+		"useful_feedback_ratio_min",
+		"source_session_quality_max",
+		"avg_relevance_feedback_max",
+		"useful_feedback_ratio_max",
+		"contradiction_feedback_ratio_min",
+		"contradiction_count_min",
+		"distance_max",
+		"distance_min",
+		"composite_rank_score_min",
+		"composite_rank_score_max",
+		"dense_score_min",
+		"dense_score_max",
+		"lexical_overlap_score_min",
+		"lexical_overlap_score_max",
+		"feedback_signal_score_min",
+		"feedback_signal_score_max",
+		"engagement_signal_score_min",
+		"engagement_signal_score_max",
+		"freshness_signal_score_min",
+		"freshness_signal_score_max",
+		"authority_signal_score_min",
+		"authority_signal_score_max",
 	}
 }
 

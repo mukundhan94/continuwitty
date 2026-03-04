@@ -131,7 +131,9 @@ func TestListEngramsWithoutActorOmitsVisibilityClause(t *testing.T) {
 func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	projectID := "engram-vault"
-	db := buildQueryEngramsFixture(projectID)
+	db := buildNamedQueryEngramsFixture(
+		queryEngramFixtureInput{projectID: projectID, kind: queryEngramFixtureDefault},
+	)
 
 	results, err := QueryEngrams(
 		context.Background(),
@@ -190,388 +192,265 @@ func TestQueryEngramsBuildsQueryAndReranks(t *testing.T) {
 	)
 }
 
-func TestQueryEngramsAppliesCompositeRankScoreFilters(t *testing.T) {
+type scoreBandFilterCase struct {
+	name         string
+	title        string
+	min          float64
+	max          float64
+	fixtureKind  queryEngramFixtureKind
+	applyBounds  func(*models.EngramQueryRequest, *float64, *float64)
+	scoreFromRow func(models.EngramQueryResult) float64
+	scoreLabel   string
+}
+
+var scoreBandFilterCaseFixtures = []scoreBandFilterCase{
+	{
+		name:        "composite rank",
+		title:       "Lexical Match",
+		min:         0.7,
+		max:         0.8,
+		fixtureKind: queryEngramFixtureDefault,
+		applyBounds: func(request *models.EngramQueryRequest, min *float64, max *float64) {
+			request.CompositeRankScoreMin = min
+			request.CompositeRankScoreMax = max
+		},
+		scoreFromRow: func(result models.EngramQueryResult) float64 { return result.CompositeRankScore },
+		scoreLabel:   "composite rank",
+	},
+	{
+		name:        "dense",
+		title:       "Lexical Match",
+		min:         0.79,
+		max:         0.81,
+		fixtureKind: queryEngramFixtureDefault,
+		applyBounds: func(request *models.EngramQueryRequest, min *float64, max *float64) {
+			request.DenseScoreMin = min
+			request.DenseScoreMax = max
+		},
+		scoreFromRow: func(result models.EngramQueryResult) float64 { return result.DenseScore },
+		scoreLabel:   "dense",
+	},
+	{
+		name:        "lexical overlap",
+		title:       "Lexical Match",
+		min:         0.9,
+		max:         1.0,
+		fixtureKind: queryEngramFixtureDefault,
+		applyBounds: func(request *models.EngramQueryRequest, min *float64, max *float64) {
+			request.LexicalOverlapScoreMin = min
+			request.LexicalOverlapScoreMax = max
+		},
+		scoreFromRow: func(result models.EngramQueryResult) float64 { return result.LexicalOverlapScore },
+		scoreLabel:   "lexical overlap",
+	},
+	{
+		name:        "feedback signal",
+		title:       "Useful Signal Match",
+		min:         0.6,
+		max:         0.8,
+		fixtureKind: queryEngramFixtureFeedback,
+		applyBounds: func(request *models.EngramQueryRequest, min *float64, max *float64) {
+			request.FeedbackSignalScoreMin = min
+			request.FeedbackSignalScoreMax = max
+		},
+		scoreFromRow: func(result models.EngramQueryResult) float64 { return result.FeedbackSignalScore },
+		scoreLabel:   "feedback signal",
+	},
+	{
+		name:        "engagement signal",
+		title:       "Lexical Match",
+		min:         0.6,
+		max:         0.8,
+		fixtureKind: queryEngramFixtureDefault,
+		applyBounds: func(request *models.EngramQueryRequest, min *float64, max *float64) {
+			request.EngagementSignalScoreMin = min
+			request.EngagementSignalScoreMax = max
+		},
+		scoreFromRow: func(result models.EngramQueryResult) float64 { return result.EngagementSignalScore },
+		scoreLabel:   "engagement signal",
+	},
+	{
+		name:        "freshness signal",
+		title:       "Lexical Match",
+		min:         0.8,
+		max:         0.95,
+		fixtureKind: queryEngramFixtureDefault,
+		applyBounds: func(request *models.EngramQueryRequest, min *float64, max *float64) {
+			request.FreshnessSignalScoreMin = min
+			request.FreshnessSignalScoreMax = max
+		},
+		scoreFromRow: func(result models.EngramQueryResult) float64 { return result.FreshnessSignalScore },
+		scoreLabel:   "freshness signal",
+	},
+	{
+		name:        "authority signal",
+		title:       "Lexical Authority Match",
+		min:         0.45,
+		max:         0.55,
+		fixtureKind: queryEngramFixtureAuthority,
+		applyBounds: func(request *models.EngramQueryRequest, min *float64, max *float64) {
+			request.AuthoritySignalScoreMin = min
+			request.AuthoritySignalScoreMax = max
+		},
+		scoreFromRow: func(result models.EngramQueryResult) float64 { return result.AuthoritySignalScore },
+		scoreLabel:   "authority signal",
+	},
+}
+
+func TestQueryEngramsAppliesScoreBandFilters(t *testing.T) {
+	for _, testCase := range scoreBandFilterCaseFixtures {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			assertScoreBandFilterCase(t, testCase)
+		})
+	}
+}
+
+func assertScoreBandFilterCase(t *testing.T, testCase scoreBandFilterCase) {
+	t.Helper()
 	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	projectID := "engram-vault"
-	minScore := 0.7
-	maxScore := 0.8
-	db := buildQueryEngramsFixture(projectID)
-
+	db := buildNamedQueryEngramsFixture(
+		queryEngramFixtureInput{projectID: projectID, kind: testCase.fixtureKind},
+	)
+	request := models.EngramQueryRequest{
+		Query:     "durable checkpoint",
+		TopK:      2,
+		ProjectID: &projectID,
+	}
+	testCase.applyBounds(&request, &testCase.min, &testCase.max)
 	results, err := QueryEngrams(
 		context.Background(),
 		db,
 		QueryEngramsInput{
-			Request: models.EngramQueryRequest{
-				Query:                 "durable checkpoint",
-				TopK:                  2,
-				ProjectID:             &projectID,
-				CompositeRankScoreMin: &minScore,
-				CompositeRankScoreMax: &maxScore,
-			},
+			Request:      request,
 			QueryLiteral: "[0.1,0.2,0.3]",
 			ActorUserID:  &actorUserID,
 		},
 	)
 	requireNoError(t, err)
 	requireEqual(t, 1, len(results))
-	requireEqual(t, "Lexical Match", results[0].Title)
+	requireEqual(t, testCase.title, results[0].Title)
 	requireEqual(t, 1, results[0].RankPosition)
-	if results[0].CompositeRankScore < minScore {
-		t.Fatalf("expected composite score >= %v, got %v", minScore, results[0].CompositeRankScore)
+	score := testCase.scoreFromRow(results[0])
+	if score < testCase.min {
+		t.Fatalf("expected %s >= %v, got %v", testCase.scoreLabel, testCase.min, score)
 	}
-	if results[0].CompositeRankScore > maxScore {
-		t.Fatalf("expected composite score <= %v, got %v", maxScore, results[0].CompositeRankScore)
-	}
-}
-
-func TestQueryEngramsAppliesDenseScoreFilters(t *testing.T) {
-	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	projectID := "engram-vault"
-	minDenseScore := 0.79
-	maxDenseScore := 0.81
-	db := buildQueryEngramsFixture(projectID)
-
-	results, err := QueryEngrams(
-		context.Background(),
-		db,
-		QueryEngramsInput{
-			Request: models.EngramQueryRequest{
-				Query:         "durable checkpoint",
-				TopK:          2,
-				ProjectID:     &projectID,
-				DenseScoreMin: &minDenseScore,
-				DenseScoreMax: &maxDenseScore,
-			},
-			QueryLiteral: "[0.1,0.2,0.3]",
-			ActorUserID:  &actorUserID,
-		},
-	)
-	requireNoError(t, err)
-	requireEqual(t, 1, len(results))
-	requireEqual(t, "Lexical Match", results[0].Title)
-	if results[0].DenseScore < minDenseScore {
-		t.Fatalf("expected dense score >= %v, got %v", minDenseScore, results[0].DenseScore)
-	}
-	if results[0].DenseScore > maxDenseScore {
-		t.Fatalf("expected dense score <= %v, got %v", maxDenseScore, results[0].DenseScore)
+	if score > testCase.max {
+		t.Fatalf("expected %s <= %v, got %v", testCase.scoreLabel, testCase.max, score)
 	}
 }
 
-func TestQueryEngramsAppliesLexicalOverlapScoreFilters(t *testing.T) {
-	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	projectID := "engram-vault"
-	minLexicalScore := 0.9
-	maxLexicalScore := 1.0
-	db := buildQueryEngramsFixture(projectID)
+type queryEngramFixtureKind int
 
-	results, err := QueryEngrams(
-		context.Background(),
-		db,
-		QueryEngramsInput{
-			Request: models.EngramQueryRequest{
-				Query:                  "durable checkpoint",
-				TopK:                   2,
-				ProjectID:              &projectID,
-				LexicalOverlapScoreMin: &minLexicalScore,
-				LexicalOverlapScoreMax: &maxLexicalScore,
-			},
-			QueryLiteral: "[0.1,0.2,0.3]",
-			ActorUserID:  &actorUserID,
-		},
-	)
-	requireNoError(t, err)
-	requireEqual(t, 1, len(results))
-	requireEqual(t, "Lexical Match", results[0].Title)
-	if results[0].LexicalOverlapScore < minLexicalScore {
-		t.Fatalf("expected lexical overlap >= %v, got %v", minLexicalScore, results[0].LexicalOverlapScore)
-	}
-	if results[0].LexicalOverlapScore > maxLexicalScore {
-		t.Fatalf("expected lexical overlap <= %v, got %v", maxLexicalScore, results[0].LexicalOverlapScore)
-	}
+const (
+	queryEngramFixtureDefault queryEngramFixtureKind = iota + 1
+	queryEngramFixtureAuthority
+	queryEngramFixtureFeedback
+)
+
+type queryEngramFixtureInput struct {
+	projectID string
+	kind      queryEngramFixtureKind
 }
 
-func TestQueryEngramsAppliesFeedbackSignalScoreFilters(t *testing.T) {
-	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	projectID := "engram-vault"
-	minFeedbackSignal := 0.6
-	maxFeedbackSignal := 0.8
-	db := buildFeedbackScoreQueryEngramsFixture(projectID)
-
-	results, err := QueryEngrams(
-		context.Background(),
-		db,
-		QueryEngramsInput{
-			Request: models.EngramQueryRequest{
-				Query:                  "durable checkpoint",
-				TopK:                   2,
-				ProjectID:              &projectID,
-				FeedbackSignalScoreMin: &minFeedbackSignal,
-				FeedbackSignalScoreMax: &maxFeedbackSignal,
-			},
-			QueryLiteral: "[0.1,0.2,0.3]",
-			ActorUserID:  &actorUserID,
-		},
-	)
-	requireNoError(t, err)
-	requireEqual(t, 1, len(results))
-	requireEqual(t, "Useful Signal Match", results[0].Title)
-	if results[0].FeedbackSignalScore < minFeedbackSignal {
-		t.Fatalf("expected feedback signal >= %v, got %v", minFeedbackSignal, results[0].FeedbackSignalScore)
-	}
-	if results[0].FeedbackSignalScore > maxFeedbackSignal {
-		t.Fatalf("expected feedback signal <= %v, got %v", maxFeedbackSignal, results[0].FeedbackSignalScore)
-	}
-}
-
-func TestQueryEngramsAppliesEngagementSignalScoreFilters(t *testing.T) {
-	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	projectID := "engram-vault"
-	minEngagementSignal := 0.6
-	maxEngagementSignal := 0.8
-	db := buildQueryEngramsFixture(projectID)
-
-	results, err := QueryEngrams(
-		context.Background(),
-		db,
-		QueryEngramsInput{
-			Request: models.EngramQueryRequest{
-				Query:                    "durable checkpoint",
-				TopK:                     2,
-				ProjectID:                &projectID,
-				EngagementSignalScoreMin: &minEngagementSignal,
-				EngagementSignalScoreMax: &maxEngagementSignal,
-			},
-			QueryLiteral: "[0.1,0.2,0.3]",
-			ActorUserID:  &actorUserID,
-		},
-	)
-	requireNoError(t, err)
-	requireEqual(t, 1, len(results))
-	requireEqual(t, "Lexical Match", results[0].Title)
-	if results[0].EngagementSignalScore < minEngagementSignal {
-		t.Fatalf("expected engagement signal >= %v, got %v", minEngagementSignal, results[0].EngagementSignalScore)
-	}
-	if results[0].EngagementSignalScore > maxEngagementSignal {
-		t.Fatalf("expected engagement signal <= %v, got %v", maxEngagementSignal, results[0].EngagementSignalScore)
-	}
-}
-
-func TestQueryEngramsAppliesFreshnessSignalScoreFilters(t *testing.T) {
-	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	projectID := "engram-vault"
-	minFreshnessSignal := 0.8
-	maxFreshnessSignal := 0.95
-	db := buildQueryEngramsFixture(projectID)
-
-	results, err := QueryEngrams(
-		context.Background(),
-		db,
-		QueryEngramsInput{
-			Request: models.EngramQueryRequest{
-				Query:                   "durable checkpoint",
-				TopK:                    2,
-				ProjectID:               &projectID,
-				FreshnessSignalScoreMin: &minFreshnessSignal,
-				FreshnessSignalScoreMax: &maxFreshnessSignal,
-			},
-			QueryLiteral: "[0.1,0.2,0.3]",
-			ActorUserID:  &actorUserID,
-		},
-	)
-	requireNoError(t, err)
-	requireEqual(t, 1, len(results))
-	requireEqual(t, "Lexical Match", results[0].Title)
-	if results[0].FreshnessSignalScore < minFreshnessSignal {
-		t.Fatalf("expected freshness signal >= %v, got %v", minFreshnessSignal, results[0].FreshnessSignalScore)
-	}
-	if results[0].FreshnessSignalScore > maxFreshnessSignal {
-		t.Fatalf("expected freshness signal <= %v, got %v", maxFreshnessSignal, results[0].FreshnessSignalScore)
-	}
-}
-
-func TestQueryEngramsAppliesAuthoritySignalScoreFilters(t *testing.T) {
-	actorUserID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	projectID := "engram-vault"
-	minAuthoritySignal := 0.45
-	maxAuthoritySignal := 0.55
-	db := buildAuthoritySignalQueryEngramsFixture(projectID)
-
-	results, err := QueryEngrams(
-		context.Background(),
-		db,
-		QueryEngramsInput{
-			Request: models.EngramQueryRequest{
-				Query:                   "durable checkpoint",
-				TopK:                    2,
-				ProjectID:               &projectID,
-				AuthoritySignalScoreMin: &minAuthoritySignal,
-				AuthoritySignalScoreMax: &maxAuthoritySignal,
-			},
-			QueryLiteral: "[0.1,0.2,0.3]",
-			ActorUserID:  &actorUserID,
-		},
-	)
-	requireNoError(t, err)
-	requireEqual(t, 1, len(results))
-	requireEqual(t, "Lexical Authority Match", results[0].Title)
-	if results[0].AuthoritySignalScore < minAuthoritySignal {
-		t.Fatalf("expected authority signal >= %v, got %v", minAuthoritySignal, results[0].AuthoritySignalScore)
-	}
-	if results[0].AuthoritySignalScore > maxAuthoritySignal {
-		t.Fatalf("expected authority signal <= %v, got %v", maxAuthoritySignal, results[0].AuthoritySignalScore)
-	}
-}
-
-func buildAuthoritySignalQueryEngramsFixture(projectID string) *fakeQueryer {
+func buildNamedQueryEngramsFixture(input queryEngramFixtureInput) *fakeQueryer {
 	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
 	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)
-	return &fakeQueryer{
-		queryRowsResult: &fakeRows{
-			values: [][]any{
-				{
-					uuid.MustParse("00000000-0000-0000-0000-000000000231"),
-					projectID,
-					"Dense Authority Match",
-					"",
-					createdDense,
-					[]string{},
-					[]string{},
-					nil,
-					"private",
-					"unrelated text",
-					0,
-					2,
-					0.55,
-					0,
-					1,
-					0.4,
-					0.2,
-					0.2,
-				},
-				{
-					uuid.MustParse("00000000-0000-0000-0000-000000000232"),
-					projectID,
-					"Lexical Authority Match",
-					"",
-					createdLexical,
-					[]string{},
-					[]string{"durable", "checkpoint"},
-					nil,
-					"private",
-					"durable checkpoint lifecycle",
-					0,
-					1,
-					0.82,
-					0,
-					7,
-					0.88,
-					0.5,
-					0.25,
-				},
-			},
-		},
+	denseCandidate := queryEngramsFixtureCandidate{
+		id:           "00000000-0000-0000-0000-000000000211",
+		title:        "Dense Match",
+		createdAt:    createdDense,
+		keywords:     []string{},
+		retrieval:    "unrelated text",
+		usefulCount:  0,
+		feedback:     2,
+		avgRelevance: 0.55,
+		accessCount:  1,
+		freshness:    0.4,
+		sourceScore:  0.5,
+		distance:     0.2,
 	}
+	lexicalCandidate := queryEngramsFixtureCandidate{
+		id:           "00000000-0000-0000-0000-000000000212",
+		title:        "Lexical Match",
+		createdAt:    createdLexical,
+		keywords:     []string{"durable", "checkpoint"},
+		retrieval:    "durable checkpoint lifecycle",
+		usefulCount:  0,
+		feedback:     1,
+		avgRelevance: 0.82,
+		accessCount:  7,
+		freshness:    0.88,
+		sourceScore:  0.5,
+		distance:     0.25,
+	}
+	switch input.kind {
+	case queryEngramFixtureAuthority:
+		denseCandidate.id = "00000000-0000-0000-0000-000000000231"
+		denseCandidate.title = "Dense Authority Match"
+		denseCandidate.sourceScore = 0.2
+		lexicalCandidate.id = "00000000-0000-0000-0000-000000000232"
+		lexicalCandidate.title = "Lexical Authority Match"
+	case queryEngramFixtureFeedback:
+		denseCandidate.id = "00000000-0000-0000-0000-000000000221"
+		denseCandidate.title = "Contradiction Signal Match"
+		denseCandidate.feedback = 1
+		denseCandidate.contradictionCount = 1
+		lexicalCandidate.id = "00000000-0000-0000-0000-000000000222"
+		lexicalCandidate.title = "Useful Signal Match"
+		lexicalCandidate.usefulCount = 1
+	}
+	return buildQueryEngramsFixtureFromCandidates(input.projectID, denseCandidate, lexicalCandidate)
 }
 
-func buildQueryEngramsFixture(projectID string) *fakeQueryer {
-	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
-	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)
-	return &fakeQueryer{
-		queryRowsResult: &fakeRows{
-			values: [][]any{
-				{
-					uuid.MustParse("00000000-0000-0000-0000-000000000211"),
-					projectID,
-					"Dense Match",
-					"",
-					createdDense,
-					[]string{},
-					[]string{},
-					nil,
-					"private",
-					"unrelated text",
-					0,
-					2,
-					0.55,
-					0,
-					1,
-					0.4,
-					0.5,
-					0.2,
-				},
-				{
-					uuid.MustParse("00000000-0000-0000-0000-000000000212"),
-					projectID,
-					"Lexical Match",
-					"",
-					createdLexical,
-					[]string{},
-					[]string{"durable", "checkpoint"},
-					nil,
-					"private",
-					"durable checkpoint lifecycle",
-					0,
-					1,
-					0.82,
-					0,
-					7,
-					0.88,
-					0.5,
-					0.25,
-				},
-			},
-		},
-	}
+type queryEngramsFixtureCandidate struct {
+	id                 string
+	title              string
+	createdAt          time.Time
+	keywords           []string
+	retrieval          string
+	usefulCount        int
+	feedback           int
+	avgRelevance       float64
+	contradictionCount int
+	accessCount        int
+	freshness          float64
+	sourceScore        float64
+	distance           float64
 }
 
-func buildFeedbackScoreQueryEngramsFixture(projectID string) *fakeQueryer {
-	createdDense := time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC)
-	createdLexical := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)
-	return &fakeQueryer{
-		queryRowsResult: &fakeRows{
-			values: [][]any{
-				{
-					uuid.MustParse("00000000-0000-0000-0000-000000000221"),
-					projectID,
-					"Contradiction Signal Match",
-					"",
-					createdDense,
-					[]string{},
-					[]string{},
-					nil,
-					"private",
-					"unrelated text",
-					0,
-					1,
-					0.55,
-					1,
-					1,
-					0.4,
-					0.5,
-					0.2,
-				},
-				{
-					uuid.MustParse("00000000-0000-0000-0000-000000000222"),
-					projectID,
-					"Useful Signal Match",
-					"",
-					createdLexical,
-					[]string{},
-					[]string{"durable", "checkpoint"},
-					nil,
-					"private",
-					"durable checkpoint lifecycle",
-					1,
-					1,
-					0.82,
-					0,
-					7,
-					0.88,
-					0.5,
-					0.25,
-				},
-			},
-		},
+func buildQueryEngramsFixtureFromCandidates(
+	projectID string,
+	candidates ...queryEngramsFixtureCandidate,
+) *fakeQueryer {
+	values := make([][]any, 0, len(candidates))
+	for _, candidate := range candidates {
+		values = append(values, buildQueryEngramsFixtureRow(projectID, candidate))
+	}
+	return &fakeQueryer{queryRowsResult: &fakeRows{values: values}}
+}
+
+func buildQueryEngramsFixtureRow(projectID string, candidate queryEngramsFixtureCandidate) []any {
+	return []any{
+		uuid.MustParse(candidate.id),
+		projectID,
+		candidate.title,
+		"",
+		candidate.createdAt,
+		[]string{},
+		candidate.keywords,
+		nil,
+		"private",
+		candidate.retrieval,
+		candidate.usefulCount,
+		candidate.feedback,
+		candidate.avgRelevance,
+		candidate.contradictionCount,
+		candidate.accessCount,
+		candidate.freshness,
+		candidate.sourceScore,
+		candidate.distance,
 	}
 }
 
