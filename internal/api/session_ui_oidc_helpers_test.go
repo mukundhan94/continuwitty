@@ -19,7 +19,7 @@ func startOIDCLoginFlow(
 ) (*http.Cookie, auth.SessionState) {
 	t.Helper()
 	_, loginCookie := fetchLoginCSRFTokenAndCookie(t, handler, manager, nil)
-	startRequest := httptest.NewRequest(http.MethodGet, "/login/oidc?next=%2Fui%2Fadmin", nil)
+	startRequest := httptest.NewRequest(http.MethodGet, "/login/oidc?next=%2Fapp%2Fadmin%2Fsessions", nil)
 	startRequest.AddCookie(loginCookie)
 	startResponse := httptest.NewRecorder()
 	handler.ServeHTTP(startResponse, startRequest)

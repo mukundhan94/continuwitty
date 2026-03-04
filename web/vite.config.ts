@@ -14,9 +14,8 @@ export default defineConfig({
     allowedHosts: allowedHosts.length > 0 ? allowedHosts : true,
     proxy: {
       '/api': apiProxyTarget,
-      '/login': apiProxyTarget,
-      '/logout': apiProxyTarget,
-      '/ui': apiProxyTarget,
+      '/oauth': apiProxyTarget,
+      '/.well-known': apiProxyTarget,
     },
   },
   test: {
