@@ -32,6 +32,71 @@ const HeaderBlock = styled.div`
   gap: 0.2rem;
 `
 
+const ConversationCanvas = styled.div`
+  border: 1px solid color-mix(in srgb, var(--surface-glass-border) 82%, transparent);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 72% 6%, color-mix(in srgb, var(--color-accent-alt) 20%, transparent) 0%, transparent
+          32%),
+    linear-gradient(160deg, color-mix(in srgb, var(--surface-glass) 88%, transparent), var(--surface-raised));
+  padding: 0.55rem 0.62rem 0.62rem;
+  display: grid;
+  gap: 0.5rem;
+`
+
+const ChatMetaRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+`
+
+const ChatMetaBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-line) 80%, transparent);
+  border-radius: 999px;
+  padding: 0.16rem 0.5rem;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--surface-raised) 84%, transparent);
+`
+
+const ThinkingRow = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.24rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--session-active-border) 62%, transparent);
+  background: color-mix(in srgb, var(--session-active-bg) 80%, var(--surface-raised));
+  font-size: 0.7rem;
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+  width: fit-content;
+`
+
+const ThinkingDot = styled.span`
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--session-active-shadow) 72%, transparent);
+  animation: pulseDot 1200ms ease-out infinite;
+
+  @keyframes pulseDot {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--session-active-shadow) 72%, transparent);
+    }
+    100% {
+      transform: scale(1.1);
+      box-shadow: 0 0 0 10px color-mix(in srgb, var(--session-active-shadow) 0%, transparent);
+    }
+  }
+`
+
 const ActionRow = styled.div`
   display: flex;
   gap: 0.5rem;
@@ -88,29 +153,34 @@ const PrimaryMinimalButton = styled(MinimalButton)`
 
 const RecallControls = styled.section`
   display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.42rem;
+  grid-template-columns: minmax(0, 1.05fr) repeat(2, minmax(0, 0.9fr));
   align-items: stretch;
+  margin-top: 0.18rem;
+
+  @media (max-width: 980px) {
+    grid-template-columns: 1fr;
+  }
 `
 
 const RecallCard = styled.div`
-  border: 1px solid color-mix(in srgb, var(--color-line) 75%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--surface-raised) 66%, transparent);
-  padding: 0.5rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-raised) 58%, transparent);
+  padding: 0.34rem 0.48rem;
   display: grid;
-  gap: 0.32rem;
+  gap: 0.26rem;
   align-content: start;
 `
 
 const RecallHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.26rem;
 `
 
 const RecallLabel = styled.span`
-  font-size: 0.74rem;
+  font-size: 0.66rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-ink-muted);
@@ -170,13 +240,6 @@ const RecallHelpText = styled.span`
   z-index: 30;
 `
 
-const RecallHint = styled.p`
-  margin: 0;
-  font-size: 0.72rem;
-  line-height: 1.35;
-  color: var(--color-ink-muted);
-`
-
 const RecallHelpContainer = styled.div`
   display: inline-flex;
   align-items: center;
@@ -192,32 +255,36 @@ const RecallCheckbox = styled.label`
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   color: var(--color-ink);
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0;
 
   input {
-    width: 0.95rem;
-    height: 0.95rem;
+    width: 0.86rem;
+    height: 0.86rem;
   }
 `
 
 const RecallNumberControl = styled.label`
-  display: grid;
-  gap: 0.3rem;
-  font-size: 0.76rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.42rem;
+  font-size: 0.72rem;
+  font-weight: 700;
   color: var(--color-ink);
   text-transform: none;
   letter-spacing: 0;
 
   input {
-    height: 2.1rem;
-    padding: 0.35rem 0.55rem;
+    width: 4.6rem;
+    height: 1.8rem;
+    padding: 0.2rem 0.45rem;
     border-color: color-mix(in srgb, var(--color-line) 75%, transparent);
     background: color-mix(in srgb, var(--color-input-bg) 75%, var(--surface-raised));
-    font-size: 0.86rem;
+    font-size: 0.78rem;
     font-weight: 700;
   }
 `
@@ -403,13 +470,7 @@ interface ComposerSectionProps {
   hasSession: boolean
   sending: boolean
   composerText: string
-  linkRecallEnabled: boolean
-  linkRecallDepth: number
-  linkRecallMaxNeighbors: number
   onComposerChange: (value: string) => void
-  onLinkRecallEnabledChange: (value: boolean) => void
-  onLinkRecallDepthChange: (value: number) => void
-  onLinkRecallMaxNeighborsChange: (value: number) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
   onComposerKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
   onRetry: () => Promise<void>
@@ -429,6 +490,21 @@ interface RecallControlsSectionProps {
 interface RecallInfoTooltipProps {
   label: string
   description: string
+}
+
+interface ConversationSectionProps {
+  session: ChatSession | null
+  messages: ChatMessage[]
+  pendingUserText: string | null
+  streamingAssistantText: string
+  hasSession: boolean
+  sending: boolean
+  linkRecallEnabled: boolean
+  linkRecallDepth: number
+  linkRecallMaxNeighbors: number
+  sourceReferences: ChatSourceReference[]
+  usedEngramLinkIds: string[]
+  engramTracePaths: EngramTracePath[]
 }
 
 function MessageBubble({ role, text }: { role: string; text: string }) {
@@ -457,6 +533,33 @@ function isEnterSubmitKey(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
 
 function canSubmitComposer(hasSession: boolean, sending: boolean, composerText: string): boolean {
   return hasSession && !sending && composerText.trim().length > 0
+}
+
+function inFlightMessagesCount(payload: {
+  messages: ChatMessage[]
+  pendingUserText: string | null
+  streamingAssistantText: string
+}): number {
+  return (
+    payload.messages.length +
+    Number(Boolean(payload.pendingUserText)) +
+    Number(Boolean(payload.streamingAssistantText))
+  )
+}
+
+function modelBadgeValue(session: ChatSession | null): string {
+  return session ? `${session.provider}/${session.model_id}` : 'No active model'
+}
+
+function recallBadgeValue(payload: {
+  linkRecallEnabled: boolean
+  linkRecallDepth: number
+  linkRecallMaxNeighbors: number
+}): string {
+  if (!payload.linkRecallEnabled) {
+    return 'Recall off'
+  }
+  return `Recall d${payload.linkRecallDepth} • n${payload.linkRecallMaxNeighbors}`
 }
 
 function clampInputNumber(value: number, minValue: number, maxValue: number): number {
@@ -707,6 +810,68 @@ function TimelineSection({ timelineEvents }: TimelineSectionProps) {
   )
 }
 
+function ConversationSection({
+  session,
+  messages,
+  pendingUserText,
+  streamingAssistantText,
+  hasSession,
+  sending,
+  linkRecallEnabled,
+  linkRecallDepth,
+  linkRecallMaxNeighbors,
+  sourceReferences,
+  usedEngramLinkIds,
+  engramTracePaths,
+}: ConversationSectionProps) {
+  return (
+    <ConversationCanvas>
+      <ChatMetaRow>
+        <ChatMetaBadge>{modelBadgeValue(session)}</ChatMetaBadge>
+        <ChatMetaBadge>
+          {inFlightMessagesCount({ messages, pendingUserText, streamingAssistantText })} messages
+        </ChatMetaBadge>
+        <ChatMetaBadge>
+          {recallBadgeValue({ linkRecallEnabled, linkRecallDepth, linkRecallMaxNeighbors })}
+        </ChatMetaBadge>
+      </ChatMetaRow>
+
+      {sending ? (
+        <ThinkingRow>
+          <ThinkingDot />
+          Assistant thinking
+        </ThinkingRow>
+      ) : null}
+
+      <TranscriptSection
+        messages={messages}
+        pendingUserText={pendingUserText}
+        streamingAssistantText={streamingAssistantText}
+        hasSession={hasSession}
+        sourceReferences={sourceReferences}
+        usedEngramLinkIds={usedEngramLinkIds}
+        engramTracePaths={engramTracePaths}
+      />
+    </ConversationCanvas>
+  )
+}
+
+function handleComposerEnterSubmit(
+  event: KeyboardEvent<HTMLTextAreaElement>,
+  state: {
+    hasSession: boolean
+    sending: boolean
+    composerText: string
+    onSend: () => Promise<void>
+  },
+) {
+  if (!isEnterSubmitKey(event) || !canSubmitComposer(state.hasSession, state.sending, state.composerText)) {
+    return
+  }
+  event.preventDefault()
+  void state.onSend()
+}
+
 function RecallInfoTooltip({ label, description }: RecallInfoTooltipProps) {
   return (
     <RecallHelpContainer>
@@ -724,30 +889,13 @@ function ComposerSection({
   hasSession,
   sending,
   composerText,
-  linkRecallEnabled,
-  linkRecallDepth,
-  linkRecallMaxNeighbors,
   onComposerChange,
-  onLinkRecallEnabledChange,
-  onLinkRecallDepthChange,
-  onLinkRecallMaxNeighborsChange,
   onSubmit,
   onComposerKeyDown,
   onRetry,
 }: ComposerSectionProps) {
   return (
     <ComposerForm onSubmit={(event) => void onSubmit(event)}>
-      <RecallControlsSection
-        hasSession={hasSession}
-        sending={sending}
-        linkRecallEnabled={linkRecallEnabled}
-        linkRecallDepth={linkRecallDepth}
-        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
-        onLinkRecallEnabledChange={onLinkRecallEnabledChange}
-        onLinkRecallDepthChange={onLinkRecallDepthChange}
-        onLinkRecallMaxNeighborsChange={onLinkRecallMaxNeighborsChange}
-      />
-
       <ComposerTextarea
         value={composerText}
         onChange={(event) => onComposerChange(event.target.value)}
@@ -792,7 +940,6 @@ function RecallControlsSection({
             description="When enabled, the assistant traverses related memory links before responding."
           />
         </RecallHeader>
-        <RecallHint>Use linked memory context in this response.</RecallHint>
         <RecallCheckbox>
           <input
             aria-label="Link Recall"
@@ -801,7 +948,7 @@ function RecallControlsSection({
             onChange={(event) => onLinkRecallEnabledChange(event.target.checked)}
             type="checkbox"
           />
-          {linkRecallEnabled ? 'Enabled' : 'Disabled'}
+          {linkRecallEnabled ? 'On' : 'Off'}
         </RecallCheckbox>
       </RecallCard>
 
@@ -813,9 +960,8 @@ function RecallControlsSection({
             description="How many link hops to traverse from initially matched memory nodes. Higher depth broadens recall."
           />
         </RecallHeader>
-        <RecallHint>Recommended: 1-2 for focused answers.</RecallHint>
         <RecallNumberControl>
-          Hops (1-3)
+          Depth
           <input
             data-testid="link-recall-depth-input"
             disabled={numericDisabled}
@@ -836,9 +982,8 @@ function RecallControlsSection({
             description="Per node, limit how many linked neighbors are considered. Lower values reduce noise and latency."
           />
         </RecallHeader>
-        <RecallHint>Controls breadth per hop (1-24).</RecallHint>
         <RecallNumberControl>
-          Neighbors
+          Limit
           <input
             data-testid="link-recall-neighbors-input"
             disabled={numericDisabled}
@@ -890,16 +1035,8 @@ export function ChatPanel({
     await onSend()
   }
 
-  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!isEnterSubmitKey(event)) {
-      return
-    }
-    if (!canSubmitComposer(hasSession, sending, composerText)) {
-      return
-    }
-    event.preventDefault()
-    void onSend()
-  }
+  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) =>
+    handleComposerEnterSubmit(event, { hasSession, sending, composerText, onSend })
 
   return (
     <GlassPane data-testid="chat-panel">
@@ -911,13 +1048,29 @@ export function ChatPanel({
         onContinueSession={onContinueSession}
       />
 
+      <RecallControlsSection
+        hasSession={hasSession}
+        sending={sending}
+        linkRecallEnabled={linkRecallEnabled}
+        linkRecallDepth={linkRecallDepth}
+        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
+        onLinkRecallEnabledChange={onLinkRecallEnabledChange}
+        onLinkRecallDepthChange={onLinkRecallDepthChange}
+        onLinkRecallMaxNeighborsChange={onLinkRecallMaxNeighborsChange}
+      />
+
       <SectionDivider />
 
-      <TranscriptSection
+      <ConversationSection
+        session={session}
         messages={messages}
         pendingUserText={pendingUserText}
         streamingAssistantText={streamingAssistantText}
         hasSession={hasSession}
+        sending={sending}
+        linkRecallEnabled={linkRecallEnabled}
+        linkRecallDepth={linkRecallDepth}
+        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
         sourceReferences={sourceReferences}
         usedEngramLinkIds={usedEngramLinkIds}
         engramTracePaths={engramTracePaths}
@@ -931,13 +1084,7 @@ export function ChatPanel({
         hasSession={hasSession}
         sending={sending}
         composerText={composerText}
-        linkRecallEnabled={linkRecallEnabled}
-        linkRecallDepth={linkRecallDepth}
-        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
         onComposerChange={onComposerChange}
-        onLinkRecallEnabledChange={onLinkRecallEnabledChange}
-        onLinkRecallDepthChange={onLinkRecallDepthChange}
-        onLinkRecallMaxNeighborsChange={onLinkRecallMaxNeighborsChange}
         onSubmit={handleSubmit}
         onComposerKeyDown={handleComposerKeyDown}
         onRetry={onRetry}
