@@ -3,7 +3,27 @@ package repository
 import "testing"
 
 func TestFilterByRankScoreBandsAppliesAllScoreBands(t *testing.T) {
+	filtered := filterByRankScoreBands(buildRankScoreBandRows(), strictRankScoreBandFilters())
+
+	requireEqual(t, 1, len(filtered))
+	requireEqual(t, "pass", filtered[0]["engram_id"])
+}
+
+func TestFilterByRankScoreBandsWithoutFiltersReturnsAllRows(t *testing.T) {
 	rows := []map[string]any{
+		{"engram_id": "first", "distance": 0.3},
+		{"engram_id": "second", "distance": 0.4},
+	}
+
+	filtered := filterByRankScoreBands(rows, rankScoreBandFilters{})
+
+	requireEqual(t, len(rows), len(filtered))
+	requireEqual(t, "first", filtered[0]["engram_id"])
+	requireEqual(t, "second", filtered[1]["engram_id"])
+}
+
+func buildRankScoreBandRows() []map[string]any {
+	return []map[string]any{
 		{
 			"engram_id":                  "pass",
 			"dense_score":                0.72,
@@ -58,7 +78,9 @@ func TestFilterByRankScoreBandsAppliesAllScoreBands(t *testing.T) {
 			"freshness_score":         0.81,
 		},
 	}
+}
 
+func strictRankScoreBandFilters() rankScoreBandFilters {
 	denseMin := 0.6
 	denseMax := 0.8
 	lexicalMin := 0.9
@@ -73,54 +95,20 @@ func TestFilterByRankScoreBandsAppliesAllScoreBands(t *testing.T) {
 	authorityMax := 0.7
 	compositeMin := 0.7
 	compositeMax := 0.85
-
-	filtered := filterByRankScoreBands(
-		rows,
-		&denseMin,
-		&denseMax,
-		&lexicalMin,
-		&lexicalMax,
-		&feedbackMin,
-		&feedbackMax,
-		&engagementMin,
-		&engagementMax,
-		&freshnessMin,
-		&freshnessMax,
-		&authorityMin,
-		&authorityMax,
-		&compositeMin,
-		&compositeMax,
-	)
-
-	requireEqual(t, 1, len(filtered))
-	requireEqual(t, "pass", filtered[0]["engram_id"])
-}
-
-func TestFilterByRankScoreBandsWithoutFiltersReturnsAllRows(t *testing.T) {
-	rows := []map[string]any{
-		{"engram_id": "first", "distance": 0.3},
-		{"engram_id": "second", "distance": 0.4},
+	return rankScoreBandFilters{
+		denseScoreMin:          &denseMin,
+		denseScoreMax:          &denseMax,
+		lexicalOverlapScoreMin: &lexicalMin,
+		lexicalOverlapScoreMax: &lexicalMax,
+		feedbackSignalScoreMin: &feedbackMin,
+		feedbackSignalScoreMax: &feedbackMax,
+		engagementScoreMin:     &engagementMin,
+		engagementScoreMax:     &engagementMax,
+		freshnessScoreMin:      &freshnessMin,
+		freshnessScoreMax:      &freshnessMax,
+		authorityScoreMin:      &authorityMin,
+		authorityScoreMax:      &authorityMax,
+		compositeScoreMin:      &compositeMin,
+		compositeScoreMax:      &compositeMax,
 	}
-
-	filtered := filterByRankScoreBands(
-		rows,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-	)
-
-	requireEqual(t, len(rows), len(filtered))
-	requireEqual(t, "first", filtered[0]["engram_id"])
-	requireEqual(t, "second", filtered[1]["engram_id"])
 }

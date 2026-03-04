@@ -76,7 +76,7 @@ func loginSessionUIUser(
 	})
 	loginResponse := httptest.NewRecorder()
 	handler.ServeHTTP(loginResponse, loginRequest)
-	assertRedirect(t, loginResponse, "/ui")
+	assertRedirect(t, loginResponse, "/app/workspace")
 	authenticatedCookie := findResponseCookie(loginResponse, manager.CookieName())
 	if authenticatedCookie == nil {
 		t.Fatalf("expected session cookie after login")
@@ -91,12 +91,38 @@ func TestMountSessionUIRoutesHomeRedirectsToLoginWhenUnauthenticated(t *testing.
 
 func TestMountSessionUIRoutesDashboardRedirectsToLoginWhenUnauthenticated(t *testing.T) {
 	handler, _, _ := buildSessionUITestHandler(t)
-	assertRouteRedirectsToLogin(t, handler, "/ui")
+	assertRouteRedirectsToLogin(t, handler, "/app/workspace")
 }
 
 func TestMountSessionUIRoutesAdminRedirectsToLoginWhenUnauthenticated(t *testing.T) {
 	handler, _, _ := buildSessionUITestHandler(t)
-	assertRouteRedirectsToLogin(t, handler, "/ui/admin")
+	assertRouteRedirectsToLogin(t, handler, "/app/admin/sessions")
+}
+
+func TestMountSessionUIRoutesLegacyRedirectsToCanonicalPaths(t *testing.T) {
+	handler, _, _ := buildSessionUITestHandler(t)
+
+	testCases := []struct {
+		path     string
+		location string
+	}{
+		{path: "/ui", location: "/app/workspace"},
+		{path: "/ui/admin", location: "/app/admin/sessions"},
+		{path: "/admin/memory", location: "/app/admin/engrams"},
+		{path: "/projects/transfer", location: "/app/projects/transfer/export"},
+	}
+
+	for _, testCase := range testCases {
+		request := httptest.NewRequest(http.MethodGet, testCase.path, nil)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		assertRedirect(t, response, testCase.location)
+	}
+}
+
+func TestMountSessionUIRoutesAppDeepRouteRedirectsToLoginWhenUnauthenticated(t *testing.T) {
+	handler, _, _ := buildSessionUITestHandler(t)
+	assertRouteRedirectsToLogin(t, handler, "/app/sessions/session-1/chat")
 }
 
 func TestMountSessionUIRoutesLoginRejectsInvalidCredentials(t *testing.T) {
@@ -202,7 +228,7 @@ func TestMountSessionUIRoutesLoginAndLogoutWorkflow(t *testing.T) {
 		Password: sessionUITestPassword,
 	})
 
-	dashboardRequest := httptest.NewRequest(http.MethodGet, "/ui", nil)
+	dashboardRequest := httptest.NewRequest(http.MethodGet, "/app/workspace", nil)
 	dashboardRequest.AddCookie(authenticatedCookie)
 	dashboardResponse := httptest.NewRecorder()
 	handler.ServeHTTP(dashboardResponse, dashboardRequest)
@@ -215,6 +241,15 @@ func TestMountSessionUIRoutesLoginAndLogoutWorkflow(t *testing.T) {
 	if !strings.Contains(dashboardResponse.Body.String(), record.Username) {
 		t.Fatalf("expected username %q in dashboard", record.Username)
 	}
+
+	deepRouteRequest := httptest.NewRequest(http.MethodGet, "/app/sessions/session-1/chat", nil)
+	deepRouteRequest.AddCookie(authenticatedCookie)
+	deepRouteResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deepRouteResponse, deepRouteRequest)
+	if deepRouteResponse.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for deep app route, got %d", deepRouteResponse.Code)
+	}
+
 	logoutCSRFToken := extractCSRFTokenFromHTML(t, dashboardResponse.Body.String())
 	dashboardCookie := findResponseCookie(dashboardResponse, manager.CookieName())
 	if dashboardCookie != nil {
@@ -237,7 +272,7 @@ func TestMountSessionUIRoutesLoginAndLogoutWorkflow(t *testing.T) {
 		t.Fatalf("expected clear-session cookie after logout")
 	}
 
-	blockedDashboardRequest := httptest.NewRequest(http.MethodGet, "/ui", nil)
+	blockedDashboardRequest := httptest.NewRequest(http.MethodGet, "/app/workspace", nil)
 	blockedDashboardRequest.AddCookie(clearedCookie)
 	blockedDashboardResponse := httptest.NewRecorder()
 	handler.ServeHTTP(blockedDashboardResponse, blockedDashboardRequest)
@@ -256,7 +291,7 @@ func TestMountSessionUIRoutesAdminRejectsNonAdminRole(t *testing.T) {
 		Password: sessionUITestPassword,
 	})
 
-	adminRequest := httptest.NewRequest(http.MethodGet, "/ui/admin", nil)
+	adminRequest := httptest.NewRequest(http.MethodGet, "/app/admin/sessions", nil)
 	adminRequest.AddCookie(authenticatedCookie)
 	adminResponse := httptest.NewRecorder()
 	handler.ServeHTTP(adminResponse, adminRequest)
@@ -279,7 +314,7 @@ func TestMountSessionUIRoutesAdminAllowsAdminRole(t *testing.T) {
 		Password: sessionUITestPassword,
 	})
 
-	adminRequest := httptest.NewRequest(http.MethodGet, "/ui/admin", nil)
+	adminRequest := httptest.NewRequest(http.MethodGet, "/app/admin/sessions", nil)
 	adminRequest.AddCookie(authenticatedCookie)
 	adminResponse := httptest.NewRecorder()
 	handler.ServeHTTP(adminResponse, adminRequest)
@@ -347,7 +382,7 @@ func TestMountSessionUIRoutesAdminCreateMCPTokenRedirectsOnSuccess(t *testing.T)
 	})
 	createResponse := httptest.NewRecorder()
 	handler.ServeHTTP(createResponse, createRequest)
-	assertRedirect(t, createResponse, "/ui/admin")
+	assertRedirect(t, createResponse, "/app/admin/tokens")
 
 	if capturedOwnerUserID != record.UserID {
 		t.Fatalf("expected owner_user_id %s, got %s", record.UserID, capturedOwnerUserID)
@@ -447,7 +482,7 @@ func TestMountSessionUIRoutesAdminRevokeMCPTokenRedirectsOnSuccess(t *testing.T)
 	})
 	revokeResponse := httptest.NewRecorder()
 	handler.ServeHTTP(revokeResponse, revokeRequest)
-	assertRedirect(t, revokeResponse, "/ui/admin")
+	assertRedirect(t, revokeResponse, "/app/admin/tokens")
 
 	if capturedTokenID != tokenID {
 		t.Fatalf("expected token id %s, got %s", tokenID, capturedTokenID)
@@ -498,8 +533,16 @@ func TestMountSessionUIRoutesLoginRedirectPathSanitization(t *testing.T) {
 		nextPath         string
 		expectedRedirect string
 	}{
-		{name: "trusted relative path", nextPath: "/ui/admin", expectedRedirect: "/ui/admin"},
-		{name: "absolute url rejected", nextPath: "https://malicious.example/phish", expectedRedirect: "/ui"},
+		{
+			name:             "trusted relative path",
+			nextPath:         "/app/admin/sessions",
+			expectedRedirect: "/app/admin/sessions",
+		},
+		{
+			name:             "absolute url rejected",
+			nextPath:         "https://malicious.example/phish",
+			expectedRedirect: "/app/workspace",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -547,7 +590,7 @@ func TestMountSessionUIRoutesLogoutRejectsInvalidCSRF(t *testing.T) {
 		t.Fatalf("expected status 403, got %d", badLogoutResponse.Code)
 	}
 
-	stillAuthenticatedRequest := httptest.NewRequest(http.MethodGet, "/ui", nil)
+	stillAuthenticatedRequest := httptest.NewRequest(http.MethodGet, "/app/workspace", nil)
 	stillAuthenticatedRequest.AddCookie(authenticatedCookie)
 	stillAuthenticatedResponse := httptest.NewRecorder()
 	handler.ServeHTTP(stillAuthenticatedResponse, stillAuthenticatedRequest)
@@ -778,7 +821,7 @@ func fetchAdminCSRFTokenAndCookie(
 	cookie *http.Cookie,
 ) (string, *http.Cookie) {
 	t.Helper()
-	request := httptest.NewRequest(http.MethodGet, "/ui/admin", nil)
+	request := httptest.NewRequest(http.MethodGet, "/app/admin/sessions", nil)
 	if cookie != nil {
 		request.AddCookie(cookie)
 	}

@@ -56,6 +56,57 @@ function finalResultFrame(frames: McpFrame[]): McpFrame {
   return resultFrames[resultFrames.length - 1]
 }
 
+function retryDelayMs(response: APIResponse, responseBody: string): number {
+  const retryAfterHeader = response.headers()['retry-after']
+  if (retryAfterHeader) {
+    const seconds = Number.parseInt(retryAfterHeader, 10)
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return (seconds + 1) * 1000
+    }
+  }
+
+  const retryInMatch = responseBody.match(/retry in\s+(\d+)\s+seconds?/i)
+  if (retryInMatch) {
+    const seconds = Number.parseInt(retryInMatch[1], 10)
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return (seconds + 1) * 1000
+    }
+  }
+
+  return 1500
+}
+
+async function callMcpToolWithRetry(
+  page: import('@playwright/test').Page,
+  body: Record<string, unknown>,
+): Promise<APIResponse> {
+  const maxAttempts = 4
+  let latestResponse: APIResponse | null = null
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await page.request.post('/api/v1/mcp/stream', {
+      headers: {
+        Accept: 'text/event-stream, application/json',
+      },
+      data: body,
+    })
+    latestResponse = response
+    if (response.ok()) {
+      return response
+    }
+    if (response.status() !== 429 || attempt >= maxAttempts) {
+      return response
+    }
+    const responseBody = await response.text()
+    await page.waitForTimeout(retryDelayMs(response, responseBody))
+  }
+
+  if (!latestResponse) {
+    throw new Error('Expected MCP response')
+  }
+  return latestResponse
+}
+
 When('I configure a default project for the phase31 scenario', async ({ page }) => {
   phase31ProjectId = `phase31-default-${Date.now()}`
   const createProject = await page.request.post('/api/v1/projects', {
@@ -74,21 +125,16 @@ When('I configure a default project for the phase31 scenario', async ({ page }) 
 })
 
 When('I create an engram through MCP without project_id', async ({ page }) => {
-  const response = await page.request.post('/api/v1/mcp/stream', {
-    headers: {
-      Accept: 'text/event-stream, application/json',
-    },
-    data: {
-      jsonrpc: '2.0',
-      id: `phase31-mcp-${Date.now()}`,
-      method: 'tools/call',
-      params: {
-        name: 'engram.create',
-        arguments: {
-          title: 'Phase31 MCP default project create',
-          abstract: 'project omitted intentionally',
-          detailed_summary_markdown: 'MCP should resolve via default project.',
-        },
+  const response = await callMcpToolWithRetry(page, {
+    jsonrpc: '2.0',
+    id: `phase31-mcp-${Date.now()}`,
+    method: 'tools/call',
+    params: {
+      name: 'engram.create',
+      arguments: {
+        title: 'Phase31 MCP default project create',
+        abstract: 'project omitted intentionally',
+        detailed_summary_markdown: 'MCP should resolve via default project.',
       },
     },
   })

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from './http'
-import { extractCsrfTokenFromHtml, loginWithPassword, logoutCurrentUser } from './auth'
+import { loginWithPassword, logoutCurrentUser } from './auth'
 
 function mockResponse(params: {
   ok: boolean
@@ -9,6 +9,7 @@ function mockResponse(params: {
   type?: ResponseType
   text?: string
   json?: unknown
+  contentType?: string
 }): Response {
   return {
     ok: params.ok,
@@ -16,7 +17,7 @@ function mockResponse(params: {
     statusText: '',
     type: params.type ?? 'basic',
     headers: new Headers({
-      'content-type': 'text/html',
+      'content-type': params.contentType ?? 'application/json',
     }),
     text: async () => params.text ?? '',
     json: async () => params.json ?? {},
@@ -27,55 +28,63 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('extractCsrfTokenFromHtml', () => {
-  it('extracts csrf token from login markup', () => {
-    const html = '<form><input type="hidden" name="csrf_token" value="abc123" /></form>'
-    expect(extractCsrfTokenFromHtml(html)).toBe('abc123')
-  })
-
-  it('throws when token is missing', () => {
-    expect(() => extractCsrfTokenFromHtml('<html></html>')).toThrow(ApiError)
-  })
-})
-
-describe('auth redirect handling', () => {
-  it('treats manual redirect opaque login response as success', async () => {
+describe('session auth APIs', () => {
+  it('logs in using session csrf + json login endpoints', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
         mockResponse({
           ok: true,
           status: 200,
-          text: '<form><input name="csrf_token" value="token-1" /></form>',
+          json: { csrf_token: 'token-1' },
         }),
       )
       .mockResolvedValueOnce(
         mockResponse({
-          ok: false,
-          status: 0,
-          type: 'opaqueredirect',
+          ok: true,
+          status: 200,
+          json: { username: 'admin' },
         }),
       )
 
     await expect(loginWithPassword('admin', 'admin123')).resolves.toBeUndefined()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/session/csrf',
+      expect.objectContaining({ method: 'GET', credentials: 'include' }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/session/login',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'admin',
+          password: 'admin123',
+          csrf_token: 'token-1',
+        }),
+      }),
+    )
   })
 
-  it('treats manual redirect opaque logout response as success', async () => {
+  it('logs out using session csrf + json logout endpoints', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
         mockResponse({
           ok: true,
           status: 200,
-          text: '<form><input name="csrf_token" value="token-2" /></form>',
+          json: { csrf_token: 'token-2' },
         }),
       )
       .mockResolvedValueOnce(
         mockResponse({
-          ok: false,
-          status: 0,
-          type: 'opaqueredirect',
+          ok: true,
+          status: 200,
+          json: { logged_out: true },
         }),
       )
 
@@ -89,7 +98,7 @@ describe('auth redirect handling', () => {
         mockResponse({
           ok: true,
           status: 200,
-          text: '<form><input name="csrf_token" value="token-3" /></form>',
+          json: { csrf_token: 'token-3' },
         }),
       )
       .mockResolvedValueOnce(
@@ -101,5 +110,17 @@ describe('auth redirect handling', () => {
       )
 
     await expect(loginWithPassword('admin', 'wrong')).rejects.toThrow(ApiError)
+  })
+
+  it('throws when csrf endpoint does not return a token', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      mockResponse({
+        ok: true,
+        status: 200,
+        json: {},
+      }),
+    )
+
+    await expect(loginWithPassword('admin', 'admin123')).rejects.toThrow(ApiError)
   })
 })

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import type { APIResponse, Page } from '@playwright/test'
 
 import { Then, When, expect } from '../support/fixtures'
+import { acceptanceEnv } from '../support/env'
 
 type ExportBundle = {
   project: {
@@ -150,7 +151,12 @@ async function ensureProjectTransferPage(page: Page): Promise<void> {
     .isVisible({ timeout: 300 })
     .catch(() => false)
   if (!onTransferPage) {
-    await page.getByTestId('open-project-transfer').click()
+    const base = acceptanceEnv.webBaseUrl.endsWith('/')
+      ? acceptanceEnv.webBaseUrl
+      : `${acceptanceEnv.webBaseUrl}/`
+    await page.goto(new URL('/app/projects/transfer/export', base).toString(), {
+      waitUntil: 'domcontentloaded',
+    })
   }
   await expect(transferPage).toBeVisible()
 }

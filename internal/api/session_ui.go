@@ -125,25 +125,72 @@ func MountSessionUIRoutes(router chi.Router, dependencies SessionAuthDependencie
 	router.Get("/login/oidc/callback", deps.handleOIDCCallback)
 	router.Post("/login", deps.handleLoginSubmit)
 	router.Post("/logout", deps.handleLogoutSubmit)
-	router.Get("/ui", deps.handleUIDashboard)
-	router.Get("/ui/admin", deps.handleUIAdmin)
+	router.Get("/ui", deps.handleLegacyWorkspaceRedirect)
+	router.Get("/ui/admin", deps.handleLegacyAdminRedirect)
+	router.Get("/admin/memory", deps.handleLegacyAdminMemoryRedirect)
+	router.Get("/projects/transfer", deps.handleLegacyProjectTransferRedirect)
+	router.Get("/app", deps.handleAppRootRedirect)
+	router.Get("/app/workspace", deps.handleUIDashboard)
+	router.Get("/app/admin/sessions", deps.handleUIAdmin)
+	router.Get("/app/admin/engrams", deps.handleUIAdmin)
+	router.Get("/app/admin/collections", deps.handleUIAdmin)
+	router.Get("/app/admin/curation", deps.handleUIAdmin)
+	router.Get("/app/admin/contradictions", deps.handleUIAdmin)
+	router.Get("/app/admin/tokens", deps.handleUIAdmin)
+	router.Get("/app/admin/observability", deps.handleUIAdmin)
+	router.Get("/app/projects/transfer/export", deps.handleUIDashboard)
+	router.Get("/app/projects/transfer/import", deps.handleUIDashboard)
+	router.Get("/app/*", deps.handleAppRoute)
 	router.Post("/ui/admin/mcp-tokens/create", deps.handleUIAdminCreateMCPToken)
 	router.Post("/ui/admin/mcp-tokens/{token_id}/revoke", deps.handleUIAdminRevokeMCPToken)
 }
 
 func (dependencies sessionAuthDependencies) handleHomeRedirect(writer http.ResponseWriter, request *http.Request) {
 	if dependencies.isAuthenticated(request) {
-		http.Redirect(writer, request, "/ui", http.StatusSeeOther)
+		http.Redirect(writer, request, "/app/workspace", http.StatusSeeOther)
 		return
 	}
 	http.Redirect(writer, request, "/login", http.StatusSeeOther)
+}
+
+func (dependencies sessionAuthDependencies) handleAppRootRedirect(writer http.ResponseWriter, request *http.Request) {
+	if dependencies.isAuthenticated(request) {
+		http.Redirect(writer, request, "/app/workspace", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(writer, request, "/login?next=/app/workspace", http.StatusSeeOther)
+}
+
+func (dependencies sessionAuthDependencies) handleLegacyWorkspaceRedirect(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	http.Redirect(writer, request, "/app/workspace", http.StatusSeeOther)
+}
+
+func (dependencies sessionAuthDependencies) handleLegacyAdminRedirect(writer http.ResponseWriter, request *http.Request) {
+	http.Redirect(writer, request, "/app/admin/sessions", http.StatusSeeOther)
+}
+
+func (dependencies sessionAuthDependencies) handleLegacyAdminMemoryRedirect(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	http.Redirect(writer, request, "/app/admin/engrams", http.StatusSeeOther)
+}
+
+func (dependencies sessionAuthDependencies) handleLegacyProjectTransferRedirect(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	http.Redirect(writer, request, "/app/projects/transfer/export", http.StatusSeeOther)
 }
 
 func (dependencies sessionAuthDependencies) handleLoginPage(writer http.ResponseWriter, request *http.Request) {
 	redirectTarget := safeNextPath(request.URL.Query().Get("next"))
 	if dependencies.isAuthenticated(request) {
 		if redirectTarget == "" {
-			redirectTarget = "/ui"
+			redirectTarget = "/app/workspace"
 		}
 		http.Redirect(writer, request, redirectTarget, http.StatusSeeOther)
 		return
@@ -325,7 +372,7 @@ func (dependencies sessionAuthDependencies) writeUILoginSuccess(
 	}
 	redirectTarget := safeNextPath(nextPath)
 	if redirectTarget == "" {
-		redirectTarget = "/ui"
+		redirectTarget = "/app/workspace"
 	}
 	http.Redirect(writer, request, redirectTarget, http.StatusSeeOther)
 }
@@ -386,6 +433,14 @@ func (dependencies sessionAuthDependencies) handleUIDashboard(writer http.Respon
 			CSRFToken: state.CSRFToken,
 		},
 	)
+}
+
+func (dependencies sessionAuthDependencies) handleAppRoute(writer http.ResponseWriter, request *http.Request) {
+	if strings.HasPrefix(request.URL.Path, "/app/admin/") {
+		dependencies.handleUIAdmin(writer, request)
+		return
+	}
+	dependencies.handleUIDashboard(writer, request)
 }
 
 func (dependencies sessionAuthDependencies) handleUIAdmin(writer http.ResponseWriter, request *http.Request) {
@@ -459,7 +514,7 @@ func (dependencies sessionAuthDependencies) handleUIAdminCreateMCPToken(writer h
 			},
 		},
 	)
-	http.Redirect(writer, request, "/ui/admin", http.StatusSeeOther)
+	http.Redirect(writer, request, "/app/admin/tokens", http.StatusSeeOther)
 }
 
 func (dependencies sessionAuthDependencies) handleUIAdminRevokeMCPToken(writer http.ResponseWriter, request *http.Request) {
@@ -500,7 +555,7 @@ func (dependencies sessionAuthDependencies) handleUIAdminRevokeMCPToken(writer h
 			},
 		},
 	)
-	http.Redirect(writer, request, "/ui/admin", http.StatusSeeOther)
+	http.Redirect(writer, request, "/app/admin/tokens", http.StatusSeeOther)
 }
 
 type uiAdminRevokeMCPTokenInput struct {

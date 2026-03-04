@@ -17,14 +17,14 @@ func TestMountSessionUIRoutesLoginPageShowsOIDCLinkWhenEnabled(t *testing.T) {
 	)
 	_, loginCookie := fetchLoginCSRFTokenAndCookie(t, handler, manager, nil)
 
-	request := httptest.NewRequest(http.MethodGet, "/login?next=%2Fui%2Fadmin", nil)
+	request := httptest.NewRequest(http.MethodGet, "/login?next=%2Fapp%2Fadmin%2Fsessions", nil)
 	request.AddCookie(loginCookie)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", response.Code)
 	}
-	if !strings.Contains(response.Body.String(), "/login/oidc?next=%2Fui%2Fadmin") {
+	if !strings.Contains(response.Body.String(), "/login/oidc?next=%2Fapp%2Fadmin%2Fsessions") {
 		t.Fatalf("expected encoded oidc login link in login page")
 	}
 }
@@ -37,13 +37,13 @@ func TestMountSessionUIRoutesOIDCStartStoresPendingState(t *testing.T) {
 	}{
 		{
 			name:             "safe next path",
-			path:             "/login/oidc?next=%2Fui%2Fadmin",
-			expectedNextPath: "/ui/admin",
+			path:             "/login/oidc?next=%2Fapp%2Fadmin%2Fsessions",
+			expectedNextPath: "/app/admin/sessions",
 		},
 		{
 			name:             "unsafe external next path",
 			path:             "/login/oidc?next=https%3A%2F%2Fevil.example%2Fsteal",
-			expectedNextPath: "/ui",
+			expectedNextPath: "/app/workspace",
 		},
 	}
 

@@ -1,33 +1,17 @@
 import { ApiError, apiJson, parseApiError } from './http'
 import type { UserProfile } from './types'
 
-export function extractCsrfTokenFromHtml(html: string): string {
-  const match = html.match(/name="csrf_token" value="([^"]+)"/)
-  if (!match || !match[1]) {
-    throw new ApiError(500, 'Unable to extract CSRF token from HTML response')
-  }
-  return match[1]
+interface SessionCsrfResponse {
+  csrf_token: string
 }
 
-async function fetchCsrfToken(pagePath: '/login' | '/ui'): Promise<string> {
-  const response = await fetch(pagePath, {
-    credentials: 'include',
-    method: 'GET',
-  })
-  if (!response.ok) {
-    throw await parseApiError(response)
+async function fetchCsrfToken(): Promise<string> {
+  const payload = await apiJson<SessionCsrfResponse>('/api/v1/session/csrf', { method: 'GET' })
+  const token = payload.csrf_token?.trim()
+  if (!token) {
+    throw new ApiError(500, 'Missing csrf token in session response')
   }
-  return extractCsrfTokenFromHtml(await response.text())
-}
-
-function isManualRedirectSuccess(response: Response): boolean {
-  if (response.status === 303 || response.status === 302 || response.status === 307 || response.status === 308) {
-    return true
-  }
-  if (response.type === 'opaqueredirect') {
-    return true
-  }
-  return response.status === 0
+  return token
 }
 
 export async function getSessionProfile(): Promise<UserProfile> {
@@ -35,24 +19,22 @@ export async function getSessionProfile(): Promise<UserProfile> {
 }
 
 export async function loginWithPassword(username: string, password: string): Promise<void> {
-  const csrfToken = await fetchCsrfToken('/login')
-  const body = new URLSearchParams({
-    username,
-    password,
-    csrf_token: csrfToken,
-  })
+  const csrfToken = await fetchCsrfToken()
 
-  const response = await fetch('/login', {
+  const response = await fetch('/api/v1/session/login', {
     credentials: 'include',
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Type': 'application/json',
     },
-    body: body.toString(),
-    redirect: 'manual',
+    body: JSON.stringify({
+      username,
+      password,
+      csrf_token: csrfToken,
+    }),
   })
 
-  if (isManualRedirectSuccess(response)) {
+  if (response.ok) {
     return
   }
 
@@ -60,20 +42,18 @@ export async function loginWithPassword(username: string, password: string): Pro
 }
 
 export async function logoutCurrentUser(): Promise<void> {
-  const csrfToken = await fetchCsrfToken('/ui')
-  const body = new URLSearchParams({ csrf_token: csrfToken })
+  const csrfToken = await fetchCsrfToken()
 
-  const response = await fetch('/logout', {
+  const response = await fetch('/api/v1/session/logout', {
     credentials: 'include',
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Type': 'application/json',
     },
-    body: body.toString(),
-    redirect: 'manual',
+    body: JSON.stringify({ csrf_token: csrfToken }),
   })
 
-  if (isManualRedirectSuccess(response)) {
+  if (response.ok) {
     return
   }
 

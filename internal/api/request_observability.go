@@ -301,7 +301,16 @@ func requestDomain(path string) string {
 		return "api"
 	case strings.HasPrefix(path, "/oauth"), strings.HasPrefix(path, "/.well-known"):
 		return "oauth"
-	case strings.HasPrefix(path, "/ui"), path == "/", strings.HasPrefix(path, "/login"), strings.HasPrefix(path, "/logout"):
+	case strings.HasPrefix(path, "/ui"),
+		strings.HasPrefix(path, "/app"),
+		path == "/",
+		path == "/for-enterprise",
+		path == "/for-developers",
+		path == "/product",
+		path == "/how-it-works",
+		path == "/pricing",
+		strings.HasPrefix(path, "/login"),
+		strings.HasPrefix(path, "/logout"):
 		return "ui"
 	default:
 		return "other"
