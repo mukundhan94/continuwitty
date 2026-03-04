@@ -114,6 +114,13 @@ const SessionListSection = styled(ScrollColumn)`
   padding-top: 0.2rem;
 `
 
+const SessionSearchRow = styled.div`
+  display: grid;
+  gap: 0.28rem;
+  padding-bottom: 0.48rem;
+  border-bottom: 1px dashed var(--color-line);
+`
+
 const DEFAULT_SESSION_TITLE = 'New chat session'
 const DEFAULT_AUTOSAVE_INTERVAL_MINUTES = 30
 const DEFAULT_AUTOSAVE_MIN_MESSAGES = 6
@@ -207,6 +214,16 @@ interface SessionHistoryPanelProps {
   loading: boolean
   sessions: ChatSession[]
   selectedSessionId: string | null
+  onSelectSession: (sessionId: string) => void
+}
+
+interface SessionHistoryResultsProps {
+  loading: boolean
+  sessionsCount: number
+  filteredSessions: ChatSession[]
+  visibleSessions: ChatSession[]
+  selectedSessionId: string | null
+  maxVisibleSessions: number
   onSelectSession: (sessionId: string) => void
 }
 
@@ -536,32 +553,97 @@ function SessionCreatorPanel({
 }
 
 function SessionHistoryPanel({ loading, sessions, selectedSessionId, onSelectSession }: SessionHistoryPanelProps) {
+  const [sessionSearch, setSessionSearch] = useState('')
+  const normalizedSearch = sessionSearch.trim().toLowerCase()
+  const filteredSessions = useMemo(() => {
+    if (!normalizedSearch) {
+      return sessions
+    }
+    return sessions.filter((session) => {
+      const searchable = `${session.title} ${session.provider} ${session.model_id} ${session.session_id}`.toLowerCase()
+      return searchable.includes(normalizedSearch)
+    })
+  }, [normalizedSearch, sessions])
+
+  const MAX_VISIBLE_SESSIONS = 120
+  const visibleSessions = filteredSessions.slice(0, MAX_VISIBLE_SESSIONS)
+
   return (
     <SessionListPanel data-testid="session-list-panel">
       <SessionListHeader>
         <SectionLabel>Previous Sessions</SectionLabel>
+        <SessionSearchRow>
+          <label htmlFor="session-search">Find Session</label>
+          <input
+            id="session-search"
+            value={sessionSearch}
+            onChange={(event) => setSessionSearch(event.target.value)}
+            placeholder="Search sessions by title, model, or id"
+          />
+          <SessionMeta>
+            Showing {visibleSessions.length} of {filteredSessions.length} sessions ({sessions.length} total)
+          </SessionMeta>
+        </SessionSearchRow>
       </SessionListHeader>
 
       <SessionListSection>
-        {loading ? <MutedText>Loading sessions...</MutedText> : null}
-        {!loading && sessions.length === 0 ? <MutedText>No sessions for this project.</MutedText> : null}
-
-        {sessions.map((session) => (
-          <SessionItemButton
-            key={session.session_id}
-            $active={selectedSessionId === session.session_id}
-            aria-current={selectedSessionId === session.session_id ? 'true' : undefined}
-            type="button"
-            onClick={() => onSelectSession(session.session_id)}
-          >
-            <span className="font-semibold">{session.title}</span>
-            <SessionMeta>
-              {session.provider}/{session.model_id}
-            </SessionMeta>
-          </SessionItemButton>
-        ))}
+        <SessionHistoryResults
+          loading={loading}
+          sessionsCount={sessions.length}
+          filteredSessions={filteredSessions}
+          visibleSessions={visibleSessions}
+          selectedSessionId={selectedSessionId}
+          maxVisibleSessions={MAX_VISIBLE_SESSIONS}
+          onSelectSession={onSelectSession}
+        />
       </SessionListSection>
     </SessionListPanel>
+  )
+}
+
+function SessionHistoryResults({
+  loading,
+  sessionsCount,
+  filteredSessions,
+  visibleSessions,
+  selectedSessionId,
+  maxVisibleSessions,
+  onSelectSession,
+}: SessionHistoryResultsProps) {
+  if (loading) {
+    return <MutedText>Loading sessions...</MutedText>
+  }
+
+  if (sessionsCount === 0) {
+    return <MutedText>No sessions for this project.</MutedText>
+  }
+
+  if (filteredSessions.length === 0) {
+    return <MutedText>No sessions match this search.</MutedText>
+  }
+
+  return (
+    <>
+      {visibleSessions.map((session) => (
+        <SessionItemButton
+          key={session.session_id}
+          $active={selectedSessionId === session.session_id}
+          aria-current={selectedSessionId === session.session_id ? 'true' : undefined}
+          type="button"
+          onClick={() => onSelectSession(session.session_id)}
+        >
+          <span className="font-semibold">{session.title}</span>
+          <SessionMeta>
+            {session.provider}/{session.model_id}
+          </SessionMeta>
+        </SessionItemButton>
+      ))}
+      {filteredSessions.length > maxVisibleSessions ? (
+        <MutedText>
+          More than {maxVisibleSessions} matches found. Add more search terms to narrow this list.
+        </MutedText>
+      ) : null}
+    </>
   )
 }
 

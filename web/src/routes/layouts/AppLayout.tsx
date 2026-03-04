@@ -5,6 +5,8 @@ const Container = styled.main`
   flex: 1;
   min-height: 0;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
   gap: 0.7rem;
 `
 

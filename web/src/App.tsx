@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { listProjects } from './api/projects'
 import type {
   ChatDebugTrace,
   ChatMessage,
@@ -12,6 +13,7 @@ import type {
   EngramSummary,
   EngramTracePath,
   PinnedDocumentRecord,
+  ProjectRecord,
   UserProfile,
 } from './api/types'
 import { AdminMemoryPage } from './components/AdminMemoryPage'
@@ -54,7 +56,17 @@ import { HowItWorksPage } from './routes/pages/marketing/HowItWorksPage'
 import { LandingPage } from './routes/pages/marketing/LandingPage'
 import { PricingPage } from './routes/pages/marketing/PricingPage'
 import { ProductPage } from './routes/pages/marketing/ProductPage'
-import { AppShell, LoadingScreen, NoticeBanner, WorkspaceGrid } from './styles/primitives'
+import {
+  AppShell,
+  GlassPane,
+  LoadingScreen,
+  MutedText,
+  NoticeBanner,
+  PaneHeader,
+  ScrollColumn,
+  SessionMeta,
+  SplitGrid,
+} from './styles/primitives'
 import { useThemeMode } from './styles/useThemeMode'
 import { buildDefaultSaveAbstract } from './utils/chat'
 import { describeError } from './utils/errors'
@@ -95,21 +107,11 @@ const APP_ROUTE_PATTERNS = [
   APP_ROUTES.adminObservability,
 ] as const
 
-const RightRail = styled.div`
-  min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(10rem, 0.6fr) minmax(10rem, 0.7fr) minmax(0, 1.2fr);
-  gap: 0.9rem;
-
-  @media (max-width: 1180px) {
-    grid-template-rows: none;
-  }
-`
-
 const RouteActionStrip = styled.div`
-  border: 1px solid rgba(94, 234, 212, 0.2);
+  min-height: 0;
+  border: 1px solid var(--color-line);
   border-radius: 16px;
-  background: rgba(8, 20, 32, 0.45);
+  background: var(--surface-raised);
   padding: 0.65rem 0.75rem;
   display: flex;
   align-items: center;
@@ -125,7 +127,104 @@ const RouteActionStrip = styled.div`
   }
 `
 
+const WorkspaceHomeGrid = styled.div`
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+`
+
+const WorkspaceHomeCard = styled.article`
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-panel);
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+`
+
+const WorkspaceHomeTitle = styled.h3`
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.04rem;
+  color: var(--color-ink);
+`
+
+const WorkspaceSplit = styled.div`
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  gap: 0.9rem;
+
+  @media (max-width: 1180px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const WorkspaceMain = styled.div`
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.9rem;
+
+  @media (max-width: 1180px) {
+    grid-template-rows: auto;
+  }
+`
+
+const WorkspaceSupportGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+
+  @media (max-width: 1180px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const WorkspaceSingleColumn = styled.div`
+  min-height: 0;
+  display: grid;
+  gap: 0.9rem;
+`
+
+const ProjectsGrid = styled.div`
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 0.9rem;
+
+  @media (max-width: 1180px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const ProjectsList = styled(ScrollColumn)`
+  min-height: 0;
+  max-height: min(58vh, 34rem);
+`
+
+const ProjectCard = styled.article`
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  padding: 0.62rem;
+  display: grid;
+  gap: 0.28rem;
+`
+
+const ProjectActionRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+`
+
 type AppSurfaceMode = 'workspace' | 'transfer' | 'admin' | 'adminTokens' | 'observability' | 'saveEngram'
+type WorkspaceSection = 'home' | 'sessions' | 'engrams' | 'documents' | 'projects'
+const MAX_VISIBLE_PROJECTS = 180
 
 type SessionRouteAction =
   | 'chat'
@@ -157,6 +256,110 @@ interface SaveModalVisibilityState {
   saveModalOpen: boolean
   appMode: AppSurfaceMode
   isSaveRoute: boolean
+}
+
+interface ProjectDirectoryState {
+  totalProjects: number
+  filteredProjects: ProjectRecord[]
+  visibleProjects: ProjectRecord[]
+  hasMoreProjects: boolean
+}
+
+interface ProjectDirectoryPaneProps {
+  projectsLoading: boolean
+  projectsError: string | null
+  projectSearch: string
+  directoryState: ProjectDirectoryState
+  onProjectSearchChange: (value: string) => void
+  onRefreshProjects: () => Promise<void>
+  onUseProject: (projectId: string) => void
+  onOpenMembers: (projectId: string) => void
+  onOpenAudit: (projectId: string) => void
+}
+
+function buildProjectDirectoryState(projects: ProjectRecord[], projectSearch: string): ProjectDirectoryState {
+  const normalizedSearch = projectSearch.trim().toLowerCase()
+  const sortedProjects = [...projects].sort((left, right) => left.project_id.localeCompare(right.project_id))
+  const filteredProjects = normalizedSearch
+    ? sortedProjects.filter((project) => {
+        const haystack = `${project.project_id} ${project.name ?? ''} ${project.description ?? ''}`.toLowerCase()
+        return haystack.includes(normalizedSearch)
+      })
+    : sortedProjects
+  const visibleProjects = filteredProjects.slice(0, MAX_VISIBLE_PROJECTS)
+  return {
+    totalProjects: sortedProjects.length,
+    filteredProjects,
+    visibleProjects,
+    hasMoreProjects: filteredProjects.length > visibleProjects.length,
+  }
+}
+
+function ProjectDirectoryPane({
+  projectsLoading,
+  projectsError,
+  projectSearch,
+  directoryState,
+  onProjectSearchChange,
+  onRefreshProjects,
+  onUseProject,
+  onOpenMembers,
+  onOpenAudit,
+}: ProjectDirectoryPaneProps) {
+  return (
+    <GlassPane>
+      <PaneHeader>
+        <h2>Available Projects</h2>
+        <button type="button" onClick={() => void onRefreshProjects()} disabled={projectsLoading}>
+          {projectsLoading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </PaneHeader>
+      <label htmlFor="project-search">Find project</label>
+      <input
+        id="project-search"
+        value={projectSearch}
+        onChange={(event) => onProjectSearchChange(event.target.value)}
+        placeholder="Search by id, name, or description"
+      />
+      <SessionMeta>
+        Showing {directoryState.visibleProjects.length} of {directoryState.filteredProjects.length} matches (
+        {directoryState.totalProjects} total)
+      </SessionMeta>
+      {projectsError ? <MutedText>{projectsError}</MutedText> : null}
+      <ProjectsList>
+        {projectsLoading ? <MutedText>Loading projects...</MutedText> : null}
+        {!projectsLoading && directoryState.filteredProjects.length === 0 ? (
+          <MutedText>No projects found for this filter.</MutedText>
+        ) : null}
+        {directoryState.visibleProjects.map((project) => (
+          <ProjectCard key={project.project_id}>
+            <strong>{project.name || project.project_id}</strong>
+            <SessionMeta>{project.project_id}</SessionMeta>
+            <MutedText>{project.description || 'No description provided.'}</MutedText>
+            <SessionMeta>
+              Owner {project.owner_user_id} · Updated {new Date(project.updated_at).toLocaleString()}
+            </SessionMeta>
+            <ProjectActionRow>
+              <button type="button" onClick={() => onUseProject(project.project_id)}>
+                Use Project
+              </button>
+              <button type="button" onClick={() => onOpenMembers(project.project_id)}>
+                Members
+              </button>
+              <button type="button" onClick={() => onOpenAudit(project.project_id)}>
+                Audit
+              </button>
+            </ProjectActionRow>
+          </ProjectCard>
+        ))}
+        {directoryState.hasMoreProjects ? (
+          <MutedText>
+            More than {MAX_VISIBLE_PROJECTS} matches found. Add a tighter search term to narrow the list.
+          </MutedText>
+        ) : null}
+      </ProjectsList>
+    </GlassPane>
+  )
 }
 
 function useLinkRecallControls() {
@@ -321,6 +524,22 @@ function resolveAppRouteMeta(pathname: string): AppRouteMeta {
   return DEFAULT_APP_ROUTE_META
 }
 
+function resolveWorkspaceSection(pathname: string): WorkspaceSection {
+  if (pathname === APP_ROUTES.workspace) {
+    return 'home'
+  }
+  if (pathname.startsWith('/app/sessions')) {
+    return 'sessions'
+  }
+  if (pathname.startsWith('/app/engrams')) {
+    return 'engrams'
+  }
+  if (pathname.startsWith('/app/documents')) {
+    return 'documents'
+  }
+  return 'projects'
+}
+
 function shouldShowSaveModal(state: SaveModalVisibilityState): boolean {
   return state.saveModalOpen && state.appMode === 'workspace' && !state.isSaveRoute
 }
@@ -343,6 +562,10 @@ function AppScreen() {
   const location = useLocation()
   const { mode, toggleMode } = useThemeMode()
   const appRouteMeta = useMemo(() => resolveAppRouteMeta(location.pathname), [location.pathname])
+  const workspaceSection = useMemo(
+    () => resolveWorkspaceSection(location.pathname),
+    [location.pathname],
+  )
   const sessionRouteInfo = useMemo(() => parseSessionRoute(location.pathname), [location.pathname])
   const isLoginRoute = location.pathname === MARKETING_ROUTES.login
   const isAppRoute = location.pathname.startsWith('/app')
@@ -400,6 +623,10 @@ function AppScreen() {
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [documentsError, setDocumentsError] = useState<string | null>(null)
   const [pinnedDocuments, setPinnedDocuments] = useState<PinnedDocumentRecord[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(false)
+  const [projectsError, setProjectsError] = useState<string | null>(null)
+  const [projects, setProjects] = useState<ProjectRecord[]>([])
+  const [projectSearch, setProjectSearch] = useState('')
 
   const [saveModalOpen, setSaveModalOpen] = useState(false)
   const [saveSubmitting, setSaveSubmitting] = useState(false)
@@ -605,9 +832,85 @@ function AppScreen() {
     void adminTokenActions.handleRefreshAdminTokenPanel()
   }, [adminTokenActions, isAdmin, isAdminTokenRoute])
 
+  useEffect(() => {
+    if (!user || workspaceSection !== 'projects') {
+      return
+    }
+    let cancelled = false
+    const loadProjects = async () => {
+      setProjectsLoading(true)
+      setProjectsError(null)
+      try {
+        const loaded = await listProjects(false)
+        if (!cancelled) {
+          setProjects(loaded)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setProjectsError(describeError(error))
+        }
+      } finally {
+        if (!cancelled) {
+          setProjectsLoading(false)
+        }
+      }
+    }
+    void loadProjects()
+    return () => {
+      cancelled = true
+    }
+  }, [user, workspaceSection])
+
+  useEffect(() => {
+    if (!sessionRouteInfo || sessionsLoading) {
+      return
+    }
+    if (sessions.length === 0) {
+      return
+    }
+    const routeSessionExists = sessions.some((item) => item.session_id === sessionRouteInfo.sessionId)
+    if (routeSessionExists) {
+      return
+    }
+    navigate(APP_ROUTES.sessions, { replace: true })
+  }, [navigate, sessionRouteInfo, sessions, sessionsLoading])
+
+  useEffect(() => {
+    if (!selectedSessionId) {
+      return
+    }
+    if (location.pathname !== APP_ROUTES.sessions && location.pathname !== APP_ROUTES.sessionsNew) {
+      return
+    }
+    navigate(`/app/sessions/${selectedSessionId}/chat`, { replace: true })
+  }, [location.pathname, navigate, selectedSessionId])
+
+  const handleSelectSession = (sessionId: string) => {
+    setSelectedSessionId(sessionId)
+
+    if (!location.pathname.startsWith('/app/sessions/')) {
+      navigate(`/app/sessions/${sessionId}/chat`)
+      return
+    }
+
+    if (!sessionRouteInfo) {
+      navigate(`/app/sessions/${sessionId}/chat`)
+      return
+    }
+
+    if (sessionRouteInfo.sessionId !== sessionId) {
+      navigate(`/app/sessions/${sessionId}/chat`)
+      return
+    }
+
+    if (sessionRouteInfo.action !== 'chat') {
+      navigate(`/app/sessions/${sessionId}/chat`)
+    }
+  }
+
   const handleRouteContinue = async () => {
     await handleContinueSession()
-    navigate(APP_ROUTES.workspace)
+    navigate(APP_ROUTES.sessions)
   }
 
   const handleRouteSave = async (payload: {
@@ -630,52 +933,65 @@ function AppScreen() {
     }
   }
 
-  const renderWorkspace = () => (
-    <WorkspaceGrid>
-      <SessionSidebar
-        sessions={sessions}
-        selectedSessionId={selectedSessionId}
-        projectId={projectId}
-        defaultProjectId={defaultProjectId}
-        settingDefaultProject={settingDefaultProject}
-        defaultProvider={WEB_CONFIG.defaultProvider}
-        defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
-        modelDefaults={WEB_CONFIG.defaultModelByProvider}
-        loading={sessionsLoading}
-        creating={creatingSession}
-        onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
-        onSetDefaultProject={handleSetDefaultProject}
-        onSelectSession={setSelectedSessionId}
-        onCreateSession={handleCreateSession}
-      />
+  const renderWorkspaceHome = () => (
+    <WorkspaceHomeGrid>
+      <WorkspaceHomeCard>
+        <WorkspaceHomeTitle>Sessions and Chat</WorkspaceHomeTitle>
+        <MutedText>
+          Focused chat workspace with a cleaner transcript flow and dedicated memory actions.
+        </MutedText>
+        <SessionMeta>{sessions.length} sessions loaded</SessionMeta>
+        <button type="button" onClick={() => navigate(APP_ROUTES.sessions)}>
+          Open Sessions
+        </button>
+      </WorkspaceHomeCard>
+      <WorkspaceHomeCard>
+        <WorkspaceHomeTitle>Engram Memory</WorkspaceHomeTitle>
+        <MutedText>Review pinned engrams, graph edges, and suggestion queue in a separate memory page.</MutedText>
+        <SessionMeta>{availableEngrams.length} engrams available</SessionMeta>
+        <button type="button" onClick={() => navigate(APP_ROUTES.engrams)}>
+          Open Engrams
+        </button>
+      </WorkspaceHomeCard>
+      <WorkspaceHomeCard>
+        <WorkspaceHomeTitle>Document Ingestion</WorkspaceHomeTitle>
+        <MutedText>Upload and chunk docs without competing for screen space with chat controls.</MutedText>
+        <SessionMeta>{documents.length} project documents</SessionMeta>
+        <button type="button" onClick={() => navigate(APP_ROUTES.documents)}>
+          Open Documents
+        </button>
+      </WorkspaceHomeCard>
+      <WorkspaceHomeCard>
+        <WorkspaceHomeTitle>Projects</WorkspaceHomeTitle>
+        <MutedText>Manage active project scope, defaults, members, and transfer entry points.</MutedText>
+        <SessionMeta>Active: {projectId || 'not set'}</SessionMeta>
+        <button type="button" onClick={() => navigate(APP_ROUTES.projects)}>
+          Open Projects
+        </button>
+      </WorkspaceHomeCard>
+    </WorkspaceHomeGrid>
+  )
 
-      <ChatPanel
-        session={selectedSession}
-        messages={messages}
-        pendingUserText={pendingUserText}
-        streamingAssistantText={streamingAssistantText}
-        composerText={composerText}
-        sending={chatSending}
-        error={chatError}
-        sourceReferences={sourceReferences}
-        usedEngramLinkIds={usedEngramLinkIds}
-        engramTracePaths={engramTracePaths}
-        debugTrace={chatDebugTrace}
-        timelineEvents={timelineEvents}
-        linkRecallEnabled={linkRecallEnabled}
-        linkRecallDepth={linkRecallDepth}
-        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
-        onLinkRecallEnabledChange={setLinkRecallEnabled}
-        onLinkRecallDepthChange={setLinkRecallDepth}
-        onLinkRecallMaxNeighborsChange={setLinkRecallMaxNeighbors}
-        onComposerChange={setComposerText}
-        onSend={handleSend}
-        onRetry={handleRetry}
-        onOpenSaveModal={() => setSaveModalOpen(true)}
-        onContinueSession={handleContinueSession}
-      />
+  const renderSessionPrimarySurface = () => {
+    if (sessionRouteInfo?.action === 'pins-engrams') {
+      return (
+        <PinnedEngramPanel
+          selectedSessionId={selectedSessionId}
+          pinnedEngrams={pinnedEngrams}
+          availableEngrams={availableEngrams}
+          search={engramSearch}
+          loading={engramLoading}
+          onSearchChange={setEngramSearch}
+          onRefresh={handleRefreshEngrams}
+          onPin={handlePin}
+          onUnpin={handleUnpin}
+          onCopyId={handleCopyEngramId}
+        />
+      )
+    }
 
-      <RightRail>
+    if (sessionRouteInfo?.action === 'pins-documents') {
+      return (
         <DocumentIngestionPanel
           projectId={projectId}
           selectedSessionId={selectedSessionId}
@@ -690,7 +1006,143 @@ function AppScreen() {
           onPinDocument={handlePinDocument}
           onUnpinDocument={handleUnpinDocument}
         />
+      )
+    }
 
+    return (
+      <ChatPanel
+        session={selectedSession}
+        messages={messages}
+        pendingUserText={pendingUserText}
+        streamingAssistantText={streamingAssistantText}
+        composerText={composerText}
+        sending={chatSending}
+        error={chatError}
+        sourceReferences={sourceReferences}
+        usedEngramLinkIds={usedEngramLinkIds}
+        engramTracePaths={engramTracePaths}
+        debugTrace={chatDebugTrace}
+        timelineEvents={timelineEvents}
+        showTimeline={sessionRouteInfo?.action === 'timeline' || sessionRouteInfo?.action === 'lifecycle'}
+        showDebugTrace={sessionRouteInfo?.action === 'lifecycle'}
+        linkRecallEnabled={linkRecallEnabled}
+        linkRecallDepth={linkRecallDepth}
+        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
+        onLinkRecallEnabledChange={setLinkRecallEnabled}
+        onLinkRecallDepthChange={setLinkRecallDepth}
+        onLinkRecallMaxNeighborsChange={setLinkRecallMaxNeighbors}
+        onComposerChange={setComposerText}
+        onSend={handleSend}
+        onRetry={handleRetry}
+        onOpenSaveModal={() => setSaveModalOpen(true)}
+        onContinueSession={handleContinueSession}
+      />
+    )
+  }
+
+  const renderSessionsWorkspace = () => (
+    <WorkspaceSplit>
+      <SessionSidebar
+        sessions={sessions}
+        selectedSessionId={selectedSessionId}
+        projectId={projectId}
+        defaultProjectId={defaultProjectId}
+        settingDefaultProject={settingDefaultProject}
+        defaultProvider={WEB_CONFIG.defaultProvider}
+        defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
+        modelDefaults={WEB_CONFIG.defaultModelByProvider}
+        loading={sessionsLoading}
+        creating={creatingSession}
+        onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
+        onSetDefaultProject={handleSetDefaultProject}
+        onSelectSession={handleSelectSession}
+        onCreateSession={handleCreateSession}
+      />
+
+      <WorkspaceMain>
+        <WorkspaceSingleColumn>
+          {isContinueRoute ? (
+            <RouteActionStrip>
+              <p>Continue this thread as a fresh session while carrying your pinned continuity context.</p>
+              <button type="button" onClick={() => void handleRouteContinue()} disabled={!selectedSessionId}>
+                Continue Session Now
+              </button>
+            </RouteActionStrip>
+          ) : null}
+          {renderSessionPrimarySurface()}
+        </WorkspaceSingleColumn>
+
+        <WorkspaceSupportGrid>
+          <RouteActionStrip>
+            <p>
+              Chat is intentionally focused. Memory graph, timeline, and pins are available via dedicated
+              routes and this quick-action strip.
+            </p>
+            <SplitGrid>
+              <button
+                type="button"
+                onClick={() =>
+                  selectedSessionId
+                    ? navigate(`/app/sessions/${selectedSessionId}/pins/engrams`)
+                    : navigate(APP_ROUTES.engrams)
+                }
+              >
+                Engram Pins
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  selectedSessionId
+                    ? navigate(`/app/sessions/${selectedSessionId}/pins/documents`)
+                    : navigate(APP_ROUTES.documents)
+                }
+              >
+                Document Pins
+              </button>
+            </SplitGrid>
+          </RouteActionStrip>
+
+          <LinkedEngramPanel
+            selectedSessionId={selectedSessionId}
+            loading={linkedEngramLoading}
+            error={linkedEngramError}
+            sourceEngramIds={linkedSourceEngramIds}
+            links={linkedEngramLinks}
+            suggestions={linkedEngramSuggestions}
+            pendingSuggestionKeys={pendingSuggestionKeys}
+            availableEngrams={availableEngrams}
+            sourceReferences={sourceReferences}
+            tracePaths={engramTracePaths}
+            onRefresh={refreshLinkInsights}
+            onAcceptSuggestion={handleAcceptSuggestion}
+            onRejectSuggestion={handleRejectSuggestion}
+          />
+        </WorkspaceSupportGrid>
+      </WorkspaceMain>
+    </WorkspaceSplit>
+  )
+
+  const renderEngramsWorkspace = () => (
+    <WorkspaceSingleColumn>
+      <RouteActionStrip>
+        <p>Engram management is separated from chat so memory curation has full, dedicated space.</p>
+        <button type="button" onClick={() => navigate(APP_ROUTES.sessions)}>
+          Open Session Chat
+        </button>
+      </RouteActionStrip>
+      <WorkspaceSupportGrid>
+        <PinnedEngramPanel
+          selectedSessionId={selectedSessionId}
+          pinnedEngrams={pinnedEngrams}
+          availableEngrams={availableEngrams}
+          search={engramSearch}
+          loading={engramLoading}
+          onSearchChange={setEngramSearch}
+          onRefresh={handleRefreshEngrams}
+          onPin={handlePin}
+          onUnpin={handleUnpin}
+          onCopyId={handleCopyEngramId}
+        />
         <LinkedEngramPanel
           selectedSessionId={selectedSessionId}
           loading={linkedEngramLoading}
@@ -706,64 +1158,150 @@ function AppScreen() {
           onAcceptSuggestion={handleAcceptSuggestion}
           onRejectSuggestion={handleRejectSuggestion}
         />
-
-        <PinnedEngramPanel
-          selectedSessionId={selectedSessionId}
-          pinnedEngrams={pinnedEngrams}
-          availableEngrams={availableEngrams}
-          search={engramSearch}
-          loading={engramLoading}
-          onSearchChange={setEngramSearch}
-          onRefresh={handleRefreshEngrams}
-          onPin={handlePin}
-          onUnpin={handleUnpin}
-          onCopyId={handleCopyEngramId}
-        />
-      </RightRail>
-    </WorkspaceGrid>
+      </WorkspaceSupportGrid>
+    </WorkspaceSingleColumn>
   )
 
-  const renderWorkspaceRouteHint = () => {
-    if (isContinueRoute) {
-      return (
-        <RouteActionStrip>
-          <p>
-            Continue this session as a new chat while carrying pinned context. This route is action-specific
-            and mirrors the in-chat continuation control.
-          </p>
-          <button type="button" onClick={() => void handleRouteContinue()} disabled={!selectedSessionId}>
-            Continue Session Now
-          </button>
-        </RouteActionStrip>
-      )
+  const renderDocumentsWorkspace = () => (
+    <WorkspaceSingleColumn>
+      <RouteActionStrip>
+        <p>Documents and evidence pinning are isolated here to reduce noise in active chat workflows.</p>
+        <button
+          type="button"
+          onClick={() =>
+            selectedSessionId
+              ? navigate(`/app/sessions/${selectedSessionId}/pins/documents`)
+              : navigate(APP_ROUTES.sessions)
+          }
+        >
+          Open Session Document Pins
+        </button>
+      </RouteActionStrip>
+
+      <WorkspaceSupportGrid>
+        <DocumentIngestionPanel
+          projectId={projectId}
+          selectedSessionId={selectedSessionId}
+          documents={documents}
+          pinnedDocumentIds={pinnedDocuments.map((item) => item.document_id)}
+          loading={documentsLoading}
+          submitting={documentsSubmitting}
+          error={documentsError}
+          onRefresh={handleRefreshDocuments}
+          onIngestText={handleIngestText}
+          onIngestFile={handleIngestFile}
+          onPinDocument={handlePinDocument}
+          onUnpinDocument={handleUnpinDocument}
+        />
+
+        <GlassPane>
+          <PaneHeader>
+            <h2>Pinned Document Context</h2>
+          </PaneHeader>
+          <MutedText>
+            {selectedSessionId
+              ? `Active session: ${selectedSessionId}`
+              : 'Pick a session to pin or unpin project documents.'}
+          </MutedText>
+          <SessionMeta>{pinnedDocuments.length} documents pinned</SessionMeta>
+          <ProjectsList>
+            {pinnedDocuments.length === 0 ? (
+              <MutedText>No pinned documents for the selected session.</MutedText>
+            ) : (
+              pinnedDocuments.map((item) => (
+                <ProjectCard key={item.document_id}>
+                  <strong>{item.document_id}</strong>
+                  <SessionMeta>Pinned at {new Date(item.created_at).toLocaleString()}</SessionMeta>
+                  <ProjectActionRow>
+                    <button type="button" onClick={() => void handleUnpinDocument(item.document_id)}>
+                      Unpin
+                    </button>
+                  </ProjectActionRow>
+                </ProjectCard>
+              ))
+            )}
+          </ProjectsList>
+        </GlassPane>
+      </WorkspaceSupportGrid>
+    </WorkspaceSingleColumn>
+  )
+
+  const renderProjectsWorkspace = () => {
+    const directoryState = buildProjectDirectoryState(projects, projectSearch)
+
+    const refreshProjects = async () => {
+      setProjectsLoading(true)
+      setProjectsError(null)
+      try {
+        setProjects(await listProjects(false))
+      } catch (error) {
+        setProjectsError(describeError(error))
+      } finally {
+        setProjectsLoading(false)
+      }
     }
 
-    if (isSaveRoute) {
-      return (
-        <RouteActionStrip>
-          <p>
-            Save this session as an engram. The dedicated route opens the save flow without leaving your
-            continuity context.
-          </p>
-          <button type="button" onClick={() => setSaveModalOpen(true)} disabled={!selectedSessionId}>
-            Open Save Form
-          </button>
-        </RouteActionStrip>
-      )
-    }
+    return (
+      <ProjectsGrid>
+        <GlassPane>
+          <PaneHeader>
+            <h2>Active Project Scope</h2>
+            <button type="button" onClick={() => void handleSetDefaultProject()} disabled={settingDefaultProject}>
+              {settingDefaultProject ? 'Saving…' : 'Set as Default'}
+            </button>
+          </PaneHeader>
+          <label htmlFor="active-project-id">Project ID</label>
+          <input
+            id="active-project-id"
+            value={projectId}
+            onChange={(event) => setProjectId(normalizeProjectId(event.target.value))}
+            placeholder="project-id"
+          />
+          <MutedText>
+            Default project: <strong>{defaultProjectId || 'not configured'}</strong>
+          </MutedText>
+          <RouteActionStrip>
+            <p>Project routes are now dedicated pages so governance actions do not interrupt chat.</p>
+            <SplitGrid>
+              <button type="button" onClick={() => navigate(APP_ROUTES.transferExport)}>
+                Export Project
+              </button>
+              <button type="button" onClick={() => navigate(APP_ROUTES.transferImport)}>
+                Import Bundle
+              </button>
+            </SplitGrid>
+          </RouteActionStrip>
+        </GlassPane>
 
-    if (location.pathname === APP_ROUTES.documentsIngestText || location.pathname === APP_ROUTES.documentsIngestFile) {
-      return (
-        <RouteActionStrip>
-          <p>
-            Use the Document Ingestion panel to add text or files, then pin relevant evidence into the
-            selected session.
-          </p>
-        </RouteActionStrip>
-      )
-    }
+        <ProjectDirectoryPane
+          projectsLoading={projectsLoading}
+          projectsError={projectsError}
+          projectSearch={projectSearch}
+          directoryState={directoryState}
+          onProjectSearchChange={setProjectSearch}
+          onRefreshProjects={refreshProjects}
+          onUseProject={setProjectId}
+          onOpenMembers={(projectIdValue) => navigate(`/app/projects/${projectIdValue}/members`)}
+          onOpenAudit={(projectIdValue) => navigate(`/app/projects/${projectIdValue}/audit`)}
+        />
+      </ProjectsGrid>
+    )
+  }
 
-    return null
+  const renderWorkspaceSurface = () => {
+    if (workspaceSection === 'home') {
+      return renderWorkspaceHome()
+    }
+    if (workspaceSection === 'sessions') {
+      return renderSessionsWorkspace()
+    }
+    if (workspaceSection === 'engrams') {
+      return renderEngramsWorkspace()
+    }
+    if (workspaceSection === 'documents') {
+      return renderDocumentsWorkspace()
+    }
+    return renderProjectsWorkspace()
   }
 
   const renderBody = () => {
@@ -843,12 +1381,7 @@ function AppScreen() {
       )
     }
 
-    return (
-      <AppLayout title={appRouteMeta.title} description={appRouteMeta.description}>
-        {renderWorkspaceRouteHint()}
-        {renderWorkspace()}
-      </AppLayout>
-    )
+    return <AppLayout title={appRouteMeta.title} description={appRouteMeta.description}>{renderWorkspaceSurface()}</AppLayout>
   }
 
   const renderSaveModal = () => {
