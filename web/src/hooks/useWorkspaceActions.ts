@@ -42,8 +42,10 @@ export function useWorkspaceActions(config: WorkspaceActionsConfig) {
         setSessions((current) => [created, ...current])
         setSelectedSessionId(created.session_id)
         setComposerText('')
+        return created
       } catch (error) {
         setChatError(describeError(error))
+        return null
       } finally {
         setCreatingSession(false)
       }

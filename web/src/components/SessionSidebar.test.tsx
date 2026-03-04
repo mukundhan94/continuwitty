@@ -32,9 +32,11 @@ function buildSession(overrides: Partial<ChatSession>): ChatSession {
 function renderSidebar(
   overrides: Partial<{
     onCreateSession: (payload: ChatSessionFormPayload) => Promise<void>
+    onSelectSession: (sessionId: string) => void
   }> = {},
 ) {
   const onCreateSession = overrides.onCreateSession ?? vi.fn(async () => {})
+  const onSelectSession = overrides.onSelectSession ?? vi.fn()
   render(
     <ThemeProvider theme={lightTheme}>
       <SessionSidebar
@@ -56,12 +58,12 @@ function renderSidebar(
         creating={false}
         onProjectChange={vi.fn()}
         onSetDefaultProject={vi.fn(async () => {})}
-        onSelectSession={vi.fn()}
+        onSelectSession={onSelectSession}
         onCreateSession={onCreateSession}
       />
     </ThemeProvider>,
   )
-  return { onCreateSession }
+  return { onCreateSession, onSelectSession }
 }
 
 describe('SessionSidebar', () => {
@@ -149,5 +151,15 @@ describe('SessionSidebar', () => {
         }),
       )
     })
+  })
+
+  it('filters session list by search input', async () => {
+    const user = userEvent.setup()
+    renderSidebar()
+
+    await user.type(screen.getByLabelText(/find session/i), 'older')
+
+    expect(screen.getByRole('button', { name: /older session/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /current session/i })).not.toBeInTheDocument()
   })
 })

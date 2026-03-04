@@ -174,6 +174,8 @@ interface ChatPanelProps {
   engramTracePaths?: EngramTracePath[]
   debugTrace: ChatDebugTrace | null
   timelineEvents: ChatTimelineEvent[]
+  showDebugTrace?: boolean
+  showTimeline?: boolean
   linkRecallEnabled?: boolean
   linkRecallDepth?: number
   linkRecallMaxNeighbors?: number
@@ -644,6 +646,8 @@ export function ChatPanel({
   engramTracePaths = [],
   debugTrace,
   timelineEvents,
+  showDebugTrace = true,
+  showTimeline = true,
   linkRecallEnabled = true,
   linkRecallDepth = 1,
   linkRecallMaxNeighbors = 8,
@@ -696,9 +700,9 @@ export function ChatPanel({
         engramTracePaths={engramTracePaths}
       />
 
-      {debugTrace ? <DebugTracePanel debugTrace={debugTrace} /> : null}
+      {showDebugTrace && debugTrace ? <DebugTracePanel debugTrace={debugTrace} /> : null}
 
-      <TimelineSection timelineEvents={timelineEvents} />
+      {showTimeline ? <TimelineSection timelineEvents={timelineEvents} /> : null}
 
       <ComposerSection
         hasSession={hasSession}
