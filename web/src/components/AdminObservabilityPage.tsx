@@ -35,7 +35,35 @@ interface VersionPayload {
   eval_suite_version: string
 }
 
-export function AdminObservabilityPage() {
+interface ObservabilityPayload {
+  metrics: Record<string, unknown>
+  version: VersionPayload
+}
+
+interface ObservabilityDataState {
+  loading: boolean
+  error: string | null
+  metrics: Record<string, unknown> | null
+  version: VersionPayload | null
+}
+
+interface JsonPaneProps {
+  title: string
+  loadingLabel: string
+  loading: boolean
+  error: string | null
+  payload: Record<string, unknown> | VersionPayload | null
+}
+
+async function loadObservabilityPayload(): Promise<ObservabilityPayload> {
+  const [metrics, version] = await Promise.all([
+    apiJson<Record<string, unknown>>('/api/v1/metrics'),
+    apiJson<VersionPayload>('/api/v1/version'),
+  ])
+  return { metrics, version }
+}
+
+function useObservabilityData(): ObservabilityDataState {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null)
@@ -48,15 +76,11 @@ export function AdminObservabilityPage() {
       setLoading(true)
       setError(null)
       try {
-        const [metricsPayload, versionPayload] = await Promise.all([
-          apiJson<Record<string, unknown>>('/api/v1/metrics'),
-          apiJson<VersionPayload>('/api/v1/version'),
-        ])
-        if (cancelled) {
-          return
+        const payload = await loadObservabilityPayload()
+        if (!cancelled) {
+          setMetrics(payload.metrics)
+          setVersion(payload.version)
         }
-        setMetrics(metricsPayload)
-        setVersion(versionPayload)
       } catch (loadError) {
         if (!cancelled) {
           setError(describeError(loadError))
@@ -74,25 +98,41 @@ export function AdminObservabilityPage() {
     }
   }, [])
 
+  return { loading, error, metrics, version }
+}
+
+function JsonPane({ title, loadingLabel, loading, error, payload }: JsonPaneProps) {
+  return (
+    <GlassPane>
+      <PaneHeader>
+        <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">{title}</h2>
+      </PaneHeader>
+      {loading ? <MutedText>{loadingLabel}</MutedText> : null}
+      {error ? <ErrorText>{error}</ErrorText> : null}
+      {payload ? <JsonBlock>{JSON.stringify(payload, null, 2)}</JsonBlock> : null}
+    </GlassPane>
+  )
+}
+
+export function AdminObservabilityPage() {
+  const { loading, error, metrics, version } = useObservabilityData()
+
   return (
     <Grid>
-      <GlassPane>
-        <PaneHeader>
-          <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Runtime Version</h2>
-        </PaneHeader>
-        {loading ? <MutedText>Loading runtime metadata...</MutedText> : null}
-        {error ? <ErrorText>{error}</ErrorText> : null}
-        {version ? <JsonBlock>{JSON.stringify(version, null, 2)}</JsonBlock> : null}
-      </GlassPane>
-
-      <GlassPane>
-        <PaneHeader>
-          <h2 className="font-display text-base font-semibold tracking-[0.02em] text-ink">Observability Snapshot</h2>
-        </PaneHeader>
-        {loading ? <MutedText>Loading metrics...</MutedText> : null}
-        {error ? <ErrorText>{error}</ErrorText> : null}
-        {metrics ? <JsonBlock>{JSON.stringify(metrics, null, 2)}</JsonBlock> : null}
-      </GlassPane>
+      <JsonPane
+        title="Runtime Version"
+        loadingLabel="Loading runtime metadata..."
+        loading={loading}
+        error={error}
+        payload={version}
+      />
+      <JsonPane
+        title="Observability Snapshot"
+        loadingLabel="Loading metrics..."
+        loading={loading}
+        error={error}
+        payload={metrics}
+      />
     </Grid>
   )
 }

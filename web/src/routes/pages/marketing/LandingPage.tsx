@@ -436,142 +436,194 @@ const ARCH_PROVIDERS = ['OpenAI', 'Anthropic', 'Custom']
 
 /* ── Component ────────────────────────────────────── */
 
+function LandingHero() {
+  return (
+    <Hero>
+      {PARTICLES.map((particle, index) => (
+        <Particle
+          key={index}
+          $top={particle.top}
+          $left={particle.left}
+          $dur={particle.dur}
+          $anim={particle.anim}
+        />
+      ))}
+      <MemoryStrandMark size="lg" />
+      <Wordmark>Continu<span>Witty</span></Wordmark>
+      <Underline>
+        <svg width="100%" height="14" viewBox="0 0 520 14" preserveAspectRatio="none">
+          <path d="M1 8 C 110 2, 220 12, 340 6 C 410 3, 460 9, 519 5" stroke="rgba(94,234,212,0.45)" strokeWidth="2" fill="none" strokeLinecap="round" />
+        </svg>
+      </Underline>
+      <Tag>Intelligence that flows</Tag>
+      <Sub>Persistent memory for agents and teams that run long, high-context work. Capture decisions, keep provenance, and resume without context loss.</Sub>
+      <Ctas>
+        <PrimaryCTA to={MARKETING_ROUTES.login}>Start Flowing</PrimaryCTA>
+        <GhostCTA to={MARKETING_ROUTES.howItWorks}>See How It Works</GhostCTA>
+      </Ctas>
+      <ScrollHint>
+        <span>Scroll to explore</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12l7 7 7-7" /></svg>
+      </ScrollHint>
+    </Hero>
+  )
+}
+
+function LandingLoopSection() {
+  return (
+    <MarketingSection
+      eyebrow="How it works"
+      title="One continuous loop. No context lost."
+      lead="Session to context to memory to continuation — an unbroken cycle that keeps agents and teams aligned across every interaction."
+    >
+      <FlowLoopDiagram />
+    </MarketingSection>
+  )
+}
+
+function LandingJourneySection() {
+  return (
+    <MarketingSection
+      eyebrow="The memory loop"
+      title="Memory continuity, not prompt repetition."
+      lead="ContinuWitty turns each session into a governed, searchable memory stream. Your next interaction starts with what matters."
+      showWave
+    >
+      <JourneyGrid>
+        <GlassCard icon={<ChatIcon />} title="1. Capture" description="Persist key milestones from active chats as engrams with tags, summaries, and visibility controls." />
+        <GlassCard icon={<FlowIcon />} title="2. Continue" description="Start the next session with pinned engrams and documents so the agent can pick up immediately." />
+        <GlassCard icon={<ShieldIcon />} title="3. Govern" description="Use project scopes, token controls, and audit timelines to scale memory operations safely." />
+      </JourneyGrid>
+    </MarketingSection>
+  )
+}
+
+function LandingArchitectureSection() {
+  return (
+    <MarketingSection
+      eyebrow="Architecture"
+      title="One platform, every actor."
+      lead="Humans and agents connect through the same continuity layer, powered by any AI provider."
+    >
+      <AnimatedSvgDiagram>
+        <ArchSvg>
+          <svg viewBox="0 0 800 220" xmlns="http://www.w3.org/2000/svg">
+            <g className="arch-layer arch-l1">
+              <rect x="220" y="10" width="140" height="44" rx="12" fill="rgba(94,234,212,0.06)" stroke="rgba(94,234,212,0.2)" strokeWidth="1" />
+              <text x="290" y="37" textAnchor="middle" fontFamily="Comfortaa, sans-serif" fontSize="11" fill="#e8fffb">Humans</text>
+              <rect x="440" y="10" width="140" height="44" rx="12" fill="rgba(94,234,212,0.06)" stroke="rgba(94,234,212,0.2)" strokeWidth="1" />
+              <text x="510" y="37" textAnchor="middle" fontFamily="Comfortaa, sans-serif" fontSize="11" fill="#e8fffb">AI Agents</text>
+              <line x1="360" y1="32" x2="440" y2="32" stroke="rgba(94,234,212,0.15)" strokeWidth="1" strokeDasharray="4 3" />
+            </g>
+            <g className="arch-layer arch-l2">
+              <line x1="290" y1="54" x2="290" y2="80" stroke="rgba(94,234,212,0.12)" strokeWidth="1" />
+              <line x1="510" y1="54" x2="510" y2="80" stroke="rgba(94,234,212,0.12)" strokeWidth="1" />
+              <rect x="100" y="80" width="600" height="56" rx="14" fill="rgba(12,53,71,0.5)" stroke="rgba(94,234,212,0.25)" strokeWidth="1" />
+              <text x="400" y="99" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="8" fill="rgba(94,234,212,0.4)" letterSpacing="2">CONTINUWITTY PLATFORM</text>
+              {ARCH_COMPARTMENTS.map((label, index) => (
+                <g key={label}>
+                  <text x={175 + index * 150} y="124" textAnchor="middle" fontFamily="Comfortaa, sans-serif" fontSize="10" fill="#a7f3d0">{label}</text>
+                  {index < 3 ? (
+                    <line x1={250 + index * 150} y1="106" x2={250 + index * 150} y2="130" stroke="rgba(94,234,212,0.08)" strokeWidth="1" strokeDasharray="3 3" />
+                  ) : null}
+                </g>
+              ))}
+            </g>
+            <g className="arch-layer arch-l3">
+              {ARCH_PROVIDERS.map((provider, index) => (
+                <g key={provider}>
+                  <line x1={250 + index * 150} y1="136" x2={250 + index * 150} y2="165" stroke="rgba(94,234,212,0.1)" strokeWidth="1" />
+                  <rect x={190 + index * 150} y="165" width="120" height="36" rx="10" fill="rgba(8,20,32,0.7)" stroke="rgba(94,234,212,0.12)" strokeWidth="1" />
+                  <text x={250 + index * 150} y="188" textAnchor="middle" fontFamily="Comfortaa, sans-serif" fontSize="10" fill="rgba(178,245,234,0.5)">{provider}</text>
+                </g>
+              ))}
+            </g>
+          </svg>
+        </ArchSvg>
+      </AnimatedSvgDiagram>
+    </MarketingSection>
+  )
+}
+
+function LandingBenefitsSection() {
+  return (
+    <MarketingSection
+      eyebrow="For agents & teams"
+      title="Built for human teams and autonomous agents."
+      lead="Agents cannot ship reliable output without stable memory. ContinuWitty gives them durable context, explainable provenance, and project boundaries."
+    >
+      <BenefitsGrid>
+        <div>
+          {BENEFITS.map((benefit) => (
+            <BenefitRow key={benefit.title}>
+              <BenefitIcon>{benefit.icon}</BenefitIcon>
+              <BenefitText>
+                <h4>{benefit.title}</h4>
+                <p>{benefit.desc}</p>
+              </BenefitText>
+            </BenefitRow>
+          ))}
+        </div>
+        <IllustrationBox>
+          <svg viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="70" cy="55" r="18" fill="none" stroke="rgba(94,234,212,0.3)" strokeWidth="1.5" />
+            <circle cx="70" cy="55" r="6" fill="rgba(94,234,212,0.15)" />
+            <rect x="54" y="80" width="32" height="45" rx="10" fill="rgba(94,234,212,0.06)" stroke="rgba(94,234,212,0.2)" strokeWidth="1" />
+            <text x="70" y="140" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="8" fill="rgba(94,234,212,0.3)">HUMAN</text>
+            <rect x="192" y="40" width="36" height="36" rx="8" fill="none" stroke="rgba(94,234,212,0.3)" strokeWidth="1.5" />
+            <circle cx="203" cy="55" r="3" fill="rgba(94,234,212,0.25)" />
+            <circle cx="217" cy="55" r="3" fill="rgba(94,234,212,0.25)" />
+            <rect x="194" y="80" width="32" height="45" rx="10" fill="rgba(94,234,212,0.06)" stroke="rgba(94,234,212,0.2)" strokeWidth="1" />
+            <text x="210" y="140" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="8" fill="rgba(94,234,212,0.3)">AGENT</text>
+            <path d="M95,75 C120,60 130,60 140,70 C150,80 160,80 170,65 C175,58 180,62 195,70" stroke="rgba(94,234,212,0.25)" strokeWidth="2" fill="none" strokeLinecap="round" />
+            <path d="M95,85 C115,75 130,72 140,80 C150,88 165,85 175,75 C180,70 185,72 195,80" stroke="rgba(167,243,208,0.15)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+            <text x="140" y="170" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill="rgba(94,234,212,0.2)" letterSpacing="1">SHARED MEMORY</text>
+          </svg>
+        </IllustrationBox>
+      </BenefitsGrid>
+    </MarketingSection>
+  )
+}
+
+function LandingProofSection() {
+  return (
+    <ProofStrip>
+      <ProofLabel>Built for</ProofLabel>
+      {PROOF_TAGS.map((tag, index) => (
+        <span key={tag} style={{ display: 'contents' }}>
+          {index > 0 ? <ProofDot /> : null}
+          <ProofTag>{tag}</ProofTag>
+        </span>
+      ))}
+    </ProofStrip>
+  )
+}
+
+function LandingCTASection() {
+  return (
+    <CtaBand>
+      <h2>Ready to give your agents memory?</h2>
+      <p>Start flowing in under two minutes.</p>
+      <CtaBandActions>
+        <PrimaryCTA to={MARKETING_ROUTES.login}>Start Flowing</PrimaryCTA>
+        <GhostCTA to={MARKETING_ROUTES.pricing}>See Pricing</GhostCTA>
+      </CtaBandActions>
+    </CtaBand>
+  )
+}
+
 export function LandingPage() {
   return (
     <Page>
-      {/* 1. Hero */}
-      <Hero>
-        {PARTICLES.map((p, i) => (
-          <Particle key={i} $top={p.top} $left={p.left} $dur={p.dur} $anim={p.anim} />
-        ))}
-        <MemoryStrandMark size="lg" />
-        <Wordmark>Continu<span>Witty</span></Wordmark>
-        <Underline>
-          <svg width="100%" height="14" viewBox="0 0 520 14" preserveAspectRatio="none">
-            <path d="M1 8 C 110 2, 220 12, 340 6 C 410 3, 460 9, 519 5" stroke="rgba(94,234,212,0.45)" strokeWidth="2" fill="none" strokeLinecap="round" />
-          </svg>
-        </Underline>
-        <Tag>Intelligence that flows</Tag>
-        <Sub>Persistent memory for agents and teams that run long, high-context work. Capture decisions, keep provenance, and resume without context loss.</Sub>
-        <Ctas>
-          <PrimaryCTA to={MARKETING_ROUTES.login}>Start Flowing</PrimaryCTA>
-          <GhostCTA to={MARKETING_ROUTES.howItWorks}>See How It Works</GhostCTA>
-        </Ctas>
-        <ScrollHint>
-          <span>Scroll to explore</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12l7 7 7-7" /></svg>
-        </ScrollHint>
-      </Hero>
-
-      {/* 2. Product Loop Diagram */}
-      <MarketingSection eyebrow="How it works" title="One continuous loop. No context lost." lead="Session to context to memory to continuation — an unbroken cycle that keeps agents and teams aligned across every interaction.">
-        <FlowLoopDiagram />
-      </MarketingSection>
-
+      <LandingHero />
+      <LandingLoopSection />
       <WaveDivider />
-
-      {/* 3. Journey Grid */}
-      <MarketingSection eyebrow="The memory loop" title="Memory continuity, not prompt repetition." lead="ContinuWitty turns each session into a governed, searchable memory stream. Your next interaction starts with what matters." showWave>
-        <JourneyGrid>
-          <GlassCard icon={<ChatIcon />} title="1. Capture" description="Persist key milestones from active chats as engrams with tags, summaries, and visibility controls." />
-          <GlassCard icon={<FlowIcon />} title="2. Continue" description="Start the next session with pinned engrams and documents so the agent can pick up immediately." />
-          <GlassCard icon={<ShieldIcon />} title="3. Govern" description="Use project scopes, token controls, and audit timelines to scale memory operations safely." />
-        </JourneyGrid>
-      </MarketingSection>
-
-      {/* 4. Architecture Strip */}
-      <MarketingSection eyebrow="Architecture" title="One platform, every actor." lead="Humans and agents connect through the same continuity layer, powered by any AI provider.">
-        <AnimatedSvgDiagram>
-          <ArchSvg>
-            <svg viewBox="0 0 800 220" xmlns="http://www.w3.org/2000/svg">
-              <g className="arch-layer arch-l1">
-                <rect x="220" y="10" width="140" height="44" rx="12" fill="rgba(94,234,212,0.06)" stroke="rgba(94,234,212,0.2)" strokeWidth="1" />
-                <text x="290" y="37" textAnchor="middle" fontFamily="Comfortaa, sans-serif" fontSize="11" fill="#e8fffb">Humans</text>
-                <rect x="440" y="10" width="140" height="44" rx="12" fill="rgba(94,234,212,0.06)" stroke="rgba(94,234,212,0.2)" strokeWidth="1" />
-                <text x="510" y="37" textAnchor="middle" fontFamily="Comfortaa, sans-serif" fontSize="11" fill="#e8fffb">AI Agents</text>
-                <line x1="360" y1="32" x2="440" y2="32" stroke="rgba(94,234,212,0.15)" strokeWidth="1" strokeDasharray="4 3" />
-              </g>
-              <g className="arch-layer arch-l2">
-                <line x1="290" y1="54" x2="290" y2="80" stroke="rgba(94,234,212,0.12)" strokeWidth="1" />
-                <line x1="510" y1="54" x2="510" y2="80" stroke="rgba(94,234,212,0.12)" strokeWidth="1" />
-                <rect x="100" y="80" width="600" height="56" rx="14" fill="rgba(12,53,71,0.5)" stroke="rgba(94,234,212,0.25)" strokeWidth="1" />
-                <text x="400" y="99" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="8" fill="rgba(94,234,212,0.4)" letterSpacing="2">CONTINUWITTY PLATFORM</text>
-                {ARCH_COMPARTMENTS.map((label, i) => (
-                  <g key={label}>
-                    <text x={175 + i * 150} y="124" textAnchor="middle" fontFamily="Comfortaa, sans-serif" fontSize="10" fill="#a7f3d0">{label}</text>
-                    {i < 3 && <line x1={250 + i * 150} y1="106" x2={250 + i * 150} y2="130" stroke="rgba(94,234,212,0.08)" strokeWidth="1" strokeDasharray="3 3" />}
-                  </g>
-                ))}
-              </g>
-              <g className="arch-layer arch-l3">
-                {ARCH_PROVIDERS.map((label, i) => (
-                  <g key={label}>
-                    <line x1={250 + i * 150} y1="136" x2={250 + i * 150} y2="165" stroke="rgba(94,234,212,0.1)" strokeWidth="1" />
-                    <rect x={190 + i * 150} y="165" width="120" height="36" rx="10" fill="rgba(8,20,32,0.7)" stroke="rgba(94,234,212,0.12)" strokeWidth="1" />
-                    <text x={250 + i * 150} y="188" textAnchor="middle" fontFamily="Comfortaa, sans-serif" fontSize="10" fill="rgba(178,245,234,0.5)">{label}</text>
-                  </g>
-                ))}
-              </g>
-            </svg>
-          </ArchSvg>
-        </AnimatedSvgDiagram>
-      </MarketingSection>
-
+      <LandingJourneySection />
+      <LandingArchitectureSection />
       <WaveDivider />
-
-      {/* 5. Agent Benefits */}
-      <MarketingSection eyebrow="For agents & teams" title="Built for human teams and autonomous agents." lead="Agents cannot ship reliable output without stable memory. ContinuWitty gives them durable context, explainable provenance, and project boundaries.">
-        <BenefitsGrid>
-          <div>
-            {BENEFITS.map((b) => (
-              <BenefitRow key={b.title}>
-                <BenefitIcon>{b.icon}</BenefitIcon>
-                <BenefitText>
-                  <h4>{b.title}</h4>
-                  <p>{b.desc}</p>
-                </BenefitText>
-              </BenefitRow>
-            ))}
-          </div>
-          <IllustrationBox>
-            <svg viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="70" cy="55" r="18" fill="none" stroke="rgba(94,234,212,0.3)" strokeWidth="1.5" />
-              <circle cx="70" cy="55" r="6" fill="rgba(94,234,212,0.15)" />
-              <rect x="54" y="80" width="32" height="45" rx="10" fill="rgba(94,234,212,0.06)" stroke="rgba(94,234,212,0.2)" strokeWidth="1" />
-              <text x="70" y="140" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="8" fill="rgba(94,234,212,0.3)">HUMAN</text>
-              <rect x="192" y="40" width="36" height="36" rx="8" fill="none" stroke="rgba(94,234,212,0.3)" strokeWidth="1.5" />
-              <circle cx="203" cy="55" r="3" fill="rgba(94,234,212,0.25)" />
-              <circle cx="217" cy="55" r="3" fill="rgba(94,234,212,0.25)" />
-              <rect x="194" y="80" width="32" height="45" rx="10" fill="rgba(94,234,212,0.06)" stroke="rgba(94,234,212,0.2)" strokeWidth="1" />
-              <text x="210" y="140" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="8" fill="rgba(94,234,212,0.3)">AGENT</text>
-              <path d="M95,75 C120,60 130,60 140,70 C150,80 160,80 170,65 C175,58 180,62 195,70" stroke="rgba(94,234,212,0.25)" strokeWidth="2" fill="none" strokeLinecap="round" />
-              <path d="M95,85 C115,75 130,72 140,80 C150,88 165,85 175,75 C180,70 185,72 195,80" stroke="rgba(167,243,208,0.15)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-              <text x="140" y="170" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="7" fill="rgba(94,234,212,0.2)" letterSpacing="1">SHARED MEMORY</text>
-            </svg>
-          </IllustrationBox>
-        </BenefitsGrid>
-      </MarketingSection>
-
-      {/* 6. Social Proof Strip */}
-      <ProofStrip>
-        <ProofLabel>Built for</ProofLabel>
-        {PROOF_TAGS.map((tag, i) => (
-          <span key={tag} style={{ display: 'contents' }}>
-            {i > 0 && <ProofDot />}
-            <ProofTag>{tag}</ProofTag>
-          </span>
-        ))}
-      </ProofStrip>
-
-      {/* 7. Final CTA Band */}
-      <CtaBand>
-        <h2>Ready to give your agents memory?</h2>
-        <p>Start flowing in under two minutes.</p>
-        <CtaBandActions>
-          <PrimaryCTA to={MARKETING_ROUTES.login}>Start Flowing</PrimaryCTA>
-          <GhostCTA to={MARKETING_ROUTES.pricing}>See Pricing</GhostCTA>
-        </CtaBandActions>
-      </CtaBand>
+      <LandingBenefitsSection />
+      <LandingProofSection />
+      <LandingCTASection />
     </Page>
   )
 }

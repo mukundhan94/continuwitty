@@ -520,41 +520,42 @@ const PageShell = styled.div`
 /*  Component                                                         */
 /* ------------------------------------------------------------------ */
 
-export function ForDevelopersPage() {
+function DeveloperHero() {
   return (
-    <PageShell>
-      {/* 1. Developer Hero */}
-      <HeroSection>
-        <DotGrid />
-        <EyebrowText>For Developers</EyebrowText>
-        <HeroTitle>Build agents that remember decisions, not just prompts.</HeroTitle>
-        <HeroLead>
-          Use REST and MCP workflows to create sessions, persist milestones as engrams, query
-          prior context, and continue work with deterministic continuity.
-        </HeroLead>
-        <HeroActions>
-          <PrimaryBtn to={MARKETING_ROUTES.login}>Start Building</PrimaryBtn>
-          <GhostBtn to={MARKETING_ROUTES.product}>See Platform</GhostBtn>
-        </HeroActions>
-      </HeroSection>
+    <HeroSection>
+      <DotGrid />
+      <EyebrowText>For Developers</EyebrowText>
+      <HeroTitle>Build agents that remember decisions, not just prompts.</HeroTitle>
+      <HeroLead>
+        Use REST and MCP workflows to create sessions, persist milestones as engrams, query
+        prior context, and continue work with deterministic continuity.
+      </HeroLead>
+      <HeroActions>
+        <PrimaryBtn to={MARKETING_ROUTES.login}>Start Building</PrimaryBtn>
+        <GhostBtn to={MARKETING_ROUTES.product}>See Platform</GhostBtn>
+      </HeroActions>
+    </HeroSection>
+  )
+}
 
-      {/* 2. Code Snippet Showcase */}
-      <MarketingSection
-        eyebrow="Quick Start"
-        title="From zero to persistent memory in minutes."
-        lead="Create a session, chat, and save the result as a durable engram — all through simple API calls."
-      >
-        <SnippetGrid>
-          <CodePanel>
-            <CodeHeader>
-              <span>
-                <Dot $color="#ff5f57" />
-                <Dot $color="#febc2e" />
-                <Dot $color="#28c840" />
-              </span>
-              <CodeLabel>Create Session — REST</CodeLabel>
-            </CodeHeader>
-            <CodeBody>{`\
+function DeveloperQuickStart() {
+  return (
+    <MarketingSection
+      eyebrow="Quick Start"
+      title="From zero to persistent memory in minutes."
+      lead="Create a session, chat, and save the result as a durable engram — all through simple API calls."
+    >
+      <SnippetGrid>
+        <CodePanel>
+          <CodeHeader>
+            <span>
+              <Dot $color="#ff5f57" />
+              <Dot $color="#febc2e" />
+              <Dot $color="#28c840" />
+            </span>
+            <CodeLabel>Create Session — REST</CodeLabel>
+          </CodeHeader>
+          <CodeBody>{`\
 `}<span className="cmt"># Create a new session</span>{`
 `}<span className="kw">POST</span>{` /api/v1/sessions
 `}<span className="kw">Content-Type:</span>{` application/json
@@ -565,18 +566,18 @@ export function ForDevelopersPage() {
   `}<span className="str">"model"</span>{`:    `}<span className="str">"claude-sonnet-4-20250514"</span>{`,
   `}<span className="str">"provider"</span>{`: `}<span className="str">"anthropic"</span>{`
 }`}</CodeBody>
-          </CodePanel>
+        </CodePanel>
 
-          <CodePanel>
-            <CodeHeader>
-              <span>
-                <Dot $color="#ff5f57" />
-                <Dot $color="#febc2e" />
-                <Dot $color="#28c840" />
-              </span>
-              <CodeLabel>Save Engram — REST</CodeLabel>
-            </CodeHeader>
-            <CodeBody>{`\
+        <CodePanel>
+          <CodeHeader>
+            <span>
+              <Dot $color="#ff5f57" />
+              <Dot $color="#febc2e" />
+              <Dot $color="#28c840" />
+            </span>
+            <CodeLabel>Save Engram — REST</CodeLabel>
+          </CodeHeader>
+          <CodeBody>{`\
 `}<span className="cmt"># Persist session result as engram</span>{`
 `}<span className="kw">POST</span>{` /api/v1/engrams
 `}<span className="kw">Content-Type:</span>{` application/json
@@ -587,66 +588,90 @@ export function ForDevelopersPage() {
   `}<span className="str">"tags"</span>{`:       [`}<span className="str">"architecture"</span>{`, `}<span className="str">"v2"</span>{`],
   `}<span className="str">"visibility"</span>{`: `}<span className="str">"project"</span>{`
 }`}</CodeBody>
-          </CodePanel>
-        </SnippetGrid>
-      </MarketingSection>
+        </CodePanel>
+      </SnippetGrid>
+    </MarketingSection>
+  )
+}
 
-      {/* 3. API Flow Diagram */}
-      <MarketingSection
-        eyebrow="Architecture"
-        title="Two protocols, one memory layer."
-        lead="Use REST for direct integration or MCP for agent-native streaming. Both paths converge on the same engram store."
-        showWave
-      >
-        <ApiFlowDiagram />
-      </MarketingSection>
+function DeveloperArchitecture() {
+  return (
+    <MarketingSection
+      eyebrow="Architecture"
+      title="Two protocols, one memory layer."
+      lead="Use REST for direct integration or MCP for agent-native streaming. Both paths converge on the same engram store."
+      showWave
+    >
+      <ApiFlowDiagram />
+    </MarketingSection>
+  )
+}
 
-      {/* 4. MCP Protocol Visual */}
-      <MarketingSection
-        eyebrow="MCP Protocol"
-        title="Native agent integration via Model Context Protocol."
-      >
-        <McpWrap>
-          <McpText>
-            <h3>Tools + Resources over SSE</h3>
-            <p>
-              ContinuWitty exposes a full MCP server with tools for session lifecycle,
-              engram persistence, and contextual query. Agents call tools via JSON-RPC
-              and receive streamed responses over Server-Sent Events.
-            </p>
-            <ul>
-              <li>session.create — Start scoped conversations</li>
-              <li>engram.save — Persist milestone memory</li>
-              <li>engram.query — Retrieve prior context by relevance</li>
-              <li>session.continue — Resume with pinned artifacts</li>
-            </ul>
-          </McpText>
-          <McpDiagram />
-        </McpWrap>
-      </MarketingSection>
+function DeveloperMCP() {
+  return (
+    <MarketingSection
+      eyebrow="MCP Protocol"
+      title="Native agent integration via Model Context Protocol."
+    >
+      <McpWrap>
+        <McpText>
+          <h3>Tools + Resources over SSE</h3>
+          <p>
+            ContinuWitty exposes a full MCP server with tools for session lifecycle,
+            engram persistence, and contextual query. Agents call tools via JSON-RPC
+            and receive streamed responses over Server-Sent Events.
+          </p>
+          <ul>
+            <li>session.create — Start scoped conversations</li>
+            <li>engram.save — Persist milestone memory</li>
+            <li>engram.query — Retrieve prior context by relevance</li>
+            <li>session.continue — Resume with pinned artifacts</li>
+          </ul>
+        </McpText>
+        <McpDiagram />
+      </McpWrap>
+    </MarketingSection>
+  )
+}
 
-      {/* 5. Integration Paths */}
-      <MarketingSection
-        eyebrow="Integration"
-        title="Multiple paths into the memory layer."
-      >
-        <IntGrid>
-          <GlassCard icon={<CodeIcon />} title="REST API" description="Standard HTTP endpoints for sessions, engrams, documents, and admin operations." />
-          <GlassCard icon={<PlugIcon />} title="MCP Protocol" description="Agent-native tools and resources over SSE for streaming agent orchestration." />
-          <GlassCard icon={<LayersIcon />} title="Export / Import" description="Portable memory bundles for project transfer and environment migration." />
-          <GlassCard icon={<KeyIcon />} title="Token Auth" description="Scoped personal access tokens with tool-level and project-level restrictions." />
-        </IntGrid>
-      </MarketingSection>
+function DeveloperIntegrations() {
+  return (
+    <MarketingSection
+      eyebrow="Integration"
+      title="Multiple paths into the memory layer."
+    >
+      <IntGrid>
+        <GlassCard icon={<CodeIcon />} title="REST API" description="Standard HTTP endpoints for sessions, engrams, documents, and admin operations." />
+        <GlassCard icon={<PlugIcon />} title="MCP Protocol" description="Agent-native tools and resources over SSE for streaming agent orchestration." />
+        <GlassCard icon={<LayersIcon />} title="Export / Import" description="Portable memory bundles for project transfer and environment migration." />
+        <GlassCard icon={<KeyIcon />} title="Token Auth" description="Scoped personal access tokens with tool-level and project-level restrictions." />
+      </IntGrid>
+    </MarketingSection>
+  )
+}
 
-      {/* 6. CTA */}
-      <CtaBand>
-        <h2>Ready to build with persistent memory?</h2>
-        <p>Get started with the API and give your agents context that lasts.</p>
-        <CtaRow>
-          <PrimaryBtn to={MARKETING_ROUTES.login}>Start Building</PrimaryBtn>
-          <GhostBtn to={MARKETING_ROUTES.howItWorks}>See How It Works</GhostBtn>
-        </CtaRow>
-      </CtaBand>
+function DeveloperCTA() {
+  return (
+    <CtaBand>
+      <h2>Ready to build with persistent memory?</h2>
+      <p>Get started with the API and give your agents context that lasts.</p>
+      <CtaRow>
+        <PrimaryBtn to={MARKETING_ROUTES.login}>Start Building</PrimaryBtn>
+        <GhostBtn to={MARKETING_ROUTES.howItWorks}>See How It Works</GhostBtn>
+      </CtaRow>
+    </CtaBand>
+  )
+}
+
+export function ForDevelopersPage() {
+  return (
+    <PageShell>
+      <DeveloperHero />
+      <DeveloperQuickStart />
+      <DeveloperArchitecture />
+      <DeveloperMCP />
+      <DeveloperIntegrations />
+      <DeveloperCTA />
     </PageShell>
   )
 }

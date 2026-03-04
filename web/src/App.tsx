@@ -148,6 +148,17 @@ interface AppRouteMeta {
   adminOnly: boolean
 }
 
+interface AppRouteMetaRule {
+  matches: (pathname: string) => boolean
+  meta: AppRouteMeta
+}
+
+interface SaveModalVisibilityState {
+  saveModalOpen: boolean
+  appMode: AppSurfaceMode
+  isSaveRoute: boolean
+}
+
 function useLinkRecallControls() {
   const [linkRecallEnabled, setLinkRecallEnabled] = useState(true)
   const [linkRecallDepth, setLinkRecallDepth] = useState(1)
@@ -198,104 +209,120 @@ function parseSessionRoute(pathname: string): SessionRouteInfo | null {
   return null
 }
 
-function resolveAppRouteMeta(pathname: string): AppRouteMeta {
-  if (pathname === APP_ROUTES.adminTokens) {
-    return {
+const SAVE_ENGRAM_ROUTE_PATTERN = /^\/app\/sessions\/[^/]+\/save-engram$/
+
+const DEFAULT_APP_ROUTE_META: AppRouteMeta = {
+  title: 'Memory Continuity Workspace',
+  description: 'Coordinate sessions, context retrieval, and memory actions in one command surface.',
+  mode: 'workspace',
+  adminOnly: false,
+}
+
+const APP_ROUTE_META_RULES: AppRouteMetaRule[] = [
+  {
+    matches: (pathname) => pathname === APP_ROUTES.adminTokens,
+    meta: {
       title: 'MCP Token Administration',
       description: 'Create, scope, and revoke MCP access tokens in a dedicated admin control plane.',
       mode: 'adminTokens',
       adminOnly: true,
-    }
-  }
-
-  if (pathname === APP_ROUTES.adminObservability) {
-    return {
+    },
+  },
+  {
+    matches: (pathname) => pathname === APP_ROUTES.adminObservability,
+    meta: {
       title: 'Observability and Runtime Health',
       description: 'Inspect request metrics and release metadata for this running environment.',
       mode: 'observability',
       adminOnly: true,
-    }
-  }
-
-  if (pathname.startsWith('/app/admin')) {
-    return {
+    },
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/app/admin'),
+    meta: {
       title: 'Memory Administration',
       description:
         'Manage sessions, engrams, collections, curation, contradictions, members, and security controls.',
       mode: 'admin',
       adminOnly: true,
-    }
-  }
-
-  if (pathname.startsWith('/app/projects/transfer')) {
-    return {
+    },
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/app/projects/transfer'),
+    meta: {
       title: 'Project Export and Import',
       description: 'Move continuity bundles across workspaces with deterministic conflict policies.',
       mode: 'transfer',
       adminOnly: false,
-    }
-  }
-
-  if (pathname === APP_ROUTES.sessionsNew) {
-    return {
+    },
+  },
+  {
+    matches: (pathname) => pathname === APP_ROUTES.sessionsNew,
+    meta: {
       title: 'Create Session',
       description: 'Configure provider, model, and lifecycle defaults for a new memory session.',
       mode: 'workspace',
       adminOnly: false,
-    }
-  }
-
-  if (pathname === APP_ROUTES.sessions) {
-    return {
+    },
+  },
+  {
+    matches: (pathname) => pathname === APP_ROUTES.sessions,
+    meta: {
       title: 'Session Workspace',
       description: 'Browse and continue previous chat sessions with durable memory continuity.',
       mode: 'workspace',
       adminOnly: false,
-    }
-  }
-
-  if (/^\/app\/sessions\/[^/]+\/save-engram$/.test(pathname)) {
-    return {
+    },
+  },
+  {
+    matches: (pathname) => SAVE_ENGRAM_ROUTE_PATTERN.test(pathname),
+    meta: {
       title: 'Save Session as Engram',
       description: 'Promote this conversation into durable memory with title, abstract, visibility, and tags.',
       mode: 'saveEngram',
       adminOnly: false,
-    }
-  }
-
-  if (pathname.startsWith('/app/engrams')) {
-    return {
+    },
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/app/engrams'),
+    meta: {
       title: 'Engram Retrieval and Graph',
       description: 'Search, inspect, trace, and curate memory artifacts with provenance-first workflows.',
       mode: 'workspace',
       adminOnly: false,
-    }
-  }
-
-  if (pathname.startsWith('/app/documents')) {
-    return {
+    },
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/app/documents'),
+    meta: {
       title: 'Document Ingestion and Pinning',
       description: 'Ingest source documents and pin evidence for active sessions.',
       mode: 'workspace',
       adminOnly: false,
-    }
-  }
-
-  if (pathname.startsWith('/app/projects')) {
-    return {
+    },
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/app/projects'),
+    meta: {
       title: 'Project Collaboration Controls',
       description: 'Manage project scope, members, defaults, and audit trails.',
       mode: 'workspace',
       adminOnly: false,
+    },
+  },
+]
+
+function resolveAppRouteMeta(pathname: string): AppRouteMeta {
+  for (const routeMetaRule of APP_ROUTE_META_RULES) {
+    if (routeMetaRule.matches(pathname)) {
+      return routeMetaRule.meta
     }
   }
+  return DEFAULT_APP_ROUTE_META
+}
 
-  return {
-    title: 'Memory Continuity Workspace',
-    description: 'Coordinate sessions, context retrieval, and memory actions in one command surface.',
-    mode: 'workspace',
-    adminOnly: false,
-  }
+function shouldShowSaveModal(state: SaveModalVisibilityState): boolean {
+  return state.saveModalOpen && state.appMode === 'workspace' && !state.isSaveRoute
 }
 
 function resolvePostLoginPath(rawNextPath: string | null): string {
@@ -833,7 +860,7 @@ function AppScreen() {
   }
 
   const renderSaveModal = () => {
-    if (!saveModalOpen || appRouteMeta.mode !== 'workspace' || isSaveRoute) {
+    if (!shouldShowSaveModal({ saveModalOpen, appMode: appRouteMeta.mode, isSaveRoute })) {
       return null
     }
 
