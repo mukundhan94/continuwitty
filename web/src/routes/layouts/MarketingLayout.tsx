@@ -1,26 +1,30 @@
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import styled, { keyframes } from 'styled-components'
+import styled from 'styled-components'
 
 import { MemoryStrandMark } from '../../components/MemoryStrandMark'
 import { MARKETING_ROUTES, MARKETING_TOP_NAV } from '../constants'
-
-const drift = keyframes`
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-`
+import { MarketingFooter } from '../pages/marketing/components/MarketingFooter'
 
 const Shell = styled.div`
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(circle at 20% 18%, rgba(94, 234, 212, 0.1), transparent 35%),
     radial-gradient(circle at 84% 78%, rgba(14, 116, 144, 0.24), transparent 42%),
     linear-gradient(170deg, #081420 0%, #0b1f31 55%, #0c2d48 100%);
   color: var(--color-ink);
-  overflow: hidden;
+  overflow-x: hidden;
+
+  --mktg-deep: #081420;
+  --mktg-sea: #5eead4;
+  --mktg-cyan: #06b6d4;
+  --mktg-teal: #0d9488;
+  --mktg-mint: #a7f3d0;
+  --mktg-glow: #ccfbf1;
+  --mktg-surface: rgba(8, 20, 32, 0.6);
+  --mktg-border: rgba(94, 234, 212, 0.12);
 `
 
 const TopBar = styled.header`
@@ -31,10 +35,11 @@ const TopBar = styled.header`
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.8rem 1rem;
+  padding: 0.8rem 1.25rem;
   border-bottom: 1px solid rgba(94, 234, 212, 0.14);
-  backdrop-filter: blur(12px);
-  background: rgba(8, 20, 32, 0.72);
+  backdrop-filter: blur(14px);
+  background: rgba(8, 20, 32, 0.78);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
 `
 
 const Brand = styled(NavLink)`
@@ -43,6 +48,7 @@ const Brand = styled(NavLink)`
   gap: 0.5rem;
   text-decoration: none;
   color: #e8fffb;
+  flex-shrink: 0;
 
   strong {
     font-family: var(--font-display);
@@ -62,7 +68,11 @@ const Brand = styled(NavLink)`
   }
 `
 
-const TopNav = styled.nav`
+const BrandCopy = styled.div`
+  line-height: 1.1;
+`
+
+const TopNav = styled.nav<{ $open?: boolean }>`
   display: flex;
   gap: 0.3rem;
   flex-wrap: wrap;
@@ -84,6 +94,36 @@ const TopNav = styled.nav`
     border-color: rgba(94, 234, 212, 0.3);
     background: rgba(94, 234, 212, 0.12);
   }
+
+  @media (max-width: 768px) {
+    display: ${({ $open }) => ($open ? 'flex' : 'none')};
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    padding: 0.75rem 1rem;
+    background: rgba(8, 20, 32, 0.95);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(94, 234, 212, 0.12);
+    gap: 0.2rem;
+  }
+`
+
+const HamburgerBtn = styled.button`
+  display: none;
+  background: none;
+  border: 1px solid rgba(94, 234, 212, 0.2);
+  border-radius: 8px;
+  padding: 0.4rem;
+  cursor: pointer;
+  color: #5eead4;
+
+  @media (max-width: 768px) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 `
 
 const LoginLink = styled(NavLink)`
@@ -96,51 +136,24 @@ const LoginLink = styled(NavLink)`
   letter-spacing: 0.03em;
   background: linear-gradient(135deg, #06b6d4, #14b8a6, #5eead4);
   box-shadow: 0 8px 30px rgba(94, 234, 212, 0.24);
+  flex-shrink: 0;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 36px rgba(94, 234, 212, 0.3);
+  }
 `
 
 const Content = styled.main`
   position: relative;
   padding: 1.25rem;
-`
-
-const WaveBand = styled.div`
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 44px;
-  pointer-events: none;
-  opacity: 0.58;
-
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    width: 200%;
-    background-repeat: repeat-x;
-    background-size: 120px 44px;
-    border-top: 1px solid rgba(94, 234, 212, 0.12);
-    animation: ${drift} 12s linear infinite;
-  }
-
-  &::before {
-    background-image: radial-gradient(80px 30px at 50% 120%, rgba(94, 234, 212, 0.2), transparent 70%);
-  }
-
-  &::after {
-    animation-duration: 18s;
-    animation-direction: reverse;
-    background-image: radial-gradient(80px 30px at 50% 120%, rgba(6, 182, 212, 0.18), transparent 70%);
-    opacity: 0.75;
-  }
-`
-
-const BrandCopy = styled.div`
-  line-height: 1.1;
+  flex: 1;
 `
 
 export function MarketingLayout() {
+  const [navOpen, setNavOpen] = useState(false)
+
   return (
     <Shell>
       <TopBar>
@@ -151,19 +164,40 @@ export function MarketingLayout() {
             <span>Intelligence that flows</span>
           </BrandCopy>
         </Brand>
-        <TopNav>
+
+        <HamburgerBtn onClick={() => setNavOpen((v) => !v)} aria-label="Toggle navigation">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            {navOpen ? (
+              <>
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </>
+            ) : (
+              <>
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </>
+            )}
+          </svg>
+        </HamburgerBtn>
+
+        <TopNav $open={navOpen}>
           {MARKETING_TOP_NAV.map((item) => (
-            <NavLink key={item.to} to={item.to}>
+            <NavLink key={item.to} to={item.to} onClick={() => setNavOpen(false)}>
               {item.label}
             </NavLink>
           ))}
         </TopNav>
+
         <LoginLink to={MARKETING_ROUTES.login}>Start Flowing</LoginLink>
       </TopBar>
+
       <Content>
         <Outlet />
       </Content>
-      <WaveBand />
+
+      <MarketingFooter />
     </Shell>
   )
 }
