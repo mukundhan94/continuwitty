@@ -1,8 +1,6 @@
 import { createGlobalStyle } from 'styled-components'
 
 export const GlobalStyle = createGlobalStyle`
-  @import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;600;700&family=Nunito:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
   :root {
     --color-bg-soft: ${({ theme }) => theme.colors.bgSoft};
     --color-bg-strong: ${({ theme }) => theme.colors.bgStrong};
@@ -18,6 +16,7 @@ export const GlobalStyle = createGlobalStyle`
     --surface-glass-border: ${({ theme }) => theme.colors.surfaceGlassBorder};
     --surface-raised: ${({ theme }) => theme.colors.surfaceRaised};
     --surface-raised-border: ${({ theme }) => theme.colors.surfaceRaisedBorder};
+    --surface-mute: ${({ theme }) => theme.colors.surfaceMute};
     --color-input-bg: ${({ theme }) => theme.colors.inputBg};
     --color-notice-bg: ${({ theme }) => theme.colors.noticeBg};
     --color-notice-border: ${({ theme }) => theme.colors.noticeBorder};
@@ -45,6 +44,9 @@ export const GlobalStyle = createGlobalStyle`
     --shadow-nav: ${({ theme }) => theme.shadows.nav};
     --shadow-card: ${({ theme }) => theme.shadows.card};
     --shadow-modal: ${({ theme }) => theme.shadows.modal};
+    
+    --cta-gradient: linear-gradient(135deg, var(--color-accent-alt), var(--color-accent), var(--session-active-border));
+    --primary-gradient: linear-gradient(135deg, var(--color-accent-alt), var(--color-accent), var(--session-active-border));
   }
 
   * {
@@ -60,12 +62,12 @@ export const GlobalStyle = createGlobalStyle`
 
   *::-webkit-scrollbar-track {
     background: var(--scrollbar-track);
-    border-radius: 999px;
+    border-radius: 9999px;
   }
 
   *::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
-    border-radius: 999px;
+    border-radius: 9999px;
     border: 2px solid var(--scrollbar-track);
   }
 
@@ -102,27 +104,30 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   button {
-    border: 1px solid transparent;
-    border-radius: 999px;
-    background: var(--color-accent);
-    color: #032027;
+    border: none;
+    border-radius: 9999px;
+    background: var(--cta-gradient);
+    color: #ffffff;
     cursor: pointer;
-    padding: 0.42rem 0.78rem;
-    font-size: 0.82rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
     font-weight: 700;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     line-height: 1.2;
+    box-shadow: 0 5px 14px var(--session-active-shadow);
     transition:
-      transform 160ms ease,
-      filter 160ms ease,
-      opacity 160ms ease;
+      transform 200ms ease-out,
+      filter 200ms ease-out,
+      box-shadow 200ms ease-out,
+      opacity 200ms ease-out;
   }
 
   button:hover {
     transform: translateY(-1px);
-    filter: brightness(1.05);
+    filter: brightness(1.04);
+    box-shadow: 0 8px 20px var(--session-active-shadow);
   }
 
   button:disabled {
@@ -136,12 +141,21 @@ export const GlobalStyle = createGlobalStyle`
   textarea,
   select {
     width: 100%;
-    border: 1px solid var(--color-line);
+    border: 1px solid transparent;
     border-radius: ${({ theme }) => theme.radius.md};
     padding: 0.55rem 0.7rem;
     background: var(--color-input-bg);
     color: var(--color-ink);
     line-height: 1.35;
+    transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
+  }
+  
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--session-active-shadow);
   }
 
   textarea {
@@ -159,6 +173,12 @@ export const GlobalStyle = createGlobalStyle`
   h1,
   h2,
   h3,
+  h4 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+  }
+  
   p {
     margin: 0;
   }

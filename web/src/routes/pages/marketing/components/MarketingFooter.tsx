@@ -11,8 +11,8 @@ const drift = keyframes`
 
 const Shell = styled.footer`
   position: relative;
-  background: rgba(4, 10, 18, 0.95);
-  border-top: 1px solid rgba(94, 234, 212, 0.08);
+  background: linear-gradient(180deg, var(--surface-mute) 0%, var(--surface-raised) 100%);
+  border-top: 1px solid var(--mktg-border, var(--surface-glass-border));
   padding: 4rem 2rem 2rem;
 
   @media (prefers-reduced-motion: reduce) {
@@ -22,12 +22,13 @@ const Shell = styled.footer`
 
 const WaveSep = styled.div`
   position: absolute;
-  top: -40px;
+  top: -62px;
   left: 0;
   right: 0;
-  height: 40px;
+  height: 62px;
   pointer-events: none;
   overflow: hidden;
+  opacity: 0.36;
 
   &::before,
   &::after {
@@ -36,18 +37,18 @@ const WaveSep = styled.div`
     inset: 0;
     width: 200%;
     background-repeat: repeat-x;
-    background-size: 120px 40px;
+    background-size: 208px 62px;
   }
 
   &::before {
-    background-image: radial-gradient(80px 28px at 50% 120%, rgba(94, 234, 212, 0.18), transparent 70%);
-    animation: ${drift} 12s linear infinite;
+    background-image: radial-gradient(104px 34px at 50% 123%, rgba(94, 234, 212, 0.11), transparent 73%);
+    animation: ${drift} 26s linear infinite;
   }
 
   &::after {
-    background-image: radial-gradient(80px 28px at 50% 120%, rgba(6, 182, 212, 0.14), transparent 70%);
-    animation: ${drift} 18s linear infinite reverse;
-    opacity: 0.75;
+    background-image: radial-gradient(104px 34px at 50% 123%, rgba(6, 182, 212, 0.09), transparent 73%);
+    animation: ${drift} 38s linear infinite reverse;
+    opacity: 0.52;
   }
 `
 
@@ -78,7 +79,7 @@ const BrandName = styled.div`
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.1rem;
-  color: #e8fffb;
+  color: var(--color-ink);
   margin-top: 0.5rem;
 `
 
@@ -87,7 +88,8 @@ const BrandTag = styled.div`
   font-size: 0.6rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(167, 243, 208, 0.4);
+  color: var(--color-ink-muted);
+  opacity: 0.8;
 `
 
 const ColTitle = styled.h4`
@@ -96,7 +98,8 @@ const ColTitle = styled.h4`
   font-size: 0.6rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(94, 234, 212, 0.35);
+  color: var(--color-ink-muted);
+  opacity: 0.82;
 `
 
 const ColLinks = styled.div`
@@ -107,11 +110,13 @@ const ColLinks = styled.div`
   a {
     text-decoration: none;
     font-size: 0.85rem;
-    color: rgba(178, 245, 234, 0.5);
+    color: var(--color-ink-muted);
+    opacity: 0.9;
     transition: color 200ms ease;
 
     &:hover {
-      color: #5eead4;
+      color: var(--color-accent);
+      opacity: 1;
     }
   }
 `
@@ -120,14 +125,15 @@ const Bottom = styled.div`
   max-width: 1100px;
   margin: 2rem auto 0;
   padding-top: 1.5rem;
-  border-top: 1px solid rgba(94, 234, 212, 0.06);
+  border-top: 1px solid var(--mktg-border, var(--surface-glass-border));
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-family: var(--font-mono);
   font-size: 0.6rem;
   letter-spacing: 0.08em;
-  color: rgba(94, 234, 212, 0.15);
+  color: var(--color-ink-muted);
+  opacity: 0.76;
 
   @media (max-width: 480px) {
     flex-direction: column;

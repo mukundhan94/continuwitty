@@ -85,18 +85,18 @@ const HeroActions = styled.div`
 
 const PrimaryBtn = styled(NavLink)`
   text-decoration: none;
-  border-radius: 999px;
+  border-radius: 9999px;
   padding: 0.6rem 1.3rem;
   font-weight: 800;
   font-size: 0.85rem;
   letter-spacing: 0.03em;
   color: #001821;
-  background: linear-gradient(135deg, #06b6d4, #14b8a6, #5eead4);
+  background: var(--cta-gradient);
 `
 
 const GhostBtn = styled(NavLink)`
   text-decoration: none;
-  border-radius: 999px;
+  border-radius: 9999px;
   padding: 0.6rem 1.3rem;
   font-weight: 700;
   font-size: 0.85rem;

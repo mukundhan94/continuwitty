@@ -116,9 +116,9 @@ const Badge = styled.span`
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #001821;
-  background: linear-gradient(135deg, #06b6d4, #5eead4);
+  background: var(--cta-gradient);
   padding: 0.2rem 0.55rem;
-  border-radius: 999px;
+  border-radius: 9999px;
   font-weight: 700;
 `
 
@@ -172,7 +172,7 @@ const FeatureItem = styled.li`
 const PlanCta = styled.button<{ $planId: string }>`
   margin-top: 1rem;
   width: 100%;
-  border-radius: 999px;
+  border-radius: 9999px;
   padding: 0.55rem;
   font-weight: 700;
   font-size: 0.82rem;
@@ -184,7 +184,7 @@ const PlanCta = styled.button<{ $planId: string }>`
   color: ${(p) => (p.$planId === 'team' ? '#001821' : '#dffcf8')};
   background: ${(p) =>
     p.$planId === 'team'
-      ? 'linear-gradient(135deg, #06b6d4, #14b8a6, #5eead4)'
+      ? 'var(--cta-gradient)'
       : 'rgba(94,234,212,0.1)'};
   border: ${(p) =>
     p.$planId === 'team' ? 'none' : '1px solid rgba(94,234,212,0.25)'};
@@ -274,18 +274,18 @@ const CtaRow = styled.div`
 
 const PrimaryBtn = styled(NavLink)`
   text-decoration: none;
-  border-radius: 999px;
+  border-radius: 9999px;
   padding: 0.6rem 1.3rem;
   font-weight: 800;
   font-size: 0.85rem;
   letter-spacing: 0.03em;
   color: #001821;
-  background: linear-gradient(135deg, #06b6d4, #14b8a6, #5eead4);
+  background: var(--cta-gradient);
 `
 
 const GhostBtn = styled(NavLink)`
   text-decoration: none;
-  border-radius: 999px;
+  border-radius: 9999px;
   padding: 0.6rem 1.3rem;
   font-weight: 700;
   font-size: 0.85rem;

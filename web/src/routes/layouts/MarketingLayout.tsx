@@ -11,20 +11,22 @@ const Shell = styled.div`
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(circle at 20% 18%, rgba(94, 234, 212, 0.1), transparent 35%),
-    radial-gradient(circle at 84% 78%, rgba(14, 116, 144, 0.24), transparent 42%),
-    linear-gradient(170deg, #081420 0%, #0b1f31 55%, #0c2d48 100%);
+    radial-gradient(circle at 20% 18%, ${({ theme }) => theme.colors.bgGlowPrimary} 0%, transparent 38%),
+    radial-gradient(circle at 84% 78%, ${({ theme }) => theme.colors.bgGlowSecondary} 0%, transparent 44%),
+    linear-gradient(170deg, var(--color-bg-soft) 0%, var(--color-bg-strong) 100%);
   color: var(--color-ink);
   overflow-x: hidden;
 
-  --mktg-deep: #081420;
-  --mktg-sea: #5eead4;
-  --mktg-cyan: #06b6d4;
-  --mktg-teal: #0d9488;
-  --mktg-mint: #a7f3d0;
-  --mktg-glow: #ccfbf1;
-  --mktg-surface: rgba(8, 20, 32, 0.6);
-  --mktg-border: rgba(94, 234, 212, 0.12);
+  --mktg-deep: var(--color-bg-soft);
+  --mktg-sea: var(--color-accent);
+  --mktg-cyan: var(--color-accent-alt);
+  --mktg-teal: var(--color-accent);
+  --mktg-mint: var(--session-active-border);
+  --mktg-glow: var(--session-active-bg);
+  --mktg-surface: var(--surface-glass);
+  --mktg-surface-raised: var(--surface-raised);
+  --mktg-border: var(--surface-glass-border);
+  --mktg-muted: var(--color-ink-muted);
 `
 
 const TopBar = styled.header`
@@ -36,10 +38,10 @@ const TopBar = styled.header`
   justify-content: space-between;
   gap: 1rem;
   padding: 0.8rem 1.25rem;
-  border-bottom: 1px solid rgba(94, 234, 212, 0.14);
+  border-bottom: 1px solid var(--surface-glass-border);
   backdrop-filter: blur(14px);
-  background: rgba(8, 20, 32, 0.78);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+  background: var(--surface-glass);
+  box-shadow: var(--shadow-nav);
 `
 
 const Brand = styled(NavLink)`
@@ -47,7 +49,7 @@ const Brand = styled(NavLink)`
   align-items: center;
   gap: 0.5rem;
   text-decoration: none;
-  color: #e8fffb;
+  color: var(--color-ink);
   flex-shrink: 0;
 
   strong {
@@ -63,7 +65,7 @@ const Brand = styled(NavLink)`
     font-family: var(--font-mono);
     font-size: 0.58rem;
     letter-spacing: 0.2em;
-    color: rgba(167, 243, 208, 0.72);
+    color: var(--color-ink-muted);
     text-transform: uppercase;
   }
 `
@@ -80,7 +82,7 @@ const TopNav = styled.nav<{ $open?: boolean }>`
   a {
     text-decoration: none;
     color: var(--color-ink-muted);
-    border-radius: 999px;
+    border-radius: 9999px;
     padding: 0.35rem 0.7rem;
     border: 1px solid transparent;
     font-size: 0.82rem;
@@ -90,9 +92,9 @@ const TopNav = styled.nav<{ $open?: boolean }>`
 
   a:hover,
   a.active {
-    color: #dffff9;
-    border-color: rgba(94, 234, 212, 0.3);
-    background: rgba(94, 234, 212, 0.12);
+    color: var(--color-ink);
+    border-color: var(--session-active-border);
+    background: var(--session-active-bg);
   }
 
   @media (max-width: 768px) {
@@ -103,21 +105,21 @@ const TopNav = styled.nav<{ $open?: boolean }>`
     right: 0;
     flex-direction: column;
     padding: 0.75rem 1rem;
-    background: rgba(8, 20, 32, 0.95);
+    background: var(--surface-glass);
     backdrop-filter: blur(14px);
-    border-bottom: 1px solid rgba(94, 234, 212, 0.12);
+    border-bottom: 1px solid var(--surface-glass-border);
     gap: 0.2rem;
   }
 `
 
 const HamburgerBtn = styled.button`
   display: none;
-  background: none;
-  border: 1px solid rgba(94, 234, 212, 0.2);
+  background: transparent;
+  border: 1px solid var(--color-line);
   border-radius: 8px;
   padding: 0.4rem;
   cursor: pointer;
-  color: #5eead4;
+  color: var(--color-accent);
 
   @media (max-width: 768px) {
     display: flex;
@@ -129,18 +131,18 @@ const HamburgerBtn = styled.button`
 const LoginLink = styled(NavLink)`
   text-decoration: none;
   color: #001822;
-  border-radius: 999px;
+  border-radius: 9999px;
   padding: 0.4rem 0.95rem;
   font-weight: 700;
   font-size: 0.8rem;
   letter-spacing: 0.03em;
-  background: linear-gradient(135deg, #06b6d4, #14b8a6, #5eead4);
+  background: var(--cta-gradient);
   box-shadow: 0 8px 30px rgba(94, 234, 212, 0.24);
   flex-shrink: 0;
-  transition: transform 200ms ease, box-shadow 200ms ease;
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out;
 
   &:hover {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
     box-shadow: 0 12px 36px rgba(94, 234, 212, 0.3);
   }
 `

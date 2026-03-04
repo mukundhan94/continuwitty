@@ -17,6 +17,7 @@ export interface ThemeColors {
   surfaceGlassBorder: string
   surfaceRaised: string
   surfaceRaisedBorder: string
+  surfaceMute: string
   inputBg: string
   noticeBg: string
   noticeBorder: string
@@ -51,110 +52,126 @@ export const radiusTokens = {
   xl: '20px',
 } as const
 
-export const shadowTokens = {
-  panel: '0 24px 56px rgba(1, 8, 16, 0.42)',
-  nav: '0 20px 52px rgba(1, 8, 16, 0.46)',
-  card: '0 26px 72px rgba(1, 8, 16, 0.48)',
-  modal: '0 32px 86px rgba(1, 8, 16, 0.56)',
-} as const
+type ShadowTokens = {
+  panel: string
+  nav: string
+  card: string
+  modal: string
+}
+
+const lightShadowTokens: ShadowTokens = {
+  panel: '0 14px 36px rgba(4, 43, 57, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.4)',
+  nav: '0 16px 42px rgba(4, 43, 57, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.42)',
+  card: '0 20px 50px rgba(4, 43, 57, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.44)',
+  modal: '0 30px 80px rgba(2, 24, 33, 0.32)',
+}
+
+const darkShadowTokens: ShadowTokens = {
+  panel: '0 22px 58px rgba(1, 7, 14, 0.64), 0 0 0 1px rgba(99, 226, 209, 0.07), 0 0 26px rgba(34, 199, 180, 0.08)',
+  nav: '0 24px 62px rgba(1, 7, 14, 0.68), 0 0 0 1px rgba(99, 226, 209, 0.09), 0 0 34px rgba(34, 199, 180, 0.09)',
+  card: '0 28px 74px rgba(1, 7, 14, 0.72), 0 0 0 1px rgba(99, 226, 209, 0.1), 0 0 38px rgba(34, 199, 180, 0.1)',
+  modal: '0 34px 90px rgba(1, 7, 14, 0.76), 0 0 0 1px rgba(99, 226, 209, 0.12), 0 0 44px rgba(34, 199, 180, 0.12)',
+}
 
 const lightColors: ThemeColors = {
-  bgSoft: '#f0fdfa',
-  bgStrong: '#d7f6ef',
-  bgGlowPrimary: 'rgba(14, 165, 233, 0.22)',
-  bgGlowSecondary: 'rgba(20, 184, 166, 0.24)',
-  ink: '#0f3741',
-  inkMuted: '#2f6068',
-  accent: '#0d9488',
-  accentAlt: '#0c4a6e',
-  card: '#ffffff',
-  line: 'rgba(13, 148, 136, 0.24)',
-  success: '#0d9488',
-  error: '#b45309',
-  surfaceGlass: 'rgba(255, 255, 255, 0.88)',
-  surfaceGlassBorder: 'rgba(167, 243, 208, 0.72)',
-  surfaceRaised: '#ffffff',
-  surfaceRaisedBorder: 'rgba(13, 148, 136, 0.2)',
-  inputBg: '#ffffff',
-  noticeBg: 'rgba(94, 234, 212, 0.2)',
-  noticeBorder: 'rgba(13, 148, 136, 0.36)',
-  bubbleUserStart: '#d1fae5',
-  bubbleUserEnd: '#99f6e4',
-  bubbleAssistantStart: '#dbeafe',
-  bubbleAssistantEnd: '#bae6fd',
+  bgSoft: '#e6f1f0',
+  bgStrong: '#c6dad7',
+  bgGlowPrimary: 'rgba(14, 116, 144, 0.11)',
+  bgGlowSecondary: 'rgba(20, 184, 166, 0.12)',
+  ink: '#0f3a40',
+  inkMuted: '#2b5f6a',
+  accent: '#0f766e',
+  accentAlt: '#0b728c',
+  card: '#f4f9f8',
+  line: 'rgba(15, 118, 110, 0.24)',
+  success: '#0f766e',
+  error: '#fb923c',
+  surfaceGlass: 'rgba(246, 252, 251, 0.86)',
+  surfaceGlassBorder: 'rgba(111, 171, 166, 0.44)',
+  surfaceRaised: '#eef7f6',
+  surfaceRaisedBorder: 'rgba(15, 118, 110, 0.2)',
+  surfaceMute: 'rgba(227, 239, 237, 0.92)',
+  inputBg: '#f3f9f8',
+  noticeBg: 'rgba(15, 118, 110, 0.12)',
+  noticeBorder: 'rgba(15, 118, 110, 0.34)',
+  bubbleUserStart: '#7ed8cc',
+  bubbleUserEnd: '#62c7bb',
+  bubbleAssistantStart: '#d6ebfb',
+  bubbleAssistantEnd: '#b8d9f5',
   markdownCodeBg: 'rgba(12, 74, 110, 0.09)',
-  markdownBlockquoteBorder: 'rgba(13, 148, 136, 0.44)',
-  markdownBlockquoteBg: 'rgba(94, 234, 212, 0.16)',
-  markdownTableBorder: 'rgba(13, 148, 136, 0.28)',
-  markdownTableHeaderBg: 'rgba(94, 234, 212, 0.22)',
-  modalBackdrop: 'rgba(2, 24, 30, 0.5)',
-  modalBorder: 'rgba(13, 148, 136, 0.24)',
-  scrollbarTrack: 'rgba(148, 230, 216, 0.45)',
-  scrollbarThumb: 'rgba(13, 148, 136, 0.62)',
-  scrollbarThumbHover: 'rgba(12, 74, 110, 0.78)',
-  sessionActiveBg: 'rgba(94, 234, 212, 0.2)',
-  sessionActiveBorder: '#0d9488',
-  sessionActiveShadow: 'rgba(13, 148, 136, 0.24)',
+  markdownBlockquoteBorder: 'rgba(15, 118, 110, 0.34)',
+  markdownBlockquoteBg: 'rgba(45, 212, 191, 0.1)',
+  markdownTableBorder: 'rgba(15, 118, 110, 0.22)',
+  markdownTableHeaderBg: 'rgba(45, 212, 191, 0.14)',
+  modalBackdrop: 'rgba(3, 18, 26, 0.5)',
+  modalBorder: 'rgba(15, 118, 110, 0.24)',
+  scrollbarTrack: 'rgba(146, 191, 185, 0.36)',
+  scrollbarThumb: 'rgba(15, 118, 110, 0.52)',
+  scrollbarThumbHover: 'rgba(12, 74, 110, 0.68)',
+  sessionActiveBg: 'rgba(15, 118, 110, 0.14)',
+  sessionActiveBorder: 'rgba(15, 118, 110, 0.72)',
+  sessionActiveShadow: 'rgba(15, 118, 110, 0.24)',
 }
 
 const darkColors: ThemeColors = {
-  bgSoft: '#081420',
-  bgStrong: '#0b1f31',
-  bgGlowPrimary: 'rgba(6, 182, 212, 0.26)',
-  bgGlowSecondary: 'rgba(20, 184, 166, 0.3)',
-  ink: '#e8fffb',
-  inkMuted: 'rgba(178, 245, 234, 0.72)',
-  accent: '#5eead4',
-  accentAlt: '#2bb5d9',
-  card: '#0d1f31',
-  line: 'rgba(94, 234, 212, 0.22)',
-  success: '#5eead4',
+  bgSoft: '#06111d',
+  bgStrong: '#0b2f43',
+  bgGlowPrimary: 'rgba(45, 212, 191, 0.2)',
+  bgGlowSecondary: 'rgba(56, 189, 248, 0.18)',
+  ink: '#e8fbf8',
+  inkMuted: 'rgba(170, 232, 223, 0.76)',
+  accent: '#63e2d1',
+  accentAlt: '#22c7b4',
+  card: '#10384e',
+  line: 'rgba(99, 226, 209, 0.34)',
+  success: '#63e2d1',
   error: '#fb923c',
-  surfaceGlass: 'rgba(8, 20, 32, 0.76)',
-  surfaceGlassBorder: 'rgba(94, 234, 212, 0.22)',
-  surfaceRaised: 'rgba(12, 53, 71, 0.55)',
-  surfaceRaisedBorder: 'rgba(94, 234, 212, 0.18)',
-  inputBg: 'rgba(8, 20, 32, 0.68)',
-  noticeBg: 'rgba(13, 148, 136, 0.18)',
-  noticeBorder: 'rgba(94, 234, 212, 0.32)',
-  bubbleUserStart: 'rgba(6, 182, 212, 0.35)',
+  surfaceGlass: 'rgba(7, 20, 33, 0.74)',
+  surfaceGlassBorder: 'rgba(99, 226, 209, 0.2)',
+  surfaceRaised: '#123f57',
+  surfaceRaisedBorder: 'rgba(99, 226, 209, 0.2)',
+  surfaceMute: 'rgba(9, 28, 44, 0.88)',
+  inputBg: 'rgba(6, 19, 31, 0.78)',
+  noticeBg: 'rgba(45, 212, 191, 0.2)',
+  noticeBorder: 'rgba(99, 226, 209, 0.44)',
+  bubbleUserStart: 'rgba(45, 212, 191, 0.3)',
   bubbleUserEnd: 'rgba(20, 184, 166, 0.42)',
-  bubbleAssistantStart: 'rgba(12, 74, 110, 0.5)',
-  bubbleAssistantEnd: 'rgba(13, 148, 136, 0.42)',
-  markdownCodeBg: 'rgba(204, 251, 241, 0.16)',
-  markdownBlockquoteBorder: 'rgba(94, 234, 212, 0.4)',
-  markdownBlockquoteBg: 'rgba(94, 234, 212, 0.08)',
-  markdownTableBorder: 'rgba(94, 234, 212, 0.2)',
-  markdownTableHeaderBg: 'rgba(94, 234, 212, 0.14)',
-  modalBackdrop: 'rgba(3, 10, 18, 0.8)',
-  modalBorder: 'rgba(94, 234, 212, 0.3)',
-  scrollbarTrack: 'rgba(12, 53, 71, 0.76)',
-  scrollbarThumb: 'rgba(94, 234, 212, 0.52)',
-  scrollbarThumbHover: 'rgba(94, 234, 212, 0.76)',
-  sessionActiveBg: 'rgba(94, 234, 212, 0.18)',
-  sessionActiveBorder: 'rgba(94, 234, 212, 0.66)',
-  sessionActiveShadow: 'rgba(94, 234, 212, 0.28)',
+  bubbleAssistantStart: 'rgba(15, 82, 112, 0.54)',
+  bubbleAssistantEnd: 'rgba(14, 116, 144, 0.42)',
+  markdownCodeBg: 'rgba(204, 251, 241, 0.18)',
+  markdownBlockquoteBorder: 'rgba(99, 226, 209, 0.5)',
+  markdownBlockquoteBg: 'rgba(99, 226, 209, 0.12)',
+  markdownTableBorder: 'rgba(99, 226, 209, 0.26)',
+  markdownTableHeaderBg: 'rgba(99, 226, 209, 0.18)',
+  modalBackdrop: 'rgba(1, 7, 13, 0.86)',
+  modalBorder: 'rgba(99, 226, 209, 0.36)',
+  scrollbarTrack: 'rgba(12, 49, 67, 0.84)',
+  scrollbarThumb: 'rgba(99, 226, 209, 0.62)',
+  scrollbarThumbHover: 'rgba(167, 244, 231, 0.86)',
+  sessionActiveBg: 'rgba(45, 212, 191, 0.2)',
+  sessionActiveBorder: 'rgba(99, 226, 209, 0.84)',
+  sessionActiveShadow: 'rgba(45, 212, 191, 0.32)',
 }
 
 export interface ThemeDefinition {
   colors: ThemeColors
   fonts: typeof fontTokens
   radius: typeof radiusTokens
-  shadows: typeof shadowTokens
+  shadows: ShadowTokens
 }
 
 export const lightTheme: ThemeDefinition = {
   colors: lightColors,
   fonts: fontTokens,
   radius: radiusTokens,
-  shadows: shadowTokens,
+  shadows: lightShadowTokens,
 }
 
 export const darkTheme: ThemeDefinition = {
   colors: darkColors,
   fonts: fontTokens,
   radius: radiusTokens,
-  shadows: shadowTokens,
+  shadows: darkShadowTokens,
 }
 
 export const appThemes: Record<ThemeMode, ThemeDefinition> = {

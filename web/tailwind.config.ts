@@ -22,9 +22,9 @@ const config: Config = {
         modal: 'var(--shadow-modal)',
       },
       fontFamily: {
-        body: ['var(--font-body)'],
-        display: ['var(--font-display)'],
-        mono: ['var(--font-mono)'],
+        body: ['var(--font-body)', 'Nunito', 'sans-serif'],
+        display: ['var(--font-display)', 'Comfortaa', 'sans-serif'],
+        mono: ['var(--font-mono)', 'JetBrains Mono', 'monospace'],
       },
     },
   },

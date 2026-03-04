@@ -18,7 +18,7 @@ const Brand = styled.div`
     font-family: var(--font-display);
     font-size: 1.1rem;
     letter-spacing: 0.01em;
-    color: #f0fffd;
+    color: var(--color-ink);
   }
 
   p {
@@ -26,8 +26,12 @@ const Brand = styled.div`
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.22em;
-    color: rgba(178, 245, 234, 0.75);
+    color: var(--color-ink-muted);
   }
+`
+
+const BrandAccent = styled.span`
+  color: var(--color-accent);
 `
 
 const BrandLabel = styled.div`
@@ -55,7 +59,7 @@ const NavStrip = styled.nav`
   gap: 0.3rem;
 
   a {
-    border-radius: 999px;
+    border-radius: 9999px;
     border: 1px solid transparent;
     padding: 0.32rem 0.6rem;
     text-decoration: none;
@@ -67,9 +71,9 @@ const NavStrip = styled.nav`
 
   a:hover,
   a.active {
-    color: #dbfffa;
-    border-color: rgba(94, 234, 212, 0.34);
-    background: rgba(94, 234, 212, 0.12);
+    color: var(--color-ink);
+    border-color: var(--session-active-border);
+    background: var(--session-active-bg);
   }
 `
 
@@ -98,7 +102,7 @@ export function WorkspaceTopNav({
           <BrandLabel>
             <p>Intelligence that flows</p>
             <h1>
-              Continu<span style={{ color: '#5eead4' }}>Witty</span> Memory Console
+              Continu<BrandAccent>Witty</BrandAccent> Memory Console
             </h1>
           </BrandLabel>
         </Brand>

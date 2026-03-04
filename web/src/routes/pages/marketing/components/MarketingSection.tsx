@@ -9,9 +9,10 @@ const waveShift = keyframes`
 const Shell = styled.section`
   position: relative;
   border-radius: 24px;
-  border: 1px solid rgba(94, 234, 212, 0.11);
-  background: rgba(8, 20, 32, 0.6);
+  border: 1px solid var(--mktg-border, var(--surface-glass-border));
+  background: linear-gradient(180deg, var(--mktg-surface, var(--surface-glass)) 0%, var(--mktg-surface-raised, var(--surface-raised)) 100%);
   backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-card);
   padding: 3rem 2rem;
   overflow: hidden;
 
@@ -26,7 +27,7 @@ const Eyebrow = styled.p`
   font-size: 0.625rem;
   letter-spacing: 0.25em;
   text-transform: uppercase;
-  color: rgba(94, 234, 212, 0.35);
+  color: var(--mktg-muted, var(--color-ink-muted));
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -36,7 +37,8 @@ const Eyebrow = styled.p`
     display: block;
     width: 20px;
     height: 1px;
-    background: rgba(94, 234, 212, 0.25);
+    background: var(--mktg-muted, var(--color-ink-muted));
+    opacity: 0.48;
   }
 `
 
@@ -45,14 +47,14 @@ const Heading = styled.h2`
   font-family: var(--font-display);
   font-weight: 700;
   font-size: clamp(1.5rem, 3.5vw, 2.2rem);
-  color: #f7fffd;
+  color: var(--color-ink);
   line-height: 1.15;
 `
 
 const Lead = styled.p`
   margin: 0.75rem 0 0;
   max-width: 56ch;
-  color: rgba(178, 245, 234, 0.76);
+  color: var(--color-ink-muted);
   line-height: 1.7;
   font-size: 0.95rem;
 `
@@ -60,9 +62,9 @@ const Lead = styled.p`
 const WaveDecoration = styled.div`
   position: absolute;
   inset: auto 0 0 0;
-  height: 36px;
+  height: 66px;
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 0.32;
 
   &::before,
   &::after {
@@ -71,17 +73,17 @@ const WaveDecoration = styled.div`
     inset: 0;
     width: 200%;
     background-repeat: repeat-x;
-    background-size: 96px 36px;
+    background-size: 188px 66px;
   }
 
   &::before {
-    background-image: radial-gradient(48px 18px at 50% 120%, rgba(94, 234, 212, 0.22), transparent 74%);
-    animation: ${waveShift} 10s linear infinite;
+    background-image: radial-gradient(94px 33px at 50% 124%, rgba(94, 234, 212, 0.12), transparent 76%);
+    animation: ${waveShift} 24s linear infinite;
   }
 
   &::after {
-    background-image: radial-gradient(48px 18px at 50% 120%, rgba(6, 182, 212, 0.2), transparent 74%);
-    animation: ${waveShift} 15s linear infinite reverse;
+    background-image: radial-gradient(94px 33px at 50% 124%, rgba(6, 182, 212, 0.09), transparent 76%);
+    animation: ${waveShift} 34s linear infinite reverse;
   }
 
   @media (prefers-reduced-motion: reduce) {

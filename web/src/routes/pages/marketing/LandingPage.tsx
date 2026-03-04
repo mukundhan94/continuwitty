@@ -184,13 +184,13 @@ const Ctas = styled.div`
 
 const PrimaryCTA = styled(NavLink)`
   text-decoration: none;
-  border-radius: 999px;
+  border-radius: 9999px;
   padding: 0.72rem 1.5rem;
   font-weight: 800;
   font-size: 0.85rem;
   letter-spacing: 0.04em;
   color: #001821;
-  background: linear-gradient(135deg, #06b6d4, #0d9488, #5eead4);
+  background: var(--cta-gradient);
   box-shadow: 0 4px 24px rgba(94, 234, 212, 0.2);
   transition: transform 200ms ease, box-shadow 200ms ease;
 
@@ -202,7 +202,7 @@ const PrimaryCTA = styled(NavLink)`
 
 const GhostCTA = styled(NavLink)`
   text-decoration: none;
-  border-radius: 999px;
+  border-radius: 9999px;
   padding: 0.72rem 1.5rem;
   font-weight: 700;
   font-size: 0.85rem;

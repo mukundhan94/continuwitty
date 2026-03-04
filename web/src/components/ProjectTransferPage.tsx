@@ -86,7 +86,7 @@ const Chip = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 0.28rem;
-  border-radius: 999px;
+  border-radius: 9999px;
   border: 1px solid var(--color-line);
   background: var(--surface-mute);
   font-size: 0.78rem;
@@ -94,7 +94,7 @@ const Chip = styled.span`
 
   button {
     border: 0;
-    border-radius: 999px;
+    border-radius: 9999px;
     background: transparent;
     color: var(--color-ink-muted);
     width: 1rem;

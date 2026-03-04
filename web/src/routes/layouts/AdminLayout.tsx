@@ -4,10 +4,10 @@ import styled from 'styled-components'
 import { AppLayout } from './AppLayout'
 
 const AdminPanel = styled.div`
-  border: 1px dashed rgba(94, 234, 212, 0.28);
+  border: 1px dashed var(--color-line);
   border-radius: 18px;
   padding: 0.8rem;
-  background: rgba(8, 20, 32, 0.5);
+  background: var(--surface-raised);
   min-height: 0;
 `
 
