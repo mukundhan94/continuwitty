@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test'
 
-import { When, Then, expect, signInWithCredentials, waitForAppShell } from '../support/fixtures'
+import { When, Then, expect, signInWithCredentials, signOutIfNeeded, waitForAppShell } from '../support/fixtures'
 import { acceptanceEnv } from '../support/env'
 
 type OptionSnapshot = {
@@ -52,9 +52,8 @@ async function ensureAdminSession(page: Page) {
 
   const logoutButton = page.getByRole('button', { name: /^Logout$/i })
   if (await logoutButton.isVisible().catch(() => false)) {
-    await logoutButton.click()
+    await signOutIfNeeded(page)
   }
-  await page.context().clearCookies()
 
   await signInWithCredentials(page, adminUsername, adminPassword)
 }
@@ -231,11 +230,7 @@ When('I sign out and sign in as the created viewer', async ({ page }) => {
     throw new Error('Missing created viewer username')
   }
 
-  const logoutButton = page.getByRole('button', { name: /^Logout$/i })
-  if (await logoutButton.isVisible().catch(() => false)) {
-    await logoutButton.click()
-  }
-  await page.context().clearCookies()
+  await signOutIfNeeded(page)
   await signInWithCredentials(page, createdViewerUsername, createdViewerPassword)
   await waitForAppShell(page)
 })

@@ -1,6 +1,7 @@
 export type NavSection =
   | 'marketing'
   | 'workspace'
+  | 'agents'
   | 'sessions'
   | 'engrams'
   | 'links'
@@ -18,6 +19,8 @@ export type AppRouteId =
   | 'pricing'
   | 'login'
   | 'app_workspace'
+  | 'app_agents'
+  | 'app_agent_run_detail'
   | 'app_sessions'
   | 'app_sessions_new'
   | 'app_session_chat'

@@ -92,6 +92,74 @@ export interface ChatTimelineEvent {
   created_at: string
 }
 
+export interface AgentSourceInput {
+  url: string
+  title?: string | null
+  snippet: string
+  captured_at?: string | null
+}
+
+export interface AgentDecision {
+  decision: string
+  rationale: string
+}
+
+export interface AgentState {
+  project_id: string
+  thread_id: string
+  objective: string
+  notes: string[]
+  assumptions: string[]
+  tags: string[]
+  keywords: string[]
+  sources: AgentSourceInput[]
+  synthesis_title: string
+  synthesis_abstract: string
+  synthesis_markdown: string
+  decisions: AgentDecision[]
+  open_questions: string[]
+  status: string
+  auto_persist_engram: boolean
+  engram_id: string | null
+  snapshot_enabled: boolean
+  snapshot_every_n_notes: number
+  snapshot_count: number
+  snapshot_engram_ids: string[]
+}
+
+export interface AgentRunResponse {
+  thread_id: string
+  status: string
+  engram_id: string | null
+  snapshot_engram_ids: string[]
+  state: AgentState
+}
+
+export interface AgentRunCreateInput {
+  project_id: string
+  thread_id: string
+  objective: string
+  notes?: string[]
+  assumptions?: string[]
+  tags?: string[]
+  keywords?: string[]
+  sources?: AgentSourceInput[]
+  auto_persist_engram?: boolean
+  snapshot_enabled?: boolean
+  snapshot_every_n_notes?: number
+}
+
+export interface AgentRunResumeInput {
+  notes?: string[]
+  assumptions?: string[]
+  tags?: string[]
+  keywords?: string[]
+  sources?: AgentSourceInput[]
+  auto_persist_engram?: boolean
+  snapshot_enabled?: boolean
+  snapshot_every_n_notes?: number
+}
+
 export interface ChatMessage {
   message_id: string
   session_id: string

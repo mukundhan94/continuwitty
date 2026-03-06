@@ -1,4 +1,11 @@
-import { Given, Then, When, expect, signInIfNeeded } from '../support/fixtures'
+import {
+  Given,
+  Then,
+  When,
+  ensureSessionCreatorVisible,
+  expect,
+  signInIfNeeded,
+} from '../support/fixtures'
 
 function uniqueTitle(base: string): string {
   const suffix = `${Date.now()}-${Math.floor(Math.random() * 10000)}`
@@ -13,6 +20,7 @@ When('I create a session named {string}', async ({ page, scenarioState }, title:
   const actualTitle = uniqueTitle(title)
   scenarioState.latestSessionTitle = actualTitle
 
+  await ensureSessionCreatorVisible(page)
   await page.locator('#session-title').fill(actualTitle)
   await page.getByRole('button', { name: /Create Session/i }).click()
 

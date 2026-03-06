@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import {
   createMcpToken,
@@ -39,6 +39,60 @@ interface AdminTokenState {
   setAdminAvailableTools: (value: string[]) => void
   setAdminAvailableProjects: (value: string[]) => void
   resetAdminTokenState: () => void
+  dispatchers: AdminTokenDispatchers
+}
+
+interface AdminTokenDispatchers {
+  setAdminTokenPanelOpen: (value: boolean) => void
+  setAdminTokensLoading: (value: boolean) => void
+  setAdminTokensCreating: (value: boolean) => void
+  setAdminTokens: (value: McpTokenSummary[]) => void
+  setAdminLatestToken: (value: McpTokenCreateResponse | null) => void
+  setAdminTokenError: (value: string | null) => void
+  setAdminTokenOptionsLoading: (value: boolean) => void
+  setAdminAvailableTools: (value: string[]) => void
+  setAdminAvailableProjects: (value: string[]) => void
+}
+
+function useAdminTokenDispatchers(
+  input: AdminTokenDispatchers,
+): AdminTokenDispatchers {
+  const {
+    setAdminTokenPanelOpen,
+    setAdminTokensLoading,
+    setAdminTokensCreating,
+    setAdminTokens,
+    setAdminLatestToken,
+    setAdminTokenError,
+    setAdminTokenOptionsLoading,
+    setAdminAvailableTools,
+    setAdminAvailableProjects,
+  } = input
+
+  return useMemo(
+    () => ({
+      setAdminTokenPanelOpen,
+      setAdminTokensLoading,
+      setAdminTokensCreating,
+      setAdminTokens,
+      setAdminLatestToken,
+      setAdminTokenError,
+      setAdminTokenOptionsLoading,
+      setAdminAvailableTools,
+      setAdminAvailableProjects,
+    }),
+    [
+      setAdminTokenPanelOpen,
+      setAdminTokensLoading,
+      setAdminTokensCreating,
+      setAdminTokens,
+      setAdminLatestToken,
+      setAdminTokenError,
+      setAdminTokenOptionsLoading,
+      setAdminAvailableTools,
+      setAdminAvailableProjects,
+    ],
+  )
 }
 
 function useAdminTokenState(): AdminTokenState {
@@ -52,8 +106,19 @@ function useAdminTokenState(): AdminTokenState {
   const [adminAvailableTools, setAdminAvailableTools] = useState<string[]>([])
   const [adminAvailableProjects, setAdminAvailableProjects] = useState<string[]>([])
 
-  const resetAdminTokenState = useCallback(
-    () => {
+  const dispatchers = useAdminTokenDispatchers({
+    setAdminTokenPanelOpen,
+    setAdminTokensLoading,
+    setAdminTokensCreating,
+    setAdminTokens,
+    setAdminLatestToken,
+    setAdminTokenError,
+    setAdminTokenOptionsLoading,
+    setAdminAvailableTools,
+    setAdminAvailableProjects,
+  })
+
+  const resetAdminTokenState = useCallback(() => {
     setAdminTokenPanelOpen(false)
     setAdminTokensLoading(false)
     setAdminTokensCreating(false)
@@ -62,20 +127,18 @@ function useAdminTokenState(): AdminTokenState {
     setAdminTokenError(null)
     setAdminTokenOptionsLoading(false)
     setAdminAvailableTools([])
-      setAdminAvailableProjects([])
-    },
-    [
-      setAdminTokenPanelOpen,
-      setAdminTokensLoading,
-      setAdminTokensCreating,
-      setAdminTokens,
-      setAdminLatestToken,
-      setAdminTokenError,
-      setAdminTokenOptionsLoading,
-      setAdminAvailableTools,
-      setAdminAvailableProjects,
-    ],
-  )
+    setAdminAvailableProjects([])
+  }, [
+    setAdminTokenPanelOpen,
+    setAdminTokensLoading,
+    setAdminTokensCreating,
+    setAdminTokens,
+    setAdminLatestToken,
+    setAdminTokenError,
+    setAdminTokenOptionsLoading,
+    setAdminAvailableTools,
+    setAdminAvailableProjects,
+  ])
 
   return {
     adminTokenPanelOpen,
@@ -97,6 +160,7 @@ function useAdminTokenState(): AdminTokenState {
     setAdminAvailableTools,
     setAdminAvailableProjects,
     resetAdminTokenState,
+    dispatchers,
   }
 }
 
@@ -239,19 +303,19 @@ function useAdminTokenMutations(config: AdminTokenMutationsConfig) {
 
 export function useAdminTokenActions(config: AdminTokenActionsConfig) {
   const state = useAdminTokenState()
-  const { resetAdminTokenState } = state
+  const { dispatchers, resetAdminTokenState } = state
   const { isAdmin, setNotice, describeError } = config
   const loaders = useAdminTokenLoaders({
     isAdmin,
     describeError,
-    state,
+    state: dispatchers,
   })
   const mutations = useAdminTokenMutations({
     isAdmin,
     setNotice,
     describeError,
     loadAdminTokens: loaders.loadAdminTokens,
-    state,
+    state: dispatchers,
   })
 
   useEffect(() => {

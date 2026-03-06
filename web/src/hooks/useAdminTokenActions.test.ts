@@ -92,6 +92,29 @@ describe('useAdminTokenActions', () => {
     expect(mcpTokenMocks.listAvailableMcpProjects).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the refresh handler stable across panel state updates', async () => {
+    const describeError = vi.fn(() => 'error')
+    mcpTokenMocks.listMcpTokens.mockResolvedValue([])
+    mcpTokenMocks.listAvailableMcpTools.mockResolvedValue(['chat.send_message'])
+    mcpTokenMocks.listAvailableMcpProjects.mockResolvedValue(['engram-vault'])
+
+    const { result } = renderHook(() =>
+      useAdminTokenActions({
+        isAdmin: true,
+        setNotice: vi.fn(),
+        describeError,
+      }),
+    )
+
+    const initialRefreshHandler = result.current.handleRefreshAdminTokenPanel
+
+    await act(async () => {
+      await result.current.openAdminTokenPanel()
+    })
+
+    expect(result.current.handleRefreshAdminTokenPanel).toBe(initialRefreshHandler)
+  })
+
   it('creates token, emits notice, and refreshes token list', async () => {
     const setNotice = vi.fn()
     mcpTokenMocks.createMcpToken.mockResolvedValue({

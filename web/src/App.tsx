@@ -2,18 +2,22 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { listProjects } from './api/projects'
 import type {
   ChatDebugTrace,
   ChatMessage,
   ChatSession,
+  ChatSessionFormPayload,
   ChatSourceReference,
   ChatTimelineEvent,
   DocumentRecord,
   EngramSummary,
   EngramTracePath,
   PinnedDocumentRecord,
+  ProjectRecord,
   UserProfile,
 } from './api/types'
+import { AgentRunsPage } from './components/AgentRunsPage'
 import { AdminMemoryPage } from './components/AdminMemoryPage'
 import { AdminMcpTokenPanel } from './components/AdminMcpTokenPanel'
 import { AdminObservabilityPage } from './components/AdminObservabilityPage'
@@ -22,6 +26,7 @@ import { DocumentIngestionPanel } from './components/DocumentIngestionPanel'
 import { LinkedEngramPanel } from './components/LinkedEngramPanel'
 import { LoginView } from './components/LoginView'
 import { PinnedEngramPanel } from './components/PinnedEngramPanel'
+import { ProjectGovernancePage } from './components/ProjectGovernancePage'
 import { ProjectTransferPage } from './components/ProjectTransferPage'
 import { SaveEngramModal } from './components/SaveEngramModal'
 import { SessionSidebar } from './components/SessionSidebar'
@@ -45,6 +50,14 @@ import {
 } from './routes/constants'
 import { AuthGuard } from './routes/guards/AuthGuard'
 import { AdminGuard } from './routes/guards/AdminGuard'
+import {
+  parseAgentThreadRoute,
+  parseProjectRoute,
+  parseSessionRoute,
+  resolveAppRouteMeta,
+  resolveWorkspaceSection,
+  type AppSurfaceMode,
+} from './routes/appRouteMeta'
 import { AdminLayout } from './routes/layouts/AdminLayout'
 import { AppLayout } from './routes/layouts/AppLayout'
 import { MarketingLayout } from './routes/layouts/MarketingLayout'
@@ -54,7 +67,17 @@ import { HowItWorksPage } from './routes/pages/marketing/HowItWorksPage'
 import { LandingPage } from './routes/pages/marketing/LandingPage'
 import { PricingPage } from './routes/pages/marketing/PricingPage'
 import { ProductPage } from './routes/pages/marketing/ProductPage'
-import { AppShell, LoadingScreen, NoticeBanner, WorkspaceGrid } from './styles/primitives'
+import {
+  AppShell,
+  GlassPane,
+  LoadingScreen,
+  MutedText,
+  NoticeBanner,
+  PaneHeader,
+  ScrollColumn,
+  SessionMeta,
+  SplitGrid,
+} from './styles/primitives'
 import { useThemeMode } from './styles/useThemeMode'
 import { buildDefaultSaveAbstract } from './utils/chat'
 import { describeError } from './utils/errors'
@@ -62,6 +85,8 @@ import { PROJECT_ID_STORAGE_KEY, initialProjectId, normalizeProjectId } from './
 
 const APP_ROUTE_PATTERNS = [
   APP_ROUTES.workspace,
+  APP_ROUTES.agents,
+  APP_ROUTES.agentRunDetail,
   APP_ROUTES.sessions,
   APP_ROUTES.sessionsNew,
   APP_ROUTES.sessionChat,
@@ -95,21 +120,11 @@ const APP_ROUTE_PATTERNS = [
   APP_ROUTES.adminObservability,
 ] as const
 
-const RightRail = styled.div`
-  min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(10rem, 0.6fr) minmax(10rem, 0.7fr) minmax(0, 1.2fr);
-  gap: 0.9rem;
-
-  @media (max-width: 1180px) {
-    grid-template-rows: none;
-  }
-`
-
 const RouteActionStrip = styled.div`
-  border: 1px solid rgba(94, 234, 212, 0.2);
+  min-height: 0;
+  border: 1px solid var(--color-line);
   border-radius: 16px;
-  background: rgba(8, 20, 32, 0.45);
+  background: var(--surface-raised);
   padding: 0.65rem 0.75rem;
   display: flex;
   align-items: center;
@@ -125,38 +140,357 @@ const RouteActionStrip = styled.div`
   }
 `
 
-type AppSurfaceMode = 'workspace' | 'transfer' | 'admin' | 'adminTokens' | 'observability' | 'saveEngram'
+const WorkspaceHomeGrid = styled.div`
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+`
 
-type SessionRouteAction =
-  | 'chat'
-  | 'lifecycle'
-  | 'timeline'
-  | 'save-engram'
-  | 'continue'
-  | 'pins-engrams'
-  | 'pins-documents'
+const WorkspaceHomeCard = styled.article`
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-panel);
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+`
 
-interface SessionRouteInfo {
-  sessionId: string
-  action: SessionRouteAction
-}
+const WorkspaceHomeTitle = styled.h3`
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.04rem;
+  color: var(--color-ink);
+`
 
-interface AppRouteMeta {
-  title: string
-  description: string
-  mode: AppSurfaceMode
-  adminOnly: boolean
-}
+const SessionDockWorkspace = styled.div`
+  min-height: 0;
+  height: 100%;
+  position: relative;
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 20px;
+  background: var(--surface-glass);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+  isolation: isolate;
 
-interface AppRouteMetaRule {
-  matches: (pathname: string) => boolean
-  meta: AppRouteMeta
-}
+  @media (max-width: 1180px) {
+    height: auto;
+    display: grid;
+    gap: 0.8rem;
+    padding: 0.85rem;
+    overflow: visible;
+  }
+`
+
+const SessionDockControls = styled.div`
+  position: absolute;
+  top: 0.62rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.36rem 0.46rem;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+
+  button {
+    font-size: 0.74rem;
+    padding: 0.36rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-ink-muted);
+  }
+
+  button[aria-pressed='true'] {
+    border-color: var(--session-active-border);
+    color: var(--color-ink);
+    background: var(--session-active-bg);
+  }
+
+  @media (max-width: 1180px) {
+    position: static;
+    top: auto;
+    left: auto;
+    transform: none;
+    justify-self: start;
+    z-index: auto;
+    max-width: 100%;
+  }
+`
+
+const SessionDockHotZone = styled.div<{ $side: 'left' | 'right' }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  z-index: 9;
+  ${({ $side }) => ($side === 'left' ? 'left: 0;' : 'right: 0;')}
+
+  @media (max-width: 1180px) {
+    display: none;
+  }
+`
+
+const SessionDockPanel = styled.aside<{ $side: 'left' | 'right'; $visible: boolean }>`
+  position: absolute;
+  top: 0.62rem;
+  bottom: 0.62rem;
+  ${({ $side }) => ($side === 'left' ? 'left: 0;' : 'right: 0;')}
+  width: min(25rem, 35vw);
+  min-width: 300px;
+  padding: 0.8rem;
+  z-index: 11;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-glass) 96%, transparent);
+  border: 1px solid var(--surface-glass-border);
+  border-left: ${({ $side }) => ($side === 'right' ? '1px solid var(--surface-glass-border)' : 'none')};
+  border-right: ${({ $side }) => ($side === 'left' ? '1px solid var(--surface-glass-border)' : 'none')};
+  border-radius: ${({ $side }) => ($side === 'left' ? '0 20px 20px 0' : '20px 0 0 20px')};
+  pointer-events: ${({ $visible }) => ($visible ? 'auto' : 'none')};
+  opacity: ${({ $visible }) => ($visible ? 1 : 0)};
+  visibility: ${({ $visible }) => ($visible ? 'visible' : 'hidden')};
+  transform: ${({ $side, $visible }) =>
+    $side === 'left'
+      ? $visible
+        ? 'translateX(0)'
+        : 'translateX(-100%)'
+      : $visible
+        ? 'translateX(0)'
+        : 'translateX(100%)'};
+  transition:
+    transform 240ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 220ms ease,
+    visibility 0ms linear ${({ $visible }) => ($visible ? '0ms' : '220ms')};
+
+  @media (max-width: 1180px) {
+    position: static;
+    top: auto;
+    bottom: auto;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    pointer-events: auto;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: none;
+  }
+`
+
+const SessionDockPanelBody = styled.div`
+  min-height: 100%;
+  display: grid;
+  align-content: start;
+  gap: 0.8rem;
+`
+
+const SessionChatStage = styled.div`
+  min-height: 0;
+  height: 100%;
+  padding: 3.45rem 1rem 1rem;
+  display: grid;
+
+  @media (max-width: 1180px) {
+    height: auto;
+    padding: 0;
+  }
+`
+
+const SessionPrimaryColumn = styled.div`
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+
+  @media (max-width: 1180px) {
+    height: auto;
+  }
+`
+
+const SessionPrimarySurface = styled.div`
+  min-height: 0;
+  height: 100%;
+  display: grid;
+
+  > * {
+    min-height: 0;
+  }
+
+  @media (max-width: 1180px) {
+    height: auto;
+  }
+`
+
+const WorkspaceSupportGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+
+  @media (max-width: 1180px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const WorkspaceSingleColumn = styled.div`
+  min-height: 0;
+  display: grid;
+  gap: 0.9rem;
+`
+
+const ProjectsGrid = styled.div`
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 0.9rem;
+
+  @media (max-width: 1180px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const ProjectsList = styled(ScrollColumn)`
+  min-height: 0;
+  max-height: min(58vh, 34rem);
+`
+
+const ProjectCard = styled.article`
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  padding: 0.62rem;
+  display: grid;
+  gap: 0.28rem;
+`
+
+const ProjectActionRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+`
+
+const MAX_VISIBLE_PROJECTS = 180
 
 interface SaveModalVisibilityState {
   saveModalOpen: boolean
   appMode: AppSurfaceMode
   isSaveRoute: boolean
+}
+
+interface ProjectDirectoryState {
+  totalProjects: number
+  filteredProjects: ProjectRecord[]
+  visibleProjects: ProjectRecord[]
+  hasMoreProjects: boolean
+}
+
+interface ProjectDirectoryPaneProps {
+  projectsLoading: boolean
+  projectsError: string | null
+  projectSearch: string
+  directoryState: ProjectDirectoryState
+  onProjectSearchChange: (value: string) => void
+  onRefreshProjects: () => Promise<void>
+  onUseProject: (projectId: string) => void
+  onOpenMembers: (projectId: string) => void
+  onOpenAudit: (projectId: string) => void
+}
+
+function buildProjectDirectoryState(projects: ProjectRecord[], projectSearch: string): ProjectDirectoryState {
+  const normalizedSearch = projectSearch.trim().toLowerCase()
+  const sortedProjects = [...projects].sort((left, right) => left.project_id.localeCompare(right.project_id))
+  const filteredProjects = normalizedSearch
+    ? sortedProjects.filter((project) => {
+        const haystack = `${project.project_id} ${project.name ?? ''} ${project.description ?? ''}`.toLowerCase()
+        return haystack.includes(normalizedSearch)
+      })
+    : sortedProjects
+  const visibleProjects = filteredProjects.slice(0, MAX_VISIBLE_PROJECTS)
+  return {
+    totalProjects: sortedProjects.length,
+    filteredProjects,
+    visibleProjects,
+    hasMoreProjects: filteredProjects.length > visibleProjects.length,
+  }
+}
+
+function ProjectDirectoryPane({
+  projectsLoading,
+  projectsError,
+  projectSearch,
+  directoryState,
+  onProjectSearchChange,
+  onRefreshProjects,
+  onUseProject,
+  onOpenMembers,
+  onOpenAudit,
+}: ProjectDirectoryPaneProps) {
+  return (
+    <GlassPane>
+      <PaneHeader>
+        <h2>Available Projects</h2>
+        <button type="button" onClick={() => void onRefreshProjects()} disabled={projectsLoading}>
+          {projectsLoading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </PaneHeader>
+      <label htmlFor="project-search">Find project</label>
+      <input
+        id="project-search"
+        value={projectSearch}
+        onChange={(event) => onProjectSearchChange(event.target.value)}
+        placeholder="Search by id, name, or description"
+      />
+      <SessionMeta>
+        Showing {directoryState.visibleProjects.length} of {directoryState.filteredProjects.length} matches (
+        {directoryState.totalProjects} total)
+      </SessionMeta>
+      {projectsError ? <MutedText>{projectsError}</MutedText> : null}
+      <ProjectsList>
+        {projectsLoading ? <MutedText>Loading projects...</MutedText> : null}
+        {!projectsLoading && directoryState.filteredProjects.length === 0 ? (
+          <MutedText>No projects found for this filter.</MutedText>
+        ) : null}
+        {directoryState.visibleProjects.map((project) => (
+          <ProjectCard key={project.project_id}>
+            <strong>{project.name || project.project_id}</strong>
+            <SessionMeta>{project.project_id}</SessionMeta>
+            <MutedText>{project.description || 'No description provided.'}</MutedText>
+            <SessionMeta>
+              Owner {project.owner_user_id} · Updated {new Date(project.updated_at).toLocaleString()}
+            </SessionMeta>
+            <ProjectActionRow>
+              <button type="button" onClick={() => onUseProject(project.project_id)}>
+                Use Project
+              </button>
+              <button type="button" onClick={() => onOpenMembers(project.project_id)}>
+                Members
+              </button>
+              <button type="button" onClick={() => onOpenAudit(project.project_id)}>
+                Audit
+              </button>
+            </ProjectActionRow>
+          </ProjectCard>
+        ))}
+        {directoryState.hasMoreProjects ? (
+          <MutedText>
+            More than {MAX_VISIBLE_PROJECTS} matches found. Add a tighter search term to narrow the list.
+          </MutedText>
+        ) : null}
+      </ProjectsList>
+    </GlassPane>
+  )
 }
 
 function useLinkRecallControls() {
@@ -187,140 +521,6 @@ function useLinkedTraceState() {
   }
 }
 
-function parseSessionRoute(pathname: string): SessionRouteInfo | null {
-  const directMatch = pathname.match(
-    /^\/app\/sessions\/([^/]+)\/(chat|lifecycle|timeline|save-engram|continue)$/,
-  )
-  if (directMatch) {
-    return {
-      sessionId: directMatch[1],
-      action: directMatch[2] as SessionRouteAction,
-    }
-  }
-
-  const pinMatch = pathname.match(/^\/app\/sessions\/([^/]+)\/pins\/(engrams|documents)$/)
-  if (pinMatch) {
-    return {
-      sessionId: pinMatch[1],
-      action: pinMatch[2] === 'engrams' ? 'pins-engrams' : 'pins-documents',
-    }
-  }
-
-  return null
-}
-
-const SAVE_ENGRAM_ROUTE_PATTERN = /^\/app\/sessions\/[^/]+\/save-engram$/
-
-const DEFAULT_APP_ROUTE_META: AppRouteMeta = {
-  title: 'Memory Continuity Workspace',
-  description: 'Coordinate sessions, context retrieval, and memory actions in one command surface.',
-  mode: 'workspace',
-  adminOnly: false,
-}
-
-const APP_ROUTE_META_RULES: AppRouteMetaRule[] = [
-  {
-    matches: (pathname) => pathname === APP_ROUTES.adminTokens,
-    meta: {
-      title: 'MCP Token Administration',
-      description: 'Create, scope, and revoke MCP access tokens in a dedicated admin control plane.',
-      mode: 'adminTokens',
-      adminOnly: true,
-    },
-  },
-  {
-    matches: (pathname) => pathname === APP_ROUTES.adminObservability,
-    meta: {
-      title: 'Observability and Runtime Health',
-      description: 'Inspect request metrics and release metadata for this running environment.',
-      mode: 'observability',
-      adminOnly: true,
-    },
-  },
-  {
-    matches: (pathname) => pathname.startsWith('/app/admin'),
-    meta: {
-      title: 'Memory Administration',
-      description:
-        'Manage sessions, engrams, collections, curation, contradictions, members, and security controls.',
-      mode: 'admin',
-      adminOnly: true,
-    },
-  },
-  {
-    matches: (pathname) => pathname.startsWith('/app/projects/transfer'),
-    meta: {
-      title: 'Project Export and Import',
-      description: 'Move continuity bundles across workspaces with deterministic conflict policies.',
-      mode: 'transfer',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => pathname === APP_ROUTES.sessionsNew,
-    meta: {
-      title: 'Create Session',
-      description: 'Configure provider, model, and lifecycle defaults for a new memory session.',
-      mode: 'workspace',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => pathname === APP_ROUTES.sessions,
-    meta: {
-      title: 'Session Workspace',
-      description: 'Browse and continue previous chat sessions with durable memory continuity.',
-      mode: 'workspace',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => SAVE_ENGRAM_ROUTE_PATTERN.test(pathname),
-    meta: {
-      title: 'Save Session as Engram',
-      description: 'Promote this conversation into durable memory with title, abstract, visibility, and tags.',
-      mode: 'saveEngram',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => pathname.startsWith('/app/engrams'),
-    meta: {
-      title: 'Engram Retrieval and Graph',
-      description: 'Search, inspect, trace, and curate memory artifacts with provenance-first workflows.',
-      mode: 'workspace',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => pathname.startsWith('/app/documents'),
-    meta: {
-      title: 'Document Ingestion and Pinning',
-      description: 'Ingest source documents and pin evidence for active sessions.',
-      mode: 'workspace',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => pathname.startsWith('/app/projects'),
-    meta: {
-      title: 'Project Collaboration Controls',
-      description: 'Manage project scope, members, defaults, and audit trails.',
-      mode: 'workspace',
-      adminOnly: false,
-    },
-  },
-]
-
-function resolveAppRouteMeta(pathname: string): AppRouteMeta {
-  for (const routeMetaRule of APP_ROUTE_META_RULES) {
-    if (routeMetaRule.matches(pathname)) {
-      return routeMetaRule.meta
-    }
-  }
-  return DEFAULT_APP_ROUTE_META
-}
-
 function shouldShowSaveModal(state: SaveModalVisibilityState): boolean {
   return state.saveModalOpen && state.appMode === 'workspace' && !state.isSaveRoute
 }
@@ -343,7 +543,13 @@ function AppScreen() {
   const location = useLocation()
   const { mode, toggleMode } = useThemeMode()
   const appRouteMeta = useMemo(() => resolveAppRouteMeta(location.pathname), [location.pathname])
+  const workspaceSection = useMemo(
+    () => resolveWorkspaceSection(location.pathname),
+    [location.pathname],
+  )
   const sessionRouteInfo = useMemo(() => parseSessionRoute(location.pathname), [location.pathname])
+  const agentThreadId = useMemo(() => parseAgentThreadRoute(location.pathname), [location.pathname])
+  const projectRouteInfo = useMemo(() => parseProjectRoute(location.pathname), [location.pathname])
   const isLoginRoute = location.pathname === MARKETING_ROUTES.login
   const isAppRoute = location.pathname.startsWith('/app')
   const isAdminTokenRoute = location.pathname === APP_ROUTES.adminTokens
@@ -363,6 +569,9 @@ function AppScreen() {
   const [creatingSession, setCreatingSession] = useState(false)
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [selectedSessionIdState, setSelectedSessionId] = useState<string | null>(null)
+  const [leftDockPinned, setLeftDockPinned] = useState(false)
+  const [rightDockPinned, setRightDockPinned] = useState(false)
+  const [hoveredDockSide, setHoveredDockSide] = useState<'left' | 'right' | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [pendingUserText, setPendingUserText] = useState<string | null>(null)
@@ -400,6 +609,10 @@ function AppScreen() {
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [documentsError, setDocumentsError] = useState<string | null>(null)
   const [pinnedDocuments, setPinnedDocuments] = useState<PinnedDocumentRecord[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(false)
+  const [projectsError, setProjectsError] = useState<string | null>(null)
+  const [projects, setProjects] = useState<ProjectRecord[]>([])
+  const [projectSearch, setProjectSearch] = useState('')
 
   const [saveModalOpen, setSaveModalOpen] = useState(false)
   const [saveSubmitting, setSaveSubmitting] = useState(false)
@@ -407,6 +620,8 @@ function AppScreen() {
   const [notice, setNotice] = useState<string | null>(null)
 
   const selectedSessionId = sessionRouteInfo?.sessionId ?? selectedSessionIdState
+  const leftDockVisible = leftDockPinned || hoveredDockSide === 'left'
+  const rightDockVisible = rightDockPinned || hoveredDockSide === 'right'
 
   const selectedSession = useMemo(
     () => sessions.find((item) => item.session_id === selectedSessionId) || null,
@@ -419,9 +634,16 @@ function AppScreen() {
     setEngramTracePaths([])
   }, [selectedSessionId, setUsedEngramIds, setUsedEngramLinkIds, setEngramTracePaths])
 
+  useEffect(() => {
+    if (workspaceSection !== 'sessions') {
+      setHoveredDockSide(null)
+    }
+  }, [workspaceSection])
+
   const defaultSaveAbstract = useMemo(() => buildDefaultSaveAbstract(messages), [messages])
   const isAdmin = user?.role === 'admin'
   const adminTokenActions = useAdminTokenActions({ isAdmin, setNotice, describeError })
+  const refreshAdminTokenPanel = adminTokenActions.handleRefreshAdminTokenPanel
 
   const workspaceDataLoaders = useWorkspaceDataLoaders({
     projectId,
@@ -449,6 +671,16 @@ function AppScreen() {
     normalizeProjectId,
     storageKey: PROJECT_ID_STORAGE_KEY,
   })
+
+  useEffect(() => {
+    if (!projectRouteInfo) {
+      return
+    }
+    const normalizedRouteProjectId = normalizeProjectId(projectRouteInfo.projectId)
+    if (normalizedRouteProjectId && normalizedRouteProjectId !== projectId) {
+      setProjectId(normalizedRouteProjectId)
+    }
+  }, [projectId, projectRouteInfo])
 
   useWorkspaceLifecycle({
     projectId,
@@ -513,6 +745,14 @@ function AppScreen() {
     setDefaultProjectId,
     setNotice,
   })
+
+  const handleCreateSessionAndRoute = async (payload: ChatSessionFormPayload) => {
+    const created = await handleCreateSession(payload)
+    if (!created) {
+      return
+    }
+    navigate(`/app/sessions/${created.session_id}/chat`)
+  }
 
   const { handleSend, handleRetry } = usePromptActions({
     composerText,
@@ -602,12 +842,88 @@ function AppScreen() {
     if (!isAdmin || !isAdminTokenRoute) {
       return
     }
-    void adminTokenActions.handleRefreshAdminTokenPanel()
-  }, [adminTokenActions, isAdmin, isAdminTokenRoute])
+    void refreshAdminTokenPanel()
+  }, [isAdmin, isAdminTokenRoute, refreshAdminTokenPanel])
+
+  useEffect(() => {
+    if (!user || workspaceSection !== 'projects') {
+      return
+    }
+    let cancelled = false
+    const loadProjects = async () => {
+      setProjectsLoading(true)
+      setProjectsError(null)
+      try {
+        const loaded = await listProjects(false)
+        if (!cancelled) {
+          setProjects(loaded)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setProjectsError(describeError(error))
+        }
+      } finally {
+        if (!cancelled) {
+          setProjectsLoading(false)
+        }
+      }
+    }
+    void loadProjects()
+    return () => {
+      cancelled = true
+    }
+  }, [user, workspaceSection])
+
+  useEffect(() => {
+    if (!sessionRouteInfo || sessionsLoading) {
+      return
+    }
+    if (sessions.length === 0) {
+      return
+    }
+    const routeSessionExists = sessions.some((item) => item.session_id === sessionRouteInfo.sessionId)
+    if (routeSessionExists) {
+      return
+    }
+    navigate(APP_ROUTES.sessions, { replace: true })
+  }, [navigate, sessionRouteInfo, sessions, sessionsLoading])
+
+  useEffect(() => {
+    if (!selectedSessionId) {
+      return
+    }
+    if (location.pathname !== APP_ROUTES.sessions && location.pathname !== APP_ROUTES.sessionsNew) {
+      return
+    }
+    navigate(`/app/sessions/${selectedSessionId}/chat`, { replace: true })
+  }, [location.pathname, navigate, selectedSessionId])
+
+  const handleSelectSession = (sessionId: string) => {
+    setSelectedSessionId(sessionId)
+
+    if (!location.pathname.startsWith('/app/sessions/')) {
+      navigate(`/app/sessions/${sessionId}/chat`)
+      return
+    }
+
+    if (!sessionRouteInfo) {
+      navigate(`/app/sessions/${sessionId}/chat`)
+      return
+    }
+
+    if (sessionRouteInfo.sessionId !== sessionId) {
+      navigate(`/app/sessions/${sessionId}/chat`)
+      return
+    }
+
+    if (sessionRouteInfo.action !== 'chat') {
+      navigate(`/app/sessions/${sessionId}/chat`)
+    }
+  }
 
   const handleRouteContinue = async () => {
     await handleContinueSession()
-    navigate(APP_ROUTES.workspace)
+    navigate(APP_ROUTES.sessions)
   }
 
   const handleRouteSave = async (payload: {
@@ -630,52 +946,124 @@ function AppScreen() {
     }
   }
 
-  const renderWorkspace = () => (
-    <WorkspaceGrid>
-      <SessionSidebar
-        sessions={sessions}
-        selectedSessionId={selectedSessionId}
-        projectId={projectId}
-        defaultProjectId={defaultProjectId}
-        settingDefaultProject={settingDefaultProject}
-        defaultProvider={WEB_CONFIG.defaultProvider}
-        defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
-        modelDefaults={WEB_CONFIG.defaultModelByProvider}
-        loading={sessionsLoading}
-        creating={creatingSession}
-        onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
-        onSetDefaultProject={handleSetDefaultProject}
-        onSelectSession={setSelectedSessionId}
-        onCreateSession={handleCreateSession}
-      />
+  const revealDockPanel = (side: 'left' | 'right') => {
+    setHoveredDockSide(side)
+  }
 
-      <ChatPanel
-        session={selectedSession}
-        messages={messages}
-        pendingUserText={pendingUserText}
-        streamingAssistantText={streamingAssistantText}
-        composerText={composerText}
-        sending={chatSending}
-        error={chatError}
-        sourceReferences={sourceReferences}
-        usedEngramLinkIds={usedEngramLinkIds}
-        engramTracePaths={engramTracePaths}
-        debugTrace={chatDebugTrace}
-        timelineEvents={timelineEvents}
-        linkRecallEnabled={linkRecallEnabled}
-        linkRecallDepth={linkRecallDepth}
-        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
-        onLinkRecallEnabledChange={setLinkRecallEnabled}
-        onLinkRecallDepthChange={setLinkRecallDepth}
-        onLinkRecallMaxNeighborsChange={setLinkRecallMaxNeighbors}
-        onComposerChange={setComposerText}
-        onSend={handleSend}
-        onRetry={handleRetry}
-        onOpenSaveModal={() => setSaveModalOpen(true)}
-        onContinueSession={handleContinueSession}
-      />
+  const hideDockHover = (side: 'left' | 'right') => {
+    setHoveredDockSide((active) => (active === side ? null : active))
+  }
 
-      <RightRail>
+  const toggleDockPanel = (side: 'left' | 'right') => {
+    const isLeftSide = side === 'left'
+    const currentlyPinned = isLeftSide ? leftDockPinned : rightDockPinned
+    const nextPinnedState = !currentlyPinned
+
+    if (isLeftSide) {
+      setLeftDockPinned(nextPinnedState)
+    } else {
+      setRightDockPinned(nextPinnedState)
+    }
+
+    if (nextPinnedState) {
+      setHoveredDockSide(side)
+      return
+    }
+    hideDockHover(side)
+  }
+
+  const focusChatOnly = () => {
+    setLeftDockPinned(false)
+    setRightDockPinned(false)
+    setHoveredDockSide(null)
+  }
+
+  const openEngramPinsWorkspace = () => {
+    if (selectedSessionId) {
+      navigate(`/app/sessions/${selectedSessionId}/pins/engrams`)
+      return
+    }
+    navigate(APP_ROUTES.engrams)
+  }
+
+  const openDocumentPinsWorkspace = () => {
+    if (selectedSessionId) {
+      navigate(`/app/sessions/${selectedSessionId}/pins/documents`)
+      return
+    }
+    navigate(APP_ROUTES.documents)
+  }
+
+  const leftDockToggleLabel = leftDockPinned ? 'Hide Sessions Panel' : 'Show Sessions Panel'
+  const rightDockToggleLabel = rightDockPinned ? 'Hide Actions Panel' : 'Show Actions Panel'
+
+  const renderWorkspaceHome = () => (
+    <WorkspaceHomeGrid>
+      <WorkspaceHomeCard>
+        <WorkspaceHomeTitle>Sessions and Chat</WorkspaceHomeTitle>
+        <MutedText>
+          Focused chat workspace with a cleaner transcript flow and dedicated memory actions.
+        </MutedText>
+        <SessionMeta>{sessions.length} sessions loaded</SessionMeta>
+        <button type="button" onClick={() => navigate(APP_ROUTES.sessions)}>
+          Open Sessions
+        </button>
+      </WorkspaceHomeCard>
+      <WorkspaceHomeCard>
+        <WorkspaceHomeTitle>Engram Memory</WorkspaceHomeTitle>
+        <MutedText>Review pinned engrams, graph edges, and suggestion queue in a separate memory page.</MutedText>
+        <SessionMeta>{availableEngrams.length} engrams available</SessionMeta>
+        <button type="button" onClick={() => navigate(APP_ROUTES.engrams)}>
+          Open Engrams
+        </button>
+      </WorkspaceHomeCard>
+      <WorkspaceHomeCard>
+        <WorkspaceHomeTitle>Document Ingestion</WorkspaceHomeTitle>
+        <MutedText>Upload and chunk docs without competing for screen space with chat controls.</MutedText>
+        <SessionMeta>{documents.length} project documents</SessionMeta>
+        <button type="button" onClick={() => navigate(APP_ROUTES.documents)}>
+          Open Documents
+        </button>
+      </WorkspaceHomeCard>
+      <WorkspaceHomeCard>
+        <WorkspaceHomeTitle>Agent Runs</WorkspaceHomeTitle>
+        <MutedText>Checkpoint long-running agents, inspect thread state, and resume with durable memory.</MutedText>
+        <SessionMeta>Thread-based workflows with optional auto-persisted engrams</SessionMeta>
+        <button type="button" onClick={() => navigate(APP_ROUTES.agents)}>
+          Open Agents
+        </button>
+      </WorkspaceHomeCard>
+      <WorkspaceHomeCard>
+        <WorkspaceHomeTitle>Projects</WorkspaceHomeTitle>
+        <MutedText>Manage active project scope, defaults, members, and transfer entry points.</MutedText>
+        <SessionMeta>Active: {projectId || 'not set'}</SessionMeta>
+        <button type="button" onClick={() => navigate(APP_ROUTES.projects)}>
+          Open Projects
+        </button>
+      </WorkspaceHomeCard>
+    </WorkspaceHomeGrid>
+  )
+
+  const renderSessionPrimarySurface = () => {
+    if (sessionRouteInfo?.action === 'pins-engrams') {
+      return (
+        <PinnedEngramPanel
+          selectedSessionId={selectedSessionId}
+          pinnedEngrams={pinnedEngrams}
+          availableEngrams={availableEngrams}
+          search={engramSearch}
+          loading={engramLoading}
+          onSearchChange={setEngramSearch}
+          onRefresh={handleRefreshEngrams}
+          onPin={handlePin}
+          onUnpin={handleUnpin}
+          onCopyId={handleCopyEngramId}
+        />
+      )
+    }
+
+    if (sessionRouteInfo?.action === 'pins-documents') {
+      return (
         <DocumentIngestionPanel
           projectId={projectId}
           selectedSessionId={selectedSessionId}
@@ -690,7 +1078,203 @@ function AppScreen() {
           onPinDocument={handlePinDocument}
           onUnpinDocument={handleUnpinDocument}
         />
+      )
+    }
 
+    return (
+      <ChatPanel
+        session={selectedSession}
+        messages={messages}
+        pendingUserText={pendingUserText}
+        streamingAssistantText={streamingAssistantText}
+        composerText={composerText}
+        sending={chatSending}
+        error={chatError}
+        sourceReferences={sourceReferences}
+        usedEngramLinkIds={usedEngramLinkIds}
+        engramTracePaths={engramTracePaths}
+        debugTrace={chatDebugTrace}
+        timelineEvents={timelineEvents}
+        showTimeline={sessionRouteInfo?.action === 'timeline' || sessionRouteInfo?.action === 'lifecycle'}
+        showDebugTrace={sessionRouteInfo?.action === 'lifecycle'}
+        linkRecallEnabled={linkRecallEnabled}
+        linkRecallDepth={linkRecallDepth}
+        linkRecallMaxNeighbors={linkRecallMaxNeighbors}
+        onLinkRecallEnabledChange={setLinkRecallEnabled}
+        onLinkRecallDepthChange={setLinkRecallDepth}
+        onLinkRecallMaxNeighborsChange={setLinkRecallMaxNeighbors}
+        onComposerChange={setComposerText}
+        onSend={handleSend}
+        onRetry={handleRetry}
+        onOpenSaveModal={() => setSaveModalOpen(true)}
+        onContinueSession={handleContinueSession}
+      />
+    )
+  }
+
+  const renderSessionDockControls = () => (
+    <SessionDockControls>
+      <button
+        type="button"
+        data-testid="dock-toggle-sessions"
+        aria-pressed={leftDockPinned}
+        onClick={() => toggleDockPanel('left')}
+      >
+        {leftDockToggleLabel}
+      </button>
+      <button
+        type="button"
+        data-testid="dock-toggle-actions"
+        aria-pressed={rightDockPinned}
+        onClick={() => toggleDockPanel('right')}
+      >
+        {rightDockToggleLabel}
+      </button>
+      <button
+        type="button"
+        data-testid="dock-focus-chat"
+        aria-pressed={!leftDockPinned && !rightDockPinned}
+        onClick={focusChatOnly}
+      >
+        Focus Chat
+      </button>
+    </SessionDockControls>
+  )
+
+  const renderSessionActionDock = () => (
+    <SessionDockPanelBody>
+      {isContinueRoute ? (
+        <RouteActionStrip>
+          <p>Continue this thread as a fresh session while carrying your pinned continuity context.</p>
+          <button type="button" onClick={() => void handleRouteContinue()} disabled={!selectedSessionId}>
+            Continue Session Now
+          </button>
+        </RouteActionStrip>
+      ) : null}
+      <RouteActionStrip>
+        <p>
+          Primary chat stays centered. Memory actions and panel routes are placed in this dock so the transcript
+          has more working space.
+        </p>
+        <SplitGrid>
+          <button type="button" onClick={openEngramPinsWorkspace}>
+            Engram Pins
+          </button>
+          <button type="button" onClick={openDocumentPinsWorkspace}>
+            Document Pins
+          </button>
+        </SplitGrid>
+      </RouteActionStrip>
+
+      <LinkedEngramPanel
+        selectedSessionId={selectedSessionId}
+        loading={linkedEngramLoading}
+        error={linkedEngramError}
+        sourceEngramIds={linkedSourceEngramIds}
+        links={linkedEngramLinks}
+        suggestions={linkedEngramSuggestions}
+        pendingSuggestionKeys={pendingSuggestionKeys}
+        availableEngrams={availableEngrams}
+        sourceReferences={sourceReferences}
+        tracePaths={engramTracePaths}
+        onRefresh={refreshLinkInsights}
+        onAcceptSuggestion={handleAcceptSuggestion}
+        onRejectSuggestion={handleRejectSuggestion}
+      />
+    </SessionDockPanelBody>
+  )
+
+  const renderSessionsWorkspace = () => (
+    <SessionDockWorkspace onMouseLeave={() => setHoveredDockSide(null)}>
+      {renderSessionDockControls()}
+
+      <SessionDockHotZone
+        $side="left"
+        data-testid="dock-hotzone-left"
+        onMouseEnter={() => revealDockPanel('left')}
+      />
+      <SessionDockHotZone
+        $side="right"
+        data-testid="dock-hotzone-right"
+        onMouseEnter={() => revealDockPanel('right')}
+      />
+
+      <SessionDockPanel
+        $side="left"
+        $visible={leftDockVisible}
+        data-testid="dock-panel-left"
+        onMouseEnter={() => revealDockPanel('left')}
+        onMouseLeave={() => hideDockHover('left')}
+      >
+        <SessionDockPanelBody>
+          <SessionSidebar
+            sessions={sessions}
+            selectedSessionId={selectedSessionId}
+            projectId={projectId}
+            defaultProjectId={defaultProjectId}
+            settingDefaultProject={settingDefaultProject}
+            defaultProvider={WEB_CONFIG.defaultProvider}
+            defaultVisibilityScope={WEB_CONFIG.defaultVisibility}
+            modelDefaults={WEB_CONFIG.defaultModelByProvider}
+            loading={sessionsLoading}
+            creating={creatingSession}
+            onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
+            onSetDefaultProject={handleSetDefaultProject}
+            onSelectSession={handleSelectSession}
+            onCreateSession={handleCreateSessionAndRoute}
+          />
+        </SessionDockPanelBody>
+      </SessionDockPanel>
+
+      <SessionDockPanel
+        $side="right"
+        $visible={rightDockVisible}
+        data-testid="dock-panel-right"
+        onMouseEnter={() => revealDockPanel('right')}
+        onMouseLeave={() => hideDockHover('right')}
+      >
+        {renderSessionActionDock()}
+      </SessionDockPanel>
+
+      <SessionChatStage>
+        <SessionPrimaryColumn>
+          <SessionPrimarySurface>{renderSessionPrimarySurface()}</SessionPrimarySurface>
+        </SessionPrimaryColumn>
+      </SessionChatStage>
+    </SessionDockWorkspace>
+  )
+
+  const renderAgentsWorkspace = () => (
+    <AgentRunsPage
+      projectId={projectId}
+      onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
+      selectedThreadId={agentThreadId}
+      onThreadSelect={(threadId) => navigate(`/app/agents/runs/${encodeURIComponent(threadId)}`)}
+      onNotice={(message) => setNotice(message)}
+    />
+  )
+
+  const renderEngramsWorkspace = () => (
+    <WorkspaceSingleColumn>
+      <RouteActionStrip>
+        <p>Engram management is separated from chat so memory curation has full, dedicated space.</p>
+        <button type="button" onClick={() => navigate(APP_ROUTES.sessions)}>
+          Open Session Chat
+        </button>
+      </RouteActionStrip>
+      <WorkspaceSupportGrid>
+        <PinnedEngramPanel
+          selectedSessionId={selectedSessionId}
+          pinnedEngrams={pinnedEngrams}
+          availableEngrams={availableEngrams}
+          search={engramSearch}
+          loading={engramLoading}
+          onSearchChange={setEngramSearch}
+          onRefresh={handleRefreshEngrams}
+          onPin={handlePin}
+          onUnpin={handleUnpin}
+          onCopyId={handleCopyEngramId}
+        />
         <LinkedEngramPanel
           selectedSessionId={selectedSessionId}
           loading={linkedEngramLoading}
@@ -706,64 +1290,176 @@ function AppScreen() {
           onAcceptSuggestion={handleAcceptSuggestion}
           onRejectSuggestion={handleRejectSuggestion}
         />
-
-        <PinnedEngramPanel
-          selectedSessionId={selectedSessionId}
-          pinnedEngrams={pinnedEngrams}
-          availableEngrams={availableEngrams}
-          search={engramSearch}
-          loading={engramLoading}
-          onSearchChange={setEngramSearch}
-          onRefresh={handleRefreshEngrams}
-          onPin={handlePin}
-          onUnpin={handleUnpin}
-          onCopyId={handleCopyEngramId}
-        />
-      </RightRail>
-    </WorkspaceGrid>
+      </WorkspaceSupportGrid>
+    </WorkspaceSingleColumn>
   )
 
-  const renderWorkspaceRouteHint = () => {
-    if (isContinueRoute) {
+  const renderDocumentsWorkspace = () => (
+    <WorkspaceSingleColumn>
+      <RouteActionStrip>
+        <p>Documents and evidence pinning are isolated here to reduce noise in active chat workflows.</p>
+        <button
+          type="button"
+          onClick={() =>
+            selectedSessionId
+              ? navigate(`/app/sessions/${selectedSessionId}/pins/documents`)
+              : navigate(APP_ROUTES.sessions)
+          }
+        >
+          Open Session Document Pins
+        </button>
+      </RouteActionStrip>
+
+      <WorkspaceSupportGrid>
+        <DocumentIngestionPanel
+          projectId={projectId}
+          selectedSessionId={selectedSessionId}
+          documents={documents}
+          pinnedDocumentIds={pinnedDocuments.map((item) => item.document_id)}
+          loading={documentsLoading}
+          submitting={documentsSubmitting}
+          error={documentsError}
+          onRefresh={handleRefreshDocuments}
+          onIngestText={handleIngestText}
+          onIngestFile={handleIngestFile}
+          onPinDocument={handlePinDocument}
+          onUnpinDocument={handleUnpinDocument}
+        />
+
+        <GlassPane>
+          <PaneHeader>
+            <h2>Pinned Document Context</h2>
+          </PaneHeader>
+          <MutedText>
+            {selectedSessionId
+              ? `Active session: ${selectedSessionId}`
+              : 'Pick a session to pin or unpin project documents.'}
+          </MutedText>
+          <SessionMeta>{pinnedDocuments.length} documents pinned</SessionMeta>
+          <ProjectsList>
+            {pinnedDocuments.length === 0 ? (
+              <MutedText>No pinned documents for the selected session.</MutedText>
+            ) : (
+              pinnedDocuments.map((item) => (
+                <ProjectCard key={item.document_id}>
+                  <strong>{item.document_id}</strong>
+                  <SessionMeta>Pinned at {new Date(item.created_at).toLocaleString()}</SessionMeta>
+                  <ProjectActionRow>
+                    <button type="button" onClick={() => void handleUnpinDocument(item.document_id)}>
+                      Unpin
+                    </button>
+                  </ProjectActionRow>
+                </ProjectCard>
+              ))
+            )}
+          </ProjectsList>
+        </GlassPane>
+      </WorkspaceSupportGrid>
+    </WorkspaceSingleColumn>
+  )
+
+  const renderProjectsWorkspace = () => {
+    if (projectRouteInfo) {
       return (
-        <RouteActionStrip>
-          <p>
-            Continue this session as a new chat while carrying pinned context. This route is action-specific
-            and mirrors the in-chat continuation control.
-          </p>
-          <button type="button" onClick={() => void handleRouteContinue()} disabled={!selectedSessionId}>
-            Continue Session Now
-          </button>
-        </RouteActionStrip>
+        <ProjectGovernancePage
+          action={projectRouteInfo.action}
+          projectId={projectRouteInfo.projectId}
+          project={projects.find((project) => project.project_id === projectRouteInfo.projectId) || null}
+          projectSuggestions={projects.map((project) => project.project_id)}
+          onProjectChange={(nextProjectId) => {
+            const normalizedProjectId = normalizeProjectId(nextProjectId)
+            if (!normalizedProjectId) {
+              return
+            }
+            navigate(
+              projectRouteInfo.action === 'members'
+                ? `/app/projects/${normalizedProjectId}/members`
+                : `/app/projects/${normalizedProjectId}/audit`,
+            )
+          }}
+          onNotice={(message) => setNotice(message)}
+        />
       )
     }
 
-    if (isSaveRoute) {
-      return (
-        <RouteActionStrip>
-          <p>
-            Save this session as an engram. The dedicated route opens the save flow without leaving your
-            continuity context.
-          </p>
-          <button type="button" onClick={() => setSaveModalOpen(true)} disabled={!selectedSessionId}>
-            Open Save Form
-          </button>
-        </RouteActionStrip>
-      )
+    const directoryState = buildProjectDirectoryState(projects, projectSearch)
+
+    const refreshProjects = async () => {
+      setProjectsLoading(true)
+      setProjectsError(null)
+      try {
+        setProjects(await listProjects(false))
+      } catch (error) {
+        setProjectsError(describeError(error))
+      } finally {
+        setProjectsLoading(false)
+      }
     }
 
-    if (location.pathname === APP_ROUTES.documentsIngestText || location.pathname === APP_ROUTES.documentsIngestFile) {
-      return (
-        <RouteActionStrip>
-          <p>
-            Use the Document Ingestion panel to add text or files, then pin relevant evidence into the
-            selected session.
-          </p>
-        </RouteActionStrip>
-      )
-    }
+    return (
+      <ProjectsGrid>
+        <GlassPane>
+          <PaneHeader>
+            <h2>Active Project Scope</h2>
+            <button type="button" onClick={() => void handleSetDefaultProject()} disabled={settingDefaultProject}>
+              {settingDefaultProject ? 'Saving…' : 'Set as Default'}
+            </button>
+          </PaneHeader>
+          <label htmlFor="active-project-id">Project ID</label>
+          <input
+            id="active-project-id"
+            value={projectId}
+            onChange={(event) => setProjectId(normalizeProjectId(event.target.value))}
+            placeholder="project-id"
+          />
+          <MutedText>
+            Default project: <strong>{defaultProjectId || 'not configured'}</strong>
+          </MutedText>
+          <RouteActionStrip>
+            <p>Project routes are now dedicated pages so governance actions do not interrupt chat.</p>
+            <SplitGrid>
+              <button type="button" onClick={() => navigate(APP_ROUTES.transferExport)}>
+                Export Project
+              </button>
+              <button type="button" onClick={() => navigate(APP_ROUTES.transferImport)}>
+                Import Bundle
+              </button>
+            </SplitGrid>
+          </RouteActionStrip>
+        </GlassPane>
 
-    return null
+        <ProjectDirectoryPane
+          projectsLoading={projectsLoading}
+          projectsError={projectsError}
+          projectSearch={projectSearch}
+          directoryState={directoryState}
+          onProjectSearchChange={setProjectSearch}
+          onRefreshProjects={refreshProjects}
+          onUseProject={setProjectId}
+          onOpenMembers={(projectIdValue) => navigate(`/app/projects/${projectIdValue}/members`)}
+          onOpenAudit={(projectIdValue) => navigate(`/app/projects/${projectIdValue}/audit`)}
+        />
+      </ProjectsGrid>
+    )
+  }
+
+  const renderWorkspaceSurface = () => {
+    if (workspaceSection === 'home') {
+      return renderWorkspaceHome()
+    }
+    if (workspaceSection === 'agents') {
+      return renderAgentsWorkspace()
+    }
+    if (workspaceSection === 'sessions') {
+      return renderSessionsWorkspace()
+    }
+    if (workspaceSection === 'engrams') {
+      return renderEngramsWorkspace()
+    }
+    if (workspaceSection === 'documents') {
+      return renderDocumentsWorkspace()
+    }
+    return renderProjectsWorkspace()
   }
 
   const renderBody = () => {
@@ -843,12 +1539,7 @@ function AppScreen() {
       )
     }
 
-    return (
-      <AppLayout title={appRouteMeta.title} description={appRouteMeta.description}>
-        {renderWorkspaceRouteHint()}
-        {renderWorkspace()}
-      </AppLayout>
-    )
+    return <AppLayout title={appRouteMeta.title} description={appRouteMeta.description}>{renderWorkspaceSurface()}</AppLayout>
   }
 
   const renderSaveModal = () => {
