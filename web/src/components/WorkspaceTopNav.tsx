@@ -119,6 +119,7 @@ export function WorkspaceTopNav({
       <TopNavUserBlock>
         <NavStrip>
           <NavLink to={APP_ROUTES.workspace}>Workspace</NavLink>
+          <NavLink to={APP_ROUTES.agents}>Agents</NavLink>
           <NavLink to={APP_ROUTES.sessions}>Sessions</NavLink>
           <NavLink to={APP_ROUTES.engrams}>Engrams</NavLink>
           <NavLink to={APP_ROUTES.documents}>Documents</NavLink>

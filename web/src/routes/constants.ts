@@ -12,6 +12,8 @@ export const MARKETING_ROUTES = {
 
 export const APP_ROUTES = {
   workspace: '/app/workspace',
+  agents: '/app/agents',
+  agentRunDetail: '/app/agents/runs/:threadId',
   sessions: '/app/sessions',
   sessionsNew: '/app/sessions/new',
   sessionChat: '/app/sessions/:sessionId/chat',
@@ -93,6 +95,9 @@ export function buildAppBreadcrumb(pathname: string): BreadcrumbSpec[] {
 
   if (pathname.startsWith('/app/admin')) {
     return [...base, { label: 'Admin', to: APP_ROUTES.adminSessions }]
+  }
+  if (pathname.startsWith('/app/agents')) {
+    return [...base, { label: 'Agents', to: APP_ROUTES.agents }]
   }
   if (pathname.startsWith('/app/projects/transfer')) {
     return [...base, { label: 'Project Transfer', to: APP_ROUTES.transferExport }]

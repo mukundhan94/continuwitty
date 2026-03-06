@@ -17,6 +17,7 @@ import type {
   ProjectRecord,
   UserProfile,
 } from './api/types'
+import { AgentRunsPage } from './components/AgentRunsPage'
 import { AdminMemoryPage } from './components/AdminMemoryPage'
 import { AdminMcpTokenPanel } from './components/AdminMcpTokenPanel'
 import { AdminObservabilityPage } from './components/AdminObservabilityPage'
@@ -25,6 +26,7 @@ import { DocumentIngestionPanel } from './components/DocumentIngestionPanel'
 import { LinkedEngramPanel } from './components/LinkedEngramPanel'
 import { LoginView } from './components/LoginView'
 import { PinnedEngramPanel } from './components/PinnedEngramPanel'
+import { ProjectGovernancePage } from './components/ProjectGovernancePage'
 import { ProjectTransferPage } from './components/ProjectTransferPage'
 import { SaveEngramModal } from './components/SaveEngramModal'
 import { SessionSidebar } from './components/SessionSidebar'
@@ -48,6 +50,14 @@ import {
 } from './routes/constants'
 import { AuthGuard } from './routes/guards/AuthGuard'
 import { AdminGuard } from './routes/guards/AdminGuard'
+import {
+  parseAgentThreadRoute,
+  parseProjectRoute,
+  parseSessionRoute,
+  resolveAppRouteMeta,
+  resolveWorkspaceSection,
+  type AppSurfaceMode,
+} from './routes/appRouteMeta'
 import { AdminLayout } from './routes/layouts/AdminLayout'
 import { AppLayout } from './routes/layouts/AppLayout'
 import { MarketingLayout } from './routes/layouts/MarketingLayout'
@@ -75,6 +85,8 @@ import { PROJECT_ID_STORAGE_KEY, initialProjectId, normalizeProjectId } from './
 
 const APP_ROUTE_PATTERNS = [
   APP_ROUTES.workspace,
+  APP_ROUTES.agents,
+  APP_ROUTES.agentRunDetail,
   APP_ROUTES.sessions,
   APP_ROUTES.sessionsNew,
   APP_ROUTES.sessionChat,
@@ -369,35 +381,7 @@ const ProjectActionRow = styled.div`
   flex-wrap: wrap;
 `
 
-type AppSurfaceMode = 'workspace' | 'transfer' | 'admin' | 'adminTokens' | 'observability' | 'saveEngram'
-type WorkspaceSection = 'home' | 'sessions' | 'engrams' | 'documents' | 'projects'
 const MAX_VISIBLE_PROJECTS = 180
-
-type SessionRouteAction =
-  | 'chat'
-  | 'lifecycle'
-  | 'timeline'
-  | 'save-engram'
-  | 'continue'
-  | 'pins-engrams'
-  | 'pins-documents'
-
-interface SessionRouteInfo {
-  sessionId: string
-  action: SessionRouteAction
-}
-
-interface AppRouteMeta {
-  title: string
-  description: string
-  mode: AppSurfaceMode
-  adminOnly: boolean
-}
-
-interface AppRouteMetaRule {
-  matches: (pathname: string) => boolean
-  meta: AppRouteMeta
-}
 
 interface SaveModalVisibilityState {
   saveModalOpen: boolean
@@ -537,156 +521,6 @@ function useLinkedTraceState() {
   }
 }
 
-function parseSessionRoute(pathname: string): SessionRouteInfo | null {
-  const directMatch = pathname.match(
-    /^\/app\/sessions\/([^/]+)\/(chat|lifecycle|timeline|save-engram|continue)$/,
-  )
-  if (directMatch) {
-    return {
-      sessionId: directMatch[1],
-      action: directMatch[2] as SessionRouteAction,
-    }
-  }
-
-  const pinMatch = pathname.match(/^\/app\/sessions\/([^/]+)\/pins\/(engrams|documents)$/)
-  if (pinMatch) {
-    return {
-      sessionId: pinMatch[1],
-      action: pinMatch[2] === 'engrams' ? 'pins-engrams' : 'pins-documents',
-    }
-  }
-
-  return null
-}
-
-const SAVE_ENGRAM_ROUTE_PATTERN = /^\/app\/sessions\/[^/]+\/save-engram$/
-
-const DEFAULT_APP_ROUTE_META: AppRouteMeta = {
-  title: 'Memory Continuity Workspace',
-  description: 'Coordinate sessions, context retrieval, and memory actions in one command surface.',
-  mode: 'workspace',
-  adminOnly: false,
-}
-
-const APP_ROUTE_META_RULES: AppRouteMetaRule[] = [
-  {
-    matches: (pathname) => pathname === APP_ROUTES.adminTokens,
-    meta: {
-      title: 'MCP Token Administration',
-      description: 'Create, scope, and revoke MCP access tokens in a dedicated admin control plane.',
-      mode: 'adminTokens',
-      adminOnly: true,
-    },
-  },
-  {
-    matches: (pathname) => pathname === APP_ROUTES.adminObservability,
-    meta: {
-      title: 'Observability and Runtime Health',
-      description: 'Inspect request metrics and release metadata for this running environment.',
-      mode: 'observability',
-      adminOnly: true,
-    },
-  },
-  {
-    matches: (pathname) => pathname.startsWith('/app/admin'),
-    meta: {
-      title: 'Memory Administration',
-      description:
-        'Manage sessions, engrams, collections, curation, contradictions, members, and security controls.',
-      mode: 'admin',
-      adminOnly: true,
-    },
-  },
-  {
-    matches: (pathname) => pathname.startsWith('/app/projects/transfer'),
-    meta: {
-      title: 'Project Export and Import',
-      description: 'Move continuity bundles across workspaces with deterministic conflict policies.',
-      mode: 'transfer',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => pathname === APP_ROUTES.sessionsNew,
-    meta: {
-      title: 'Create Session',
-      description: 'Configure provider, model, and lifecycle defaults for a new memory session.',
-      mode: 'workspace',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => pathname === APP_ROUTES.sessions,
-    meta: {
-      title: 'Session Workspace',
-      description: 'Browse and continue previous chat sessions with durable memory continuity.',
-      mode: 'workspace',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => SAVE_ENGRAM_ROUTE_PATTERN.test(pathname),
-    meta: {
-      title: 'Save Session as Engram',
-      description: 'Promote this conversation into durable memory with title, abstract, visibility, and tags.',
-      mode: 'saveEngram',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => pathname.startsWith('/app/engrams'),
-    meta: {
-      title: 'Engram Retrieval and Graph',
-      description: 'Search, inspect, trace, and curate memory artifacts with provenance-first workflows.',
-      mode: 'workspace',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => pathname.startsWith('/app/documents'),
-    meta: {
-      title: 'Document Ingestion and Pinning',
-      description: 'Ingest source documents and pin evidence for active sessions.',
-      mode: 'workspace',
-      adminOnly: false,
-    },
-  },
-  {
-    matches: (pathname) => pathname.startsWith('/app/projects'),
-    meta: {
-      title: 'Project Collaboration Controls',
-      description: 'Manage project scope, members, defaults, and audit trails.',
-      mode: 'workspace',
-      adminOnly: false,
-    },
-  },
-]
-
-function resolveAppRouteMeta(pathname: string): AppRouteMeta {
-  for (const routeMetaRule of APP_ROUTE_META_RULES) {
-    if (routeMetaRule.matches(pathname)) {
-      return routeMetaRule.meta
-    }
-  }
-  return DEFAULT_APP_ROUTE_META
-}
-
-function resolveWorkspaceSection(pathname: string): WorkspaceSection {
-  if (pathname === APP_ROUTES.workspace) {
-    return 'home'
-  }
-  if (pathname.startsWith('/app/sessions')) {
-    return 'sessions'
-  }
-  if (pathname.startsWith('/app/engrams')) {
-    return 'engrams'
-  }
-  if (pathname.startsWith('/app/documents')) {
-    return 'documents'
-  }
-  return 'projects'
-}
-
 function shouldShowSaveModal(state: SaveModalVisibilityState): boolean {
   return state.saveModalOpen && state.appMode === 'workspace' && !state.isSaveRoute
 }
@@ -714,6 +548,8 @@ function AppScreen() {
     [location.pathname],
   )
   const sessionRouteInfo = useMemo(() => parseSessionRoute(location.pathname), [location.pathname])
+  const agentThreadId = useMemo(() => parseAgentThreadRoute(location.pathname), [location.pathname])
+  const projectRouteInfo = useMemo(() => parseProjectRoute(location.pathname), [location.pathname])
   const isLoginRoute = location.pathname === MARKETING_ROUTES.login
   const isAppRoute = location.pathname.startsWith('/app')
   const isAdminTokenRoute = location.pathname === APP_ROUTES.adminTokens
@@ -834,6 +670,16 @@ function AppScreen() {
     normalizeProjectId,
     storageKey: PROJECT_ID_STORAGE_KEY,
   })
+
+  useEffect(() => {
+    if (!projectRouteInfo) {
+      return
+    }
+    const normalizedRouteProjectId = normalizeProjectId(projectRouteInfo.projectId)
+    if (normalizedRouteProjectId && normalizedRouteProjectId !== projectId) {
+      setProjectId(normalizedRouteProjectId)
+    }
+  }, [projectId, projectRouteInfo])
 
   useWorkspaceLifecycle({
     projectId,
@@ -1179,6 +1025,14 @@ function AppScreen() {
         </button>
       </WorkspaceHomeCard>
       <WorkspaceHomeCard>
+        <WorkspaceHomeTitle>Agent Runs</WorkspaceHomeTitle>
+        <MutedText>Checkpoint long-running agents, inspect thread state, and resume with durable memory.</MutedText>
+        <SessionMeta>Thread-based workflows with optional auto-persisted engrams</SessionMeta>
+        <button type="button" onClick={() => navigate(APP_ROUTES.agents)}>
+          Open Agents
+        </button>
+      </WorkspaceHomeCard>
+      <WorkspaceHomeCard>
         <WorkspaceHomeTitle>Projects</WorkspaceHomeTitle>
         <MutedText>Manage active project scope, defaults, members, and transfer entry points.</MutedText>
         <SessionMeta>Active: {projectId || 'not set'}</SessionMeta>
@@ -1389,6 +1243,16 @@ function AppScreen() {
     </SessionDockWorkspace>
   )
 
+  const renderAgentsWorkspace = () => (
+    <AgentRunsPage
+      projectId={projectId}
+      onProjectChange={(value) => setProjectId(normalizeProjectId(value))}
+      selectedThreadId={agentThreadId}
+      onThreadSelect={(threadId) => navigate(`/app/agents/runs/${encodeURIComponent(threadId)}`)}
+      onNotice={(message) => setNotice(message)}
+    />
+  )
+
   const renderEngramsWorkspace = () => (
     <WorkspaceSingleColumn>
       <RouteActionStrip>
@@ -1494,6 +1358,29 @@ function AppScreen() {
   )
 
   const renderProjectsWorkspace = () => {
+    if (projectRouteInfo) {
+      return (
+        <ProjectGovernancePage
+          action={projectRouteInfo.action}
+          projectId={projectRouteInfo.projectId}
+          project={projects.find((project) => project.project_id === projectRouteInfo.projectId) || null}
+          projectSuggestions={projects.map((project) => project.project_id)}
+          onProjectChange={(nextProjectId) => {
+            const normalizedProjectId = normalizeProjectId(nextProjectId)
+            if (!normalizedProjectId) {
+              return
+            }
+            navigate(
+              projectRouteInfo.action === 'members'
+                ? `/app/projects/${normalizedProjectId}/members`
+                : `/app/projects/${normalizedProjectId}/audit`,
+            )
+          }}
+          onNotice={(message) => setNotice(message)}
+        />
+      )
+    }
+
     const directoryState = buildProjectDirectoryState(projects, projectSearch)
 
     const refreshProjects = async () => {
@@ -1558,6 +1445,9 @@ function AppScreen() {
   const renderWorkspaceSurface = () => {
     if (workspaceSection === 'home') {
       return renderWorkspaceHome()
+    }
+    if (workspaceSection === 'agents') {
+      return renderAgentsWorkspace()
     }
     if (workspaceSection === 'sessions') {
       return renderSessionsWorkspace()

@@ -59,6 +59,7 @@ describe('WorkspaceTopNav', () => {
 
     expect(screen.getByText('admin · admin')).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: 'Workspace' }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: 'Agents' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Transfer' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Light Theme' }))
