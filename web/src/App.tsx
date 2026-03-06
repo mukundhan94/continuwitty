@@ -643,6 +643,7 @@ function AppScreen() {
   const defaultSaveAbstract = useMemo(() => buildDefaultSaveAbstract(messages), [messages])
   const isAdmin = user?.role === 'admin'
   const adminTokenActions = useAdminTokenActions({ isAdmin, setNotice, describeError })
+  const refreshAdminTokenPanel = adminTokenActions.handleRefreshAdminTokenPanel
 
   const workspaceDataLoaders = useWorkspaceDataLoaders({
     projectId,
@@ -841,8 +842,8 @@ function AppScreen() {
     if (!isAdmin || !isAdminTokenRoute) {
       return
     }
-    void adminTokenActions.handleRefreshAdminTokenPanel()
-  }, [adminTokenActions, isAdmin, isAdminTokenRoute])
+    void refreshAdminTokenPanel()
+  }, [isAdmin, isAdminTokenRoute, refreshAdminTokenPanel])
 
   useEffect(() => {
     if (!user || workspaceSection !== 'projects') {

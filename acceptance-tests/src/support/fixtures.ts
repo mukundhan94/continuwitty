@@ -159,6 +159,17 @@ export async function signInIfNeeded(page: Page): Promise<void> {
   await signInWithCredentials(page, acceptanceEnv.username, acceptanceEnv.password)
 }
 
+export async function signOutIfNeeded(page: Page): Promise<void> {
+  const logout = logoutButton(page)
+  if (await logout.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await logout.click()
+    await expect(logout).toBeHidden({ timeout: 15000 })
+  }
+
+  await page.context().clearCookies()
+  await openChatApplication(page)
+}
+
 const { Given, When, Then, After } = createBdd(test)
 
 After(async ({ page, $testInfo }) => {
